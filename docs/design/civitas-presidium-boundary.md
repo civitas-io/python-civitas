@@ -160,3 +160,96 @@ The full governed gateway — per-agent rate limits, cost tracking, budget enfor
 Civitas is designed so that governance can be added without modifying it. The extension hooks (`RegistryListener`, plugin protocols, `AuditSink`, credential context, durable suspension) are stable surfaces — Presidium attaches to them without Civitas needing to know Presidium exists.
 
 This is the correct architecture: Civitas provides primitives; Presidium provides policy. Neither layer bleeds into the other's domain.
+
+---
+
+## Presidium Architecture: Interface-First with Dual Deployment Modes
+
+> Decided: June 2026
+
+![Full Stack Layers](../assets/full-stack-layers.svg)
+
+### Interface-First Design
+
+Presidium follows the same pattern as Civitas: **protocols in core, implementations in contrib**.
+
+- `presidium` (pip install presidium) — Protocol definitions only, plus lightweight defaults (CEL policy engine, in-memory registry, env-var credentials). Zero external dependencies beyond Civitas.
+- `presidium-contrib` (pip install presidium-contrib[opa,vault,...]) — Adapters for existing products and reference implementations for novel components.
+
+This replaces the earlier 6-package design (presidium-registry, presidium-policy, etc.) with a simpler 2-package structure that mirrors civitas + civitas-contrib.
+
+### CEL as Default Policy Language
+
+The default policy engine uses [CEL (Common Expression Language)](https://github.com/google/cel-spec) — the same expression language used by Kubernetes admission policies and Google Cloud IAM.
+
+CEL is chosen over OPA/Rego because:
+- **Embeddable**: Evaluates in-process in microseconds. No sidecar, no HTTP call.
+- **Industry direction**: Kubernetes is replacing OPA/Gatekeeper with CEL for admission policies.
+- **Simpler**: Single expressions, not a full language with packages and rule heads.
+- **Python support**: `cel-python` (Google's reference implementation).
+
+OPA remains available as a `presidium-contrib[opa]` adapter for organisations that already run OPA infrastructure.
+
+### Library Mode vs Service Mode
+
+Every Presidium component works in two deployment modes:
+
+| Mode | How It Works | When to Use |
+|------|-------------|-------------|
+| **Library** | In-process Python. No network calls. Evaluates directly. | Single-process, dev, small deployments |
+| **Service** | Civitas GenServer on the message bus, or standalone HTTP endpoint | Multi-deployment, shared state, central management |
+
+Library mode is the complete, correct implementation — not a degraded subset. Service mode adds shared state and centralised management when the user outgrows in-process.
+
+Example topology configuration:
+
+```yaml
+# Library mode — everything in-process
+presidium:
+  policy:
+    type: cel
+    rules_path: ./policies/
+  registry:
+    type: sqlite
+    db_path: ./presidium.db
+
+# Service mode — components point to services
+presidium:
+  policy:
+    type: opa
+    url: http://policy-service:8181
+  registry:
+    type: remote
+    url: http://registry-service:8080
+  credentials:
+    type: vault
+    url: https://vault.internal:8200
+```
+
+### Mapping to Existing Products
+
+Where mature products exist, Presidium wraps them via adapters rather than reimplementing:
+
+| Presidium Interface | Existing Product Adapters | Novel (Reference Impl) |
+|---|---|---|
+| PolicyEngine | OPA, Cedar | CEL (default, built-in) |
+| CredentialProvider | HashiCorp Vault, AWS Secrets Manager | Env/File (default, built-in) |
+| GovernedModelProvider | LiteLLM Proxy, Portkey | In-process grant checks (default) |
+| ApprovalService | Slack, Temporal, PagerDuty | Callback (default, built-in) |
+| AgentRegistry | — | Postgres-backed registry (novel) |
+| GovernedToolProvider | — | MCP governance (novel) |
+| TrustScorer | — | Rule-based + learning scorer (novel) |
+| AuditEnricher | Datadog, Splunk, ELK (via Civitas AuditSink) | In-process enrichment (default) |
+
+### Autonomy Progression
+
+![Autonomy Progression](../assets/autonomy-progression.svg)
+
+Presidium supports a graduated autonomy model:
+
+1. **Full HITL** — All significant actions require human approval. Uses `ApprovalService` protocol.
+2. **Heuristic recommendations** — `EvalAgent` subclasses monitor behaviour and send corrections. CEL policies define guardrails.
+3. **Learned partial autonomy** — Decision journal records approvals/rejections. Confidence-gated routing auto-approves high-confidence actions.
+4. **Full autonomy** — Trust scores, policy compliance history, and learned models enable autonomous operation within governance bounds.
+
+Levels 1-2 work today with Civitas + Presidium interfaces. Level 3 requires the decision journal and confidence routing (M4). Level 4 requires mature trust scoring and policy learning.

@@ -258,8 +258,8 @@ Civitas is a **runtime**, not a framework. LangGraph, CrewAI, and the OpenAI Age
 │  CONTEXT LAYER                               │
 │  Prompts, memory, RAG, AGENTS.md             │
 ├──────────────────────────────────────────────┤
-│  CONTROL LAYER                               │
-│  Guardrails, HITL gates, cost limits         │
+│  CONTROL LAYER  ◄── Presidium lives here      │
+│  Policy (CEL/OPA), HITL gates, cost limits   │
 ├──────────────────────────────────────────────┤
 │  RUNTIME LAYER  ◄── Civitas lives here        │
 │  Process lifecycle, fault tolerance,         │

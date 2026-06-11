@@ -765,7 +765,11 @@ Web-based drag-and-drop editor for designing agent topologies visually.
 
 ## Phase 5 — Agentic Platform
 
-Ideas awaiting full design specs. Each is a supervised GenServer (or group of GenServers) that runs inside the user's deployment — not external services, not SaaS. The SaaS boundary sits above these: hosted registries, managed observability, and multi-tenant governance are separate concerns.
+Civitas provides the runtime primitives. Governance lives in [Presidium](https://github.com/civitas-io/presidium) — an interface library that defines governance protocols (PolicyEngine, AgentRegistry, CredentialProvider, etc.) with lightweight defaults (CEL policy engine, in-memory registry) in the core package, and adapters for existing products (OPA, Vault, LiteLLM) plus reference implementations for novel components in presidium-contrib.
+
+Presidium follows the same pattern as Civitas: protocols in core, implementations in contrib. Every component works as an in-process library (single-process deployments) or as a service (distributed deployments via Civitas GenServers or standalone HTTP). See [Civitas-Presidium Boundary](design/civitas-presidium-boundary.md) for the full architecture.
+
+The items below are Civitas-side features that complement Presidium's governance layer.
 
 ---
 
@@ -794,17 +798,17 @@ This is one of the strongest SaaS upgrade stories: the OSS `PromptStore` runs in
 
 ### LLM Gateway
 
-**Status: ⏸️ Moved to Presidium (`presidium-llm-gateway`)**
+**Status: ⏸️ Moved to Presidium**
 
 Model routing *without* governance (multi-provider fallback for reliability) is a thin Civitas utility — `CompositeModelProvider`. It is not a full gateway.
 
-The full governed LLM gateway — per-agent rate limits, cost tracking, budget enforcement, grant-based provider routing — belongs in Presidium. It wraps any Civitas `ModelProvider` via the plugin protocol and enforces governance policy before delegating to the underlying provider.
+The full governed LLM gateway — per-agent rate limits, cost tracking, budget enforcement, grant-based provider routing — belongs in Presidium. It is implemented via the `GovernedModelProvider` protocol in the `presidium` core package, with the `LiteLLMProxyAdapter` and `PortkeyAdapter` available in `presidium-contrib`. It wraps any Civitas `ModelProvider` via the plugin protocol and enforces governance policy before delegating to the underlying provider.
 
 Civitas provides the `ModelProvider` protocol (integration point 2 for Presidium). Civitas does not provide rate limiting, budgets, or grant-based routing — those are governance concerns.
 
 **Residual Civitas utility:** `CompositeModelProvider` — a simple ordered fallback chain (primary → fallback) for reliability. No governance, no per-agent tracking. Infrastructure, not governance.
 
-See [Presidium `presidium-llm-gateway`](https://github.com/civitas-io/presidium/blob/main/docs/architecture/packages.md#presidium-llm-gateway) for the governed implementation.
+See [Presidium](https://github.com/civitas-io/presidium) for the governed implementation (`GovernedModelProvider` in core, `LiteLLMProxyAdapter` in contrib).
 See [docs/design/civitas-presidium-boundary.md](design/civitas-presidium-boundary.md) for the full boundary definition.
 
 ---
