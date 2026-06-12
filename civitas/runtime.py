@@ -189,6 +189,17 @@ class Runtime:
         self._agents_by_name: dict[str, AgentProcess] = {}  # F04-10: O(1) live process lookup
         self._started = False
 
+    _KNOWN_CONFIG_KEYS = {
+        "transport",
+        "plugins",
+        "supervision",
+        "supervisor",
+        "mcp",
+        "security",
+        "audit",
+        "presidium",
+    }
+
     @classmethod
     def from_config(
         cls,
@@ -203,20 +214,25 @@ class Runtime:
         """
         config = yaml.safe_load(Path(path).read_text())
         config = substitute_vars(config)
-        _KNOWN_CONFIG_KEYS = {
-            "transport",
-            "plugins",
-            "supervision",
-            "supervisor",
-            "mcp",
-            "security",
-            "audit",
-        }
-        unknown = set(config.keys()) - _KNOWN_CONFIG_KEYS
+        return cls.from_config_dict(config, agent_classes=agent_classes)
+
+    @classmethod
+    def from_config_dict(
+        cls,
+        config: dict[str, Any],
+        agent_classes: dict[str, type[AgentProcess]] | None = None,
+    ) -> Runtime:
+        """Build a Runtime from an already-parsed config dict.
+
+        Same as ``from_config`` but accepts a dict instead of a file path.
+        Useful for governance layers (e.g. Presidium) that need to extract
+        their own config block before passing the rest to the runtime.
+        """
+        unknown = set(config.keys()) - cls._KNOWN_CONFIG_KEYS
         if unknown:
             raise ConfigurationError(
                 f"Unknown top-level config keys: {sorted(unknown)!r}. "
-                f"Valid keys are: {sorted(_KNOWN_CONFIG_KEYS)!r}"
+                f"Valid keys are: {sorted(cls._KNOWN_CONFIG_KEYS)!r}"
             )
         classes = agent_classes or {}
 

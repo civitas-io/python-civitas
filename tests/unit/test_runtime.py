@@ -266,6 +266,61 @@ class TestFromConfig:
         assert agents[0].name == "worker"
         assert isinstance(agents[0], NullAgent)
 
+    def test_presidium_key_accepted(self, tmp_path: Path):
+        yaml_file = tmp_path / "presidium.yaml"
+        yaml_file.write_text(
+            textwrap.dedent("""\
+            presidium:
+              registry:
+                trust_domain: acme.com
+            supervision:
+              name: root
+        """)
+        )
+        rt = Runtime.from_config(yaml_file)
+        assert rt._root_supervisor is not None
+
+
+class TestFromConfigDict:
+    def test_produces_identical_runtime(self, tmp_path: Path):
+        yaml_file = tmp_path / "test.yaml"
+        yaml_file.write_text(
+            textwrap.dedent("""\
+            supervision:
+              name: root
+              children:
+                - type: "NullAgent"
+                  name: "worker"
+        """)
+        )
+        rt_file = Runtime.from_config(yaml_file, agent_classes={"NullAgent": NullAgent})
+        config = {
+            "supervision": {"name": "root", "children": [{"type": "NullAgent", "name": "worker"}]}
+        }
+        rt_dict = Runtime.from_config_dict(config, agent_classes={"NullAgent": NullAgent})
+        assert rt_file._root_supervisor.name == rt_dict._root_supervisor.name
+        assert len(rt_file._root_supervisor.all_agents()) == len(
+            rt_dict._root_supervisor.all_agents()
+        )
+
+    def test_rejects_unknown_keys(self):
+        config = {"bogus": True, "supervision": {"name": "root"}}
+        with pytest.raises(AgencyConfigError, match="bogus"):
+            Runtime.from_config_dict(config)
+
+    def test_accepts_presidium_key(self):
+        config = {
+            "presidium": {"registry": {"trust_domain": "acme.com"}},
+            "supervision": {"name": "root"},
+        }
+        rt = Runtime.from_config_dict(config)
+        assert rt._root_supervisor is not None
+
+    def test_minimal_config(self):
+        config = {"supervision": {"name": "root"}}
+        rt = Runtime.from_config_dict(config)
+        assert rt._root_supervisor.name == "root"
+
 
 # ---------------------------------------------------------------------------
 # F12-9 — Example YAML topology files are valid against the config schema
