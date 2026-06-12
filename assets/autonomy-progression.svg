@@ -1,0 +1,110 @@
+<svg viewBox="0 0 780 340" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#9CA3AF"/>
+    </marker>
+    <linearGradient id="progressGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#DC2626"/>
+      <stop offset="33%" stop-color="#F59E0B"/>
+      <stop offset="66%" stop-color="#3B82F6"/>
+      <stop offset="100%" stop-color="#10B981"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Title -->
+  <text x="390" y="28" text-anchor="middle" font-size="16" font-weight="700" fill="#E5E7EB">Autonomy Progression</text>
+  <text x="390" y="48" text-anchor="middle" font-size="11" fill="#9CA3AF">Agents earn autonomy through demonstrated reliability</text>
+
+  <!-- Progress bar -->
+  <rect x="50" y="62" width="680" height="6" rx="3" fill="#1F2937"/>
+  <rect x="50" y="62" width="680" height="6" rx="3" fill="url(#progressGrad)" opacity="0.7"/>
+
+  <!-- ═══ LEVEL 1: Full HITL ═══ -->
+  <rect x="20" y="85" width="175" height="230" rx="8" fill="#111827" stroke="#DC2626" stroke-width="2"/>
+  <rect x="20" y="85" width="175" height="35" rx="8" fill="#DC2626"/>
+  <rect x="20" y="110" width="175" height="5" fill="#DC2626"/>
+  <text x="107" y="107" text-anchor="middle" font-size="12" font-weight="700" fill="white">Level 1: Full HITL</text>
+
+  <text x="107" y="140" text-anchor="middle" font-size="9" font-weight="600" fill="#FCA5A5">Every action needs approval</text>
+
+  <rect x="35" y="155" width="145" height="22" rx="4" fill="#1F2937"/>
+  <text x="107" y="170" text-anchor="middle" font-size="8" fill="#D1D5DB">ApprovalService</text>
+
+  <rect x="35" y="185" width="145" height="22" rx="4" fill="#1F2937"/>
+  <text x="107" y="200" text-anchor="middle" font-size="8" fill="#D1D5DB">self.state (pending)</text>
+
+  <rect x="35" y="215" width="145" height="22" rx="4" fill="#1F2937"/>
+  <text x="107" y="230" text-anchor="middle" font-size="8" fill="#D1D5DB">AuditSink (all actions)</text>
+
+  <rect x="35" y="275" width="145" height="28" rx="5" fill="#2D6A4F"/>
+  <text x="107" y="293" text-anchor="middle" font-size="9" font-weight="600" fill="white">Works today</text>
+
+  <!-- Arrow 1→2 -->
+  <line x1="195" y1="200" x2="210" y2="200" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ═══ LEVEL 2: Heuristic ═══ -->
+  <rect x="212" y="85" width="175" height="230" rx="8" fill="#111827" stroke="#F59E0B" stroke-width="2"/>
+  <rect x="212" y="85" width="175" height="35" rx="8" fill="#B45309"/>
+  <rect x="212" y="110" width="175" height="5" fill="#B45309"/>
+  <text x="299" y="107" text-anchor="middle" font-size="12" font-weight="700" fill="white">Level 2: Heuristic</text>
+
+  <text x="299" y="140" text-anchor="middle" font-size="9" font-weight="600" fill="#FCD34D">Rules-based guardrails</text>
+
+  <rect x="227" y="155" width="145" height="22" rx="4" fill="#1F2937"/>
+  <text x="299" y="170" text-anchor="middle" font-size="8" fill="#D1D5DB">EvalAgent subclass</text>
+
+  <rect x="227" y="185" width="145" height="22" rx="4" fill="#1F2937"/>
+  <text x="299" y="200" text-anchor="middle" font-size="8" fill="#D1D5DB">CEL policy expressions</text>
+
+  <rect x="227" y="215" width="145" height="22" rx="4" fill="#1F2937"/>
+  <text x="299" y="230" text-anchor="middle" font-size="8" fill="#D1D5DB">nudge / redirect / halt</text>
+
+  <rect x="227" y="275" width="145" height="28" rx="5" fill="#2D6A4F"/>
+  <text x="299" y="293" text-anchor="middle" font-size="9" font-weight="600" fill="white">Works today</text>
+
+  <!-- Arrow 2→3 -->
+  <line x1="387" y1="200" x2="402" y2="200" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ═══ LEVEL 3: Learned Partial ═══ -->
+  <rect x="404" y="85" width="175" height="230" rx="8" fill="#111827" stroke="#3B82F6" stroke-width="2"/>
+  <rect x="404" y="85" width="175" height="35" rx="8" fill="#1D4ED8"/>
+  <rect x="404" y="110" width="175" height="5" fill="#1D4ED8"/>
+  <text x="491" y="107" text-anchor="middle" font-size="12" font-weight="700" fill="white">Level 3: Learned</text>
+
+  <text x="491" y="140" text-anchor="middle" font-size="9" font-weight="600" fill="#93C5FD">Confidence-gated decisions</text>
+
+  <rect x="419" y="155" width="145" height="22" rx="4" fill="#1F2937"/>
+  <text x="491" y="170" text-anchor="middle" font-size="8" fill="#D1D5DB">Decision journal</text>
+
+  <rect x="419" y="185" width="145" height="22" rx="4" fill="#1F2937"/>
+  <text x="491" y="200" text-anchor="middle" font-size="8" fill="#D1D5DB">Confidence routing</text>
+
+  <rect x="419" y="215" width="145" height="22" rx="4" fill="#1F2937"/>
+  <text x="491" y="230" text-anchor="middle" font-size="8" fill="#D1D5DB">LearningTrustScorer</text>
+
+  <rect x="419" y="275" width="145" height="28" rx="5" fill="#4C1D95"/>
+  <text x="491" y="293" text-anchor="middle" font-size="9" font-weight="600" fill="white">Presidium M4</text>
+
+  <!-- Arrow 3→4 -->
+  <line x1="579" y1="200" x2="594" y2="200" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ═══ LEVEL 4: Full Autonomy ═══ -->
+  <rect x="596" y="85" width="170" height="230" rx="8" fill="#111827" stroke="#10B981" stroke-width="2"/>
+  <rect x="596" y="85" width="170" height="35" rx="8" fill="#065F46"/>
+  <rect x="596" y="110" width="170" height="5" fill="#065F46"/>
+  <text x="681" y="107" text-anchor="middle" font-size="12" font-weight="700" fill="white">Level 4: Autonomous</text>
+
+  <text x="681" y="140" text-anchor="middle" font-size="9" font-weight="600" fill="#6EE7B7">Governed self-operation</text>
+
+  <rect x="611" y="155" width="140" height="22" rx="4" fill="#1F2937"/>
+  <text x="681" y="170" text-anchor="middle" font-size="8" fill="#D1D5DB">Trust score policies</text>
+
+  <rect x="611" y="185" width="140" height="22" rx="4" fill="#1F2937"/>
+  <text x="681" y="200" text-anchor="middle" font-size="8" fill="#D1D5DB">Compliance history</text>
+
+  <rect x="611" y="215" width="140" height="22" rx="4" fill="#1F2937"/>
+  <text x="681" y="230" text-anchor="middle" font-size="8" fill="#D1D5DB">Auto-grant escalation</text>
+
+  <rect x="611" y="275" width="140" height="28" rx="5" fill="#4C1D95"/>
+  <text x="681" y="293" text-anchor="middle" font-size="9" font-weight="600" fill="white">Presidium M4+</text>
+</svg>

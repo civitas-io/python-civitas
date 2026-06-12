@@ -4017,7 +4017,9 @@
 </table>
 <hr />
 <h2 id="phase-5-agentic-platform">Phase 5 — Agentic Platform<a class="headerlink" href="#phase-5-agentic-platform" title="Permanent link">&para;</a></h2>
-<p>Ideas awaiting full design specs. Each is a supervised GenServer (or group of GenServers) that runs inside the user's deployment — not external services, not SaaS. The SaaS boundary sits above these: hosted registries, managed observability, and multi-tenant governance are separate concerns.</p>
+<p>Civitas provides the runtime primitives. Governance lives in <a href="https://github.com/civitas-io/presidium">Presidium</a> — an interface library that defines governance protocols (PolicyEngine, AgentRegistry, CredentialProvider, etc.) with lightweight defaults (CEL policy engine, in-memory registry) in the core package, and adapters for existing products (OPA, Vault, LiteLLM) plus reference implementations for novel components in presidium-contrib.</p>
+<p>Presidium follows the same pattern as Civitas: protocols in core, implementations in contrib. Every component works as an in-process library (single-process deployments) or as a service (distributed deployments via Civitas GenServers or standalone HTTP). See <a href="../design/civitas-presidium-boundary/">Civitas-Presidium Boundary</a> for the full architecture.</p>
+<p>The items below are Civitas-side features that complement Presidium's governance layer.</p>
 <hr />
 <h3 id="prompt-library-playground">Prompt Library &amp; Playground<a class="headerlink" href="#prompt-library-playground" title="Permanent link">&para;</a></h3>
 <p><strong>Status: 💡 Idea — to be specced | Priority: 🔴 High</strong></p>
@@ -4075,12 +4077,12 @@
 </table>
 <hr />
 <h3 id="llm-gateway">LLM Gateway<a class="headerlink" href="#llm-gateway" title="Permanent link">&para;</a></h3>
-<p><strong>Status: ⏸️ Moved to Presidium (<code>presidium-llm-gateway</code>)</strong></p>
+<p><strong>Status: ⏸️ Moved to Presidium</strong></p>
 <p>Model routing <em>without</em> governance (multi-provider fallback for reliability) is a thin Civitas utility — <code>CompositeModelProvider</code>. It is not a full gateway.</p>
-<p>The full governed LLM gateway — per-agent rate limits, cost tracking, budget enforcement, grant-based provider routing — belongs in Presidium. It wraps any Civitas <code>ModelProvider</code> via the plugin protocol and enforces governance policy before delegating to the underlying provider.</p>
+<p>The full governed LLM gateway — per-agent rate limits, cost tracking, budget enforcement, grant-based provider routing — belongs in Presidium. It is implemented via the <code>GovernedModelProvider</code> protocol in the <code>presidium</code> core package, with the <code>LiteLLMProxyAdapter</code> and <code>PortkeyAdapter</code> available in <code>presidium-contrib</code>. It wraps any Civitas <code>ModelProvider</code> via the plugin protocol and enforces governance policy before delegating to the underlying provider.</p>
 <p>Civitas provides the <code>ModelProvider</code> protocol (integration point 2 for Presidium). Civitas does not provide rate limiting, budgets, or grant-based routing — those are governance concerns.</p>
 <p><strong>Residual Civitas utility:</strong> <code>CompositeModelProvider</code> — a simple ordered fallback chain (primary → fallback) for reliability. No governance, no per-agent tracking. Infrastructure, not governance.</p>
-<p>See <a href="https://github.com/civitas-io/presidium/blob/main/docs/architecture/packages.md#presidium-llm-gateway">Presidium <code>presidium-llm-gateway</code></a> for the governed implementation.
+<p>See <a href="https://github.com/civitas-io/presidium">Presidium</a> for the governed implementation (<code>GovernedModelProvider</code> in core, <code>LiteLLMProxyAdapter</code> in contrib).
 See <a href="../design/civitas-presidium-boundary/">docs/design/civitas-presidium-boundary.md</a> for the full boundary definition.</p>
 <hr />
 <h3 id="fabrica-tools-gateway">Fabrica — Tools Gateway<a class="headerlink" href="#fabrica-tools-gateway" title="Permanent link">&para;</a></h3>

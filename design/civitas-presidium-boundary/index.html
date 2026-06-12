@@ -1830,6 +1830,78 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#presidium-architecture-interface-first-with-dual-deployment-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Presidium Architecture: Interface-First with Dual Deployment Modes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Presidium Architecture: Interface-First with Dual Deployment Modes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#interface-first-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interface-First Design
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cel-as-default-policy-language" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CEL as Default Policy Language
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#library-mode-vs-service-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Library Mode vs Service Mode
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mapping-to-existing-products" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mapping to Existing Products
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#autonomy-progression" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Autonomy Progression
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2152,6 +2224,136 @@
 <h2 id="design-principle">Design Principle<a class="headerlink" href="#design-principle" title="Permanent link">&para;</a></h2>
 <p>Civitas is designed so that governance can be added without modifying it. The extension hooks (<code>RegistryListener</code>, plugin protocols, <code>AuditSink</code>, credential context, durable suspension) are stable surfaces — Presidium attaches to them without Civitas needing to know Presidium exists.</p>
 <p>This is the correct architecture: Civitas provides primitives; Presidium provides policy. Neither layer bleeds into the other's domain.</p>
+<hr />
+<h2 id="presidium-architecture-interface-first-with-dual-deployment-modes">Presidium Architecture: Interface-First with Dual Deployment Modes<a class="headerlink" href="#presidium-architecture-interface-first-with-dual-deployment-modes" title="Permanent link">&para;</a></h2>
+<blockquote>
+<p>Decided: June 2026</p>
+</blockquote>
+<p><img alt="Full Stack Layers" src="../../assets/full-stack-layers.svg" /></p>
+<h3 id="interface-first-design">Interface-First Design<a class="headerlink" href="#interface-first-design" title="Permanent link">&para;</a></h3>
+<p>Presidium follows the same pattern as Civitas: <strong>protocols in core, implementations in contrib</strong>.</p>
+<ul>
+<li><code>presidium</code> (pip install presidium) — Protocol definitions only, plus lightweight defaults (CEL policy engine, in-memory registry, env-var credentials). Zero external dependencies beyond Civitas.</li>
+<li><code>presidium-contrib</code> (pip install presidium-contrib[opa,vault,...]) — Adapters for existing products and reference implementations for novel components.</li>
+</ul>
+<p>This replaces the earlier 6-package design (presidium-registry, presidium-policy, etc.) with a simpler 2-package structure that mirrors civitas + civitas-contrib.</p>
+<h3 id="cel-as-default-policy-language">CEL as Default Policy Language<a class="headerlink" href="#cel-as-default-policy-language" title="Permanent link">&para;</a></h3>
+<p>The default policy engine uses <a href="https://github.com/google/cel-spec">CEL (Common Expression Language)</a> — the same expression language used by Kubernetes admission policies and Google Cloud IAM.</p>
+<p>CEL is chosen over OPA/Rego because:
+- <strong>Embeddable</strong>: Evaluates in-process in microseconds. No sidecar, no HTTP call.
+- <strong>Industry direction</strong>: Kubernetes is replacing OPA/Gatekeeper with CEL for admission policies.
+- <strong>Simpler</strong>: Single expressions, not a full language with packages and rule heads.
+- <strong>Python support</strong>: <code>cel-python</code> (Google's reference implementation).</p>
+<p>OPA remains available as a <code>presidium-contrib[opa]</code> adapter for organisations that already run OPA infrastructure.</p>
+<h3 id="library-mode-vs-service-mode">Library Mode vs Service Mode<a class="headerlink" href="#library-mode-vs-service-mode" title="Permanent link">&para;</a></h3>
+<p>Every Presidium component works in two deployment modes:</p>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>How It Works</th>
+<th>When to Use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Library</strong></td>
+<td>In-process Python. No network calls. Evaluates directly.</td>
+<td>Single-process, dev, small deployments</td>
+</tr>
+<tr>
+<td><strong>Service</strong></td>
+<td>Civitas GenServer on the message bus, or standalone HTTP endpoint</td>
+<td>Multi-deployment, shared state, central management</td>
+</tr>
+</tbody>
+</table>
+<p>Library mode is the complete, correct implementation — not a degraded subset. Service mode adds shared state and centralised management when the user outgrows in-process.</p>
+<p>Example topology configuration:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Library mode — everything in-process</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nt">presidium</span><span class="p">:</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">policy</span><span class="p">:</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cel</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span><span class="nt">rules_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./policies/</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span><span class="nt">registry</span><span class="p">:</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sqlite</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">    </span><span class="nt">db_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./presidium.db</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># Service mode — components point to services</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="nt">presidium</span><span class="p">:</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">  </span><span class="nt">policy</span><span class="p">:</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">opa</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">    </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://policy-service:8181</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">  </span><span class="nt">registry</span><span class="p">:</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">remote</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="w">    </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://registry-service:8080</span>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="w">  </span><span class="nt">credentials</span><span class="p">:</span>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">vault</span>
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="w">    </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://vault.internal:8200</span>
+</span></code></pre></div>
+<h3 id="mapping-to-existing-products">Mapping to Existing Products<a class="headerlink" href="#mapping-to-existing-products" title="Permanent link">&para;</a></h3>
+<p>Where mature products exist, Presidium wraps them via adapters rather than reimplementing:</p>
+<table>
+<thead>
+<tr>
+<th>Presidium Interface</th>
+<th>Existing Product Adapters</th>
+<th>Novel (Reference Impl)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PolicyEngine</td>
+<td>OPA, Cedar</td>
+<td>CEL (default, built-in)</td>
+</tr>
+<tr>
+<td>CredentialProvider</td>
+<td>HashiCorp Vault, AWS Secrets Manager</td>
+<td>Env/File (default, built-in)</td>
+</tr>
+<tr>
+<td>GovernedModelProvider</td>
+<td>LiteLLM Proxy, Portkey</td>
+<td>In-process grant checks (default)</td>
+</tr>
+<tr>
+<td>ApprovalService</td>
+<td>Slack, Temporal, PagerDuty</td>
+<td>Callback (default, built-in)</td>
+</tr>
+<tr>
+<td>AgentRegistry</td>
+<td>—</td>
+<td>Postgres-backed registry (novel)</td>
+</tr>
+<tr>
+<td>GovernedToolProvider</td>
+<td>—</td>
+<td>MCP governance (novel)</td>
+</tr>
+<tr>
+<td>TrustScorer</td>
+<td>—</td>
+<td>Rule-based + learning scorer (novel)</td>
+</tr>
+<tr>
+<td>AuditEnricher</td>
+<td>Datadog, Splunk, ELK (via Civitas AuditSink)</td>
+<td>In-process enrichment (default)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="autonomy-progression">Autonomy Progression<a class="headerlink" href="#autonomy-progression" title="Permanent link">&para;</a></h3>
+<p><img alt="Autonomy Progression" src="../../assets/autonomy-progression.svg" /></p>
+<p>Presidium supports a graduated autonomy model:</p>
+<ol>
+<li><strong>Full HITL</strong> — All significant actions require human approval. Uses <code>ApprovalService</code> protocol.</li>
+<li><strong>Heuristic recommendations</strong> — <code>EvalAgent</code> subclasses monitor behaviour and send corrections. CEL policies define guardrails.</li>
+<li><strong>Learned partial autonomy</strong> — Decision journal records approvals/rejections. Confidence-gated routing auto-approves high-confidence actions.</li>
+<li><strong>Full autonomy</strong> — Trust scores, policy compliance history, and learned models enable autonomous operation within governance bounds.</li>
+</ol>
+<p>Levels 1-2 work today with Civitas + Presidium interfaces. Level 3 requires the decision journal and confidence routing (M4). Level 4 requires mature trust scoring and policy learning.</p>
 
 
 
