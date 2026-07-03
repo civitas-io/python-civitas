@@ -37,7 +37,7 @@ Development progress across all phases of Civitas.
 | 4 | [Gateway API Surface](#gateway-api-surface) | ✅ Completed | Apr 2026 |
 | 4 | [Postgres StateStore + Migration](#postgres-statestore--migration) | ✅ Completed | May 2026 |
 | — | [v0.4.0 Release Fixes](#v040-release-fixes) | ✅ Completed | Jul 2026 |
-| — | [v0.5.0 — Planned](#v050--planned) | ⏳ Planned | — |
+| — | [v0.5.0 — In Progress](#v050--in-progress) | 🔄 In Progress | Bucket A done, Jul 2026 |
 | 4 | [Visual Topology Editor](#m41-visual-topology-editor) | ⏸️ Deferred | — |
 | 5 | [Prompt Library & Playground (civitas-contrib)](#prompt-library--playground) | 💡 Idea | v0.5+, not this repo |
 | 5 | [LLM Gateway](#llm-gateway) | ⏸️ Moved to Presidium | — |
@@ -750,29 +750,34 @@ the published 0.3.0 wheel. Downstream projects running their own `mypy --strict`
 
 ---
 
-## v0.5.0 — Planned
+## v0.5.0 — In Progress
 
-**Status: ⏳ Planned | Scoped — July 2026**
+**Status: 🔄 In Progress — Scoped July 2026, Bucket A completed July 2026**
 
 Scope locked in as three buckets. A fourth candidate bucket (D) was explicitly deferred to a
-future version — see below.
+future version — see below. Bucket A (correctness & hardening) is done and fully tested; Bucket B
+(durable suspension) has not started.
 
 ### A — Correctness & hardening
 
-Seven items from [`context/known-issues.md`](https://github.com/civitas-io/context) (private
-cross-repo tracker), each re-verified against the current codebase before inclusion here — one
-originally-listed item (F01-2, span leak on serializer error in `bus.route()`) was found already
-fixed and is not carried forward.
+**Status: ✅ Completed — July 2026**
 
-| ID | Priority | Issue | Fix direction |
+Seven items from [`context/known-issues.md`](https://github.com/civitas-io/context) (private
+cross-repo tracker). Each was re-verified against the current codebase — via grep, not taken on
+faith — immediately before fixing, since one originally-scoped item (F01-2, span leak on
+serializer error in `bus.route()`) turned out already fixed, and F04-2 (below) turned out already
+fixed too, only found because a search for its old, differently-worded issue text missed the
+actual `_KNOWN_CONFIG_KEYS` implementation on first pass.
+
+| ID | Priority | Issue | Resolution |
 |---|---|---|---|
-| FD-01 | 🔴 High | `MetricsCollector` not wired to real event sources — dashboard always shows 0 for message flow, LLM cost, restarts | Add a proper `on_crash_callback`/lifecycle hook injectable on `Supervisor`/`Runtime`; wire all `MetricsCollector` methods (`message_handled`, `message_sent`, `agent_error`, `llm_call`) through it — same fix serves FD-03 |
-| FD-03 | 🟡 Medium | `civitas/cli/dashboard.py` monkey-patches `runtime._root_supervisor._handle_crash` directly (`# type: ignore[method-assign]`) | Replace with the public hook added for FD-01 — violates AGENTS.md anti-pattern #14 |
-| F04-2 | 🟡 Medium | `Runtime.from_config` silently accepts unknown topology YAML keys (e.g. `supervison:` typo) | Validate top-level keys against a known set at parse time; raise `ConfigurationError` — this is literally what AGENTS.md anti-pattern #17 prescribes, never implemented |
-| F01-3 | 🟡 Medium | `Message.ttl` declared and documented, never enforced (`# ttl: planned` TODO still in `messages.py`) | Check `message.ttl` in `bus.route()` / mailbox delivery; discard expired messages with a warning — violates AGENTS.md anti-pattern #16 (dead API surface) |
-| F11-5 | 🟡 Medium | `on_stop()` not called when `on_start()` raises (`AgentProcess._start()` has no try/except around `on_start()`) | Wrap `on_start()` in the same lifecycle error handling as `_message_loop()`; verify against OTP `terminate/2`-after-failed-`init/1` semantics |
-| FD-07 | 🟢 Low | `Worker` processes don't receive exporters from topology YAML — no exporter references anywhere in `worker.py` or `cli/run.py` | Pass exporters to `Worker` via `ComponentSet` or a direct constructor parameter |
-| FD-09 | 🟢 Low | Two parallel OTEL span export paths coexist (`Tracer`'s direct `TracerProvider`/`BatchSpanProcessor` vs. `SpanQueue`→`OTELAgent`→`ExportBackend`) | Unify on the `SpanQueue`/`ExportBackend` pipeline; implement an `OTELExportBackend` wrapping the OTLP exporter; remove direct `TracerProvider` setup from `Tracer.__init__` — larger, riskier, candidate to slip to v0.5.1 if it threatens the release |
+| FD-01 | 🔴 High | `MetricsCollector` not wired to real event sources — dashboard always showed 0 for message flow, restarts | `civitas.observability.metrics.MetricsSink` protocol added; injected via `ComponentSet`/`Runtime.set_metrics()`. Wires `message_handled` + `agent_error` in `AgentProcess._dispatch()`, `message_sent` in `send()`/`ask()`. **`llm_call` is not auto-wired** — `llm_span()` is a bare context manager with no interception point for `ModelResponse` token/cost data without a larger redesign of how `self.llm` is wrapped; that's a real follow-up, not silently claimed done here. |
+| FD-03 | 🟡 Medium | `civitas/cli/dashboard.py` monkey-patched `runtime._root_supervisor._handle_crash` directly | `Supervisor.add_crash_callback()` + `Runtime.on_crash()` public hook added, invoked from `_handle_crash()` before the restart strategy runs. `cli/dashboard.py` monkeypatch removed. |
+| F04-2 | — | ~~`Runtime.from_config` silently accepts unknown topology YAML keys~~ | **Already fixed** — `Runtime._KNOWN_CONFIG_KEYS` + the `ConfigurationError` raise already existed in `from_config_dict()`. No code change; added the missing regression test only. |
+| F01-3 | 🟡 Medium | `Message.ttl` declared and documented, never enforced | `ttl` field (optional float, seconds) added to `Message`; enforced in `Mailbox.get()` — expired messages are discarded with a warning and the search continues. |
+| F11-5 | 🟡 Medium | `on_stop()` not called when `on_start()` raises | `AgentProcess._start()` now wraps `on_start()`; on failure, closes the open `civitas.agent.start` span with the error, sets `CRASHED`, runs `on_stop()` + MCP client cleanup, then re-raises. The pre-existing test asserting the *old* behavior (`on_stop` not called) was inverted to assert the new one. |
+| FD-07 | 🟢 Low | `Worker` processes didn't receive exporters from topology YAML | Fixed together with FD-09 (same underlying gap — see below). `exporters` now flows through `Worker.__init__` and `cli/run.py`'s `_run_worker()`. |
+| FD-09 | 🟢 Low | Two parallel OTEL span export paths coexist | **Scope note:** rather than the originally-sketched "write an `OTLPExportBackend` that converts `SpanData` to OTEL wire format," which is a genuinely large, failure-prone undertaking (hand-rolling OTLP span construction) for a bug-fix pass, the actual fix makes the two paths **mutually exclusive**: `Tracer.__init__` skips the direct `TracerProvider` entirely whenever a `span_queue` is supplied. `build_component_set()` now builds a `SpanQueue` + `FanOutBackend` only when `plugins.exporters` is configured in YAML, and `Runtime`/`Worker` own starting/stopping the `OTELAgent` task. This makes `plugins.exporters: [{type: console}]` actually work for the first time — previously dead code, per `civitas/plugins/loader.py`'s own docstring example (`type: otel`) which was never backed by a real implementation. The existing OTLP env-var auto-detect path (`OTEL_EXPORTER_OTLP_ENDPOINT`) is untouched and still uses the direct `TracerProvider` path when no `plugins.exporters` are configured — zero behavior change for that default case. |
 
 ### B — Durable suspension
 

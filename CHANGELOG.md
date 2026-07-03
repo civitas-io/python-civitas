@@ -11,6 +11,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+
+- **FD-01/FD-03** — `MetricsCollector` (dashboard) had no working way to receive restart, message,
+  or error events; `civitas/cli/dashboard.py` worked around it by monkey-patching
+  `runtime._root_supervisor._handle_crash` directly. Added `civitas.observability.metrics.MetricsSink`
+  protocol, injected via `ComponentSet`/`Runtime.set_metrics()`; `Supervisor.add_crash_callback()` +
+  `Runtime.on_crash()` public hook replace the monkeypatch. `message_handled` and `agent_error` are
+  wired from `AgentProcess._dispatch()`, `message_sent` from `send()`/`ask()`. `llm_call` remains
+  unwired — no clean interception point exists for `ModelResponse` token/cost data without a larger
+  redesign of how `self.llm` is wrapped; flagged as a known follow-up, not silently claimed done.
+- **F01-3** — `Message.ttl` was declared and documented (`AGENTS.md`) but never enforced. Added the
+  `ttl` field to `Message` and enforcement in `Mailbox.get()`: expired messages are discarded with a
+  warning instead of being delivered.
+- **F11-5** — `on_stop()` was not called when `on_start()` raised, leaking any resources partially
+  acquired in `on_start()` and any open `civitas.agent.start` tracer span. `AgentProcess._start()`
+  now runs the equivalent cleanup (close span with error, mark `CRASHED`, run `on_stop()` + MCP
+  client disconnect) before re-raising the original exception.
+- **FD-07/FD-09** — `plugins.exporters` in topology YAML was parsed but never wired to anything in
+  `Runtime` or `Worker`; `Worker` in particular dropped exporters silently in `cli/run.py`'s
+  `_run_worker()`. Fixed both together: `Tracer` now skips its direct `TracerProvider` path
+  whenever a `SpanQueue` is supplied (previously both could run simultaneously with no
+  coordination), and `build_component_set()` assembles a `SpanQueue` + `FanOutBackend` from
+  configured exporters, with `Runtime`/`Worker` owning the `OTELAgent` background task's lifecycle.
+  `plugins.exporters: [{type: console}]` now actually works. The existing `OTEL_EXPORTER_OTLP_ENDPOINT`
+  auto-detect path is unchanged when no `plugins.exporters` are configured.
+
 ## [0.4.0] — 2026-07-03
 
 ### Fixed
