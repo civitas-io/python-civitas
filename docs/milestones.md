@@ -37,7 +37,7 @@ Development progress across all phases of Civitas.
 | 4 | [Gateway API Surface](#gateway-api-surface) | ✅ Completed | Apr 2026 |
 | 4 | [Postgres StateStore + Migration](#postgres-statestore--migration) | ✅ Completed | May 2026 |
 | — | [v0.4.0 Release Fixes](#v040-release-fixes) | ✅ Completed | Jul 2026 |
-| — | [v0.5.0 — In Progress](#v050--in-progress) | 🔄 In Progress | Bucket A done, Jul 2026 |
+| — | [v0.5.0 — Complete (pending release)](#v050--complete-pending-release) | ✅ A+B+C done | Jul 2026 |
 | 4 | [Visual Topology Editor](#m41-visual-topology-editor) | ⏸️ Deferred | — |
 | 5 | [Prompt Library & Playground (civitas-contrib)](#prompt-library--playground) | 💡 Idea | v0.5+, not this repo |
 | 5 | [LLM Gateway](#llm-gateway) | ⏸️ Moved to Presidium | — |
@@ -750,13 +750,14 @@ the published 0.3.0 wheel. Downstream projects running their own `mypy --strict`
 
 ---
 
-## v0.5.0 — In Progress
+## v0.5.0 — Complete (pending release)
 
-**Status: 🔄 In Progress — Scoped July 2026, Bucket A completed July 2026**
+**Status: ✅ Buckets A + B + C complete — July 2026 (release tag not yet cut)**
 
-Scope locked in as three buckets. A fourth candidate bucket (D) was explicitly deferred to a
-future version — see below. Bucket A (correctness & hardening) is done and fully tested; Bucket B
-(durable suspension) has not started.
+Scope was three buckets; a fourth candidate (D) was explicitly deferred to a future version — see
+below. Bucket A (correctness & hardening) ✅, Bucket B (durable suspension) ✅, Bucket C (doc
+hygiene) ✅ — all done and fully tested. A `msgpack>=1.2.1` security bump (GHSA-6v7p-g79w-8964) also
+landed on this line. Cutting the v0.5.0 release tag is the maintainer's call.
 
 ### A — Correctness & hardening
 
@@ -781,22 +782,30 @@ actual `_KNOWN_CONFIG_KEYS` implementation on first pass.
 
 ### B — Durable suspension
 
-**Status: ⏳ Design needed before implementation**
+**Status: ✅ Done** (design + implementation)
 
-`agent.suspend()` / `agent.resume()` — does not exist anywhere in the codebase today (confirmed:
-no `def suspend`/`def resume` in `civitas/`). This is integration point #8 in
-[`boundary.md`](https://github.com/civitas-io/context)'s eight-point Civitas→Presidium contract —
-required for Presidium's human-in-the-loop (HITL) approval flow, where an agent's execution must
-pause mid-`handle()`, durably persist enough state to resume later (possibly after a process
-restart), and resume when Presidium's policy engine or a human approves.
+`agent.suspend()` / `agent.resume()` — integration point #8 in
+[`boundary.md`](https://github.com/civitas-io/context)'s eight-point Civitas→Presidium contract,
+required for Presidium's human-in-the-loop (HITL) approval flow, where an agent must pause, durably
+persist enough state to resume later (possibly after a process restart), and resume when Presidium's
+policy engine or a human approves.
 
-This repo's own convention (see M4.2 Security Hardening, M4.1b Dynamic Spawning) is a design doc
-before an implementation checklist for anything touching core lifecycle semantics. No
-`docs/design/durable-suspension.md` exists yet — first deliverable for this bucket is that spec,
-covering at minimum: where suspended state is persisted (`StateStore`? a new protocol?),
-interaction with `Supervisor` restart strategies (does a suspended agent count as crashed?),
-mailbox behavior while suspended (queue, reject, or backpressure new messages?), and the
-resume-after-process-restart case.
+Design spec: [`docs/design/durable-suspension.md`](design/durable-suspension.md) (FINAL DESIGN
+S1–S10). Delivered per that spec:
+
+- `ProcessStatus.SUSPENDED` re-introduced fully-wired (removed as dead API in **F02-6**), with every
+  transition defined and tested — the governing constraint that F02-6 flagged.
+- Suspension pauses *dispatch* only (no coroutine snapshotting). `suspend()` is a non-blocking flag
+  actioned at the message-loop boundary; while suspended only the priority queue is drained so
+  business messages stay buffered (FIFO + backpressure preserved).
+- Durable marker persisted inside `self.state` (reserved key `_civitas.suspended`) via the existing
+  `checkpoint()` path — no `StateStore` protocol change, so all contrib stores work unchanged.
+  Durable only with a persistent store (same caveat as `checkpoint()`).
+- Write-ahead suspend (pause in-memory first, then persist; never falls back to RUNNING);
+  approver-gated resume; marker cleared on permanent removal (despawn / restarts exhausted) but kept
+  on graceful shutdown / crash-restart. Supervisor `_stop()` and restart strategies handle SUSPENDED.
+- Suspend/resume emit spans + `AuditEvent`s (resume records the approver). A suspended agent does
+  **not** count as crashed. `ask()` into a suspended agent times out (fail-fast deferred).
 
 ### C — Doc hygiene (completed as part of scoping this release)
 

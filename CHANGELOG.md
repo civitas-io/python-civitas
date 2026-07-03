@@ -11,6 +11,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+### Added
+
+- **Durable suspension** (`agent.suspend()` / `agent.resume()`) — the Presidium human-in-the-loop
+  approval primitive. `ProcessStatus.SUSPENDED` is re-introduced fully-wired (it was removed as dead
+  API in **F02-6**): every transition, mailbox behaviour, supervisor interaction, and persistence
+  path is defined and tested. Suspension pauses message *dispatch* only (Python cannot snapshot a
+  running `handle()` coroutine). Key semantics: `suspend()` is a non-blocking flag actioned at the
+  message-loop boundary; while suspended only the priority queue is drained so business messages stay
+  buffered in FIFO order with backpressure preserved; the durable marker rides inside `self.state`
+  under `_civitas.suspended` (one atomic checkpoint, durable only with a persistent store); suspend is
+  write-ahead (pause in-memory first, then persist — never falls back to RUNNING on persist failure);
+  `resume()` requires a non-empty `approver`; on permanent removal (despawn / restarts exhausted) the
+  marker is cleared to prevent zombie-suspension, while graceful shutdown and crash-restart keep it.
+  External entry points `runtime.suspend(name, reason="")` / `runtime.resume(name, approver)` deliver
+  priority `_agency.suspend` / `_agency.resume` control messages. Each suspend/resume emits a
+  `civitas.agent.suspend` / `civitas.agent.resume` span and an `AuditEvent` (resume records the
+  approver). `ask()` into a suspended agent times out (documented; fail-fast deferred).
+
 ### Security
 
 - Bumped `msgpack` floor to `>=1.2.1` (was `>=1.1`, resolved to 1.1.2) to clear
