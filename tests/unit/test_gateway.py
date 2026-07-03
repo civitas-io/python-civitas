@@ -1274,6 +1274,178 @@ class TestMiddlewareLoadFailure:
 
 
 # ---------------------------------------------------------------------------
+# Route-scoped middleware — RouteEntry.middleware, resolved and run after
+# global middleware, before contract validation / bus dispatch (GH #6)
+# ---------------------------------------------------------------------------
+
+_route_mw_order: list[str] = []
+
+
+async def _order_tracking_route_mw(
+    request: GatewayRequest, next_fn: Callable[[GatewayRequest], Awaitable[GatewayResponse]]
+) -> GatewayResponse:
+    _route_mw_order.append("route")
+    return await next_fn(request)
+
+
+async def _order_tracking_global_mw(
+    request: GatewayRequest, next_fn: Callable[[GatewayRequest], Awaitable[GatewayResponse]]
+) -> GatewayResponse:
+    _route_mw_order.append("global")
+    return await next_fn(request)
+
+
+async def _admin_guard_route_mw(
+    request: GatewayRequest, next_fn: Callable[[GatewayRequest], Awaitable[GatewayResponse]]
+) -> GatewayResponse:
+    if request.headers.get("x-admin") != "true":
+        return GatewayResponse(403, {"error": "forbidden"})
+    return await next_fn(request)
+
+
+class TestRouteScopedMiddleware:
+    def setup_method(self) -> None:
+        _route_mw_order.clear()
+
+    @pytest.mark.asyncio
+    async def test_route_scoped_middleware_blocks_unauthorized_request(self) -> None:
+        # This is the exact exploit from GH #6: a route-scoped guard on an
+        # admin route must actually run, not be silently skipped.
+        asgi, gateway = _make_asgi(
+            routes=[
+                {
+                    "method": "GET",
+                    "path": "/admin/tenants",
+                    "agent": "admin_agent",
+                    "mode": "call",
+                    "middleware": ["tests.unit.test_gateway._admin_guard_route_mw"],
+                }
+            ]
+        )
+        gateway.ask = AsyncMock(return_value=MagicMock(spec=Message, payload={"tenants": []}))
+
+        status, body = await _http_request(asgi, method="GET", path="/admin/tenants")
+        assert status == 403
+        assert body == {"error": "forbidden"}
+        gateway.ask.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_route_scoped_middleware_allows_authorized_request(self) -> None:
+        asgi, gateway = _make_asgi(
+            routes=[
+                {
+                    "method": "GET",
+                    "path": "/admin/tenants",
+                    "agent": "admin_agent",
+                    "mode": "call",
+                    "middleware": ["tests.unit.test_gateway._admin_guard_route_mw"],
+                }
+            ]
+        )
+        reply = MagicMock(spec=Message)
+        reply.payload = {"tenants": ["acme"]}
+        gateway.ask = AsyncMock(return_value=reply)
+
+        status, body = await _http_request(
+            asgi, method="GET", path="/admin/tenants", headers={"x-admin": "true"}
+        )
+        assert status == 200
+        assert body == {"tenants": ["acme"]}
+        gateway.ask.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_global_middleware_runs_before_route_scoped(self) -> None:
+        gateway = MagicMock(spec=HTTPGateway)
+        gateway.name = "api"
+        config = GatewayConfig(
+            middleware=["tests.unit.test_gateway._order_tracking_global_mw"],
+            routes=[
+                {
+                    "method": "POST",
+                    "path": "/v1/chat",
+                    "agent": "assistant",
+                    "mode": "call",
+                    "middleware": ["tests.unit.test_gateway._order_tracking_route_mw"],
+                }
+            ],
+        )
+        route_table = RouteTable.from_config(config.routes)
+        asgi = GatewayASGI(gateway=gateway, route_table=route_table, config=config)
+        reply = MagicMock(spec=Message)
+        reply.payload = {}
+        gateway.ask = AsyncMock(return_value=reply)
+
+        await _http_request(asgi, method="POST", path="/v1/chat")
+        assert _route_mw_order == ["global", "route"]
+
+    @pytest.mark.asyncio
+    async def test_route_without_middleware_is_unaffected(self) -> None:
+        asgi, gateway = _make_asgi(
+            routes=[
+                {
+                    "method": "GET",
+                    "path": "/admin/tenants",
+                    "agent": "admin_agent",
+                    "middleware": ["tests.unit.test_gateway._admin_guard_route_mw"],
+                },
+                {"method": "GET", "path": "/public/status", "agent": "status_agent"},
+            ]
+        )
+        reply = MagicMock(spec=Message)
+        reply.payload = {"ok": True}
+        gateway.ask = AsyncMock(return_value=reply)
+
+        status, body = await _http_request(asgi, method="GET", path="/public/status")
+        assert status == 200
+        assert body == {"ok": True}
+
+    @pytest.mark.asyncio
+    async def test_bad_route_middleware_path_logged_not_raised(self) -> None:
+        asgi, gateway = _make_asgi(
+            routes=[
+                {
+                    "method": "POST",
+                    "path": "/v1/chat",
+                    "agent": "assistant",
+                    "middleware": ["nonexistent.module.Middleware"],
+                }
+            ]
+        )
+        reply = MagicMock(spec=Message)
+        reply.payload = {}
+        gateway.ask = AsyncMock(return_value=reply)
+
+        # Should not raise — bad route middleware is logged and skipped,
+        # same behavior as an unresolvable global middleware path.
+        status, _ = await _http_request(asgi, method="POST", path="/v1/chat")
+        assert status == 200
+
+    @pytest.mark.asyncio
+    async def test_route_middleware_resolved_once_and_cached(self) -> None:
+        asgi, gateway = _make_asgi(
+            routes=[
+                {
+                    "method": "POST",
+                    "path": "/v1/chat",
+                    "agent": "assistant",
+                    "middleware": ["tests.unit.test_gateway._order_tracking_route_mw"],
+                }
+            ]
+        )
+        reply = MagicMock(spec=Message)
+        reply.payload = {}
+        gateway.ask = AsyncMock(return_value=reply)
+
+        with patch(
+            "civitas.gateway.asgi.load_middleware", wraps=load_middleware
+        ) as spy_load:
+            await _http_request(asgi, method="POST", path="/v1/chat")
+            await _http_request(asgi, method="POST", path="/v1/chat")
+            assert spy_load.call_count == 1
+        assert _route_mw_order == ["route", "route"]
+
+
+# ---------------------------------------------------------------------------
 # HTTPGateway — on_start uvicorn import failure (lines 78-79)
 # ---------------------------------------------------------------------------
 

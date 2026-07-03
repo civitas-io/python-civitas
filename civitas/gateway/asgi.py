@@ -14,7 +14,7 @@ from civitas.gateway.types import GatewayRequest, GatewayResponse, MiddlewareCal
 
 if TYPE_CHECKING:
     from civitas.gateway.core import GatewayConfig, HTTPGateway
-    from civitas.gateway.router import RouteTable
+    from civitas.gateway.router import RouteEntry, RouteTable
 
 logger = logging.getLogger(__name__)
 
@@ -71,8 +71,32 @@ class GatewayASGI:
             except Exception:
                 logger.exception("Failed to load middleware %r", dotted_path)
 
+        # Route-scoped middleware is resolved lazily per RouteEntry (keyed by
+        # object identity — entries live for the lifetime of the route table)
+        # and cached so repeated requests don't re-import on every call.
+        self._route_middleware_cache: dict[int, list[MiddlewareCallable]] = {}
+
         # Cached OpenAPI spec (built lazily)
         self._openapi_spec: dict[str, Any] | None = None
+
+    def _route_middlewares(self, entry: RouteEntry) -> list[MiddlewareCallable]:
+        """Resolve and cache *entry*'s own ``middleware:`` dotted paths."""
+        cached = self._route_middleware_cache.get(id(entry))
+        if cached is not None:
+            return cached
+        resolved: list[MiddlewareCallable] = []
+        for dotted_path in entry.middleware:
+            try:
+                resolved.append(load_middleware(dotted_path))
+            except Exception:
+                logger.exception(
+                    "Failed to load route middleware %r for %s %s",
+                    dotted_path,
+                    entry.method,
+                    entry.path_pattern,
+                )
+        self._route_middleware_cache[id(entry)] = resolved
+        return resolved
 
     async def __call__(self, scope: _Scope, receive: _Receive, send: _Send) -> None:
         if scope["type"] == "lifespan":
@@ -138,9 +162,13 @@ class GatewayASGI:
                 await self._respond(send, GatewayResponse(400, {"error": "invalid JSON body"}))
                 return
 
+        matched = self._route_table.match(method, path)
+        route_middlewares = self._route_middlewares(matched[0]) if matched is not None else []
+
         request = GatewayRequest(
             method=method,
             path=path,
+            path_params=matched[1] if matched is not None else {},
             query_params=query_params,
             headers=headers,
             body=body,
@@ -148,8 +176,9 @@ class GatewayASGI:
             gateway=self._gateway,
         )
 
-        # Build and run middleware chain around the dispatch handler
-        chain = build_chain(self._middlewares, self._dispatch_handler)
+        # Build and run middleware chain: global middleware, then this route's
+        # own middleware, then contract validation + bus dispatch (terminal).
+        chain = build_chain(self._middlewares + route_middlewares, self._dispatch_handler)
         response = await chain(request)
 
         # Attach trace context headers from original request
