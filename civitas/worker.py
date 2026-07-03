@@ -36,6 +36,7 @@ from typing import Any
 from civitas.components import ComponentSet, build_component_set
 from civitas.errors import ConfigurationError
 from civitas.messages import Message
+from civitas.observability.otel_agent import run_otel_agent
 from civitas.process import AgentProcess, ProcessStatus
 from civitas.serializer import Serializer
 
@@ -66,6 +67,7 @@ class Worker:
         model_provider: Any = None,
         tool_registry: Any = None,
         state_store: Any = None,
+        exporters: list[Any] | None = None,
         max_restarts: int = 3,
         components: ComponentSet | None = None,
     ) -> None:
@@ -78,8 +80,10 @@ class Worker:
         self._model_provider = model_provider
         self._tool_registry = tool_registry
         self._state_store = state_store
+        self._exporters = exporters or []
         self._max_restarts = max_restarts
         self._components = components
+        self._otel_agent_task: asyncio.Task[None] | None = None
 
         # O(1) agent lookup by name (F02-8)
         self._agents: dict[str, AgentProcess] = {a.name: a for a in agents}
@@ -111,6 +115,7 @@ class Worker:
                 model_provider=self._model_provider,
                 tool_registry=self._tool_registry,
                 state_store=self._state_store,
+                exporters=self._exporters,
                 zmq_pub_addr=self._zmq_pub_addr,
                 zmq_sub_addr=self._zmq_sub_addr,
                 zmq_start_proxy=False,  # Workers connect to an existing proxy
@@ -123,6 +128,12 @@ class Worker:
         self._transport = cs.transport
         self._registry = cs.registry
         self._bus = cs.bus
+
+        # Drain span_queue via OTELAgent when exporters are configured (FD-07/FD-09)
+        if cs.span_queue is not None and cs.export_backend is not None:
+            self._otel_agent_task = asyncio.create_task(
+                run_otel_agent(cs.span_queue, cs.export_backend)
+            )
 
         # Start transport first — must be running before setup_agent (F02-16)
         await self._transport.start()
@@ -229,6 +240,11 @@ class Worker:
 
         if self._transport is not None:
             await self._transport.stop()
+
+        if self._otel_agent_task is not None:
+            self._otel_agent_task.cancel()
+            await asyncio.gather(self._otel_agent_task, return_exceptions=True)
+            self._otel_agent_task = None
 
         self._started = False
         self._stop_event.set()

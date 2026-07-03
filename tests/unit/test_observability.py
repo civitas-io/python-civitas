@@ -396,6 +396,39 @@ def test_tracer_new_span_id_returns_hex_string() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Tracer — span_queue makes Path A/Path B mutually exclusive (FD-09)
+# ---------------------------------------------------------------------------
+
+
+def test_tracer_with_span_queue_skips_direct_provider() -> None:
+    """Providing span_queue skips the direct TracerProvider path entirely."""
+    queue = SpanQueue()
+    tracer = Tracer(span_queue=queue)
+    assert tracer._use_otel is False
+    assert tracer._provider is None
+    assert tracer._otel_tracer is None
+    assert tracer._console_fallback is False
+
+
+def test_tracer_without_span_queue_unchanged() -> None:
+    """Providing no span_queue behaves exactly as before (default path)."""
+    tracer = Tracer()
+    assert tracer._span_queue is None
+    # _console_fallback / _use_otel depend on whether opentelemetry-sdk is
+    # installed in this environment — just confirm the queue path was skipped.
+    assert tracer._use_otel or tracer._console_fallback
+
+
+def test_tracer_with_span_queue_pushes_completed_spans() -> None:
+    """Spans still flow to the queue when the direct provider path is skipped."""
+    queue = SpanQueue()
+    tracer = Tracer(span_queue=queue)
+    span = tracer.start_span("civitas.test", trace_id="t1")
+    span.end()
+    assert queue.qsize() == 1
+
+
+# ---------------------------------------------------------------------------
 # Tracer — console fallback log output
 # ---------------------------------------------------------------------------
 

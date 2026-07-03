@@ -139,6 +139,8 @@ async def _run_worker(config: dict[str, Any], process_name: str) -> None:
             kwargs["model_provider"] = loaded["model_providers"][0]
         if loaded["state_store"] is not None:
             kwargs["state_store"] = loaded["state_store"]
+        if loaded["exporters"]:
+            kwargs["exporters"] = loaded["exporters"]
 
     worker = Worker(**kwargs)
     console.print(f"  [blue]Worker '{process_name}':[/blue] hosting {[a.name for a in agents]}")
