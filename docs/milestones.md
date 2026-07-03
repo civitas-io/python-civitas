@@ -36,12 +36,13 @@ Development progress across all phases of Civitas.
 | 4 | [HTTP Gateway](#http-gateway) | ✅ Completed | Apr 2026 |
 | 4 | [Gateway API Surface](#gateway-api-surface) | ✅ Completed | Apr 2026 |
 | 4 | [Postgres StateStore + Migration](#postgres-statestore--migration) | ✅ Completed | May 2026 |
-| 4 | [Visual Topology Editor](#m41-visual-topology-editor) | ⏸️ Deferred | — |
 | — | [v0.4.0 Release Fixes](#v040-release-fixes) | ✅ Completed | Jul 2026 |
-| 5 | [Prompt Library & Playground](#prompt-library--playground) | 💡 Idea | v0.5+ |
+| — | [v0.5.0 — Planned](#v050--planned) | ⏳ Planned | — |
+| 4 | [Visual Topology Editor](#m41-visual-topology-editor) | ⏸️ Deferred | — |
+| 5 | [Prompt Library & Playground (civitas-contrib)](#prompt-library--playground) | 💡 Idea | v0.5+, not this repo |
 | 5 | [LLM Gateway](#llm-gateway) | ⏸️ Moved to Presidium | — |
-| 5 | [Fabrica — Tools Gateway](#fabrica--tools-gateway) | 💡 Idea | v0.5+ |
-| 5 | [Skills Gateway](#skills-gateway) | 💡 Idea | v0.5+ |
+| 5 | [Fabrica — Tools Gateway (civitas-forge)](#fabrica--tools-gateway) | 💡 Idea | v0.5+, not this repo |
+| 5 | [Skills Gateway (civitas-contrib)](#skills-gateway) | 💡 Idea | v0.5+, not this repo |
 
 ---
 
@@ -203,91 +204,39 @@ Plugin adapters connecting Civitas's `EvalEvent` stream to external eval engines
 
 ### M3.4 — MCP Integration
 
-**Status: ✅ Completed — April 2026**
+**Status: ✅ Completed — April 2026 | Corrected — July 2026**
 
-MCP protocol plumbing — the wire layer between Civitas agents and MCP tool servers. Agents call tools by direct address (`mcp://server/tool`); the runtime handles handshake, transport, schema negotiation, and tracing. Agents also expose themselves as MCP servers so external LLM clients can discover and call them.
+> **Correction (July 2026):** This section originally described `MCPClient` and `MCPTool` as
+> civitas-core deliverables. Per [`boundary.md`](https://github.com/civitas-io/context)'s
+> ownership split, the MCP tools gateway (Fabrica) is a civitas-contrib concern. The actual
+> implementation moved there; civitas core kept only the wire-layer types and the lazy-import
+> integration point. Table below reflects current reality, not the original plan.
 
-**Scope:** protocol wire layer only. Connection pooling, circuit breakers, unified tool namespacing, and semantic retrieval are **not** in scope — they belong to Fabrica. See [design spec](design/mcp-integration.md).
+MCP protocol plumbing — the wire layer between Civitas agents and MCP tool servers. Agents call tools by direct address (`mcp://server/tool`); civitas core owns the config types and the `AgentProcess.connect_mcp()` integration point; the actual client/transport implementation lives in Fabrica (civitas-contrib).
 
-**Dependency chain:** M3.4 → M4.4 (ToolStore) → Fabrica (pooling + retrieval)
+**Scope:** civitas core keeps config types (no `mcp` SDK dependency at import time) and the `connect_mcp()` lazy-import hook. Connection handling, tool wrapping, connection pooling, circuit breakers, unified tool namespacing, and semantic retrieval are **not** in core scope — they belong to Fabrica. See [design spec](design/mcp-integration.md) (describes the original plan; superseded on the client/tool split, see correction above).
 
-| Deliverable | Status |
-|-------------|--------|
-| `civitas[mcp]` optional extra — `mcp>=1.0` dependency | ✅ |
-| `MCPClient` — connect (stdio + SSE), `list_tools`, `call_tool`, persistent session via `AsyncExitStack` | ✅ |
-| `MCPTool(ToolProvider)` — `mcp://server_name/tool_name` name scheme | ✅ |
-| `AgentProcess.connect_mcp()` — connect + auto-register tools into `self.tools`; idempotent | ✅ |
-| `self.tools.get("mcp://server/tool")` resolves to the registered `MCPTool` | ✅ |
-| `MCPTool.execute()` emits `civitas.mcp.call` OTEL span | ✅ |
-| `CivitasMCPServer(GenServer)` — deferred to Fabrica (scope boundary decision) | ⏸️ |
-| Topology YAML `mcp.servers` block — auto-connect at agent startup | ✅ |
-| 23 unit tests | ✅ |
+**Dependency chain:** M3.4 (types + integration point) → Fabrica (`MCPClient`, `MCPTool`, pooling, retrieval)
 
-**Explicitly out of scope for M3.4:**
+| Deliverable | Status | Lives in |
+|-------------|--------|----------|
+| `civitas.mcp.types` — `MCPServerConfig`, `MCPToolSchema`, `MCPToolError` (no `mcp` SDK import) | ✅ | civitas core |
+| `AgentProcess.connect_mcp(config)` — lazily imports `fabrica.mcp.client.MCPClient`, registers tools into `self.tools`; idempotent | ✅ | civitas core |
+| `ToolRegistry.deregister_prefix(prefix)` | ✅ | civitas core |
+| Topology YAML `mcp.servers` block — parsed into `Runtime._mcp_configs`, auto-connect at agent startup | ✅ | civitas core |
+| `MCPClient` — connect (stdio + SSE), `list_tools`, `call_tool` | ✅ | **civitas-contrib (fabrica)** — not this repo |
+| `MCPTool(ToolProvider)` — `mcp://server_name/tool_name` name scheme, `civitas.mcp.call` OTEL span | ✅ | **civitas-contrib (fabrica)** — not this repo |
+| `civitas[mcp]` optional extra | ❌ removed | use `pip install fabrica[mcp]` instead |
+| `CivitasMCPServer(GenServer)` — expose an agent tree as an MCP server | ⏸️ | deferred to Fabrica (scope boundary decision), not started anywhere |
+| Unit tests (types + YAML parsing, core-side only) | ✅ | civitas core (`tests/unit/test_mcp.py`) |
+
+**Explicitly out of scope for civitas core:**
+- `MCPClient` / `MCPTool` implementation — Fabrica (civitas-contrib)
 - Connection pooling / persistent sessions — Fabrica (`MCPToolSource`)
 - Circuit breakers per server — Fabrica
 - Semantic or keyword tool retrieval (`find_tools`) — Fabrica
 - Unified cross-agent tool namespace — M4.4 ToolStore
 - Per-agent credential isolation — M4.2 Security Hardening
-
-#### Implementation checklist
-
-Ordered tasks — each step is independently mergeable.
-
-1. **Package setup**
-   - [ ] `civitas/mcp/__init__.py` — package stub
-   - [ ] `civitas/mcp/types.py` — `MCPServerConfig` (name, transport, command/args/env/url), `MCPToolSchema`
-   - [ ] `civitas[mcp]` extra in `pyproject.toml` — `mcp>=1.0`
-
-2. **MCP client**
-   - [ ] `civitas/mcp/client.py` — `MCPClient.__init__(config: MCPServerConfig)`
-   - [ ] `MCPClient.list_tools()` — stdio transport: open subprocess session, call `list_tools`, close
-   - [ ] `MCPClient.list_tools()` — SSE transport: open HTTP session, call `list_tools`, close
-   - [ ] `MCPClient.call_tool(name, arguments)` — stdio transport
-   - [ ] `MCPClient.call_tool(name, arguments)` — SSE transport
-
-3. **MCPTool**
-   - [ ] `civitas/mcp/tool.py` — `MCPTool(ToolProvider)` wrapping `MCPClient` + `MCPToolSchema`
-   - [ ] `MCPTool.name` returns `mcp://server_name/tool_name`
-   - [ ] `MCPTool.schema` returns the JSON Schema from the MCP tool definition
-   - [ ] `MCPTool.execute(**kwargs)` calls `client.call_tool()` and returns result
-   - [ ] `MCPTool.execute()` emits `civitas.mcp.call` OTEL span (attributes: server, tool, transport)
-
-4. **AgentProcess integration**
-   - [ ] `AgentProcess.connect_mcp(config)` — creates `MCPClient`, calls `list_tools`, registers each as `MCPTool` in `self.tools`
-   - [ ] `connect_mcp()` is idempotent: deregisters existing tools for the same server before re-registering
-   - [ ] `self.tools.get("mcp://github/create_issue")` resolves correctly via registered name
-
-5. **MCP server exposure**
-   - [ ] `civitas/mcp/server.py` — `CivitasMCPServer(GenServer)`
-   - [ ] `CivitasMCPServer.init()` — starts MCP stdio server in background task via `mcp.Server`
-   - [ ] `list_tools` handler — returns schemas from injected `ToolRegistry`
-   - [ ] `call_tool` handler — calls the matching `MCPTool.execute()` or raises `ToolNotFoundError`
-
-6. **Topology YAML support**
-   - [ ] Runtime loader reads `mcp.servers` block, creates `MCPServerConfig` instances
-   - [ ] Agents auto-connect configured servers during startup (before first message)
-   - [ ] `mcp.expose.enabled: true` starts `CivitasMCPServer` as a supervised child
-   - [ ] `civitas topology validate` accepts `mcp:` section without errors
-
-7. **Tests (≥ 10 unit, ≥ 2 integration)**
-   - [ ] `MCPServerConfig` validation (missing transport fields, unknown transport)
-   - [ ] `MCPTool.name` follows `mcp://` scheme
-   - [ ] `MCPTool.schema` returns correct JSON Schema
-   - [ ] `MCPTool.execute()` calls `client.call_tool()` with correct args
-   - [ ] `MCPTool.execute()` emits OTEL span
-   - [ ] `connect_mcp()` registers tools in `self.tools`
-   - [ ] `connect_mcp()` deregisters old tools on reconnect (idempotency)
-   - [ ] `self.tools.get("mcp://server/tool")` returns correct tool
-   - [ ] `CivitasMCPServer` `list_tools` returns all registered tools
-   - [ ] `CivitasMCPServer` `call_tool` routes to correct tool
-   - [ ] Integration: agent connects to real stdio MCP echo server, calls a tool
-   - [ ] Integration: `CivitasMCPServer` handles `list_tools` request from real MCP client
-
-8. **Release**
-   - [ ] `CHANGELOG.md` entry under `## [0.3.0]`
-   - [ ] Example: `examples/mcp_agent.py` — agent connecting to a stdio MCP server
-   - [ ] `mkdocs.yml` nav updated with MCP integration design doc
 
 ---
 
@@ -374,8 +323,7 @@ Ordered tasks — each step is independently mergeable.
 | PyPI publishing via OIDC trusted publishing | ✅ | Apr 2026 |
 | GitHub Pages documentation site | ✅ | Apr 2026 |
 | Test coverage raised from 85% → 90%+ | ✅ | Apr 2026 |
-| Framework adapters: LangGraph, OpenAI Agents SDK | ✅ | Mar 2026 |
-| Framework adapters: CrewAI | ⏳ | — |
+| Framework adapters: LangGraph, OpenAI Agents SDK, CrewAI (stub) | ✅ | Mar 2026 — **civitas-contrib**, not this repo; `civitas/adapters/` does not exist in python-civitas |
 
 ---
 
@@ -722,29 +670,33 @@ Declarative routes, Pydantic request/response validation, middleware chain, and 
 
 ### Postgres StateStore + Migration
 
-**Status: ✅ Completed — May 2026 | Priority: 🔴 High**
+**Status: ✅ Completed — May 2026 | Priority: 🔴 High | Corrected — July 2026**
 
-SQLite works for single-process deployments but breaks under concurrent cross-process writes (ZMQ Level 2+, NATS Level 3). `PostgresStateStore` extends the `StateStore` protocol — switching backends is a topology YAML change with no agent code changes.
+> **Correction (July 2026):** This section originally described `PostgresStateStore` itself as a
+> civitas-core deliverable. Per [`boundary.md`](https://github.com/civitas-io/context), state
+> store *implementations* (SQLite, Postgres, Redis) are a civitas-contrib concern — only the
+> `StateStore` protocol, `InMemoryStateStore` (the trivial default), the plugin loader's lazy
+> resolution, and the `civitas state migrate` CLI are core's job. Table corrected below.
 
-| Deliverable | Status |
-|-------------|--------|
-| `StateStore` protocol extended with `list_agents()` and `close()` | ✅ |
-| `InMemoryStateStore.list_agents()` / `close()` | ✅ |
-| `PostgresStateStore` — `asyncpg` backend, connection pool, lazy init | ✅ |
-| `civitas_agent_state` table — JSONB, upsert, `updated_at` timestamp | ✅ |
-| Pool config via topology YAML — `min_size`, `max_size`, `timeout` | ✅ |
-| `civitas[postgres]` optional extra — `asyncpg>=0.29` | ✅ |
-| Plugin loader entry: `type: postgres` | ✅ |
-| `@runtime_checkable StateStore` — `isinstance()` checks work | ✅ |
-| `civitas state migrate <src> <dst>` — dry-run by default, `--execute` to apply | ✅ |
-| `_parse_dsn()` — `sqlite:<path>`, `.db`/`.sqlite` extension, `postgresql://` URL | ✅ |
-| Helpful `ImportError` with install hint if `asyncpg` not installed | ✅ |
-| 20 unit tests covering protocol, PostgresStateStore (mocked), and migrate CLI | ✅ |
+SQLite works for single-process deployments but breaks under concurrent cross-process writes (ZMQ Level 2+, NATS Level 3). `PostgresStateStore` extends the `StateStore` protocol — switching backends is a topology YAML change with no agent code changes, and no top-level `civitas` import ever references `asyncpg` directly.
+
+| Deliverable | Status | Lives in |
+|-------------|--------|----------|
+| `StateStore` protocol extended with `list_agents()` and `close()` | ✅ | civitas core |
+| `InMemoryStateStore.list_agents()` / `close()` | ✅ | civitas core |
+| Plugin loader entry `type: postgres` → lazy `civitas_contrib.plugins.postgres_store.PostgresStateStore` import | ✅ | civitas core (resolution only) |
+| `@runtime_checkable StateStore` — `isinstance()` checks work | ✅ | civitas core |
+| `civitas state migrate <src> <dst>` — dry-run by default, `--execute` to apply; lazy-imports `PostgresStateStore` from civitas-contrib | ✅ | civitas core |
+| `_parse_dsn()` — `sqlite:<path>`, `.db`/`.sqlite` extension, `postgresql://` URL | ✅ | civitas core (`cli/state.py`) |
+| `PostgresStateStore` — `asyncpg` backend, connection pool, `civitas_agent_state` JSONB table | ✅ | **civitas-contrib** — not this repo |
+| `civitas[postgres]` optional extra — `asyncpg>=0.29` | ❌ removed from core | use `civitas-contrib[postgres]` |
+| Helpful `ImportError`/`ConfigurationError` with install hint if civitas-contrib not installed | ✅ | civitas core (lazy-import pattern) |
+| 20 unit tests covering protocol, migrate CLI DSN parsing, and mocked contrib import | ✅ | civitas core |
 | Zero-downtime dual-write migration | ⏸️ Deferred — maintenance-window copy is sufficient for v0.4 |
 | PgBouncer deployment guide | ⏸️ Deferred to docs pass |
-| MySQL StateStore (`aiomysql`/`asyncmy` backend) | ⏸️ Deferred — see below |
+| MySQL StateStore (`aiomysql`/`asyncmy` backend) | ⏸️ Deferred — see below; **civitas-contrib**'s job if built |
 
-> **MySQL StateStore** — deferred because Postgres covers the multi-process persistence gap and asyncpg is a better async foundation. Add if users are already running MySQL and cannot introduce a second database. Implementation is a clean 100-line addition following the same plugin pattern (`civitas[mysql]` extra, `type: mysql` loader entry, `mysql://` DSN in `_parse_dsn`).
+> **MySQL StateStore** — deferred because Postgres covers the multi-process persistence gap and asyncpg is a better async foundation. If ever built, it belongs in **civitas-contrib** alongside the other state store implementations, following the same lazy plugin-loader pattern (`type: mysql` loader entry resolving to `civitas_contrib.plugins.mysql_store.MySQLStateStore`, `mysql://` DSN in `_parse_dsn`).
 
 ---
 
@@ -798,6 +750,75 @@ the published 0.3.0 wheel. Downstream projects running their own `mypy --strict`
 
 ---
 
+## v0.5.0 — Planned
+
+**Status: ⏳ Planned | Scoped — July 2026**
+
+Scope locked in as three buckets. A fourth candidate bucket (D) was explicitly deferred to a
+future version — see below.
+
+### A — Correctness & hardening
+
+Seven items from [`context/known-issues.md`](https://github.com/civitas-io/context) (private
+cross-repo tracker), each re-verified against the current codebase before inclusion here — one
+originally-listed item (F01-2, span leak on serializer error in `bus.route()`) was found already
+fixed and is not carried forward.
+
+| ID | Priority | Issue | Fix direction |
+|---|---|---|---|
+| FD-01 | 🔴 High | `MetricsCollector` not wired to real event sources — dashboard always shows 0 for message flow, LLM cost, restarts | Add a proper `on_crash_callback`/lifecycle hook injectable on `Supervisor`/`Runtime`; wire all `MetricsCollector` methods (`message_handled`, `message_sent`, `agent_error`, `llm_call`) through it — same fix serves FD-03 |
+| FD-03 | 🟡 Medium | `civitas/cli/dashboard.py` monkey-patches `runtime._root_supervisor._handle_crash` directly (`# type: ignore[method-assign]`) | Replace with the public hook added for FD-01 — violates AGENTS.md anti-pattern #14 |
+| F04-2 | 🟡 Medium | `Runtime.from_config` silently accepts unknown topology YAML keys (e.g. `supervison:` typo) | Validate top-level keys against a known set at parse time; raise `ConfigurationError` — this is literally what AGENTS.md anti-pattern #17 prescribes, never implemented |
+| F01-3 | 🟡 Medium | `Message.ttl` declared and documented, never enforced (`# ttl: planned` TODO still in `messages.py`) | Check `message.ttl` in `bus.route()` / mailbox delivery; discard expired messages with a warning — violates AGENTS.md anti-pattern #16 (dead API surface) |
+| F11-5 | 🟡 Medium | `on_stop()` not called when `on_start()` raises (`AgentProcess._start()` has no try/except around `on_start()`) | Wrap `on_start()` in the same lifecycle error handling as `_message_loop()`; verify against OTP `terminate/2`-after-failed-`init/1` semantics |
+| FD-07 | 🟢 Low | `Worker` processes don't receive exporters from topology YAML — no exporter references anywhere in `worker.py` or `cli/run.py` | Pass exporters to `Worker` via `ComponentSet` or a direct constructor parameter |
+| FD-09 | 🟢 Low | Two parallel OTEL span export paths coexist (`Tracer`'s direct `TracerProvider`/`BatchSpanProcessor` vs. `SpanQueue`→`OTELAgent`→`ExportBackend`) | Unify on the `SpanQueue`/`ExportBackend` pipeline; implement an `OTELExportBackend` wrapping the OTLP exporter; remove direct `TracerProvider` setup from `Tracer.__init__` — larger, riskier, candidate to slip to v0.5.1 if it threatens the release |
+
+### B — Durable suspension
+
+**Status: ⏳ Design needed before implementation**
+
+`agent.suspend()` / `agent.resume()` — does not exist anywhere in the codebase today (confirmed:
+no `def suspend`/`def resume` in `civitas/`). This is integration point #8 in
+[`boundary.md`](https://github.com/civitas-io/context)'s eight-point Civitas→Presidium contract —
+required for Presidium's human-in-the-loop (HITL) approval flow, where an agent's execution must
+pause mid-`handle()`, durably persist enough state to resume later (possibly after a process
+restart), and resume when Presidium's policy engine or a human approves.
+
+This repo's own convention (see M4.2 Security Hardening, M4.1b Dynamic Spawning) is a design doc
+before an implementation checklist for anything touching core lifecycle semantics. No
+`docs/design/durable-suspension.md` exists yet — first deliverable for this bucket is that spec,
+covering at minimum: where suspended state is persisted (`StateStore`? a new protocol?),
+interaction with `Supervisor` restart strategies (does a suspended agent count as crashed?),
+mailbox behavior while suspended (queue, reject, or backpressure new messages?), and the
+resume-after-process-restart case.
+
+### C — Doc hygiene (completed as part of scoping this release)
+
+`docs/milestones.md` had drifted from [`boundary.md`](https://github.com/civitas-io/context)'s
+repo-ownership split in four places, all corrected in this pass:
+
+- **M3.4 MCP Integration** — table claimed `MCPClient`/`MCPTool`/`civitas[mcp]` as civitas-core
+  deliverables; they live in Fabrica (civitas-contrib). Corrected to show only the types +
+  `connect_mcp()` lazy-import point as core.
+- **Postgres StateStore + Migration** — table claimed `PostgresStateStore` itself as civitas-core;
+  it lives in civitas-contrib. Corrected to show only the protocol, loader resolution, and
+  `civitas state migrate` CLI as core.
+- **Infrastructure & Release — Framework adapters** — claimed LangGraph/OpenAI adapters as
+  civitas-core with CrewAI merely "planned"; `civitas/adapters/` doesn't exist in this repo at
+  all — all three (including CrewAI as a stub) live in civitas-contrib. Corrected.
+- **Phase 5 — Prompt Library & Playground, Skills Gateway** — framed as "Civitas-side features";
+  `boundary.md` assigns both to civitas-contrib. Corrected with explicit "Lives in" callouts
+  matching how Fabrica's entry already read.
+
+### D — Explicitly deferred to a future version
+
+Not python-civitas's job per `boundary.md`, and not touched in v0.5.0: Prompt Library &
+Playground, Skills Gateway, CrewAI adapter full implementation, MySQL StateStore, Fabrica. All
+belong to civitas-contrib or the separate `civitas-forge` repo — revisit there, not here.
+
+---
+
 ### M4.1 — Visual Topology Editor
 
 **Status: ⏸️ Deferred | Priority: 🟢 Low**
@@ -820,13 +841,19 @@ Civitas provides the runtime primitives. Governance lives in [Presidium](https:/
 
 Presidium follows the same pattern as Civitas: protocols in core, implementations in contrib. Every component works as an in-process library (single-process deployments) or as a service (distributed deployments via Civitas GenServers or standalone HTTP). See [Civitas-Presidium Boundary](design/civitas-presidium-boundary.md) for the full architecture.
 
-The items below are Civitas-side features that complement Presidium's governance layer.
+The items below are ideas across the wider Civitas product line that complement Presidium's governance layer. **Most of them are not python-civitas's job** — see the "Lives in" callout on each. Per [`boundary.md`](https://github.com/civitas-io/context) (2026-05-08), Prompt Library and Skills Gateway are civitas-contrib ("Dev tooling" / "skills routing layer"), same as Fabrica is its own repo. This file previously implied otherwise; corrected July 2026.
 
 ---
 
 ### Prompt Library & Playground
 
-**Status: 💡 Idea — to be specced | Priority: 🔴 High**
+**Status: 💡 Idea — to be specced | Priority: 🔴 High | Lives in: civitas-contrib, not python-civitas**
+
+> **Correction (July 2026):** Originally framed here as a "Civitas-side feature." `boundary.md`
+> lists "Prompt library" under civitas-contrib ownership ("Dev tooling"). If built, `PromptStore`
+> would be a `civitas_contrib`-namespaced `GenServer` subclass depending on this repo's `GenServer`
+> base class — not a `civitas/` module itself. The `civitas playground` CLI reference below would
+> need to become a civitas-contrib CLI plugin or a documented pattern, not a core subcommand.
 
 Prompts as first-class versioned entities, stored and served by a supervised `PromptStore(GenServer)`. Agents load instructions by name rather than hardcoding strings — prompt changes never require a code deploy. The playground (CLI + dashboard tab) lets you test a prompt version against a live agent before promoting it.
 
@@ -895,7 +922,13 @@ See RFC 0001 (`docs/rfc/0001-tool-retrieval.md`) for the formal problem statemen
 
 ### Skills Gateway
 
-**Status: 💡 Idea — to be specced | Priority: 🟡 Medium**
+**Status: 💡 Idea — to be specced | Priority: 🟡 Medium | Lives in: civitas-contrib, not python-civitas**
+
+> **Correction (July 2026):** Originally framed here as a "Civitas-side feature." `boundary.md`
+> lists "Skills gateway" under civitas-contrib ownership ("skills routing layer"). It would
+> *consume* this repo's Capability-Aware Registry (M4.4) and `MessageBus` as a dependency, the
+> same way civitas-contrib's provider plugins and adapters consume civitas core today — it would
+> not be implemented inside `civitas/`.
 
 A supervised registry of composable agent workflows — "skills" — that can be discovered and invoked by name or capability. A skill is a named, versioned sequence of tool calls, LLM steps, or sub-agent invocations exposed as a single callable unit on the bus.
 
