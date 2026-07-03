@@ -37,6 +37,7 @@ Development progress across all phases of Civitas.
 | 4 | [Gateway API Surface](#gateway-api-surface) | ✅ Completed | Apr 2026 |
 | 4 | [Postgres StateStore + Migration](#postgres-statestore--migration) | ✅ Completed | May 2026 |
 | 4 | [Visual Topology Editor](#m41-visual-topology-editor) | ⏸️ Deferred | — |
+| — | [v0.4.0 Release Fixes](#v040-release-fixes) | ✅ Completed | Jul 2026 |
 | 5 | [Prompt Library & Playground](#prompt-library--playground) | 💡 Idea | v0.5+ |
 | 5 | [LLM Gateway](#llm-gateway) | ⏸️ Moved to Presidium | — |
 | 5 | [Fabrica — Tools Gateway](#fabrica--tools-gateway) | 💡 Idea | v0.5+ |
@@ -678,7 +679,7 @@ Declarative routes, Pydantic request/response validation, middleware chain, and 
    - [x] `MiddlewareChain` — ordered list of async callables; builds `call_next` chain via closure
    - [x] Global middleware loaded from `config.middleware` (dotted import path → callable)
    - [x] Route-scoped middleware loaded from `route.middleware`
-   - [x] Execution order: global → route-scoped → contract validation → bus dispatch
+   - [x] Execution order: global → route-scoped → contract validation → bus dispatch — parsing landed here, but wiring into the ASGI dispatch path had a gap; not actually wired until [GH #6](https://github.com/civitas-io/python-civitas/issues/6), fixed for the v0.4.0 release
    - [x] Short-circuit: middleware returning `GatewayResponse` without calling `call_next` skips remainder
 
 5. **Wire into ASGI — `civitas/gateway/asgi.py` updates**
@@ -706,7 +707,7 @@ Declarative routes, Pydantic request/response validation, middleware chain, and 
    - [x] `@contract` response validation: valid reply → 200; invalid → 500
    - [x] Middleware chain: all middleware called in order
    - [x] Middleware short-circuit: returning response without `call_next` skips rest of chain
-   - [x] Global middleware runs before route-scoped middleware
+   - [x] Global middleware runs before route-scoped middleware — test added for the v0.4.0 release ([GH #6](https://github.com/civitas-io/python-civitas/issues/6)); no test had actually exercised route-scoped execution before this
    - [x] `/openapi.json` returns valid OpenAPI 3.1 spec
    - [x] `/docs` returns 200 with Swagger UI HTML
    - [x] `docs.enabled: false` → `/docs` returns 404
@@ -744,6 +745,56 @@ SQLite works for single-process deployments but breaks under concurrent cross-pr
 | MySQL StateStore (`aiomysql`/`asyncmy` backend) | ⏸️ Deferred — see below |
 
 > **MySQL StateStore** — deferred because Postgres covers the multi-process persistence gap and asyncpg is a better async foundation. Add if users are already running MySQL and cannot introduce a second database. Implementation is a clean 100-line addition following the same plugin pattern (`civitas[mysql]` extra, `type: mysql` loader entry, `mysql://` DSN in `_parse_dsn`).
+
+---
+
+## v0.4.0 Release Fixes
+
+**Status: ✅ Completed — July 2026**
+
+Two bugs reported against v0.3.0, found by a downstream project building against `civitas` at HEAD. Both fixed and folded into the v0.4.0 release alongside the Phase 4 work above — the v0.4.0 changes were already sitting on `main`, unreleased, when these were reported.
+
+| Deliverable | Status |
+|-------------|--------|
+| [GH #6](https://github.com/civitas-io/python-civitas/issues/6) — Route-scoped gateway middleware wired into ASGI dispatch | ✅ |
+| [GH #7](https://github.com/civitas-io/python-civitas/issues/7) — `civitas/py.typed` marker added | ✅ |
+
+#### GH #6 — Route-scoped gateway middleware is parsed but never executed
+
+`RouteEntry.middleware` (a route's own `middleware:` list in topology YAML) was parsed into
+`RouteEntry` objects but never read by `GatewayASGI`. The dispatch layer built its middleware
+chain once at construction time from `config.middleware` (global only) — the matched route's
+`.middleware` field was never consulted. A route declaring its own auth/guard middleware (e.g.
+an admin-only route on an otherwise public gateway) would silently run **without** that guard,
+with no error or warning.
+
+This contradicted `docs/gateway.md` and this file's own Gateway API Surface checklist, both of
+which stated route-scoped middleware runs after global middleware, before contract validation.
+
+**Fix:**
+- `GatewayASGI._handle_http()` now matches the route *before* building the middleware chain.
+- Route-scoped middleware (`entry.middleware`, resolved via the existing `load_middleware()`
+  loader) is appended after global middleware when building the chain, restoring the documented
+  order: global → route-scoped → contract validation → bus dispatch.
+- Resolved route middleware callables are cached per `RouteEntry` (by object identity) so they
+  are loaded once, not on every request.
+- Unresolvable route middleware paths are logged and skipped, matching the existing behavior for
+  global middleware — never raises at request time.
+- Corrected the two checklist items below (Gateway API Surface, "Wire into ASGI" and "Tests")
+  that had been checked off despite this gap.
+
+#### GH #7 — Missing `py.typed` marker despite "Typing :: Typed" classifier + mypy --strict
+
+`pyproject.toml` declares the `"Typing :: Typed"` classifier and the package runs
+`mypy --strict` internally, but no `civitas/py.typed` marker file existed in the source tree or
+the published 0.3.0 wheel. Downstream projects running their own `mypy --strict` got
+`error: ... missing library stubs or py.typed marker [import-untyped]` for every import from
+`civitas`.
+
+**Fix:**
+- Added empty `civitas/py.typed`.
+- `[tool.hatch.build.targets.wheel] packages = ["civitas"]` picks it up automatically — verified
+  present in the built wheel (`unzip -l dist/*.whl`) as part of the release checklist below.
 
 ---
 

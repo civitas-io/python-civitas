@@ -11,7 +11,66 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-07-03
+
+### Fixed
+
+- **[#6](https://github.com/civitas-io/python-civitas/issues/6)** — Route-scoped gateway
+  middleware (`RouteEntry.middleware` / a route's `middleware:` list in topology YAML) was
+  parsed but never invoked by `GatewayASGI`. The dispatch layer built its middleware chain once
+  at construction time from global `config.middleware` only; a matched route's own `.middleware`
+  was never read. `GatewayASGI` now matches the route before building the chain and appends the
+  route's resolved middleware after global middleware, restoring the documented execution order:
+  global → route-scoped → contract validation → bus dispatch. Route middleware is resolved once
+  and cached per route.
+- **[#7](https://github.com/civitas-io/python-civitas/issues/7)** — Added the missing
+  `civitas/py.typed` marker file. The package declared the `"Typing :: Typed"` classifier and
+  ran `mypy --strict` internally, but shipped no marker, causing downstream `mypy --strict`
+  users to get `import-untyped` errors on every `civitas` import.
+
+### Changed
+
+- **BREAKING CHANGE:** Model provider plugins (`civitas.plugins.{anthropic,openai,gemini,mistral,litellm}`), `civitas.plugins.sqlite_store`, `civitas.plugins.fiddler`, and `civitas.plugins.otel` have moved to `civitas-contrib` (`civitas_contrib.plugins.*`). Update imports, e.g. `from civitas.plugins.anthropic import AnthropicProvider` → `from civitas_contrib.plugins.anthropic import AnthropicProvider` (`pip install civitas-contrib[anthropic]`). `civitas.plugins.model`, `civitas.plugins.tools`, and `civitas.plugins.state` (protocols + `InMemoryStateStore`) remain in core.
+- **BREAKING CHANGE:** `MCPClient` and `MCPTool` have moved to `fabrica` (`fabrica.mcp.client`, `fabrica.mcp.tool` — `pip install fabrica[mcp]`); there is no `civitas[mcp]` extra. `civitas.mcp.types` (`MCPServerConfig`, `MCPToolSchema`, `MCPToolError`) remains in core with no `mcp` SDK dependency at import time. `AgentProcess.connect_mcp()` and the `mcp.servers` topology YAML block remain in core and lazily import `fabrica.mcp.client.MCPClient` at call time, raising a `ConfigurationError` with install instructions if `fabrica` is not installed. `CivitasMCPServer` (exposing an agent tree as an MCP server) was never implemented in core — it is a Fabrica-scope feature, not a civitas regression.
+
 ### Added
+
+#### M4.1b — Dynamic Agent Spawning
+
+- `DynamicSupervisor` — starts empty, `ONE_FOR_ONE` only, `max_children` + `max_total_spawns` limits
+- `self.spawn(AgentClass, name, config)` — routes to the nearest ancestor `DynamicSupervisor`
+- `self.despawn(name)` (hard stop) / `self.stop(name, drain, timeout)` (soft stop, awaitable)
+- `on_spawn_requested()` governance veto hook on `DynamicSupervisor`; `on_child_terminated()` notification hook on the spawning agent
+- `Runtime.spawn()` / `Runtime.despawn()` / `Runtime.stop_agent()` — external entry points; `SpawnError` added to the error hierarchy
+- `TopologyServer` — supervised JSON HTTP endpoint (`/topology`, `/agents`, `/agents/{name}`, `/health`); `civitas topology show` uses it for live state, falling back to static YAML
+
+#### M4.2 — Security Hardening
+
+- `civitas/security/` — `AgentIdentity` (Ed25519 keypairs), `KeyRegistry`, `MessageSigner` (v=2 wire format), `NonceCache` (replay protection), `SignatureError`, `SigningSerializer`; `security:` YAML block; InProcess transport bypasses signing entirely
+- ZMQ CURVE and NATS TLS + nkeys transport-level encryption/auth; `civitas security init` CLI to scaffold keys
+- `civitas.secrets` — `SecretsProvider` protocol, env/file implementations, `${VAR_NAME}` substitution in topology YAML (raises `ConfigurationError` on unset vars), per-agent `credentials:` block
+- Bubblewrap-based tool sandbox for MCP subprocess execution on Linux; `sandbox:` YAML block; refuses to start when `sandbox.enabled: true` and `bwrap` is unavailable
+- `civitas.audit` — `AuditEvent`, `AuditSink` protocol, `JsonlFileSink` (batched fsync, SIGHUP rotation), `NullSink`, `SyslogSink`, `OtlpSink`; emission at `MessageBus.route()`, tool execution, sandbox violations, secret access
+
+#### M4.4 — Capability-Aware Registry
+
+- `RoutingEntry.capabilities` / `capability_metadata`; `LocalRegistry.find_by_capability()` / `find_by_capabilities(tags, match="any"|"all")`
+- `AgentProcess.capabilities` / `capability_metadata` class-level declarations; `AgentProcess.send_capable(capability, payload)`
+- `CapabilityNotFoundError`; YAML `capabilities:` / `capability_metadata:` overrides; distributed propagation via Worker announcements
+- `RegistryListener` hook — async callbacks on every register/deregister (Presidium integration point); `add_listener()` / `remove_listener()`
+- `RoutingEntry`, `RegistryListener`, `CapabilityNotFoundError` exported from `civitas` top-level package
+
+#### Gateway API Surface
+
+- `@route(method, path, mode=)` and `@contract(request=Model, response=Model)` decorators; YAML remains the sole runtime-authoritative source, decorators are documentation + `civitas topology validate` cross-checks
+- Global + route-scoped middleware chain (`config.middleware`, `RouteEntry.middleware`); short-circuit by returning a `GatewayResponse` without calling `next_fn`
+- Auto-generated OpenAPI 3.1 spec (`GET /openapi.json`), Swagger UI (`GET /docs`), ReDoc (`GET /redoc`); `docs.enabled: false` disables all three
+
+#### Postgres StateStore + Migration
+
+- `PostgresStateStore` — `asyncpg` backend, connection pool, `civitas_agent_state` JSONB table with upsert; `civitas[postgres]` extra
+- `StateStore` protocol extended with `list_agents()` / `close()`; `@runtime_checkable` for `isinstance()` checks
+- `civitas state migrate <src> <dst>` — dry-run by default, `--execute` to apply; `_parse_dsn()` supports `sqlite:`, `.db`/`.sqlite`, and `postgresql://`
 
 #### M4.1 — HTTP Gateway
 
