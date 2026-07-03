@@ -11,6 +11,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+### Security
+
+- Bumped `msgpack` floor to `>=1.2.1` (was `>=1.1`, resolved to 1.1.2) to clear
+  **GHSA-6v7p-g79w-8964** (SEGV / DoS when a streaming `Unpacker` is reused after an error).
+  Civitas's `MsgpackSerializer` uses one-shot `msgpack.unpackb()`, not the reused-`Unpacker`
+  pattern, so core was not directly exposed — but the fix clears the `pip-audit --strict` CI gate
+  and hardens the untrusted-input path over ZMQ/NATS transports regardless.
+
 ### Fixed
 
 - **FD-01/FD-03** — `MetricsCollector` (dashboard) had no working way to receive restart, message,
