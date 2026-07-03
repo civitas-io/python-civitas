@@ -13,6 +13,7 @@ Development progress across all phases of Civitas.
 | ⏳ | Planned |
 | ⏸️ | Deferred |
 | 💡 | Idea — to be specced |
+| 🗂️ | Tracked backlog (index of deferred work) |
 
 ---
 
@@ -38,6 +39,8 @@ Development progress across all phases of Civitas.
 | 4 | [Postgres StateStore + Migration](#postgres-statestore--migration) | ✅ Completed | May 2026 |
 | — | [v0.4.0 Release Fixes](#v040-release-fixes) | ✅ Completed | Jul 2026 |
 | — | [v0.5.0 — Released](#v050--released) | ✅ Released | Jul 2026 |
+| — | [v0.6.0 — Gateway Completion](#v060--gateway-completion-planned) | ⏳ Planned | next |
+| — | [Deferred Backlog](#deferred-backlog) | 🗂️ Tracked | — |
 | 4 | [Visual Topology Editor](#m41-visual-topology-editor) | ⏸️ Deferred | — |
 | 5 | [Prompt Library & Playground (civitas-contrib)](#prompt-library--playground) | 💡 Idea | v0.5+, not this repo |
 | 5 | [LLM Gateway](#llm-gateway) | ⏸️ Moved to Presidium | — |
@@ -830,6 +833,79 @@ repo-ownership split in four places, all corrected in this pass:
 Not python-civitas's job per `boundary.md`, and not touched in v0.5.0: Prompt Library &
 Playground, Skills Gateway, CrewAI adapter full implementation, MySQL StateStore, Fabrica. All
 belong to civitas-contrib or the separate `civitas-forge` repo — revisit there, not here.
+
+---
+
+## v0.6.0 — Gateway Completion (Planned)
+
+**Status: ⏳ Planned — next 0.x release**
+
+The HTTP Gateway shipped in v0.4 with HTTP/1.1, HTTP/2, and HTTP/3 (QUIC), but several planned
+transport and middleware features were deferred across the gateway design docs
+([`http-gateway.md`](design/http-gateway.md) Phases 3–4, [`gateway-api-surface.md`](design/gateway-api-surface.md)).
+v0.6.0 completes the gateway as a coherent theme. A design refresh across those two docs should
+precede implementation (they were written pre-v0.4 and predate the shipped ASGI/middleware layer).
+
+| # | Deliverable | Priority | Source |
+|---|-------------|----------|--------|
+| G1 | **gRPC gateway** — generic `CivitasGateway` service; RPC→message-type mapping; bundled `.proto`; custom `.proto` loading from `proto_dir`; `civitas[grpc]` (grpclib) + `civitas[grpc-fast]` (grpcio) extras | 🔴 High | http-gateway.md Phase 3 |
+| G2 | **WebSocket upgrade** — long-lived bidirectional sessions mapped to a `cast()` stream on the bus | 🔴 High | http-gateway.md Phase 4, gateway.md |
+| G3 | **SSE / true streaming responses** — chunked/Server-Sent-Events instead of the current `{"chunks": [...]}` buffer-and-serialise workaround | 🔴 High | gateway-api-surface.md Q4 |
+| G4 | **Rate-limiting middleware** — `RateLimiter` GenServer wired as gateway middleware | 🟡 Medium | http-gateway.md Phase 4 |
+| G5 | **Auth middleware** — JWT / API-key / mTLS client-cert authentication middleware (integration point already documented; ship first-party implementations) | 🟡 Medium | http-gateway.md Phase 4, security-hardening.md |
+| G6 | **File uploads** — `multipart/form-data` request handling | 🟢 Low | gateway-api-surface.md |
+| G7 | **HTTP/2 server push** — requires explicit push directives from agents | 🟢 Low | http-gateway.md |
+| G8 | **gRPC reflection service** — generic reflection for the gRPC surface | 🟢 Low | http-gateway.md Phase 4 |
+| G9 | **Evaluate quiche-python** (Rust QUIC) as a drop-in replacement for aioquic in the HTTP/3 path | 🟢 Low | http-gateway.md |
+
+**Suggested cut line:** G1–G3 (gRPC + streaming) are the headline value and a shippable v0.6.0 on
+their own; G4–G5 (middleware) are strong companions; G6–G9 are opportunistic and can slip to a
+later patch without holding the release.
+
+**Non-goals for v0.6.0:** business logic in the gateway, load balancing, request queuing — the
+gateway stays a thin translate-and-route edge ([`http-gateway.md`](design/http-gateway.md) Non-Goals).
+
+---
+
+## Deferred Backlog
+
+**Status: 🗂️ Tracked** — the single index of everything deferred and not in v0.6.0. Items with a
+dedicated section link there; items that currently live only in a design doc are captured here so
+nothing is lost. Owner column: `core` = python-civitas, else the target repo.
+
+### python-civitas — deferred (not in v0.6.0)
+
+| Item | Owner | Target | Where tracked |
+|------|-------|--------|---------------|
+| [Visual Topology Editor](#m41-visual-topology-editor) (drag-drop UI) | core | ⏸️ low priority | §M4.1 |
+| Textual dashboard rebuild (on `TopologyServer` endpoints) | core | ⏸️ follow-on | design/dynamic-spawning.md |
+| Cross-process dynamic spawning (ZMQ / NATS) | core | ⏸️ v0.x | design/dynamic-spawning.md Non-Goals |
+| Per-agent spawn quotas (only global `max_children` today) | core | ⏸️ | design/dynamic-spawning.md Non-Goals |
+| External security audit before v1.0 (fix all HIGH+; publish summary) | core | ⏳ pre-v1.0 | §M4.3 |
+| Continuous security posture (CVE watch, CVSS advisories) | core | ⏳ ongoing | §M4.3 |
+| Encrypted `StateStore` at rest | core | ⏸️ (could be v0.x) | design/security-hardening.md |
+| Fine-grained ACL DSL (overlaps M4.4 capabilities) | core | ⏸️ | design/security-hardening.md |
+| HSM / TPM-backed signing keys | core | ⏸️ post-v1.0 | design/security-hardening.md |
+| PKI / CA integration (cert issuance) | core | ⏸️ deployment-layer | design/security-hardening.md |
+| Durable suspension: fail-fast `ask()` into a suspended agent (times out today) | core | ⏸️ | design/durable-suspension.md Non-Goals |
+| Durable suspension: crash-while-suspended restart-budget exemption | core | ⏸️ v1 | supervisor.py (S8 finding #5) |
+| Fiddler eval exporter: two-way guardrail receive | core/contrib | ⏸️ | §M2.6 |
+| Postgres: zero-downtime dual-write migration | core | ⏸️ | §Postgres StateStore |
+| Postgres: PgBouncer deployment guide | core | ⏸️ docs pass | §Postgres StateStore |
+| Personal AI Assistant demo (Telegram gateway + skills) | core | ⏸️ | §M1.8 |
+
+### Other repos (per [`boundary.md`](https://github.com/civitas-io/context))
+
+| Item | Owner | Status | Where tracked |
+|------|-------|--------|---------------|
+| `CivitasMCPServer` — expose an agent tree as an MCP server | fabrica | ⏸️ not started anywhere | §M3.4 |
+| CrewAI adapter — full implementation (stub raises `NotImplementedError` today) | civitas-contrib | ⏳ stub | §Infrastructure & Release |
+| MySQL StateStore | civitas-contrib | ⏸️ | §Postgres StateStore |
+| [Prompt Library & Playground](#prompt-library--playground) | civitas-contrib | 💡 idea (🔴 high), spec unwritten | §Phase 5 |
+| [Skills Gateway](#skills-gateway) | civitas-contrib | 💡 idea, spec unwritten | §Phase 5 |
+| [Fabrica — Tools Gateway](#fabrica--tools-gateway) / `find_tools` (RFC 0001) | civitas-forge | 💡 idea (🔴 high), spec unwritten | §Phase 5, rfc/0001 |
+| [LLM Gateway](#llm-gateway) (governed: rate limits, budgets, grant routing) | presidium | ⏸️ moved | §Phase 5 |
+| Credential-propagation RFC (per-user OAuth for retrieved tools) | cross-repo | ⏸️ future RFC | rfc/0001 §out-of-scope |
 
 ---
 
