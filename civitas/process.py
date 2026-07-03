@@ -34,6 +34,7 @@ class ProcessStatus(Enum):
 
     INITIALIZING = "INITIALIZING"
     RUNNING = "RUNNING"
+    SUSPENDED = "SUSPENDED"  # F02-6: must stay fully wired — no decorative enum values
     STOPPING = "STOPPING"
     STOPPED = "STOPPED"
     CRASHED = "CRASHED"
@@ -61,6 +62,18 @@ class Mailbox:
             await self._queue.put(message)
             self._notify.set()
 
+    def _drop_if_expired(self, message: Message) -> bool:
+        """Return True (logging a warning) if the message has exceeded its ttl (F01-3)."""
+        if message.ttl is not None and message.timestamp + message.ttl < time.time():
+            logger.warning(
+                "Mailbox: discarding expired message %s (type=%r, ttl=%.1fs)",
+                message.id,
+                message.type,
+                message.ttl,
+            )
+            return True
+        return False
+
     async def get(self) -> Message:
         """Dequeue the next message. Priority messages are served first.
 
@@ -75,13 +88,7 @@ class Mailbox:
                 message = self._queue.get_nowait()
 
             if message is not None:
-                if message.ttl is not None and message.timestamp + message.ttl < time.time():
-                    logger.warning(
-                        "Mailbox: discarding expired message %s (type=%r, ttl=%.1fs)",
-                        message.id,
-                        message.type,
-                        message.ttl,
-                    )
+                if self._drop_if_expired(message):
                     continue
                 return message
 
@@ -89,6 +96,31 @@ class Mailbox:
             self._notify.clear()
             # Double-check after clearing (avoid race)
             if not self._priority_queue.empty() or not self._queue.empty():
+                continue
+            await self._notify.wait()
+
+    async def get_priority(self) -> Message:
+        """Dequeue the next priority-queue message only, leaving normal messages buffered.
+
+        Used while an agent is SUSPENDED (durable-suspension S3): control
+        messages (priority > 0) are actioned while business messages stay in
+        the normal queue, preserving FIFO order and backpressure for resume.
+
+        Concurrency footgun (Oracle finding #10): ``_notify`` is shared and is
+        also set by normal-queue puts. We therefore clear it and re-check the
+        priority queue *before* awaiting, so a normal put only produces a
+        bounded spurious wakeup (no busy-loop) and a priority put racing with
+        the clear is never lost.
+        """
+        while True:
+            if not self._priority_queue.empty():
+                message = self._priority_queue.get_nowait()
+                if self._drop_if_expired(message):
+                    continue
+                return message
+
+            self._notify.clear()
+            if not self._priority_queue.empty():
                 continue
             await self._notify.wait()
 
@@ -131,6 +163,10 @@ class AgentProcess:
     # Free-form metadata per capability tag. Passed through to registry listeners
     # (e.g. Presidium) verbatim — the runtime never interprets this dict.
     capability_metadata: dict[str, Any] = {}
+
+    # Durable suspend marker rides inside self.state (not a separate store key) so
+    # one atomic checkpoint() keeps it and any user pending_action from desyncing.
+    _SUSPEND_STATE_KEY = "_civitas.suspended"
 
     def __init__(
         self,
@@ -178,6 +214,11 @@ class AgentProcess:
 
         # Signalled when the message loop enters RUNNING
         self._running_event: asyncio.Event | None = None
+
+        # Non-blocking suspend intent (S2): set by suspend() / _agency.suspend,
+        # actioned at the next message-loop boundary. Reason carried alongside.
+        self._suspend_requested = False
+        self._suspend_reason = ""
 
     @property
     def status(self) -> ProcessStatus:
@@ -264,6 +305,22 @@ class AgentProcess:
     async def on_stop(self) -> None:
         """Called on graceful shutdown. Always called — even on crash."""
 
+    async def on_suspend(self, reason: str) -> None:
+        """Called as the agent enters SUSPENDED via a fresh suspend request.
+
+        Not called when an agent restores into SUSPENDED from a persisted
+        marker (that is a restore, not a new suspension). Override to release
+        transient resources or notify a governance layer.
+        """
+
+    async def on_resume(self, approver: str) -> None:
+        """Called as the agent leaves SUSPENDED, carrying the resume approver.
+
+        ``approver`` is the non-empty identity that authorised the resume (S6).
+        Override to re-read a checkpointed pending_action and act on it — only
+        after this hook confirms an approver, never on local state alone.
+        """
+
     async def on_correction(self, message: Message) -> None:
         """Called when this agent receives a civitas.eval.correction signal.
 
@@ -301,6 +358,137 @@ class AgentProcess:
             saved = await self.store.get(self.name)
             if saved is not None:
                 self.state = saved
+
+    # ------------------------------------------------------------------
+    # Durable suspension — suspend / resume (Presidium HITL primitive)
+    # ------------------------------------------------------------------
+
+    async def suspend(self, reason: str = "") -> None:
+        """Request suspension of this agent. Non-blocking (S2).
+
+        Marks intent and returns immediately: the message loop transitions to
+        SUSPENDED at its next boundary, before pulling another business message.
+        Safe to call from inside handle() (self-suspension) without deadlock —
+        the loop, not this call, performs the transition.
+        """
+        self._suspend_requested = True
+        self._suspend_reason = reason
+
+    async def resume(self, approver: str) -> None:
+        """Resume a suspended agent. Requires a non-empty approver (S6).
+
+        Clears the durable marker, returns the agent to RUNNING, and fires
+        on_resume(approver). Resuming an agent that is not suspended is a safe
+        no-op, but an approver is still required for API consistency.
+
+        Raises:
+            ValueError: if ``approver`` is empty — a checkpointed pending_action
+                is never authorization on its own; a named approver is required.
+        """
+        if not approver:
+            raise ValueError("resume() requires a non-empty approver")
+        self._suspend_requested = False
+        if self._status != ProcessStatus.SUSPENDED:
+            return
+        self.state.pop(self._SUSPEND_STATE_KEY, None)
+        self._status = ProcessStatus.RUNNING
+        try:
+            await self.checkpoint()
+        except Exception:
+            logger.warning(
+                "[%s] failed to clear suspend marker on resume; durability degraded", self.name
+            )
+        try:
+            await self.on_resume(approver)
+        except Exception:
+            logger.exception("[%s] on_resume() raised", self.name)
+        self._emit_lifecycle_span("civitas.agent.resume", {"civitas.resume.approver": approver})
+        await self._emit_audit("agent.resume", {"approver": approver})
+
+    async def _enter_suspended(self, reason: str) -> None:
+        """Transition RUNNING → SUSPENDED at the loop boundary (S2/S5).
+
+        Write-ahead ordering (S5): pause dispatch in-memory FIRST so the agent
+        stops acting immediately, THEN persist the durable marker. A failed
+        persist leaves the agent paused with degraded durability — it never
+        falls back to RUNNING, because immediate safety outranks durability.
+        """
+        self._status = ProcessStatus.SUSPENDED
+        self.state[self._SUSPEND_STATE_KEY] = {
+            "reason": reason,
+            "since": time.time(),
+            "approver": None,
+        }
+        try:
+            await self.on_suspend(reason)
+        except Exception:
+            logger.exception("[%s] on_suspend() raised; agent remains suspended", self.name)
+        try:
+            await self.checkpoint()
+        except Exception:
+            logger.warning("[%s] failed to persist suspend marker; durability degraded", self.name)
+        self._emit_lifecycle_span("civitas.agent.suspend", {"civitas.suspend.reason": reason})
+        await self._emit_audit("agent.suspend", {"reason": reason})
+
+    async def _update_suspend_reason(self, reason: str) -> None:
+        """Idempotent re-suspend of an already-suspended agent (S10).
+
+        Keeps the original ``since`` and updates only the reason; does not
+        re-fire on_suspend.
+        """
+        marker = self.state.get(self._SUSPEND_STATE_KEY)
+        if isinstance(marker, dict):
+            marker["reason"] = reason
+            try:
+                await self.checkpoint()
+            except Exception:
+                logger.warning(
+                    "[%s] failed to persist updated suspend reason; durability degraded",
+                    self.name,
+                )
+
+    async def _clear_suspend_marker(self) -> None:
+        """Clear the durable marker on permanent removal (S8 zombie prevention).
+
+        Called by despawn / restarts-exhausted / NEVER paths so a future agent
+        reusing this name does not resurrect as suspended. Graceful shutdown and
+        crash-restart deliberately do NOT call this — that is the cross-restart
+        continuation point.
+        """
+        if self._SUSPEND_STATE_KEY in self.state:
+            self.state.pop(self._SUSPEND_STATE_KEY, None)
+            try:
+                await self.checkpoint()
+            except Exception:
+                logger.warning("[%s] failed to clear suspend marker on removal", self.name)
+
+    def _emit_lifecycle_span(self, name: str, attributes: dict[str, Any]) -> None:
+        """Emit a fire-and-forget lifecycle span (S9), a no-op without a tracer."""
+        if self._tracer is None:
+            return
+        span = self._tracer.start_span(
+            name,
+            attributes={
+                "civitas.agent.name": self.name,
+                "civitas.agent.id": self.id,
+                **attributes,
+            },
+        )
+        span.end()
+
+    async def _emit_audit(self, event: str, details: dict[str, Any]) -> None:
+        """Emit a governance AuditEvent (S9), a no-op when auditing is disabled."""
+        if self._audit_sink is None:
+            return
+        await self._audit_sink.emit(
+            AuditEvent(
+                event=event,
+                ts=datetime.now(UTC).isoformat(),
+                agent=self.name,
+                signer_id="",
+                details=details,
+            )
+        )
 
     # ------------------------------------------------------------------
     # Messaging methods — call from inside hooks
@@ -665,14 +853,35 @@ class AgentProcess:
         await self._running_event.wait()
 
     async def _message_loop(self) -> None:
-        """Main loop: dequeue messages and dispatch to handle()."""
-        self._status = ProcessStatus.RUNNING
+        """Main loop: dequeue messages and dispatch to handle().
+
+        Startup status is conditional on the restored marker (S7): an agent
+        whose checkpoint carried the suspend marker comes up SUSPENDED, not
+        RUNNING, and does NOT fire on_suspend (a restore is not a fresh
+        suspend). _running_event is set either way so _start() never hangs.
+        """
+        if self._SUSPEND_STATE_KEY in self.state:
+            self._status = ProcessStatus.SUSPENDED
+        else:
+            self._status = ProcessStatus.RUNNING
         if self._running_event is not None:
             self._running_event.set()
 
         try:
-            while self._status == ProcessStatus.RUNNING:
-                message = await self._mailbox.get()
+            while self._status in (ProcessStatus.RUNNING, ProcessStatus.SUSPENDED):
+                # Boundary transition (S2): a requested suspend takes effect here,
+                # before another business message is dispatched.
+                if self._suspend_requested and self._status == ProcessStatus.RUNNING:
+                    await self._enter_suspended(self._suspend_reason)
+                self._suspend_requested = False
+
+                # While SUSPENDED drain ONLY the priority queue (S3): business
+                # messages stay buffered so FIFO order and backpressure survive.
+                if self._status == ProcessStatus.SUSPENDED:
+                    message = await self._mailbox.get_priority()
+                else:
+                    message = await self._mailbox.get()
+
                 if message.type in ("_agency.shutdown", "civitas.eval.halt"):
                     break
                 if message.type == "_agency.heartbeat":
@@ -686,6 +895,23 @@ class AgentProcess:
                             trace_id=message.trace_id,
                         )
                         await self._bus.route(ack)
+                    continue
+                if message.type == "_agency.suspend":
+                    reason = message.payload.get("reason", "")
+                    if self._status == ProcessStatus.SUSPENDED:
+                        await self._update_suspend_reason(reason)
+                    else:
+                        self._suspend_requested = True
+                        self._suspend_reason = reason
+                    continue
+                if message.type == "_agency.resume":
+                    approver = message.payload.get("approver", "")
+                    if approver:
+                        await self.resume(approver)
+                    else:
+                        logger.warning(
+                            "[%s] ignoring _agency.resume with empty approver", self.name
+                        )
                     continue
                 if message.type == "civitas.dynamic.terminated":
                     await self.on_child_terminated(
@@ -810,8 +1036,17 @@ class AgentProcess:
             raise exc  # propagate to supervisor via task exception
 
     async def _stop(self) -> None:
-        """Request graceful shutdown by sending a shutdown system message."""
-        if self._status not in (ProcessStatus.RUNNING, ProcessStatus.INITIALIZING):
+        """Request graceful shutdown by sending a shutdown system message.
+
+        SUSPENDED is included (S7): the priority shutdown is drained by the
+        suspended loop's priority-only path, so a suspended agent is actually
+        stopped rather than leaked on shutdown or double-looped on restart.
+        """
+        if self._status not in (
+            ProcessStatus.RUNNING,
+            ProcessStatus.INITIALIZING,
+            ProcessStatus.SUSPENDED,
+        ):
             return
         shutdown_msg = Message(
             type="_agency.shutdown",

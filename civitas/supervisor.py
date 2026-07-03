@@ -433,6 +433,7 @@ class Supervisor:
             # Log the permanent failure — agent stays CRASHED, no further restarts.
             agent = self._find_child(name)
             if agent is not None and not isinstance(agent, Supervisor):
+                await agent._clear_suspend_marker()  # S8: permanent removal clears marker
                 logger.error(
                     "[%s] Agent %r permanently stopped after exceeding max_restarts (%d).",
                     self.name,
@@ -642,6 +643,7 @@ class DynamicSupervisor(AgentProcess):
             except (asyncio.CancelledError, Exception):
                 pass
 
+        await self._clear_child_marker(name)
         self._remove_child(name)
         if self._registry is not None:
             self._registry.deregister(name)
@@ -710,11 +712,13 @@ class DynamicSupervisor(AgentProcess):
         crashed = exc is not None
 
         if self._restart_mode == RestartMode.NEVER:
+            await self._clear_child_marker(name)
             self._remove_child(name)
             await self._notify_spawner(name, "restarts_exhausted" if crashed else "clean_exit")
             return
 
         if self._restart_mode == RestartMode.TRANSIENT and not crashed:
+            await self._clear_child_marker(name)
             self._remove_child(name)
             await self._notify_spawner(name, "clean_exit")
             return
@@ -733,6 +737,7 @@ class DynamicSupervisor(AgentProcess):
 
         if len(ts) > self._ds_max_restarts:
             # Exhausted — remove and notify spawner; do NOT escalate to parent supervisor
+            await self._clear_child_marker(name)
             self._remove_child(name)
             await self._notify_spawner(name, "restarts_exhausted")
             logger.warning(
@@ -754,6 +759,9 @@ class DynamicSupervisor(AgentProcess):
             self._child_restart_counts[name],
             self._ds_max_restarts,
         )
+        # A child crashed while SUSPENDED restarts back into SUSPENDED (its marker
+        # survives in self.state) and consumes a restart; budget exemption (S8
+        # finding #5) is deferred for v1.
         agent._status = ProcessStatus.INITIALIZING
         await agent._start()
 
@@ -771,6 +779,15 @@ class DynamicSupervisor(AgentProcess):
     def _remove_child(self, name: str) -> None:
         self._dynamic_children.pop(name, None)
         self._child_tasks.pop(name, None)
+
+    async def _clear_child_marker(self, name: str) -> None:
+        """Clear a child's durable suspend marker on permanent removal (S8).
+
+        Prevents a future agent reusing this name from resurrecting suspended.
+        """
+        agent = self._dynamic_children.get(name)
+        if agent is not None:
+            await agent._clear_suspend_marker()
 
     async def _notify_spawner(self, child_name: str, reason: str) -> None:
         spawner_name = self._spawner_names.get(child_name)

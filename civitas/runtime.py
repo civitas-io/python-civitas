@@ -903,3 +903,56 @@ class Runtime:
         )
         if reply.payload.get("status") != "ok":
             raise SpawnError(reply.payload.get("reason", "stop failed"))
+
+    # ------------------------------------------------------------------
+    # Durable suspension — external entry points (Presidium HITL)
+    # ------------------------------------------------------------------
+
+    async def suspend(self, name: str, reason: str = "") -> None:
+        """Suspend an agent by name (S10).
+
+        Delivers a priority ``_agency.suspend`` control message; the agent
+        transitions to SUSPENDED at its next loop boundary (non-blocking).
+        Suspending an already-suspended agent keeps its original ``since`` and
+        updates the reason. ``ask()`` into a suspended agent times out — that is
+        intended; use ``send()`` plus polling for long approvals.
+        """
+        if self._bus is None or self._tracer is None:
+            raise RuntimeError("Runtime not started")
+        message = Message(
+            type="_agency.suspend",
+            sender="_runtime",
+            recipient=name,
+            payload={"reason": reason},
+            trace_id=self._tracer.new_trace_id(),
+            span_id=_new_span_id(),
+            priority=1,
+        )
+        await self._bus.route(message)
+
+    async def resume(self, name: str, approver: str) -> None:
+        """Resume a suspended agent by name (S6/S10). Requires a non-empty approver.
+
+        Delivers a priority ``_agency.resume`` control message carrying the
+        approver identity. Resuming a not-suspended agent is a safe no-op, but
+        an approver is still required. The approver is recorded in the resume
+        AuditEvent.
+
+        Raises:
+            ValueError: if ``approver`` is empty — a checkpointed pending_action
+                is never authorization on its own; a named approver is required.
+        """
+        if not approver:
+            raise ValueError("resume() requires a non-empty approver")
+        if self._bus is None or self._tracer is None:
+            raise RuntimeError("Runtime not started")
+        message = Message(
+            type="_agency.resume",
+            sender="_runtime",
+            recipient=name,
+            payload={"approver": approver},
+            trace_id=self._tracer.new_trace_id(),
+            span_id=_new_span_id(),
+            priority=1,
+        )
+        await self._bus.route(message)

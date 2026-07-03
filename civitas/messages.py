@@ -129,5 +129,7 @@ SYSTEM_MESSAGE_TYPES: frozenset[str] = frozenset(
         "_agency.restart",
         "_agency.register",
         "_agency.deregister",
+        "_agency.suspend",
+        "_agency.resume",
     }
 )

@@ -90,20 +90,20 @@ async def test_mailbox_ttl_not_yet_elapsed_delivered():
 
 
 # ---------------------------------------------------------------------------
-# ProcessStatus — SUSPENDED removed (F02-6)
+# ProcessStatus — SUSPENDED re-introduced fully-wired (F02-6)
 # ---------------------------------------------------------------------------
 
 
-def test_suspended_removed_from_enum():
-    """SUSPENDED is not in ProcessStatus (F02-6)."""
+def test_suspended_present_in_enum():
+    """SUSPENDED is in ProcessStatus (F02-6: removed as dead API, re-added fully wired)."""
     names = [s.name for s in ProcessStatus]
-    assert "SUSPENDED" not in names
+    assert "SUSPENDED" in names
 
 
 def test_expected_states_present():
-    """All expected states are present."""
+    """All expected states are present — the 5 originals plus SUSPENDED (F02-6)."""
     names = {s.name for s in ProcessStatus}
-    assert names == {"INITIALIZING", "RUNNING", "STOPPING", "STOPPED", "CRASHED"}
+    assert names == {"INITIALIZING", "RUNNING", "SUSPENDED", "STOPPING", "STOPPED", "CRASHED"}
 
 
 # ---------------------------------------------------------------------------
