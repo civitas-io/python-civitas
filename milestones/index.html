@@ -1658,15 +1658,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#v050-planned" class="md-nav__link">
+  <a href="#v050-in-progress" class="md-nav__link">
     <span class="md-ellipsis">
       
-        v0.5.0 — Planned
+        v0.5.0 — In Progress
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="v0.5.0 — Planned">
+    <nav class="md-nav" aria-label="v0.5.0 — In Progress">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2399,15 +2399,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#v050-planned" class="md-nav__link">
+  <a href="#v050-in-progress" class="md-nav__link">
     <span class="md-ellipsis">
       
-        v0.5.0 — Planned
+        v0.5.0 — In Progress
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="v0.5.0 — Planned">
+    <nav class="md-nav" aria-label="v0.5.0 — In Progress">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2701,9 +2701,9 @@
 </tr>
 <tr>
 <td>—</td>
-<td><a href="#v050--planned">v0.5.0 — Planned</a></td>
-<td>⏳ Planned</td>
-<td>—</td>
+<td><a href="#v050--in-progress">v0.5.0 — In Progress</a></td>
+<td>🔄 In Progress</td>
+<td>Bucket A done, Jul 2026</td>
 </tr>
 <tr>
 <td>4</td>
@@ -4137,66 +4137,70 @@ the published 0.3.0 wheel. Downstream projects running their own <code>mypy --st
 - <code>[tool.hatch.build.targets.wheel] packages = ["civitas"]</code> picks it up automatically — verified
   present in the built wheel (<code>unzip -l dist/*.whl</code>) as part of the release checklist below.</p>
 <hr />
-<h2 id="v050-planned">v0.5.0 — Planned<a class="headerlink" href="#v050-planned" title="Permanent link">&para;</a></h2>
-<p><strong>Status: ⏳ Planned | Scoped — July 2026</strong></p>
+<h2 id="v050-in-progress">v0.5.0 — In Progress<a class="headerlink" href="#v050-in-progress" title="Permanent link">&para;</a></h2>
+<p><strong>Status: 🔄 In Progress — Scoped July 2026, Bucket A completed July 2026</strong></p>
 <p>Scope locked in as three buckets. A fourth candidate bucket (D) was explicitly deferred to a
-future version — see below.</p>
+future version — see below. Bucket A (correctness &amp; hardening) is done and fully tested; Bucket B
+(durable suspension) has not started.</p>
 <h3 id="a-correctness-hardening">A — Correctness &amp; hardening<a class="headerlink" href="#a-correctness-hardening" title="Permanent link">&para;</a></h3>
+<p><strong>Status: ✅ Completed — July 2026</strong></p>
 <p>Seven items from <a href="https://github.com/civitas-io/context"><code>context/known-issues.md</code></a> (private
-cross-repo tracker), each re-verified against the current codebase before inclusion here — one
-originally-listed item (F01-2, span leak on serializer error in <code>bus.route()</code>) was found already
-fixed and is not carried forward.</p>
+cross-repo tracker). Each was re-verified against the current codebase — via grep, not taken on
+faith — immediately before fixing, since one originally-scoped item (F01-2, span leak on
+serializer error in <code>bus.route()</code>) turned out already fixed, and F04-2 (below) turned out already
+fixed too, only found because a search for its old, differently-worded issue text missed the
+actual <code>_KNOWN_CONFIG_KEYS</code> implementation on first pass.</p>
 <table>
 <thead>
 <tr>
 <th>ID</th>
 <th>Priority</th>
 <th>Issue</th>
-<th>Fix direction</th>
+<th>Resolution</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>FD-01</td>
 <td>🔴 High</td>
-<td><code>MetricsCollector</code> not wired to real event sources — dashboard always shows 0 for message flow, LLM cost, restarts</td>
-<td>Add a proper <code>on_crash_callback</code>/lifecycle hook injectable on <code>Supervisor</code>/<code>Runtime</code>; wire all <code>MetricsCollector</code> methods (<code>message_handled</code>, <code>message_sent</code>, <code>agent_error</code>, <code>llm_call</code>) through it — same fix serves FD-03</td>
+<td><code>MetricsCollector</code> not wired to real event sources — dashboard always showed 0 for message flow, restarts</td>
+<td><code>civitas.observability.metrics.MetricsSink</code> protocol added; injected via <code>ComponentSet</code>/<code>Runtime.set_metrics()</code>. Wires <code>message_handled</code> + <code>agent_error</code> in <code>AgentProcess._dispatch()</code>, <code>message_sent</code> in <code>send()</code>/<code>ask()</code>. <strong><code>llm_call</code> is not auto-wired</strong> — <code>llm_span()</code> is a bare context manager with no interception point for <code>ModelResponse</code> token/cost data without a larger redesign of how <code>self.llm</code> is wrapped; that's a real follow-up, not silently claimed done here.</td>
 </tr>
 <tr>
 <td>FD-03</td>
 <td>🟡 Medium</td>
-<td><code>civitas/cli/dashboard.py</code> monkey-patches <code>runtime._root_supervisor._handle_crash</code> directly (<code># type: ignore[method-assign]</code>)</td>
-<td>Replace with the public hook added for FD-01 — violates AGENTS.md anti-pattern #14</td>
+<td><code>civitas/cli/dashboard.py</code> monkey-patched <code>runtime._root_supervisor._handle_crash</code> directly</td>
+<td><code>Supervisor.add_crash_callback()</code> + <code>Runtime.on_crash()</code> public hook added, invoked from <code>_handle_crash()</code> before the restart strategy runs. <code>cli/dashboard.py</code> monkeypatch removed.</td>
 </tr>
 <tr>
 <td>F04-2</td>
-<td>🟡 Medium</td>
-<td><code>Runtime.from_config</code> silently accepts unknown topology YAML keys (e.g. <code>supervison:</code> typo)</td>
-<td>Validate top-level keys against a known set at parse time; raise <code>ConfigurationError</code> — this is literally what AGENTS.md anti-pattern #17 prescribes, never implemented</td>
+<td>—</td>
+<td>~~<code>Runtime.from_config</code> silently accepts unknown topology YAML keys~~</td>
+<td><strong>Already fixed</strong> — <code>Runtime._KNOWN_CONFIG_KEYS</code> + the <code>ConfigurationError</code> raise already existed in <code>from_config_dict()</code>. No code change; added the missing regression test only.</td>
 </tr>
 <tr>
 <td>F01-3</td>
 <td>🟡 Medium</td>
-<td><code>Message.ttl</code> declared and documented, never enforced (<code># ttl: planned</code> TODO still in <code>messages.py</code>)</td>
-<td>Check <code>message.ttl</code> in <code>bus.route()</code> / mailbox delivery; discard expired messages with a warning — violates AGENTS.md anti-pattern #16 (dead API surface)</td>
+<td><code>Message.ttl</code> declared and documented, never enforced</td>
+<td><code>ttl</code> field (optional float, seconds) added to <code>Message</code>; enforced in <code>Mailbox.get()</code> — expired messages are discarded with a warning and the search continues.</td>
 </tr>
 <tr>
 <td>F11-5</td>
 <td>🟡 Medium</td>
-<td><code>on_stop()</code> not called when <code>on_start()</code> raises (<code>AgentProcess._start()</code> has no try/except around <code>on_start()</code>)</td>
-<td>Wrap <code>on_start()</code> in the same lifecycle error handling as <code>_message_loop()</code>; verify against OTP <code>terminate/2</code>-after-failed-<code>init/1</code> semantics</td>
+<td><code>on_stop()</code> not called when <code>on_start()</code> raises</td>
+<td><code>AgentProcess._start()</code> now wraps <code>on_start()</code>; on failure, closes the open <code>civitas.agent.start</code> span with the error, sets <code>CRASHED</code>, runs <code>on_stop()</code> + MCP client cleanup, then re-raises. The pre-existing test asserting the <em>old</em> behavior (<code>on_stop</code> not called) was inverted to assert the new one.</td>
 </tr>
 <tr>
 <td>FD-07</td>
 <td>🟢 Low</td>
-<td><code>Worker</code> processes don't receive exporters from topology YAML — no exporter references anywhere in <code>worker.py</code> or <code>cli/run.py</code></td>
-<td>Pass exporters to <code>Worker</code> via <code>ComponentSet</code> or a direct constructor parameter</td>
+<td><code>Worker</code> processes didn't receive exporters from topology YAML</td>
+<td>Fixed together with FD-09 (same underlying gap — see below). <code>exporters</code> now flows through <code>Worker.__init__</code> and <code>cli/run.py</code>'s <code>_run_worker()</code>.</td>
 </tr>
 <tr>
 <td>FD-09</td>
 <td>🟢 Low</td>
-<td>Two parallel OTEL span export paths coexist (<code>Tracer</code>'s direct <code>TracerProvider</code>/<code>BatchSpanProcessor</code> vs. <code>SpanQueue</code>→<code>OTELAgent</code>→<code>ExportBackend</code>)</td>
-<td>Unify on the <code>SpanQueue</code>/<code>ExportBackend</code> pipeline; implement an <code>OTELExportBackend</code> wrapping the OTLP exporter; remove direct <code>TracerProvider</code> setup from <code>Tracer.__init__</code> — larger, riskier, candidate to slip to v0.5.1 if it threatens the release</td>
+<td>Two parallel OTEL span export paths coexist</td>
+<td><strong>Scope note:</strong> rather than the originally-sketched "write an <code>OTLPExportBackend</code> that converts <code>SpanData</code> to OTEL wire format," which is a genuinely large, failure-prone undertaking (hand-rolling OTLP span construction) for a bug-fix pass, the actual fix makes the two paths <strong>mutually exclusive</strong>: <code>Tracer.__init__</code> skips the direct <code>TracerProvider</code> entirely whenever a <code>span_queue</code> is supplied. <code>build_component_set()</code> now builds a <code>SpanQueue</code> + <code>FanOutBackend</code> only when <code>plugins.exporters</code> is configured in YAML, and <code>Runtime</code>/<code>Worker</code> own starting/stopping the <code>OTELAgent</code> task. This makes <code>plugins.exporters: [{type: console}]</code> actually work for the first time — previously dead code, per <code>civitas/plugins/loader.py</code>'s own docstring example (<code>type: otel</code>) which was never backed by a real implementation. The existing OTLP env-var auto-detect path (<code>OTEL_EXPORTER_OTLP_ENDPOINT</code>) is untouched and still uses the direct <code>TracerProvider</code> path when no <code>plugins.exporters</code> are configured — zero behavior change for that default case.</td>
 </tr>
 </tbody>
 </table>
