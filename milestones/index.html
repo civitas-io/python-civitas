@@ -1658,15 +1658,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#v050-in-progress" class="md-nav__link">
+  <a href="#v050-complete-pending-release" class="md-nav__link">
     <span class="md-ellipsis">
       
-        v0.5.0 — In Progress
+        v0.5.0 — Complete (pending release)
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="v0.5.0 — In Progress">
+    <nav class="md-nav" aria-label="v0.5.0 — Complete (pending release)">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2399,15 +2399,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#v050-in-progress" class="md-nav__link">
+  <a href="#v050-complete-pending-release" class="md-nav__link">
     <span class="md-ellipsis">
       
-        v0.5.0 — In Progress
+        v0.5.0 — Complete (pending release)
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="v0.5.0 — In Progress">
+    <nav class="md-nav" aria-label="v0.5.0 — Complete (pending release)">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2701,9 +2701,9 @@
 </tr>
 <tr>
 <td>—</td>
-<td><a href="#v050--in-progress">v0.5.0 — In Progress</a></td>
-<td>🔄 In Progress</td>
-<td>Bucket A done, Jul 2026</td>
+<td><a href="#v050--complete-pending-release">v0.5.0 — Complete (pending release)</a></td>
+<td>✅ A+B+C done</td>
+<td>Jul 2026</td>
 </tr>
 <tr>
 <td>4</td>
@@ -4137,11 +4137,12 @@ the published 0.3.0 wheel. Downstream projects running their own <code>mypy --st
 - <code>[tool.hatch.build.targets.wheel] packages = ["civitas"]</code> picks it up automatically — verified
   present in the built wheel (<code>unzip -l dist/*.whl</code>) as part of the release checklist below.</p>
 <hr />
-<h2 id="v050-in-progress">v0.5.0 — In Progress<a class="headerlink" href="#v050-in-progress" title="Permanent link">&para;</a></h2>
-<p><strong>Status: 🔄 In Progress — Scoped July 2026, Bucket A completed July 2026</strong></p>
-<p>Scope locked in as three buckets. A fourth candidate bucket (D) was explicitly deferred to a
-future version — see below. Bucket A (correctness &amp; hardening) is done and fully tested; Bucket B
-(durable suspension) has not started.</p>
+<h2 id="v050-complete-pending-release">v0.5.0 — Complete (pending release)<a class="headerlink" href="#v050-complete-pending-release" title="Permanent link">&para;</a></h2>
+<p><strong>Status: ✅ Buckets A + B + C complete — July 2026 (release tag not yet cut)</strong></p>
+<p>Scope was three buckets; a fourth candidate (D) was explicitly deferred to a future version — see
+below. Bucket A (correctness &amp; hardening) ✅, Bucket B (durable suspension) ✅, Bucket C (doc
+hygiene) ✅ — all done and fully tested. A <code>msgpack&gt;=1.2.1</code> security bump (GHSA-6v7p-g79w-8964) also
+landed on this line. Cutting the v0.5.0 release tag is the maintainer's call.</p>
 <h3 id="a-correctness-hardening">A — Correctness &amp; hardening<a class="headerlink" href="#a-correctness-hardening" title="Permanent link">&para;</a></h3>
 <p><strong>Status: ✅ Completed — July 2026</strong></p>
 <p>Seven items from <a href="https://github.com/civitas-io/context"><code>context/known-issues.md</code></a> (private
@@ -4205,20 +4206,29 @@ actual <code>_KNOWN_CONFIG_KEYS</code> implementation on first pass.</p>
 </tbody>
 </table>
 <h3 id="b-durable-suspension">B — Durable suspension<a class="headerlink" href="#b-durable-suspension" title="Permanent link">&para;</a></h3>
-<p><strong>Status: ⏳ Design needed before implementation</strong></p>
-<p><code>agent.suspend()</code> / <code>agent.resume()</code> — does not exist anywhere in the codebase today (confirmed:
-no <code>def suspend</code>/<code>def resume</code> in <code>civitas/</code>). This is integration point #8 in
-<a href="https://github.com/civitas-io/context"><code>boundary.md</code></a>'s eight-point Civitas→Presidium contract —
-required for Presidium's human-in-the-loop (HITL) approval flow, where an agent's execution must
-pause mid-<code>handle()</code>, durably persist enough state to resume later (possibly after a process
-restart), and resume when Presidium's policy engine or a human approves.</p>
-<p>This repo's own convention (see M4.2 Security Hardening, M4.1b Dynamic Spawning) is a design doc
-before an implementation checklist for anything touching core lifecycle semantics. No
-<code>docs/design/durable-suspension.md</code> exists yet — first deliverable for this bucket is that spec,
-covering at minimum: where suspended state is persisted (<code>StateStore</code>? a new protocol?),
-interaction with <code>Supervisor</code> restart strategies (does a suspended agent count as crashed?),
-mailbox behavior while suspended (queue, reject, or backpressure new messages?), and the
-resume-after-process-restart case.</p>
+<p><strong>Status: ✅ Done</strong> (design + implementation)</p>
+<p><code>agent.suspend()</code> / <code>agent.resume()</code> — integration point #8 in
+<a href="https://github.com/civitas-io/context"><code>boundary.md</code></a>'s eight-point Civitas→Presidium contract,
+required for Presidium's human-in-the-loop (HITL) approval flow, where an agent must pause, durably
+persist enough state to resume later (possibly after a process restart), and resume when Presidium's
+policy engine or a human approves.</p>
+<p>Design spec: <a href="../design/durable-suspension/"><code>docs/design/durable-suspension.md</code></a> (FINAL DESIGN
+S1–S10). Delivered per that spec:</p>
+<ul>
+<li><code>ProcessStatus.SUSPENDED</code> re-introduced fully-wired (removed as dead API in <strong>F02-6</strong>), with every
+  transition defined and tested — the governing constraint that F02-6 flagged.</li>
+<li>Suspension pauses <em>dispatch</em> only (no coroutine snapshotting). <code>suspend()</code> is a non-blocking flag
+  actioned at the message-loop boundary; while suspended only the priority queue is drained so
+  business messages stay buffered (FIFO + backpressure preserved).</li>
+<li>Durable marker persisted inside <code>self.state</code> (reserved key <code>_civitas.suspended</code>) via the existing
+  <code>checkpoint()</code> path — no <code>StateStore</code> protocol change, so all contrib stores work unchanged.
+  Durable only with a persistent store (same caveat as <code>checkpoint()</code>).</li>
+<li>Write-ahead suspend (pause in-memory first, then persist; never falls back to RUNNING);
+  approver-gated resume; marker cleared on permanent removal (despawn / restarts exhausted) but kept
+  on graceful shutdown / crash-restart. Supervisor <code>_stop()</code> and restart strategies handle SUSPENDED.</li>
+<li>Suspend/resume emit spans + <code>AuditEvent</code>s (resume records the approver). A suspended agent does
+  <strong>not</strong> count as crashed. <code>ask()</code> into a suspended agent times out (fail-fast deferred).</li>
+</ul>
 <h3 id="c-doc-hygiene-completed-as-part-of-scoping-this-release">C — Doc hygiene (completed as part of scoping this release)<a class="headerlink" href="#c-doc-hygiene-completed-as-part-of-scoping-this-release" title="Permanent link">&para;</a></h3>
 <p><code>docs/milestones.md</code> had drifted from <a href="https://github.com/civitas-io/context"><code>boundary.md</code></a>'s
 repo-ownership split in four places, all corrected in this pass:</p>

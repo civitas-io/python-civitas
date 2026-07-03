@@ -1,0 +1,2450 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="The production runtime for Python agents">
+      
+      
+      
+        <link rel="canonical" href="https://civitas-io.github.io/python-civitas/design/durable-suspension/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
+    
+    
+      
+        <title>Design: Durable Suspension (v0.5.0, Bucket B) - civitas</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+  
+
+
+  
+  
+
+<script id="__analytics">function __md_analytics(){function e(){dataLayer.push(arguments)}window.dataLayer=window.dataLayer||[],e("js",new Date),e("config",""),document.addEventListener("DOMContentLoaded",(function(){document.forms.search&&document.forms.search.query.addEventListener("blur",(function(){this.value&&e("event","search",{search_term:this.value})}));document$.subscribe((function(){var t=document.forms.feedback;if(void 0!==t)for(var a of t.querySelectorAll("[type=submit]"))a.addEventListener("click",(function(a){a.preventDefault();var n=document.location.pathname,d=this.getAttribute("data-md-value");e("event","feedback",{page:n,data:d}),t.firstElementChild.disabled=!0;var r=t.querySelector(".md-feedback__note [data-md-value='"+d+"']");r&&(r.hidden=!1)})),t.hidden=!1})),location$.subscribe((function(t){e("config","",{page_path:t.pathname})}))}));var t=document.createElement("script");t.async=!0,t.src="https://www.googletagmanager.com/gtag/js?id=",document.getElementById("__analytics").insertAdjacentElement("afterEnd",t)}</script>
+  
+    <script>"undefined"!=typeof __md_analytics&&__md_analytics()</script>
+  
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#design-durable-suspension-v050-bucket-b" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="civitas" class="md-header__button md-logo" aria-label="civitas" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            civitas
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Design: Durable Suspension (v0.5.0, Bucket B)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/civitas-io/python-civitas" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    civitas-io/python-civitas
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting Started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../concepts/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../architecture/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../milestones/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Milestones
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../mcp-integration/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../rfc/0001-tool-retrieval/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  RFCs
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../contributing/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Contributing
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="civitas" class="md-nav__button md-logo" aria-label="civitas" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    civitas
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/civitas-io/python-civitas" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    civitas-io/python-civitas
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../supervision/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Supervision
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../messaging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Messaging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../transports/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Transports
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../topology/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Topology YAML
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FAQ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/process/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AgentProcess
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/genserver/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GenServer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/supervisor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Supervisor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/messages/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Message
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/bus/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MessageBus
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/transport/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Transport
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../milestones/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Milestones
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp-integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Integration (M3.4)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../genserver/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GenServer (M3.5)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../http-gateway/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP Gateway (M4.x)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gateway-api-surface/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gateway API Surface (M4.x)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RFCs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    RFCs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../rfc/0001-tool-retrieval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RFC 0001 — Selective Tool Retrieval
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#final-design-approved-implementation-spec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FINAL DESIGN (approved) — implementation spec
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="FINAL DESIGN (approved) — implementation spec">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#implementation-checklist-in-dependency-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation checklist (in dependency order)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#motivation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Motivation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prior-art-in-this-repo-why-suspended-was-removed-f02-6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prior art in this repo: why SUSPENDED was removed (F02-6)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#review-findings-revised-design-post-oracle-code-verified-2026-07-03" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Review findings &amp; revised design (post-Oracle, code-verified 2026-07-03)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#otp-analogy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OTP analogy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-one-clarification-that-shapes-everything-what-durable-can-and-cannot-mean" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The one clarification that shapes everything: what "durable" can and cannot mean
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#design-decisions-proposed-for-review" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design Decisions (PROPOSED — for review)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Design Decisions (PROPOSED — for review)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#d1-re-introduce-suspended-as-a-fully-wired-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D1 — Re-introduce SUSPENDED as a fully-wired state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d2-suspension-pauses-dispatch-the-mailbox-keeps-buffering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D2 — Suspension pauses dispatch; the mailbox keeps buffering
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d3-a-suspended-agent-is-not-crashed-the-supervisor-leaves-it-alone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D3 — A suspended agent is NOT crashed; the supervisor leaves it alone
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d4-suspendresume-are-control-messages-priority-runtimepeer-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D4 — suspend/resume are control messages (priority) + Runtime/peer API
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d5-durability-a-runtime-owned-suspend-marker-separate-from-selfstate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D5 — Durability: a runtime-owned suspend marker, separate from self.state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d6-hitl-approve-this-action-is-a-checkpoint-and-re-read-pattern-not-stack-magic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D6 — HITL "approve this action" is a checkpoint-and-re-read pattern, not stack magic
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions-genuinely-unresolved-need-a-design-session" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open Questions (genuinely unresolved — need a design session)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-surface-provisional-subject-to-open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API Surface (provisional — subject to open questions)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#non-goals-v050" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-Goals (v0.5.0)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-checklist-to-be-filled-in-after-this-design-is-approved" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation checklist (to be filled in AFTER this design is approved)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="design-durable-suspension-v050-bucket-b">Design: Durable Suspension (v0.5.0, Bucket B)<a class="headerlink" href="#design-durable-suspension-v050-bucket-b" title="Permanent link">&para;</a></h1>
+<p><strong>Status:</strong> APPROVED 2026-07-03 — implementing. Authoritative spec is the "Final Design" section
+directly below; the "Review findings" and "Design Decisions (D1–D6)" sections beneath it are
+retained as rationale/history (D-sections partially superseded — defer to Final Design on any
+conflict).
+<strong>Author:</strong> Sisyphus
+<strong>Last updated:</strong> 2026-07-03</p>
+<hr />
+<h2 id="final-design-approved-implementation-spec">FINAL DESIGN (approved) — implementation spec<a class="headerlink" href="#final-design-approved-implementation-spec" title="Permanent link">&para;</a></h2>
+<p>Decisions locked with the maintainer. This section is authoritative.</p>
+<p><strong>Governing constraint:</strong> <code>SUSPENDED</code> was previously removed as dead API (F02-6). It may only be
+re-introduced fully wired — every transition, mailbox behavior, supervisor interaction, and
+persistence path defined and tested. See the F02-6 section below for why.</p>
+<p><strong>S1 — <code>ProcessStatus.SUSPENDED</code> re-introduced, fully wired.</strong> Transitions: <code>RUNNING → SUSPENDED</code>
+(suspend), <code>SUSPENDED → RUNNING</code> (resume), <code>INITIALIZING → SUSPENDED</code> (restore sees marker),
+<code>SUSPENDED → STOPPING → STOPPED</code> (shutdown/halt/despawn). Update <code>test_suspended_removed_from_enum</code>
+and <code>test_expected_states_present</code>; commit message must reference F02-6.</p>
+<p><strong>S2 — Suspend is a non-blocking flag checked at the loop boundary.</strong> <code>self.suspend(reason)</code> marks
+intent and returns immediately (no deadlock; no extra business message dispatched). External
+<code>runtime.suspend(name, reason)</code> sets the same flag via a priority control message. <code>_message_loop</code>
+guard becomes <code>while self._status in (RUNNING, SUSPENDED)</code>; at the top of each iteration, if the
+suspend flag is set and status is RUNNING, transition to SUSPENDED (fire <code>on_suspend</code>) before
+pulling the next business message.</p>
+<p><strong>S3 — While SUSPENDED, drain ONLY the priority queue; leave the business queue in place.</strong> This
+preserves message ordering and backpressure for free and makes resume trivial (flip status; normal
+<code>get()</code> resumes original FIFO order). Requires a priority-only wait variant on <code>Mailbox</code> (wait on
+<code>_notify</code> but only return priority-queue messages; avoid busy-loop / spurious-wakeup footgun,
+Oracle finding #10). Control types that MUST be handled while suspended and therefore MUST be
+priority≥1: <code>_agency.shutdown</code> (already prio 1), <code>civitas.eval.halt</code> (verified prio 1,
+evalloop.py:215), <code>_agency.resume</code> (new, prio 1). Business messages and <code>civitas.eval.correction</code>
+(prio 0) stay buffered.</p>
+<p><strong>S4 — Durable marker lives INSIDE <code>self.state</code> under a reserved key, one atomic write.</strong> Key:
+<code>self.state["_civitas.suspended"] = {"reason": ..., "since": ..., "approver": None}</code>. Persisted via
+the existing <code>checkpoint()</code> path (<code>store.set(name, self.state)</code>). One atomic write means marker +
+any user <code>pending_action</code> can never desync across a crash (Oracle finding #1 / governance-critical).
+On <code>_start()</code>, after <code>_restore_state()</code>, if the marker is present the agent enters <code>SUSPENDED</code>
+instead of <code>RUNNING</code> (S1). Durable only with a persistent store; with the default <code>InMemoryStateStore</code>
+it is not — same caveat as <code>checkpoint()</code> today, documented loudly.</p>
+<p><strong>S5 — Write-ahead safety on suspend.</strong> Pause dispatch in-memory FIRST (immediate safety: stop the
+agent acting), THEN persist the marker. If the persist fails, stay paused in-memory and emit a
+degraded-durability WARNING — never fall back to RUNNING. Immediate "stop acting" outranks durability.</p>
+<p><strong>S6 — Resume REQUIRES an explicit approver signal (maintainer decision).</strong> <code>resume()</code> /
+<code>runtime.resume()</code> take a required non-empty <code>approver: str</code>. The <code>_agency.resume</code> control message
+carries it. Rules:
+- <code>resume(name)</code> with no/empty <code>approver</code> → raise <code>ValueError</code> (resume without an approver is
+  never valid — presence of a checkpointed <code>pending_action</code> alone is NOT authorization).
+- On resume, the marker is cleared and <code>on_resume(approver)</code> fires with the approver identity.
+- The D6 pending-action pattern must only execute after <code>on_resume</code> delivers a valid approver; the
+  runtime records the approver in the resume <code>AuditEvent</code> (S9). This closes Oracle finding #4
+  (resume-authorization): an agent must not act on mere local state; a human/policy approver must
+  be named.</p>
+<p><strong>S7 — Supervisor/lifecycle changes are REQUIRED (the draft's "zero Supervisor changes" was false).</strong>
+- <code>_stop()</code> (process.py:814) must handle <code>SUSPENDED</code> — currently early-returns, so a suspended agent
+  leaks on shutdown and double-loops under ONE_FOR_ALL/REST_FOR_ONE. <code>_stop()</code> must actually stop a
+  SUSPENDED agent (deliver shutdown / cancel task).
+- Supervisor restart-set membership guards (<code>_restart_all_children</code>, <code>_restart_rest_for_one</code>) must
+  treat SUSPENDED correctly (stop then restart, no duplicate loop).
+- Restore-into-SUSPENDED must still set <code>_running_event</code> (else <code>_start()</code> hangs) and must NOT fire
+  <code>on_suspend</code> (it's a restore, not a fresh suspend); it MAY fire nothing or a distinct
+  <code>on_restored_suspended</code> — keep it simple: fire nothing on restore.</p>
+<p><strong>S8 — Marker lifecycle: clear on permanent removal, keep on graceful shutdown.</strong>
+- <code>despawn()</code> / permanent removal (restarts exhausted, NEVER) → CLEAR the marker (else a future
+  agent reusing the name resurrects as suspended — Oracle finding #2 zombie suspension).
+- Graceful full-runtime shutdown / crash-restart → KEEP the marker (that is the cross-restart point).
+- Crash-while-suspended that restarts back into SUSPENDED should NOT consume the restart budget
+  toward exhaustion (Oracle finding #5) — or at minimum must be documented; simplest acceptable v1:
+  document the behavior, defer budget-exemption if it complicates the supervisor too much (flag in PR).</p>
+<p><strong>S9 — Observability + audit.</strong> Emit <code>civitas.agent.suspend</code> / <code>civitas.agent.resume</code> spans and an
+<code>AuditEvent</code> at each (governance-relevant; Presidium consumes). Resume audit records the approver.</p>
+<p><strong>S10 — Scope trims (avoid re-creating the F02-6 dead-API smell).</strong> NO <code>suspend_peer()</code>/<code>resume_peer()</code>
+(no in-repo caller; add when one exists). Use <code>_agency.suspend</code> / <code>_agency.resume</code> (existing reserved
+prefix), added to <code>SYSTEM_MESSAGE_TYPES</code> (messages.py). External entry points: <code>runtime.suspend(name,
+reason="")</code> and <code>runtime.resume(name, approver)</code>. Idempotency: suspend-of-suspended keeps original
+<code>since</code> (updates reason); resume-of-not-suspended is a safe no-op (but still requires an approver arg
+for API consistency). <code>ask()</code> into a suspended agent times out (documented); fail-fast deferred.</p>
+<h3 id="implementation-checklist-in-dependency-order">Implementation checklist (in dependency order)<a class="headerlink" href="#implementation-checklist-in-dependency-order" title="Permanent link">&para;</a></h3>
+<ol>
+<li><code>messages.py</code>: add <code>_agency.suspend</code>, <code>_agency.resume</code> to <code>SYSTEM_MESSAGE_TYPES</code>.</li>
+<li><code>process.py</code> <code>Mailbox</code>: add priority-only wait/get variant (S3, footgun #10).</li>
+<li><code>process.py</code> <code>ProcessStatus</code>: re-add <code>SUSPENDED</code> (S1).</li>
+<li><code>process.py</code> <code>AgentProcess</code>: <code>_suspend_requested</code> flag, reserved-key constant, <code>suspend(reason)</code>
+   (non-blocking, write-ahead S5), <code>resume(approver)</code> (S6 validation), <code>on_suspend(reason)</code> /
+   <code>on_resume(approver)</code> hooks (default no-op).</li>
+<li><code>process.py</code> <code>_message_loop</code>: guard <code>in (RUNNING, SUSPENDED)</code>; boundary flag check → transition;
+   priority-only drain while SUSPENDED; handle <code>_agency.suspend</code>/<code>_agency.resume</code> control branches.</li>
+<li><code>process.py</code> <code>_start</code>/<code>_restore_state</code>: restore-into-SUSPENDED, set <code>_running_event</code>, no
+   <code>on_suspend</code> on restore (S7).</li>
+<li><code>process.py</code> <code>_stop</code>: handle SUSPENDED (S7).</li>
+<li><code>supervisor.py</code>: restart-set membership for SUSPENDED; marker-clear on despawn/permanent-remove
+   (S8); crash-while-suspended note (S8).</li>
+<li><code>runtime.py</code>: <code>suspend(name, reason="")</code> / <code>resume(name, approver)</code> external entry points.</li>
+<li>observability spans + <code>AuditEvent</code> (S9).</li>
+<li>tests: every interleaving in Oracle findings #1–#10 + S6 approver validation + restore path.</li>
+<li><code>CHANGELOG</code> + <code>milestones.md</code> (bucket B).</li>
+</ol>
+<hr />
+<hr />
+<h2 id="motivation">Motivation<a class="headerlink" href="#motivation" title="Permanent link">&para;</a></h2>
+<p>Civitas is integration point #8 in the Civitas→Presidium contract
+(<a href="https://github.com/civitas-io/context"><code>boundary.md</code></a>):</p>
+<blockquote>
+<p><strong>Durable suspension</strong> — Civitas provides <code>agent.suspend()</code> / <code>agent.resume()</code>; Presidium
+consumes them for the HITL (human-in-the-loop) approval flow.</p>
+</blockquote>
+<p>The scenario: an agent is about to take a consequential action (spend money, call a
+destructive tool, send an irreversible message). Presidium's <code>PolicyEngine</code> returns
+<code>REQUIRE_APPROVAL</code>. The agent must <strong>stop processing</strong> until a human or policy approves —
+and that approval may take seconds, hours, or days, potentially spanning a process restart
+or redeploy. When approval arrives, the agent resumes.</p>
+<p>Today Civitas has no way to express "paused, awaiting approval." An agent is either RUNNING,
+STOPPING, STOPPED, or CRASHED. This design adds a supervised, durable <strong>SUSPENDED</strong> state.</p>
+<hr />
+<h2 id="prior-art-in-this-repo-why-suspended-was-removed-f02-6">Prior art in this repo: why <code>SUSPENDED</code> was removed (F02-6)<a class="headerlink" href="#prior-art-in-this-repo-why-suspended-was-removed-f02-6" title="Permanent link">&para;</a></h2>
+<p><code>ProcessStatus</code> <strong>used to</strong> have a <code>SUSPENDED</code> member. It was removed in commit <code>7b64ac4</code>
+(F02 review, Apr 2026) — see <code>tests/unit/test_process.py::test_suspended_removed_from_enum</code>.</p>
+<p><strong>It was not removed because suspension is a bad idea.</strong> It was removed because it was <em>dead
+API</em>: the enum value existed but nothing ever transitioned into or out of it, nothing checked
+it, and no method set it. That is exactly <a href="../../AGENTS.md">AGENTS.md anti-pattern #16</a>
+("Declaring API surface without wiring it up").</p>
+<p><strong>This is the governing constraint of this design.</strong> Re-introducing <code>SUSPENDED</code> is only
+acceptable if it is <em>fully wired</em>: defined transitions in and out, defined mailbox behavior,
+defined supervisor interaction, defined persistence, and tests covering each. A decorative
+enum value would just recreate the exact defect F02-6 deleted. Every design decision below
+exists to satisfy that bar.</p>
+<hr />
+<h2 id="review-findings-revised-design-post-oracle-code-verified-2026-07-03">Review findings &amp; revised design (post-Oracle, code-verified 2026-07-03)<a class="headerlink" href="#review-findings-revised-design-post-oracle-code-verified-2026-07-03" title="Permanent link">&para;</a></h2>
+<p>This draft was pressure-tested by Oracle and the load-bearing claims verified against source.
+<strong>The original design below (D1–D6) is superseded where this section contradicts it.</strong> Net: the
+central premise was wrong, and the corrected design is actually <em>leaner</em>.</p>
+<p><strong>The "zero changes to Supervisor" claim (D3) is FALSE — verified in code:</strong>
+- <code>_message_loop</code> guard is <code>while self._status == ProcessStatus.RUNNING</code> — setting <code>SUSPENDED</code>
+  makes the loop <em>exit</em>, run <code>on_stop()</code>, and end the task. A <code>Supervisor</code> child then silently
+  dies (no exception → no restart); a <code>DynamicSupervisor</code> child is read as <code>clean_exit</code> and
+  permanently removed. So suspend must be a <strong>flag checked at the loop boundary</strong>, and the guard
+  must become <code>while status in (RUNNING, SUSPENDED)</code>.
+- <code>_stop()</code> (<code>process.py:814</code>) early-returns unless status ∈ {RUNNING, INITIALIZING}. A suspended
+  agent is therefore <strong>skipped on shutdown (task leak)</strong>, and under <code>ONE_FOR_ALL</code>/<code>REST_FOR_ONE</code>
+  the restart path calls <code>_stop()</code> (no-op) then <code>_start_child()</code> → <strong>two live message loops for
+  one agent</strong>. <code>_stop()</code> and the restart-set membership guards must handle <code>SUSPENDED</code>.</p>
+<p><strong>Revised decisions:</strong></p>
+<ul>
+<li><strong>Q1 (framing) — confirmed correct.</strong> "Pause dispatch + checkpoint" is the ceiling; CPython
+  can't serialize a live coroutine. Add: name the sanctioned finer-grained path (sans-io /
+  explicit state machine) and one line on why Temporal-style event-sourced replay is out of scope
+  (different programming model, not a suspension primitive).</li>
+<li><strong>Q2 (self-suspension) — REVERSED from the draft.</strong> Do <em>not</em> forbid self-suspension. Implement
+  <code>await self.suspend(reason=...)</code> as a <strong>non-blocking flag</strong> — it marks intent and returns; the
+  loop transitions to SUSPENDED at the <em>next boundary</em>, before pulling another business message.
+  This kills the deadlock AND the D6 dispatch-window race, and — the elegant part — <strong>external
+  <code>runtime.suspend()</code> sets the same flag</strong>, so self- and external-suspend converge on one path.</li>
+<li><strong>Q3 (control-while-suspended) — neither drafted option; use priority-only drain.</strong> The mailbox
+  is already two queues (business=prio 0, control=prio 1). While suspended, drain <strong>only the
+  priority queue</strong> and leave the normal queue in place. Free wins: ordering preserved (nothing
+  dequeued → nothing reordered on resume), backpressure preserved (normal queue fills, senders
+  block), trivial resume (flip status). Requires every must-handle-while-suspended control type be
+  priority&gt;0: <code>_agency.shutdown</code> ✓ (prio 1), <code>civitas.eval.halt</code> ✓ (prio 1, verified evalloop.py:215).
+  Correction to D2: in-process agents have <strong>no heartbeat</strong> (heartbeats are remote-only, a v0.5
+  non-goal); the "looks dead → restart" risk is the <em>loop exiting</em>, not missed heartbeats.</li>
+<li><strong>Q4 (persistence) — REVERSED from the draft.</strong> Store the marker <strong>inside <code>self.state</code></strong> under a
+  reserved key (e.g. <code>self.state["_civitas.suspended"]</code>), riding the existing checkpoint path — not
+  a separate top-level StateStore key. Decisive reason: <strong>atomicity.</strong> The HITL flow persists
+  <code>pending_action</code> AND the suspend marker; two separate writes create a crash window where the
+  agent restarts RUNNING with an unapproved pending action (the exact governance failure suspension
+  prevents). One key = one atomic <code>set()</code> = window closed. Bonus: no <code>list_agents()</code> pollution
+  (a separate top-level key shows up as a phantom agent in CLI/migrate). Reject the protocol
+  extension (<code>set_suspended</code>/<code>get_suspended</code>) — forces every store incl. contrib to change for
+  something the existing k/v surface already stores.</li>
+<li><strong>Q6 (scope) — trim.</strong> Cut <code>suspend_peer()</code>/<code>resume_peer()</code> — no in-repo caller (Presidium uses
+  <code>runtime.suspend()</code>), so it would be exactly the unwired-API smell (anti-pattern #16 / F02-6)
+  this design invokes as its constraint. Use <code>_agency.suspend</code>/<code>_agency.resume</code> (existing reserved
+  prefix), not a new <code>civitas.control.*</code> namespace; add them to <code>SYSTEM_MESSAGE_TYPES</code>.</li>
+</ul>
+<p><strong>Additional holes to resolve before/while implementing (from Oracle, verified where cited):</strong></p>
+<ol>
+<li>Restore-into-SUSPENDED collides with loop startup: <code>_message_loop</code> sets <code>RUNNING</code>
+   unconditionally at entry and sets <code>_running_event</code>; the restore path must set status
+   conditionally <em>and</em> still set <code>_running_event</code> (else <code>_start()</code> hangs).</li>
+<li>Stale marker on permanent removal → zombie suspension: <code>despawn()</code>/permanent-remove must
+   <strong>clear</strong> the marker; graceful full-runtime shutdown must <strong>keep</strong> it (that's the cross-restart
+   point). This "gone forever" vs "will return" distinction doesn't cleanly exist today (<code>_stop()</code>
+   serves both) — needs to be introduced.</li>
+<li>StateStore write failure during suspend: pause in-memory <em>first</em> (immediate safety), then
+   persist; on failure stay paused + emit degraded-durability warning; never fall back to RUNNING.</li>
+<li>Resume authorization: D6 executes <code>pending_action</code> on mere presence — resume must be gated by an
+   approver signal, not local state alone.</li>
+<li>Crash-while-suspended restart-budget accounting: a suspended child knocked over by a sibling
+   restarts into SUSPENDED but burns a restart; consider not counting restarts that land back in
+   SUSPENDED (else a legitimately-suspended agent gets removed on exhaustion).</li>
+<li>Buffered business messages can TTL-expire and be silently dropped on resume after a long
+   suspension (my F01-3 ttl fix discards expired at <code>Mailbox.get()</code>) — documented behavior.</li>
+<li>Idempotency: double-suspend (keep original <code>since</code>?) and resume-of-not-suspended (safe no-op).</li>
+<li>Capability/broadcast black hole: <code>send_capable()</code>/<code>broadcast()</code> still select a suspended agent;
+   messages buffer silently. Document the tradeoff.</li>
+<li><code>on_suspend()</code>/<code>on_resume()</code> semantics: fire on fresh suspend but NOT on restore-into-suspended;
+   define behavior if <code>on_suspend()</code> raises mid-transition.</li>
+<li><code>_notify</code> spurious wakeups in priority-only mode (normal-queue puts set the shared event) —
+    implementation footgun, needs a priority-only wait variant.</li>
+</ol>
+<p><strong>Effort:</strong> Medium (1–2 days). Most cost is the <code>_message_loop</code>/<code>_stop</code>/restart-path surgery and
+the interleaving tests — NOT the enum or persistence. The draft's "AgentProcess-only" framing
+would have under-estimated it.</p>
+<hr />
+<h2 id="otp-analogy">OTP analogy<a class="headerlink" href="#otp-analogy" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>OTP</th>
+<th>Civitas</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sys:suspend(Name)</code></td>
+<td><code>runtime.suspend(name)</code> / <code>self.suspend_peer(name)</code></td>
+</tr>
+<tr>
+<td><code>sys:resume(Name)</code></td>
+<td><code>runtime.resume(name)</code> / <code>self.resume_peer(name)</code></td>
+</tr>
+<tr>
+<td>Suspended process stops handling messages; mailbox keeps buffering</td>
+<td>Same</td>
+</tr>
+<tr>
+<td>Suspension is <strong>in-memory only</strong> (lost if the process dies)</td>
+<td><strong>Durable</strong> — survives supervisor restart when a persistent StateStore is configured</td>
+</tr>
+</tbody>
+</table>
+<p>The durability is the deliberate departure from OTP. OTP suspension is a debugging/maintenance
+tool measured in milliseconds; Civitas suspension is an approval-workflow primitive that must
+outlive a crash-and-restart.</p>
+<hr />
+<h2 id="the-one-clarification-that-shapes-everything-what-durable-can-and-cannot-mean">The one clarification that shapes everything: what "durable" can and cannot mean<a class="headerlink" href="#the-one-clarification-that-shapes-everything-what-durable-can-and-cannot-mean" title="Permanent link">&para;</a></h2>
+<p><strong>Durable suspension pauses message <em>dispatch</em>. It does not snapshot a running <code>handle()</code>
+coroutine.</strong></p>
+<p>Python cannot serialize a suspended coroutine's stack. There is no way to freeze an agent
+halfway through <code>handle()</code>, persist the half-executed frame, restart the process, and resume
+that frame. Any design claiming otherwise is lying.</p>
+<p>So "resume after a process restart" means precisely: the agent's process restarts, restores
+its checkpointed <code>self.state</code> (existing mechanism), comes back up in <code>SUSPENDED</code> status
+instead of <code>RUNNING</code>, and does <strong>not</strong> dispatch queued business messages until resumed. It
+does <strong>not</strong> mean a mid-flight <code>handle()</code> call continues from where it was interrupted.</p>
+<p>The consequence for the HITL "approve <em>this specific action</em>" case is D6 below: the agent must
+checkpoint the pending action into <code>self.state</code> <em>before</em> suspending, and re-read it on resume.
+The runtime cannot do this transparently.</p>
+<p>This point must survive into the user-facing docs verbatim, or users will expect coroutine
+snapshotting and be surprised.</p>
+<hr />
+<h2 id="design-decisions-proposed-for-review">Design Decisions (PROPOSED — for review)<a class="headerlink" href="#design-decisions-proposed-for-review" title="Permanent link">&para;</a></h2>
+<h3 id="d1-re-introduce-suspended-as-a-fully-wired-state">D1 — Re-introduce <code>SUSPENDED</code> as a fully-wired state<a class="headerlink" href="#d1-re-introduce-suspended-as-a-fully-wired-state" title="Permanent link">&para;</a></h3>
+<p><code>ProcessStatus</code> gains <code>SUSPENDED</code> back, with explicit transitions:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>RUNNING    --suspend()--&gt;  SUSPENDED
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>SUSPENDED  --resume()--&gt;   RUNNING
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>INITIALIZING --(restore sees suspend marker)--&gt; SUSPENDED   (start-up path, D5)
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>SUSPENDED  --shutdown/halt--&gt;  STOPPING --&gt; STOPPED
+</span></code></pre></div>
+<p><code>test_suspended_removed_from_enum</code> and <code>test_expected_states_present</code> will be updated (the
+latter's expected set becomes the 5 current states + <code>SUSPENDED</code>). The commit message must
+reference F02-6 explicitly so the history reads coherently: "removed as dead API in F02-6,
+re-introduced fully-wired for durable suspension."</p>
+<h3 id="d2-suspension-pauses-dispatch-the-mailbox-keeps-buffering">D2 — Suspension pauses dispatch; the mailbox keeps buffering<a class="headerlink" href="#d2-suspension-pauses-dispatch-the-mailbox-keeps-buffering" title="Permanent link">&para;</a></h3>
+<p>When <code>SUSPENDED</code>, <code>_message_loop()</code> stops dequeuing/dispatching <strong>business</strong> messages. The
+mailbox continues to accept incoming messages up to its existing bound (backpressure applies
+when full, unchanged). This is OTP-faithful and matches caller expectations: a message sent to
+a temporarily-paused agent should eventually be handled, not rejected.</p>
+<p><strong>Critical carve-out — control and system messages must still be processed while suspended,</strong>
+or a suspended agent looks dead to its supervisor and gets restarted (which would defeat
+suspension). While <code>SUSPENDED</code>, the loop still handles:</p>
+<ul>
+<li><code>_agency.heartbeat</code> → must still ack, or heartbeat monitoring flags it as crashed (see D3)</li>
+<li><code>_agency.shutdown</code> → graceful stop still works</li>
+<li><code>civitas.eval.halt</code> → halt still works</li>
+<li><code>civitas.control.resume</code> → the resume trigger itself (D4)</li>
+</ul>
+<p>Everything else stays queued. Mechanically this means the suspended loop is a restricted
+dispatch: pull from the priority path / peek for control types, re-buffer or skip business
+messages.</p>
+<blockquote>
+<p><strong>Open sub-question (Q-A):</strong> "re-buffer business messages" needs a concrete mechanism. The
+current <code>Mailbox</code> is two <code>asyncio.Queue</code>s; you cannot peek without dequeuing. Options: (a) a
+dedicated control-message fast-path that bypasses the mailbox entirely (route control
+messages via a separate <code>asyncio.Event</code>/attribute the loop checks), or (b) dequeue-and-hold
+business messages in a local buffer while suspended, re-enqueue on resume. (a) is cleaner and
+avoids reordering; I lean (a). Flagged for review.</p>
+</blockquote>
+<h3 id="d3-a-suspended-agent-is-not-crashed-the-supervisor-leaves-it-alone">D3 — A suspended agent is NOT crashed; the supervisor leaves it alone<a class="headerlink" href="#d3-a-suspended-agent-is-not-crashed-the-supervisor-leaves-it-alone" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><strong>SUPERSEDED (see Review Findings).</strong> The <em>goal</em> stands — a suspended agent must not be treated
+as crashed. But the claim that this needs "zero changes to <code>Supervisor</code>" is <strong>false</strong>: verified
+in code, <code>_message_loop</code>'s <code>while == RUNNING</code> guard and <code>_stop()</code>'s status guard both break on
+<code>SUSPENDED</code>. Achieving the goal requires changes to <code>_message_loop</code>, <code>_stop()</code>, and the restart-
+set membership checks. Keep the goal; discard the "zero changes" claim.</p>
+</blockquote>
+<p>Suspension is orthogonal to the crash/restart machinery.</p>
+<ul>
+<li>The agent's asyncio task stays alive (the loop runs, it just isn't dispatching business
+  work), so the task-done callback never fires and restart strategies are never triggered.</li>
+<li>Heartbeats are still answered (D2), so remote heartbeat monitoring doesn't flag it.</li>
+</ul>
+<p>This is the cleanest possible answer to milestones.md's open question <em>"does a suspended agent
+count as crashed?"</em> — <strong>no</strong>, and the design achieves that with <strong>zero changes to <code>Supervisor</code>
+restart strategies</strong>. Suspension lives entirely inside <code>AgentProcess</code>; <code>Supervisor</code> doesn't
+need to know the state exists.</p>
+<h3 id="d4-suspendresume-are-control-messages-priority-runtimepeer-api">D4 — suspend/resume are control messages (priority) + Runtime/peer API<a class="headerlink" href="#d4-suspendresume-are-control-messages-priority-runtimepeer-api" title="Permanent link">&para;</a></h3>
+<p><code>suspend()</code> and <code>resume()</code> are delivered as high-priority control messages so they are
+actioned even though the agent isn't dispatching normal traffic:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>civitas.control.suspend   (priority=1)
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>civitas.control.resume    (priority=1)
+</span></code></pre></div>
+<p>Entry points:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># External (Presidium, ops tooling, tests)</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">await</span> <span class="n">runtime</span><span class="o">.</span><span class="n">suspend</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">reason</span><span class="o">=</span><span class="s2">&quot;awaiting approval&quot;</span><span class="p">)</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="k">await</span> <span class="n">runtime</span><span class="o">.</span><span class="n">resume</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="c1"># Peer agent (e.g. an orchestrator or a governance agent)</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">suspend_peer</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">reason</span><span class="o">=...</span><span class="p">)</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">resume_peer</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+</span></code></pre></div>
+<p>Presidium wiring: <code>PolicyEngine</code> → <code>REQUIRE_APPROVAL</code> calls <code>runtime.suspend()</code>; the approval
+callback calls <code>runtime.resume()</code>. Civitas owns the mechanism; Presidium owns the policy.</p>
+<p><code>_agency.*</code> is reserved for pure runtime internals; <code>civitas.control.*</code> is a new namespace for
+operator/governance control-plane messages. (Naming for review — could also be <code>_agency.suspend</code>.)</p>
+<h3 id="d5-durability-a-runtime-owned-suspend-marker-separate-from-selfstate">D5 — Durability: a runtime-owned suspend marker, separate from <code>self.state</code><a class="headerlink" href="#d5-durability-a-runtime-owned-suspend-marker-separate-from-selfstate" title="Permanent link">&para;</a></h3>
+<p>On suspend, the runtime writes a <strong>suspension record</strong> to the StateStore under a reserved key,
+<strong>not</strong> mixed into user <code>self.state</code>:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Reserved key namespace — never collides with an agent name</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">store</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;_civitas.suspend::</span><span class="si">{</span><span class="n">agent_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="p">{</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="s2">&quot;suspended&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="s2">&quot;reason&quot;</span><span class="p">:</span> <span class="s2">&quot;awaiting approval&quot;</span><span class="p">,</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="s2">&quot;since&quot;</span><span class="p">:</span> <span class="mf">1720000000.0</span><span class="p">,</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="p">})</span>
+</span></code></pre></div>
+<p>On <code>_start()</code>, after <code>_restore_state()</code>, the runtime checks for a suspend record. If present,
+the agent enters <code>SUSPENDED</code> instead of <code>RUNNING</code>. <code>resume()</code> deletes the record.</p>
+<p>Rationale:
+- <strong>Separate from <code>self.state</code></strong> because user code owns <code>self.state</code> and may clear or overwrite
+  it; the suspend marker is control-plane data. Mixing them risks user code accidentally
+  un-suspending, or the marker polluting user-visible state.
+- <strong>Reserved key on the existing StateStore</strong> (rather than a new protocol method) means zero
+  changes to the <code>StateStore</code> protocol and works with every existing store — <code>InMemoryStateStore</code>,
+  and the contrib <code>SQLiteStateStore</code> / <code>PostgresStateStore</code> — with no contrib changes.</p>
+<blockquote>
+<p><strong>Durability caveat (must be documented loudly):</strong> durability is only as durable as the
+configured store. With the default <code>InMemoryStateStore</code>, a suspended agent that survives to a
+process restart loses its suspend marker (same semantics as <code>checkpoint()</code> today). Durable
+across restart <strong>only</strong> with a persistent store (SQLite/Postgres). This is consistent with how
+<code>self.state</code> durability already works, so it's a familiar caveat, not a new surprise.</p>
+<p><strong>Open sub-question (Q-B):</strong> reserved-key (<code>_civitas.suspend::{name}</code>) vs. a first-class
+<code>StateStore.set_suspended()/get_suspended()</code> protocol extension. Reserved-key is less invasive
+and needs no contrib changes; a protocol method is more explicit and type-safe but forces
+every store implementation (incl. contrib) to update. Leaning reserved-key. Flagged for review.</p>
+</blockquote>
+<h3 id="d6-hitl-approve-this-action-is-a-checkpoint-and-re-read-pattern-not-stack-magic">D6 — HITL "approve <em>this action</em>" is a checkpoint-and-re-read pattern, not stack magic<a class="headerlink" href="#d6-hitl-approve-this-action-is-a-checkpoint-and-re-read-pattern-not-stack-magic" title="Permanent link">&para;</a></h3>
+<p>Because of the coroutine-snapshot impossibility above, the mid-action approval flow is an
+explicit application pattern, not a runtime feature:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">handle</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="n">Message</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Message</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_needs_approval</span><span class="p">(</span><span class="n">message</span><span class="p">):</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>        <span class="c1"># persist the pending action so it survives suspension (and restart)</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">state</span><span class="p">[</span><span class="s2">&quot;pending_action&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">message</span><span class="o">.</span><span class="n">payload</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>        <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint</span><span class="p">()</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>        <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">emit_eval</span><span class="p">(</span><span class="s2">&quot;action.requires_approval&quot;</span><span class="p">,</span> <span class="p">{</span><span class="o">...</span><span class="p">})</span>  <span class="c1"># tell Presidium</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>        <span class="k">return</span>  <span class="c1"># stop here; an external controller will suspend us</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="c1"># on resume, a fresh message (or a re-delivery) triggers execution:</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;pending_action&quot;</span><span class="p">):</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>        <span class="n">action</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;pending_action&quot;</span><span class="p">)</span>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>        <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint</span><span class="p">()</span>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>        <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_execute</span><span class="p">(</span><span class="n">action</span><span class="p">)</span>
+</span></code></pre></div>
+<p>The runtime provides the <em>pause</em> (SUSPENDED) and the <em>durable marker</em> (D5); the agent provides
+the <em>what-was-I-doing</em> via its own checkpointed <code>self.state</code>. The design doc and user docs must
+show this pattern so nobody expects transparent mid-<code>handle()</code> resumption.</p>
+<hr />
+<h2 id="open-questions-genuinely-unresolved-need-a-design-session">Open Questions (genuinely unresolved — need a design session)<a class="headerlink" href="#open-questions-genuinely-unresolved-need-a-design-session" title="Permanent link">&para;</a></h2>
+<ul>
+<li>
+<p><strong>Q1 — Self-suspension deadlock.</strong> Can an agent call <code>await self.suspend()</code> on <em>itself</em> from
+  inside <code>handle()</code>? Problem: the message loop is what processes the <code>resume</code> control message.
+  If <code>handle()</code> blocks awaiting resume, the loop can't process resume → <strong>deadlock.</strong> Options:
+  (a) forbid self-suspension — <code>suspend()</code> is external/peer-only, self-pause is done via the D6
+  checkpoint-and-return pattern; (b) allow <code>self.suspend()</code> but make it non-blocking — it sets
+  the state and the loop suspends <em>after</em> <code>handle()</code> returns, not mid-call. I lean (a) for v0.5
+  (simplest, no deadlock surface), with the D6 pattern as the sanctioned self-pause idiom.
+  <strong>Needs your call.</strong></p>
+</li>
+<li>
+<p><strong>Q2 — <code>ask()</code> into a suspended agent.</strong> A caller doing <code>ask(suspended_agent, ...)</code> blocks
+  until its timeout (default 30s). For long approvals this will time out. Is that acceptable
+  (document "don't <code>ask()</code> an agent you expect to be suspended; use <code>send()</code> + poll/event"), or
+  do we want the bus to fail fast with a distinct <code>AgentSuspendedError</code>? Failing fast is friendlier
+  but requires the bus/registry to know suspension state (currently it doesn't — D3 keeps
+  suspension inside <code>AgentProcess</code>). Leaning: document the timeout behavior for v0.5, defer
+  fail-fast. <strong>Needs your call.</strong></p>
+</li>
+<li>
+<p><strong>Q3 — Control-message delivery mechanism (Q-A above).</strong> Separate control fast-path vs.
+  dequeue-and-hold. Affects whether message ordering is preserved across a suspend/resume cycle.</p>
+</li>
+<li>
+<p><strong>Q4 — Persistence surface (Q-B above).</strong> Reserved StateStore key vs. protocol extension.</p>
+</li>
+<li>
+<p><strong>Q5 — Interaction with dynamic children.</strong> If a <code>DynamicSupervisor</code>'s dynamic child is
+  suspended and the supervisor is asked to <code>stop(drain=...)</code> it, does drain wait for resume, skip,
+  or force-stop? Probably force-stop (suspension shouldn't block shutdown), but the interaction
+  with the D5 marker (does a force-stopped suspended child leave a stale marker?) needs care —
+  <code>despawn()</code>/<code>stop()</code> must clear the suspend marker.</p>
+</li>
+<li>
+<p><strong>Q6 — Observability.</strong> New spans/events: <code>civitas.agent.suspend</code> / <code>civitas.agent.resume</code>,
+  and an <code>AuditEvent</code> at each (this is squarely an audit-relevant, governance action — Presidium
+  will want it). Straightforward, just needs to be in scope.</p>
+</li>
+</ul>
+<hr />
+<h2 id="api-surface-provisional-subject-to-open-questions">API Surface (provisional — subject to open questions)<a class="headerlink" href="#api-surface-provisional-subject-to-open-questions" title="Permanent link">&para;</a></h2>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># ProcessStatus</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">ProcessStatus</span><span class="p">(</span><span class="n">Enum</span><span class="p">):</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>    <span class="n">INITIALIZING</span> <span class="o">=</span> <span class="s2">&quot;INITIALIZING&quot;</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="n">RUNNING</span> <span class="o">=</span> <span class="s2">&quot;RUNNING&quot;</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    <span class="n">SUSPENDED</span> <span class="o">=</span> <span class="s2">&quot;SUSPENDED&quot;</span>   <span class="c1"># re-introduced, fully wired (was removed in F02-6)</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="n">STOPPING</span> <span class="o">=</span> <span class="s2">&quot;STOPPING&quot;</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="n">STOPPED</span> <span class="o">=</span> <span class="s2">&quot;STOPPED&quot;</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="n">CRASHED</span> <span class="o">=</span> <span class="s2">&quot;CRASHED&quot;</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="c1"># Runtime — external entry points</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="k">await</span> <span class="n">runtime</span><span class="o">.</span><span class="n">suspend</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">reason</span><span class="o">=</span><span class="s2">&quot;awaiting approval&quot;</span><span class="p">)</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="k">await</span> <span class="n">runtime</span><span class="o">.</span><span class="n">resume</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="c1"># AgentProcess — peer control</span>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">suspend_peer</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">reason</span><span class="o">=...</span><span class="p">)</span>
+</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">resume_peer</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a>
+</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="c1"># AgentProcess — lifecycle hooks (optional overrides)</span>
+</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_suspend</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">reason</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>   <span class="c1"># called as it enters SUSPENDED</span>
+</span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_resume</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>                 <span class="c1"># called as it leaves SUSPENDED</span>
+</span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a>
+</span><span id="__span-5-22"><a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="c1"># Introspection</span>
+</span><span id="__span-5-23"><a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a><span class="n">runtime</span><span class="o">.</span><span class="n">get_agent</span><span class="p">(</span><span class="n">name</span><span class="p">)</span><span class="o">.</span><span class="n">status</span> <span class="ow">is</span> <span class="n">ProcessStatus</span><span class="o">.</span><span class="n">SUSPENDED</span>
+</span></code></pre></div>
+<hr />
+<h2 id="non-goals-v050">Non-Goals (v0.5.0)<a class="headerlink" href="#non-goals-v050" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Mid-<code>handle()</code> coroutine snapshotting / stack resumption</strong> — impossible in Python; not
+  attempted. Durable suspension pauses <em>dispatch</em>, per the clarification section.</li>
+<li><strong>Suspension state in the routing registry / bus</strong> — kept out of the registry/bus; fail-fast
+  <code>ask()</code> into a suspended agent is deferred (caller sees a timeout for v0.5). NOTE: this does
+  <em>not</em> mean "no <code>Supervisor</code> changes" — <code>_stop()</code> and the restart paths must handle <code>SUSPENDED</code>
+  (see Review Findings; the earlier "no Supervisor changes" wording was wrong).</li>
+<li><strong>Cross-process suspend of a remote worker agent</strong> — same trajectory as dynamic spawning:
+  control message works over the bus in principle, but v0.5 targets in-process; remote is a
+  follow-on. (Confirm scope during review.)</li>
+<li><strong>Automatic re-delivery of the in-flight message on resume</strong> — the agent that returned from
+  <code>handle()</code> before suspending is responsible for its own pending-action checkpoint (D6).</li>
+</ul>
+<hr />
+<h2 id="implementation-checklist-to-be-filled-in-after-this-design-is-approved">Implementation checklist (to be filled in AFTER this design is approved)<a class="headerlink" href="#implementation-checklist-to-be-filled-in-after-this-design-is-approved" title="Permanent link">&para;</a></h2>
+<p>Not started — this document is the first deliverable of Bucket B and is for review before any
+code is written, per this repo's convention (design doc precedes implementation for changes to
+core lifecycle semantics; see M4.2 and dynamic-spawning).</p>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Apache 2.0 License
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/civitas-io/python-civitas" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand", "navigation.top", "navigation.instant", "navigation.indexes", "content.code.copy", "content.code.annotate", "search.highlight", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="https://unpkg.com/mermaid@11/dist/mermaid.min.js"></script>
+      
+    
+  </body>
+</html>
