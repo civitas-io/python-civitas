@@ -1713,6 +1713,56 @@
   
 </li>
         
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v060-gateway-completion-planned" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.6.0 — Gateway Completion (Planned)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deferred-backlog" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deferred Backlog
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Deferred Backlog">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#python-civitas-deferred-not-in-v060" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        python-civitas — deferred (not in v0.6.0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#other-repos-per-boundarymd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other repos (per boundary.md)
+      
+    </span>
+  </a>
+  
+</li>
+        
           <li class="md-nav__item">
   <a href="#m41-visual-topology-editor" class="md-nav__link">
     <span class="md-ellipsis">
@@ -2454,6 +2504,56 @@
   
 </li>
         
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v060-gateway-completion-planned" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.6.0 — Gateway Completion (Planned)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deferred-backlog" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deferred Backlog
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Deferred Backlog">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#python-civitas-deferred-not-in-v060" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        python-civitas — deferred (not in v0.6.0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#other-repos-per-boundarymd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other repos (per boundary.md)
+      
+    </span>
+  </a>
+  
+</li>
+        
           <li class="md-nav__item">
   <a href="#m41-visual-topology-editor" class="md-nav__link">
     <span class="md-ellipsis">
@@ -2583,6 +2683,10 @@
 <td>💡</td>
 <td>Idea — to be specced</td>
 </tr>
+<tr>
+<td>🗂️</td>
+<td>Tracked backlog (index of deferred work)</td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -2704,6 +2808,18 @@
 <td><a href="#v050--released">v0.5.0 — Released</a></td>
 <td>✅ Released</td>
 <td>Jul 2026</td>
+</tr>
+<tr>
+<td>—</td>
+<td><a href="#v060--gateway-completion-planned">v0.6.0 — Gateway Completion</a></td>
+<td>⏳ Planned</td>
+<td>next</td>
+</tr>
+<tr>
+<td>—</td>
+<td><a href="#deferred-backlog">Deferred Backlog</a></td>
+<td>🗂️ Tracked</td>
+<td>—</td>
 </tr>
 <tr>
 <td>4</td>
@@ -4250,6 +4366,260 @@ repo-ownership split in four places, all corrected in this pass:</p>
 <p>Not python-civitas's job per <code>boundary.md</code>, and not touched in v0.5.0: Prompt Library &amp;
 Playground, Skills Gateway, CrewAI adapter full implementation, MySQL StateStore, Fabrica. All
 belong to civitas-contrib or the separate <code>civitas-forge</code> repo — revisit there, not here.</p>
+<hr />
+<h2 id="v060-gateway-completion-planned">v0.6.0 — Gateway Completion (Planned)<a class="headerlink" href="#v060-gateway-completion-planned" title="Permanent link">&para;</a></h2>
+<p><strong>Status: ⏳ Planned — next 0.x release</strong></p>
+<p>The HTTP Gateway shipped in v0.4 with HTTP/1.1, HTTP/2, and HTTP/3 (QUIC), but several planned
+transport and middleware features were deferred across the gateway design docs
+(<a href="../design/http-gateway/"><code>http-gateway.md</code></a> Phases 3–4, <a href="../design/gateway-api-surface/"><code>gateway-api-surface.md</code></a>).
+v0.6.0 completes the gateway as a coherent theme. A design refresh across those two docs should
+precede implementation (they were written pre-v0.4 and predate the shipped ASGI/middleware layer).</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Deliverable</th>
+<th>Priority</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>G1</td>
+<td><strong>gRPC gateway</strong> — generic <code>CivitasGateway</code> service; RPC→message-type mapping; bundled <code>.proto</code>; custom <code>.proto</code> loading from <code>proto_dir</code>; <code>civitas[grpc]</code> (grpclib) + <code>civitas[grpc-fast]</code> (grpcio) extras</td>
+<td>🔴 High</td>
+<td>http-gateway.md Phase 3</td>
+</tr>
+<tr>
+<td>G2</td>
+<td><strong>WebSocket upgrade</strong> — long-lived bidirectional sessions mapped to a <code>cast()</code> stream on the bus</td>
+<td>🔴 High</td>
+<td>http-gateway.md Phase 4, gateway.md</td>
+</tr>
+<tr>
+<td>G3</td>
+<td><strong>SSE / true streaming responses</strong> — chunked/Server-Sent-Events instead of the current <code>{"chunks": [...]}</code> buffer-and-serialise workaround</td>
+<td>🔴 High</td>
+<td>gateway-api-surface.md Q4</td>
+</tr>
+<tr>
+<td>G4</td>
+<td><strong>Rate-limiting middleware</strong> — <code>RateLimiter</code> GenServer wired as gateway middleware</td>
+<td>🟡 Medium</td>
+<td>http-gateway.md Phase 4</td>
+</tr>
+<tr>
+<td>G5</td>
+<td><strong>Auth middleware</strong> — JWT / API-key / mTLS client-cert authentication middleware (integration point already documented; ship first-party implementations)</td>
+<td>🟡 Medium</td>
+<td>http-gateway.md Phase 4, security-hardening.md</td>
+</tr>
+<tr>
+<td>G6</td>
+<td><strong>File uploads</strong> — <code>multipart/form-data</code> request handling</td>
+<td>🟢 Low</td>
+<td>gateway-api-surface.md</td>
+</tr>
+<tr>
+<td>G7</td>
+<td><strong>HTTP/2 server push</strong> — requires explicit push directives from agents</td>
+<td>🟢 Low</td>
+<td>http-gateway.md</td>
+</tr>
+<tr>
+<td>G8</td>
+<td><strong>gRPC reflection service</strong> — generic reflection for the gRPC surface</td>
+<td>🟢 Low</td>
+<td>http-gateway.md Phase 4</td>
+</tr>
+<tr>
+<td>G9</td>
+<td><strong>Evaluate quiche-python</strong> (Rust QUIC) as a drop-in replacement for aioquic in the HTTP/3 path</td>
+<td>🟢 Low</td>
+<td>http-gateway.md</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Suggested cut line:</strong> G1–G3 (gRPC + streaming) are the headline value and a shippable v0.6.0 on
+their own; G4–G5 (middleware) are strong companions; G6–G9 are opportunistic and can slip to a
+later patch without holding the release.</p>
+<p><strong>Non-goals for v0.6.0:</strong> business logic in the gateway, load balancing, request queuing — the
+gateway stays a thin translate-and-route edge (<a href="../design/http-gateway/"><code>http-gateway.md</code></a> Non-Goals).</p>
+<hr />
+<h2 id="deferred-backlog">Deferred Backlog<a class="headerlink" href="#deferred-backlog" title="Permanent link">&para;</a></h2>
+<p><strong>Status: 🗂️ Tracked</strong> — the single index of everything deferred and not in v0.6.0. Items with a
+dedicated section link there; items that currently live only in a design doc are captured here so
+nothing is lost. Owner column: <code>core</code> = python-civitas, else the target repo.</p>
+<h3 id="python-civitas-deferred-not-in-v060">python-civitas — deferred (not in v0.6.0)<a class="headerlink" href="#python-civitas-deferred-not-in-v060" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Owner</th>
+<th>Target</th>
+<th>Where tracked</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="#m41-visual-topology-editor">Visual Topology Editor</a> (drag-drop UI)</td>
+<td>core</td>
+<td>⏸️ low priority</td>
+<td>§M4.1</td>
+</tr>
+<tr>
+<td>Textual dashboard rebuild (on <code>TopologyServer</code> endpoints)</td>
+<td>core</td>
+<td>⏸️ follow-on</td>
+<td>design/dynamic-spawning.md</td>
+</tr>
+<tr>
+<td>Cross-process dynamic spawning (ZMQ / NATS)</td>
+<td>core</td>
+<td>⏸️ v0.x</td>
+<td>design/dynamic-spawning.md Non-Goals</td>
+</tr>
+<tr>
+<td>Per-agent spawn quotas (only global <code>max_children</code> today)</td>
+<td>core</td>
+<td>⏸️</td>
+<td>design/dynamic-spawning.md Non-Goals</td>
+</tr>
+<tr>
+<td>External security audit before v1.0 (fix all HIGH+; publish summary)</td>
+<td>core</td>
+<td>⏳ pre-v1.0</td>
+<td>§M4.3</td>
+</tr>
+<tr>
+<td>Continuous security posture (CVE watch, CVSS advisories)</td>
+<td>core</td>
+<td>⏳ ongoing</td>
+<td>§M4.3</td>
+</tr>
+<tr>
+<td>Encrypted <code>StateStore</code> at rest</td>
+<td>core</td>
+<td>⏸️ (could be v0.x)</td>
+<td>design/security-hardening.md</td>
+</tr>
+<tr>
+<td>Fine-grained ACL DSL (overlaps M4.4 capabilities)</td>
+<td>core</td>
+<td>⏸️</td>
+<td>design/security-hardening.md</td>
+</tr>
+<tr>
+<td>HSM / TPM-backed signing keys</td>
+<td>core</td>
+<td>⏸️ post-v1.0</td>
+<td>design/security-hardening.md</td>
+</tr>
+<tr>
+<td>PKI / CA integration (cert issuance)</td>
+<td>core</td>
+<td>⏸️ deployment-layer</td>
+<td>design/security-hardening.md</td>
+</tr>
+<tr>
+<td>Durable suspension: fail-fast <code>ask()</code> into a suspended agent (times out today)</td>
+<td>core</td>
+<td>⏸️</td>
+<td>design/durable-suspension.md Non-Goals</td>
+</tr>
+<tr>
+<td>Durable suspension: crash-while-suspended restart-budget exemption</td>
+<td>core</td>
+<td>⏸️ v1</td>
+<td>supervisor.py (S8 finding #5)</td>
+</tr>
+<tr>
+<td>Fiddler eval exporter: two-way guardrail receive</td>
+<td>core/contrib</td>
+<td>⏸️</td>
+<td>§M2.6</td>
+</tr>
+<tr>
+<td>Postgres: zero-downtime dual-write migration</td>
+<td>core</td>
+<td>⏸️</td>
+<td>§Postgres StateStore</td>
+</tr>
+<tr>
+<td>Postgres: PgBouncer deployment guide</td>
+<td>core</td>
+<td>⏸️ docs pass</td>
+<td>§Postgres StateStore</td>
+</tr>
+<tr>
+<td>Personal AI Assistant demo (Telegram gateway + skills)</td>
+<td>core</td>
+<td>⏸️</td>
+<td>§M1.8</td>
+</tr>
+</tbody>
+</table>
+<h3 id="other-repos-per-boundarymd">Other repos (per <a href="https://github.com/civitas-io/context"><code>boundary.md</code></a>)<a class="headerlink" href="#other-repos-per-boundarymd" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Owner</th>
+<th>Status</th>
+<th>Where tracked</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>CivitasMCPServer</code> — expose an agent tree as an MCP server</td>
+<td>fabrica</td>
+<td>⏸️ not started anywhere</td>
+<td>§M3.4</td>
+</tr>
+<tr>
+<td>CrewAI adapter — full implementation (stub raises <code>NotImplementedError</code> today)</td>
+<td>civitas-contrib</td>
+<td>⏳ stub</td>
+<td>§Infrastructure &amp; Release</td>
+</tr>
+<tr>
+<td>MySQL StateStore</td>
+<td>civitas-contrib</td>
+<td>⏸️</td>
+<td>§Postgres StateStore</td>
+</tr>
+<tr>
+<td><a href="#prompt-library--playground">Prompt Library &amp; Playground</a></td>
+<td>civitas-contrib</td>
+<td>💡 idea (🔴 high), spec unwritten</td>
+<td>§Phase 5</td>
+</tr>
+<tr>
+<td><a href="#skills-gateway">Skills Gateway</a></td>
+<td>civitas-contrib</td>
+<td>💡 idea, spec unwritten</td>
+<td>§Phase 5</td>
+</tr>
+<tr>
+<td><a href="#fabrica--tools-gateway">Fabrica — Tools Gateway</a> / <code>find_tools</code> (RFC 0001)</td>
+<td>civitas-forge</td>
+<td>💡 idea (🔴 high), spec unwritten</td>
+<td>§Phase 5, rfc/0001</td>
+</tr>
+<tr>
+<td><a href="#llm-gateway">LLM Gateway</a> (governed: rate limits, budgets, grant routing)</td>
+<td>presidium</td>
+<td>⏸️ moved</td>
+<td>§Phase 5</td>
+</tr>
+<tr>
+<td>Credential-propagation RFC (per-user OAuth for retrieved tools)</td>
+<td>cross-repo</td>
+<td>⏸️ future RFC</td>
+<td>rfc/0001 §out-of-scope</td>
+</tr>
+</tbody>
+</table>
 <hr />
 <h3 id="m41-visual-topology-editor">M4.1 — Visual Topology Editor<a class="headerlink" href="#m41-visual-topology-editor" title="Permanent link">&para;</a></h3>
 <p><strong>Status: ⏸️ Deferred | Priority: 🟢 Low</strong></p>
