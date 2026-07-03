@@ -1641,6 +1641,23 @@
   
 </li>
         
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v040-release-fixes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.4.0 Release Fixes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="v0.4.0 Release Fixes">
+      <ul class="md-nav__list">
+        
           <li class="md-nav__item">
   <a href="#m41-visual-topology-editor" class="md-nav__link">
     <span class="md-ellipsis">
@@ -2310,6 +2327,23 @@
   
 </li>
         
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v040-release-fixes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.4.0 Release Fixes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="v0.4.0 Release Fixes">
+      <ul class="md-nav__list">
+        
           <li class="md-nav__item">
   <a href="#m41-visual-topology-editor" class="md-nav__link">
     <span class="md-ellipsis">
@@ -2554,6 +2588,12 @@
 <td><a href="#m41-visual-topology-editor">Visual Topology Editor</a></td>
 <td>⏸️ Deferred</td>
 <td>—</td>
+</tr>
+<tr>
+<td>—</td>
+<td><a href="#v040-release-fixes">v0.4.0 Release Fixes</a></td>
+<td>✅ Completed</td>
+<td>Jul 2026</td>
 </tr>
 <tr>
 <td>5</td>
@@ -3853,7 +3893,7 @@
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <code>MiddlewareChain</code> — ordered list of async callables; builds <code>call_next</code> chain via closure</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> Global middleware loaded from <code>config.middleware</code> (dotted import path → callable)</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> Route-scoped middleware loaded from <code>route.middleware</code></li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> Execution order: global → route-scoped → contract validation → bus dispatch</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> Execution order: global → route-scoped → contract validation → bus dispatch — parsing landed here, but wiring into the ASGI dispatch path had a gap; not actually wired until <a href="https://github.com/civitas-io/python-civitas/issues/6">GH #6</a>, fixed for the v0.4.0 release</li>
 <li class="task-list-item">
 <p><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> Short-circuit: middleware returning <code>GatewayResponse</code> without calling <code>call_next</code> skips remainder</p>
 </li>
@@ -3890,7 +3930,7 @@
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <code>@contract</code> response validation: valid reply → 200; invalid → 500</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> Middleware chain: all middleware called in order</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> Middleware short-circuit: returning response without <code>call_next</code> skips rest of chain</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> Global middleware runs before route-scoped middleware</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> Global middleware runs before route-scoped middleware — test added for the v0.4.0 release (<a href="https://github.com/civitas-io/python-civitas/issues/6">GH #6</a>); no test had actually exercised route-scoped execution before this</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <code>/openapi.json</code> returns valid OpenAPI 3.1 spec</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <code>/docs</code> returns 200 with Swagger UI HTML</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <code>docs.enabled: false</code> → <code>/docs</code> returns 404</li>
@@ -3981,6 +4021,58 @@
 <blockquote>
 <p><strong>MySQL StateStore</strong> — deferred because Postgres covers the multi-process persistence gap and asyncpg is a better async foundation. Add if users are already running MySQL and cannot introduce a second database. Implementation is a clean 100-line addition following the same plugin pattern (<code>civitas[mysql]</code> extra, <code>type: mysql</code> loader entry, <code>mysql://</code> DSN in <code>_parse_dsn</code>).</p>
 </blockquote>
+<hr />
+<h2 id="v040-release-fixes">v0.4.0 Release Fixes<a class="headerlink" href="#v040-release-fixes" title="Permanent link">&para;</a></h2>
+<p><strong>Status: ✅ Completed — July 2026</strong></p>
+<p>Two bugs reported against v0.3.0, found by a downstream project building against <code>civitas</code> at HEAD. Both fixed and folded into the v0.4.0 release alongside the Phase 4 work above — the v0.4.0 changes were already sitting on <code>main</code>, unreleased, when these were reported.</p>
+<table>
+<thead>
+<tr>
+<th>Deliverable</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/civitas-io/python-civitas/issues/6">GH #6</a> — Route-scoped gateway middleware wired into ASGI dispatch</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><a href="https://github.com/civitas-io/python-civitas/issues/7">GH #7</a> — <code>civitas/py.typed</code> marker added</td>
+<td>✅</td>
+</tr>
+</tbody>
+</table>
+<h4 id="gh-6-route-scoped-gateway-middleware-is-parsed-but-never-executed">GH #6 — Route-scoped gateway middleware is parsed but never executed<a class="headerlink" href="#gh-6-route-scoped-gateway-middleware-is-parsed-but-never-executed" title="Permanent link">&para;</a></h4>
+<p><code>RouteEntry.middleware</code> (a route's own <code>middleware:</code> list in topology YAML) was parsed into
+<code>RouteEntry</code> objects but never read by <code>GatewayASGI</code>. The dispatch layer built its middleware
+chain once at construction time from <code>config.middleware</code> (global only) — the matched route's
+<code>.middleware</code> field was never consulted. A route declaring its own auth/guard middleware (e.g.
+an admin-only route on an otherwise public gateway) would silently run <strong>without</strong> that guard,
+with no error or warning.</p>
+<p>This contradicted <code>docs/gateway.md</code> and this file's own Gateway API Surface checklist, both of
+which stated route-scoped middleware runs after global middleware, before contract validation.</p>
+<p><strong>Fix:</strong>
+- <code>GatewayASGI._handle_http()</code> now matches the route <em>before</em> building the middleware chain.
+- Route-scoped middleware (<code>entry.middleware</code>, resolved via the existing <code>load_middleware()</code>
+  loader) is appended after global middleware when building the chain, restoring the documented
+  order: global → route-scoped → contract validation → bus dispatch.
+- Resolved route middleware callables are cached per <code>RouteEntry</code> (by object identity) so they
+  are loaded once, not on every request.
+- Unresolvable route middleware paths are logged and skipped, matching the existing behavior for
+  global middleware — never raises at request time.
+- Corrected the two checklist items below (Gateway API Surface, "Wire into ASGI" and "Tests")
+  that had been checked off despite this gap.</p>
+<h4 id="gh-7-missing-pytyped-marker-despite-typing-typed-classifier-mypy-strict">GH #7 — Missing <code>py.typed</code> marker despite "Typing :: Typed" classifier + mypy --strict<a class="headerlink" href="#gh-7-missing-pytyped-marker-despite-typing-typed-classifier-mypy-strict" title="Permanent link">&para;</a></h4>
+<p><code>pyproject.toml</code> declares the <code>"Typing :: Typed"</code> classifier and the package runs
+<code>mypy --strict</code> internally, but no <code>civitas/py.typed</code> marker file existed in the source tree or
+the published 0.3.0 wheel. Downstream projects running their own <code>mypy --strict</code> got
+<code>error: ... missing library stubs or py.typed marker [import-untyped]</code> for every import from
+<code>civitas</code>.</p>
+<p><strong>Fix:</strong>
+- Added empty <code>civitas/py.typed</code>.
+- <code>[tool.hatch.build.targets.wheel] packages = ["civitas"]</code> picks it up automatically — verified
+  present in the built wheel (<code>unzip -l dist/*.whl</code>) as part of the release checklist below.</p>
 <hr />
 <h3 id="m41-visual-topology-editor">M4.1 — Visual Topology Editor<a class="headerlink" href="#m41-visual-topology-editor" title="Permanent link">&para;</a></h3>
 <p><strong>Status: ⏸️ Deferred | Priority: 🟢 Low</strong></p>
