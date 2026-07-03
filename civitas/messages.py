@@ -75,7 +75,7 @@ class Message:
     parent_span_id: str | None = None
     attempt: int = 0
     priority: int = 0
-    # ttl: planned — discard expired messages at Mailbox.get()
+    ttl: float | None = None
 
     def __post_init__(self) -> None:
         try:
@@ -106,6 +106,7 @@ class Message:
             "parent_span_id": self.parent_span_id,
             "attempt": self.attempt,
             "priority": self.priority,
+            "ttl": self.ttl,
         }
 
     @classmethod

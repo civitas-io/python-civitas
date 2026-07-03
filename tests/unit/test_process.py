@@ -58,6 +58,37 @@ async def test_mailbox_priority_queue_bounded():
     assert mb._priority_queue.maxsize == 100
 
 
+async def test_mailbox_expired_message_discarded(caplog: Any) -> None:
+    """A message past its ttl is discarded, not delivered (F01-3)."""
+    mb = Mailbox()
+    expired = Message(type="expired", timestamp=0.0, ttl=1.0)  # elapsed long ago
+    fresh = Message(type="fresh")
+    await mb.put(expired)
+    await mb.put(fresh)
+    with caplog.at_level("WARNING"):
+        result = await mb.get()
+    assert result.type == "fresh"
+    assert any("discarding expired message" in r.message for r in caplog.records)
+
+
+async def test_mailbox_no_ttl_never_expires():
+    """A message with ttl=None (the default) is never discarded (F01-3)."""
+    mb = Mailbox()
+    msg = Message(type="no-ttl", timestamp=0.0)
+    await mb.put(msg)
+    assert (await mb.get()).type == "no-ttl"
+
+
+async def test_mailbox_ttl_not_yet_elapsed_delivered():
+    """A message within its ttl window is delivered normally (F01-3)."""
+    import time
+
+    mb = Mailbox()
+    msg = Message(type="fresh", timestamp=time.time(), ttl=60.0)
+    await mb.put(msg)
+    assert (await mb.get()).type == "fresh"
+
+
 # ---------------------------------------------------------------------------
 # ProcessStatus — SUSPENDED removed (F02-6)
 # ---------------------------------------------------------------------------
@@ -121,8 +152,12 @@ async def test_on_stop_called_on_graceful_shutdown():
     assert agent.status == ProcessStatus.STOPPED
 
 
-async def test_on_stop_called_on_crash():
-    """on_stop() is always called — even when the agent crashes (F02-1)."""
+async def test_on_stop_called_when_on_start_raises():
+    """on_stop() runs even when on_start() raises (F11-5).
+
+    The message loop never starts in this case, so _start() runs the
+    equivalent cleanup itself before re-raising the original exception.
+    """
 
     class CrashingAgent(AgentProcess):
         def __init__(self) -> None:
@@ -139,8 +174,12 @@ async def test_on_stop_called_on_crash():
     # on_start crash propagates — _start() should raise
     with pytest.raises(RuntimeError, match="on_start crash"):
         await agent._start()
-    # on_stop is not called for on_start failures (message loop never ran)
-    # But crashes during handle() should call on_stop via the finally block.
+    assert agent.stop_called, "on_stop must be called even when on_start() raises"
+    assert agent.status == ProcessStatus.CRASHED
+
+
+async def test_on_stop_called_on_crash():
+    """on_stop() is always called — even when the agent crashes (F02-1)."""
 
     # Second scenario: crash during handle()
     class HandleCrashAgent(AgentProcess):
@@ -554,3 +593,109 @@ async def test_stop_noop_when_never_started():
     # _task is None, _status is INITIALIZING
     await agent._stop()
     # No exception — idempotent
+
+
+# ---------------------------------------------------------------------------
+# MetricsSink wiring (FD-01/FD-03)
+# ---------------------------------------------------------------------------
+
+
+class _FakeMetricsSink:
+    """Records calls without depending on the dashboard's MetricsCollector."""
+
+    def __init__(self) -> None:
+        self.handled: list[tuple[str, float]] = []
+        self.sent: list[str] = []
+        self.errors: list[str] = []
+
+    def message_handled(self, agent_name: str, latency_ms: float) -> None:
+        self.handled.append((agent_name, latency_ms))
+
+    def message_sent(self, agent_name: str) -> None:
+        self.sent.append(agent_name)
+
+    def agent_error(self, agent_name: str) -> None:
+        self.errors.append(agent_name)
+
+    def agent_restarted(self, agent_name: str, reason: str = "") -> None:
+        pass
+
+
+async def test_message_handled_recorded_on_success():
+    """A successful handle() call records message_handled with latency (FD-01)."""
+    agent = TrackingAgent()
+    sink = _FakeMetricsSink()
+    agent._metrics = sink
+
+    await agent._start()
+    await agent._mailbox.put(Message(type="ping"))
+    await wait_for(lambda: len(sink.handled) >= 1)
+    await agent._stop()
+
+    name, latency_ms = sink.handled[0]
+    assert name == "tracker"
+    assert latency_ms >= 0.0
+
+
+async def test_agent_error_and_message_handled_recorded_on_failure():
+    """A raising handle() call records both agent_error and message_handled (FD-01)."""
+
+    class AlwaysFailAgent(AgentProcess):
+        def __init__(self) -> None:
+            super().__init__("failer")
+
+        async def handle(self, message: Message) -> None:
+            raise ValueError("boom")
+
+        async def on_error(self, error: Exception, message: Message) -> ErrorAction:
+            return ErrorAction.SKIP
+
+    agent = AlwaysFailAgent()
+    sink = _FakeMetricsSink()
+    agent._metrics = sink
+
+    await agent._start()
+    await agent._mailbox.put(Message(type="ping"))
+    await wait_for(lambda: len(sink.errors) >= 1)
+    assert sink.errors == ["failer"]
+    assert len(sink.handled) == 1
+    await agent._stop()
+
+
+async def test_message_sent_recorded_on_send():
+    """send() records message_sent for the sending agent (FD-01)."""
+    agent = TrackingAgent()
+    sink = _FakeMetricsSink()
+    agent._metrics = sink
+    mock_bus = MagicMock()
+    mock_bus.route = AsyncMock()
+    agent._bus = mock_bus
+
+    await agent.send("other", {"key": "value"})
+
+    assert sink.sent == ["tracker"]
+
+
+async def test_message_sent_recorded_on_ask():
+    """ask() records message_sent for the asking agent (FD-01)."""
+    agent = TrackingAgent()
+    sink = _FakeMetricsSink()
+    agent._metrics = sink
+    mock_bus = MagicMock()
+    mock_bus.request = AsyncMock(return_value=Message(type="reply"))
+    agent._bus = mock_bus
+
+    await agent.ask("other", {"key": "value"})
+
+    assert sink.sent == ["tracker"]
+
+
+async def test_no_metrics_sink_does_not_raise():
+    """AgentProcess works normally when no metrics sink is attached (default)."""
+    agent = TrackingAgent()
+    assert agent._metrics is None
+
+    await agent._start()
+    await agent._mailbox.put(Message(type="ping"))
+    await wait_for(lambda: "handle:ping" in agent.events)
+    await agent._stop()

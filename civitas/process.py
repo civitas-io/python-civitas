@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from civitas.bus import MessageBus
+    from civitas.observability.metrics import MetricsSink
     from civitas.observability.tracer import Tracer
     from civitas.plugins.model import ModelProvider
     from civitas.plugins.state import StateStore
@@ -60,14 +62,29 @@ class Mailbox:
             self._notify.set()
 
     async def get(self) -> Message:
-        """Dequeue the next message. Priority messages are served first."""
+        """Dequeue the next message. Priority messages are served first.
+
+        Messages whose ttl has elapsed are discarded with a warning instead
+        of being returned; the search continues for the next message.
+        """
         while True:
-            # Check priority queue first
+            message: Message | None = None
             if not self._priority_queue.empty():
-                return self._priority_queue.get_nowait()
-            # Then normal queue
-            if not self._queue.empty():
-                return self._queue.get_nowait()
+                message = self._priority_queue.get_nowait()
+            elif not self._queue.empty():
+                message = self._queue.get_nowait()
+
+            if message is not None:
+                if message.ttl is not None and message.timestamp + message.ttl < time.time():
+                    logger.warning(
+                        "Mailbox: discarding expired message %s (type=%r, ttl=%.1fs)",
+                        message.id,
+                        message.type,
+                        message.ttl,
+                    )
+                    continue
+                return message
+
             # Wait for a notification
             self._notify.clear()
             # Double-check after clearing (avoid race)
@@ -145,6 +162,9 @@ class AgentProcess:
 
         # Audit sink — injected by ComponentSet, None when auditing is disabled.
         self._audit_sink: AuditSink | None = None
+
+        # Metrics sink — injected by ComponentSet, None when no collector is attached.
+        self._metrics: MetricsSink | None = None
 
         # Set by Runtime to the nearest DynamicSupervisor ancestor name (if any)
         self._dynamic_supervisor_name: str | None = None
@@ -311,6 +331,8 @@ class AgentProcess:
             parent_span_id=parent_span_id,
         )
         await self._bus.route(message)
+        if self._metrics is not None:
+            self._metrics.message_sent(self.name)
 
     async def ask(
         self,
@@ -339,6 +361,8 @@ class AgentProcess:
             span_id=_new_span_id(),
             parent_span_id=parent_span_id,
         )
+        if self._metrics is not None:
+            self._metrics.message_sent(self.name)
         return await self._bus.request(message, timeout=timeout)
 
     async def send_capable(
@@ -607,15 +631,33 @@ class AgentProcess:
         await self._restore_state()
 
         # Emit agent.start span
+        start_span = None
         if self._tracer is not None:
             start_span = self._tracer.start_span(
                 "civitas.agent.start",
                 attributes={"civitas.agent.name": self.name, "civitas.agent.id": self.id},
             )
 
-        await self.on_start()
+        try:
+            await self.on_start()
+        except Exception as exc:
+            # on_start() failed — the message loop (and its finally block)
+            # never runs, so run the equivalent cleanup here. Mirrors OTP's
+            # terminate/2-after-failed-init/1 semantics.
+            if start_span is not None:
+                start_span.set_error(exc)
+                start_span.end()
+            self._status = ProcessStatus.CRASHED
+            await self.on_stop()
+            for _client in list(self._mcp_clients.values()):
+                try:
+                    await _client.disconnect()
+                except Exception:
+                    pass
+            self._mcp_clients.clear()
+            raise
 
-        if self._tracer is not None:
+        if start_span is not None:
             start_span.end()
 
         self._task = asyncio.create_task(self._message_loop(), name=self.name)
@@ -690,6 +732,7 @@ class AgentProcess:
 
     async def _dispatch(self, message: Message) -> None:
         """Wrap a single handle() call in a span, apply error action."""
+        dispatch_start = time.time()
         # Start handle span
         handle_span: Span | None = None
         if self._tracer is not None:
@@ -720,11 +763,15 @@ class AgentProcess:
             if handle_span is not None:
                 handle_span.set_error(exc)
                 handle_span.set_attribute("civitas.handle.result", "error")
+            if self._metrics is not None:
+                self._metrics.agent_error(self.name)
             action = await self.on_error(exc, message)
             if handle_span is not None:
                 handle_span.set_attribute("civitas.handle.result", f"error.{action.value.lower()}")
             await self._apply_error_action(action, exc, message)
         finally:
+            if self._metrics is not None:
+                self._metrics.message_handled(self.name, (time.time() - dispatch_start) * 1000)
             if handle_span is not None:
                 handle_span.end()
             self._current_handle_span = None
