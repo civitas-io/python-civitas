@@ -11,6 +11,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-07-03
+
 ### Added
 
 - **Durable suspension** (`agent.suspend()` / `agent.resume()`) — the Presidium human-in-the-loop

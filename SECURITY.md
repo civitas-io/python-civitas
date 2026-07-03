@@ -4,8 +4,8 @@
 
 | Version | Supported |
 |---------|-----------|
-| 0.4.x (latest) | ✅ Security fixes |
-| < 0.4.0 | ❌ No longer supported |
+| 0.5.x (latest) | ✅ Security fixes |
+| < 0.5.0 | ❌ No longer supported |
 
 Civitas is pre-1.0. Minor releases may include security fixes alongside new features. We strongly recommend staying on the latest release.
 

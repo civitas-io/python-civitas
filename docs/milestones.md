@@ -37,7 +37,7 @@ Development progress across all phases of Civitas.
 | 4 | [Gateway API Surface](#gateway-api-surface) | ✅ Completed | Apr 2026 |
 | 4 | [Postgres StateStore + Migration](#postgres-statestore--migration) | ✅ Completed | May 2026 |
 | — | [v0.4.0 Release Fixes](#v040-release-fixes) | ✅ Completed | Jul 2026 |
-| — | [v0.5.0 — Complete (pending release)](#v050--complete-pending-release) | ✅ A+B+C done | Jul 2026 |
+| — | [v0.5.0 — Released](#v050--released) | ✅ Released | Jul 2026 |
 | 4 | [Visual Topology Editor](#m41-visual-topology-editor) | ⏸️ Deferred | — |
 | 5 | [Prompt Library & Playground (civitas-contrib)](#prompt-library--playground) | 💡 Idea | v0.5+, not this repo |
 | 5 | [LLM Gateway](#llm-gateway) | ⏸️ Moved to Presidium | — |
@@ -750,9 +750,9 @@ the published 0.3.0 wheel. Downstream projects running their own `mypy --strict`
 
 ---
 
-## v0.5.0 — Complete (pending release)
+## v0.5.0 — Released
 
-**Status: ✅ Buckets A + B + C complete — July 2026 (release tag not yet cut)**
+**Status: ✅ Released — July 2026 (buckets A + B + C)**
 
 Scope was three buckets; a fourth candidate (D) was explicitly deferred to a future version — see
 below. Bucket A (correctness & hardening) ✅, Bucket B (durable suspension) ✅, Bucket C (doc
