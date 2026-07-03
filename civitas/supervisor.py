@@ -8,7 +8,7 @@ import logging
 import random
 import time
 from collections import deque
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
@@ -86,6 +86,7 @@ class Supervisor:
         self._pending_crash_tasks: set[asyncio.Task[None]] = set()  # F03-4: track handlers
         self._running = False
         self._parent: Supervisor | None = None
+        self._crash_callbacks: list[Callable[[str, Exception], Awaitable[None]]] = []
 
         # Injected by Runtime
         self._bus: MessageBus | None = None
@@ -137,6 +138,14 @@ class Supervisor:
                 await child.stop()
             else:
                 await child._stop()
+
+    def add_crash_callback(self, callback: Callable[[str, Exception], Awaitable[None]]) -> None:
+        """Register a callback invoked with (child_name, exception) on every crash.
+
+        Runs before the restart strategy is applied. A callback that raises
+        is logged and does not prevent the restart strategy from running.
+        """
+        self._crash_callbacks.append(callback)
 
     async def _start_child(self, agent: AgentProcess) -> None:
         """Start a single child agent and monitor its task."""
@@ -271,6 +280,12 @@ class Supervisor:
         self._restart_timestamps.append(now)
         while self._restart_timestamps and self._restart_timestamps[0] <= cutoff:
             self._restart_timestamps.popleft()
+
+        for callback in self._crash_callbacks:
+            try:
+                await callback(name, exc)
+            except Exception:
+                logger.exception("Supervisor %r: crash callback raised", self.name)
 
         # Check if we've exceeded max restarts
         if len(self._restart_timestamps) > self.max_restarts:

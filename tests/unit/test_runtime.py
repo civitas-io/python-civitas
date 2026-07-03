@@ -150,6 +150,86 @@ class TestGetAgent:
 
 
 # ---------------------------------------------------------------------------
+# Runtime.on_crash / set_metrics (FD-01/FD-03)
+# ---------------------------------------------------------------------------
+
+
+class TestOnCrash:
+    def test_delegates_to_root_supervisor(self):
+        sup = Supervisor("root", children=[NullAgent("a")])
+        rt = Runtime(supervisor=sup)
+        received = []
+
+        async def callback(name: str, exc: Exception) -> None:
+            received.append(name)
+
+        rt.on_crash(callback)
+        assert sup._crash_callbacks == [callback]
+
+    def test_noop_with_no_supervisor(self):
+        rt = Runtime()
+
+        async def callback(name: str, exc: Exception) -> None:
+            pass
+
+        rt.on_crash(callback)  # must not raise
+
+
+class TestSetMetrics:
+    @pytest.mark.asyncio
+    async def test_metrics_injected_into_agents(self):
+        agent = NullAgent("a")
+        rt = Runtime(supervisor=Supervisor("root", children=[agent]))
+        sink = object()
+        rt.set_metrics(sink)
+        await rt.start()
+        try:
+            assert agent._metrics is sink
+        finally:
+            await rt.stop()
+
+
+class TestExportersWiring:
+    """Runtime(exporters=[...]) drains real spans through OTELAgent (FD-07/FD-09)."""
+
+    @pytest.mark.asyncio
+    async def test_exporter_receives_spans_end_to_end(self):
+        from civitas.observability.span_queue import SpanData
+
+        received: list[SpanData] = []
+
+        class RecordingBackend:
+            async def export(self, spans: list[SpanData]) -> None:
+                received.extend(spans)
+
+            async def shutdown(self) -> None:
+                pass
+
+        agent = NullAgent("a")
+        rt = Runtime(
+            supervisor=Supervisor("root", children=[agent]),
+            exporters=[RecordingBackend()],
+        )
+        await rt.start()
+        assert rt._otel_agent_task is not None
+        await rt.send("a", {})
+        await rt.stop()  # drains any spans still queued before returning
+
+        assert rt._otel_agent_task is None
+        assert len(received) > 0
+
+    @pytest.mark.asyncio
+    async def test_no_exporters_no_otel_agent_task(self):
+        agent = NullAgent("a")
+        rt = Runtime(supervisor=Supervisor("root", children=[agent]))
+        await rt.start()
+        try:
+            assert rt._otel_agent_task is None
+        finally:
+            await rt.stop()
+
+
+# ---------------------------------------------------------------------------
 # Runtime.start / stop lifecycle guards
 # ---------------------------------------------------------------------------
 
@@ -362,7 +442,7 @@ def test_example_topology_parses(example_file: str) -> None:
 
 def test_example_production_yaml_supervision_structure() -> None:
     """production.yaml supervision tree parses; plugin loading is mocked (F12-9)."""
-    mock_loaded = {"model_providers": [], "state_store": None}
+    mock_loaded = {"model_providers": [], "state_store": None, "exporters": []}
     path = _EXAMPLES_DIR / "production.yaml"
     with patch("civitas.plugins.loader.load_plugins_from_config", return_value=mock_loaded):
         rt = Runtime.from_config(path, agent_classes=_ANY)
@@ -413,7 +493,7 @@ def test_from_config_loads_single_model_provider(tmp_path: Path) -> None:
     )
 
     fake_provider = MagicMock()
-    mock_loaded = {"model_providers": [fake_provider], "state_store": None}
+    mock_loaded = {"model_providers": [fake_provider], "state_store": None, "exporters": []}
 
     with patch("civitas.runtime.load_plugins_from_config", return_value=mock_loaded):
         rt = Runtime.from_config(yaml_file, agent_classes=_ANY)
@@ -438,7 +518,7 @@ def test_from_config_multiple_providers_warns(
     )
 
     p1, p2 = MagicMock(), MagicMock()
-    mock_loaded = {"model_providers": [p1, p2], "state_store": None}
+    mock_loaded = {"model_providers": [p1, p2], "state_store": None, "exporters": []}
 
     with patch("civitas.runtime.load_plugins_from_config", return_value=mock_loaded):
         with caplog.at_level(logging.WARNING, logger="civitas.runtime"):
@@ -462,7 +542,7 @@ def test_from_config_loads_state_store(tmp_path: Path) -> None:
     )
 
     fake_store = MagicMock()
-    mock_loaded = {"model_providers": [], "state_store": fake_store}
+    mock_loaded = {"model_providers": [], "state_store": fake_store, "exporters": []}
 
     with patch("civitas.runtime.load_plugins_from_config", return_value=mock_loaded):
         rt = Runtime.from_config(yaml_file, agent_classes=_ANY)

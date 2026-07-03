@@ -14,6 +14,10 @@ from civitas.dashboard.collector import MetricsCollector
 from civitas.dashboard.renderer import render_dashboard
 
 
+async def _record_restart(collector: MetricsCollector, name: str, exc: Exception) -> None:
+    collector.agent_restarted(name, type(exc).__name__)
+
+
 async def _run_dashboard(
     topology_path: Path,
     refresh_rate: float,
@@ -21,16 +25,8 @@ async def _run_dashboard(
     """Start the runtime with metrics collection and render a live dashboard."""
     collector = MetricsCollector()
     runtime = Runtime.from_config(str(topology_path))
-
-    # FD-01: wire restart events into MetricsCollector via lightweight hook
-    if runtime._root_supervisor is not None:
-        original_handle_crash = runtime._root_supervisor._handle_crash
-
-        async def _instrumented_crash(name: str, exc: Exception) -> None:
-            collector.agent_restarted(name, type(exc).__name__)
-            await original_handle_crash(name, exc)
-
-        runtime._root_supervisor._handle_crash = _instrumented_crash  # type: ignore[method-assign]
+    runtime.set_metrics(collector)
+    runtime.on_crash(lambda name, exc: _record_restart(collector, name, exc))
 
     await runtime.start()
     collector.runtime_started()

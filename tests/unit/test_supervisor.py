@@ -298,6 +298,64 @@ class TestStrategyDispatch:
         sup._restart_child.assert_not_called()
 
 
+class TestCrashCallbacks:
+    @pytest.mark.asyncio
+    async def test_callback_invoked_on_crash(self):
+        """add_crash_callback() registers a callback invoked with (name, exc) (FD-01/FD-03)."""
+        sup = Supervisor(
+            "root", strategy="ONE_FOR_ONE", max_restarts=5, backoff="CONSTANT", backoff_base=0.0
+        )
+        sup._restart_child = AsyncMock()  # type: ignore[method-assign]
+        received: list[tuple[str, Exception]] = []
+
+        async def callback(name: str, exc: Exception) -> None:
+            received.append((name, exc))
+
+        sup.add_crash_callback(callback)
+        exc = ValueError("boom")
+        await sup._handle_crash("a", exc)
+
+        assert received == [("a", exc)]
+
+    @pytest.mark.asyncio
+    async def test_multiple_callbacks_all_invoked(self):
+        """Multiple registered callbacks all run on the same crash (FD-01/FD-03)."""
+        sup = Supervisor(
+            "root", strategy="ONE_FOR_ONE", max_restarts=5, backoff="CONSTANT", backoff_base=0.0
+        )
+        sup._restart_child = AsyncMock()  # type: ignore[method-assign]
+        calls: list[str] = []
+
+        async def callback_a(name: str, exc: Exception) -> None:
+            calls.append(f"a:{name}")
+
+        async def callback_b(name: str, exc: Exception) -> None:
+            calls.append(f"b:{name}")
+
+        sup.add_crash_callback(callback_a)
+        sup.add_crash_callback(callback_b)
+        await sup._handle_crash("worker", ValueError("x"))
+
+        assert calls == ["a:worker", "b:worker"]
+
+    @pytest.mark.asyncio
+    async def test_raising_callback_does_not_block_restart(self):
+        """A crash callback that raises is logged, restart still proceeds (FD-01/FD-03)."""
+        sup = Supervisor(
+            "root", strategy="ONE_FOR_ONE", max_restarts=5, backoff="CONSTANT", backoff_base=0.0
+        )
+        restarted: list[str] = []
+        sup._restart_child = AsyncMock(side_effect=lambda n: restarted.append(n))  # type: ignore[method-assign]
+
+        async def bad_callback(name: str, exc: Exception) -> None:
+            raise RuntimeError("callback exploded")
+
+        sup.add_crash_callback(bad_callback)
+        await sup._handle_crash("a", ValueError("x"))
+
+        assert restarted == ["a"]
+
+
 # ---------------------------------------------------------------------------
 # all_agents / all_supervisors
 # ---------------------------------------------------------------------------

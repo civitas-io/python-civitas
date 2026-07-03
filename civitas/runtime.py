@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import importlib
 import logging
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any, cast
 
@@ -17,6 +19,7 @@ from civitas.gateway.core import GatewayConfig, HTTPGateway
 from civitas.genserver import GenServer
 from civitas.mcp.types import MCPServerConfig
 from civitas.messages import Message, _new_span_id, _uuid7
+from civitas.observability.otel_agent import run_otel_agent
 from civitas.plugins.loader import load_plugins_from_config
 from civitas.process import AgentProcess
 from civitas.sandbox.config import SandboxConfig
@@ -135,6 +138,8 @@ class Runtime:
         model_provider: Any = None,
         tool_registry: Any = None,
         state_store: Any = None,
+        metrics: Any = None,
+        exporters: list[Any] | None = None,
         zmq_pub_addr: str = "tcp://127.0.0.1:5559",
         zmq_sub_addr: str = "tcp://127.0.0.1:5560",
         zmq_start_proxy: bool = True,
@@ -149,7 +154,10 @@ class Runtime:
         self._model_provider = model_provider
         self._tool_registry = tool_registry
         self._state_store = state_store
+        self._metrics = metrics
+        self._exporters = exporters or []
         self._components = components
+        self._otel_agent_task: asyncio.Task[None] | None = None
 
         # ZMQ-specific config
         self._zmq_pub_addr = zmq_pub_addr
@@ -433,6 +441,8 @@ class Runtime:
                 kwargs["model_provider"] = loaded["model_providers"][0]
             if loaded["state_store"] is not None:
                 kwargs["state_store"] = loaded["state_store"]
+            if loaded["exporters"]:
+                kwargs["exporters"] = loaded["exporters"]
 
         runtime = cls(**kwargs)
 
@@ -487,6 +497,25 @@ class Runtime:
         if self._root_supervisor is None:
             return []
         return self._root_supervisor.all_agents()
+
+    def on_crash(self, callback: Callable[[str, Exception], Awaitable[None]]) -> None:
+        """Register a callback invoked with (agent_name, exception) on every crash.
+
+        Runs before the supervisor applies its restart strategy. Only observes
+        crashes handled directly by the root supervisor — a crash retried
+        successfully by a nested child supervisor without escalating does
+        not surface here. Call before start().
+        """
+        if self._root_supervisor is not None:
+            self._root_supervisor.add_crash_callback(callback)
+
+    def set_metrics(self, metrics: Any) -> None:
+        """Attach a MetricsSink (e.g. the dashboard's MetricsCollector).
+
+        Must be called before start() — the sink is injected into agents as
+        part of ComponentSet assembly during startup.
+        """
+        self._metrics = metrics
 
     def print_tree(self) -> str:
         """Return an ASCII representation of the supervision tree."""
@@ -548,6 +577,8 @@ class Runtime:
                 tool_registry=self._tool_registry,
                 state_store=self._state_store,
                 audit_sink=self._audit_sink,
+                metrics=self._metrics,
+                exporters=self._exporters,
                 zmq_pub_addr=self._zmq_pub_addr,
                 zmq_sub_addr=self._zmq_sub_addr,
                 zmq_start_proxy=self._zmq_start_proxy,
@@ -565,6 +596,12 @@ class Runtime:
         self._registry = cs.registry
         self._bus = cs.bus
         self._state_store = cs.store
+
+        # Drain span_queue via OTELAgent when exporters are configured (FD-07/FD-09)
+        if cs.span_queue is not None and cs.export_backend is not None:
+            self._otel_agent_task = asyncio.create_task(
+                run_otel_agent(cs.span_queue, cs.export_backend)
+            )
 
         if self._root_supervisor is None:
             self._started = True
@@ -731,7 +768,13 @@ class Runtime:
         if self._tracer is not None:
             self._tracer.flush()
 
-        # 5. Close Audit sink
+        # 5. Stop OTELAgent — cancel triggers its own drain-remaining-spans logic
+        if self._otel_agent_task is not None:
+            self._otel_agent_task.cancel()
+            await asyncio.gather(self._otel_agent_task, return_exceptions=True)
+            self._otel_agent_task = None
+
+        # 6. Close Audit sink
         if self._audit_sink is not None:
             await self._audit_sink.close()
 

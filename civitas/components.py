@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any
 from civitas.audit.types import AuditSink
 from civitas.bus import MessageBus
 from civitas.config import settings
+from civitas.observability.metrics import MetricsSink
 from civitas.observability.tracer import Tracer
 from civitas.plugins.state import InMemoryStateStore
 from civitas.registry import LocalRegistry, Registry
@@ -66,6 +67,9 @@ class ComponentSet:
     model_provider: Any = None
     tool_registry: Any = None
     audit_sink: AuditSink | None = None
+    metrics: MetricsSink | None = None
+    span_queue: Any = None  # SpanQueue | None — set when exporters is non-empty
+    export_backend: Any = None  # ExportBackend | None — drains span_queue via OTELAgent
     bus: MessageBus = field(init=False)
 
     def __post_init__(self) -> None:
@@ -86,6 +90,7 @@ class ComponentSet:
         agent.tools = self.tool_registry
         agent.store = self.store
         agent._audit_sink = self.audit_sink
+        agent._metrics = self.metrics
 
 
 def build_component_set(
@@ -95,6 +100,8 @@ def build_component_set(
     tool_registry: Any = None,
     state_store: Any = None,
     audit_sink: AuditSink | None = None,
+    metrics: MetricsSink | None = None,
+    exporters: list[Any] | None = None,
     zmq_pub_addr: str = "tcp://127.0.0.1:5559",
     zmq_sub_addr: str = "tcp://127.0.0.1:5560",
     zmq_start_proxy: bool = True,
@@ -118,8 +125,19 @@ def build_component_set(
     else:
         built_serializer = MsgpackSerializer()
 
-    # Tracer
-    built_tracer = Tracer()
+    # Tracer — when exporters are configured (plugins.exporters in topology YAML),
+    # spans flow through SpanQueue -> OTELAgent -> ExportBackend instead of the
+    # Tracer's own direct OTLP path, so the two never run simultaneously (FD-09).
+    # Runtime/Worker are responsible for starting/stopping the OTELAgent task.
+    built_span_queue: Any = None
+    built_export_backend: Any = None
+    if exporters:
+        from civitas.observability.export_backend import FanOutBackend
+        from civitas.observability.span_queue import SpanQueue
+
+        built_span_queue = SpanQueue()
+        built_export_backend = FanOutBackend(exporters) if len(exporters) > 1 else exporters[0]
+    built_tracer = Tracer(span_queue=built_span_queue)
 
     # Transport — imports are intentionally scoped here: ZMQ and NATS are optional
     # extras (pyzmq, nats-py) that may not be installed. Importing at module level
@@ -166,4 +184,7 @@ def build_component_set(
         model_provider=model_provider,
         tool_registry=tool_registry,
         audit_sink=audit_sink,
+        metrics=metrics,
+        span_queue=built_span_queue,
+        export_backend=built_export_backend,
     )
