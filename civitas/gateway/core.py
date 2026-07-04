@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from civitas.errors import ConfigurationError
+from civitas.gateway.dispatch import GatewayDispatcher
 from civitas.gateway.router import RouteTable
 from civitas.messages import Message
 from civitas.process import AgentProcess
@@ -30,6 +31,9 @@ class GatewayConfig:
     tls_key: str | None = None
     request_timeout: float = 30.0
     enable_http3: bool = False
+    grpc_enabled: bool = False
+    grpc_port: int | None = None
+    grpc_reflection: bool = True
     routes: list[dict[str, Any]] = field(default_factory=list)
     middleware: list[str] = field(default_factory=list)
     docs_enabled: bool = True
@@ -40,6 +44,8 @@ class GatewayConfig:
             raise ValueError("enable_http3 requires tls_cert and tls_key")
         if self.enable_http3 and self.port_quic is None:
             raise ValueError("enable_http3 requires port_quic")
+        if self.grpc_enabled and self.grpc_port is None:
+            raise ValueError("grpc_enabled requires grpc_port")
 
 
 class HTTPGateway(AgentProcess):
@@ -72,6 +78,7 @@ class HTTPGateway(AgentProcess):
         self._uvicorn_server: Any = None
         self._server_task: asyncio.Task[None] | None = None
         self._h3_server: Any = None
+        self._grpc_server: Any = None
 
     async def on_start(self) -> None:
         try:
@@ -84,10 +91,14 @@ class HTTPGateway(AgentProcess):
 
         from civitas.gateway.asgi import GatewayASGI
 
+        # Shared by every transport so HTTP and gRPC route identically (D3).
+        dispatcher = GatewayDispatcher(self, self._gw_config.request_timeout)
+
         asgi_app = GatewayASGI(
             gateway=self,
             route_table=self._route_table,
             config=self._gw_config,
+            dispatcher=dispatcher,
         )
 
         uv_config = uvicorn.Config(
@@ -139,7 +150,40 @@ class HTTPGateway(AgentProcess):
                 self._gw_config.port_quic,
             )
 
+        if self._gw_config.grpc_enabled:
+            if self._gw_config.grpc_port is None:
+                raise ConfigurationError(
+                    "HTTPGateway: 'grpc_port' is required when grpc_enabled=True"
+                )
+            try:
+                from civitas.gateway.grpc_server import GrpcServer
+            except ImportError as exc:
+                raise RuntimeError(
+                    "civitas[grpc] is required for the gRPC surface. "
+                    "Install with: pip install 'civitas[grpc]'"
+                ) from exc
+
+            self._grpc_server = GrpcServer(
+                dispatcher,
+                host=self._gw_config.host,
+                port=self._gw_config.grpc_port,
+                reflection_enabled=self._gw_config.grpc_reflection,
+                tls_cert=self._gw_config.tls_cert,
+                tls_key=self._gw_config.tls_key,
+            )
+            await self._grpc_server.start()
+            logger.info(
+                "HTTPGateway '%s' gRPC on %s:%d",
+                self.name,
+                self._gw_config.host,
+                self._gw_config.grpc_port,
+            )
+
     async def on_stop(self) -> None:
+        if self._grpc_server is not None:
+            await self._grpc_server.stop()
+            self._grpc_server = None
+
         if self._h3_server is not None:
             await self._h3_server.stop()
             self._h3_server = None

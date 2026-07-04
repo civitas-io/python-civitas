@@ -11,6 +11,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+### Added
+
+- **gRPC gateway** (`civitas[grpc]`) — a generic `grpc.aio` surface on the gateway (v0.6.0 / G1). One
+  `civitas.Agent` service proxies any agent by name, so callers need no per-agent `.proto` or civitas
+  SDK: `Invoke` (unary → agent `call()`) and `Cast` (unary → `cast()`) carry a
+  `google.protobuf.Struct` payload that maps to/from the JSON-ish dict a `Message` holds. Enabled with
+  `GatewayConfig(grpc_enabled=True, grpc_port=…, grpc_reflection=True)` alongside the existing
+  HTTP/1.1/2/3 surfaces; every transport shares one `GatewayDispatcher` so routing and error semantics
+  stay identical. Ships the standard gRPC health service and optional server reflection (for
+  `grpcurl`). Error mapping: no agent → `NOT_FOUND`, timeout → `DEADLINE_EXCEEDED`, unhandled error →
+  `INTERNAL`; an agent's own business error is returned in-band on `AgentReply.error` with the payload
+  preserved (mirrors the HTTP 400-with-body behaviour). `Stream` (server-streaming) is defined in the
+  `.proto` but returns `UNIMPLEMENTED` until G3. Generated `_pb2` stubs are committed (no build-time
+  `protoc` needed by consumers).
+
 ## [0.5.0] — 2026-07-03
 
 ### Added

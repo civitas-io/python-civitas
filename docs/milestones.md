@@ -848,14 +848,14 @@ precede implementation (they were written pre-v0.4 and predate the shipped ASGI/
 
 | # | Deliverable | Priority | Source |
 |---|-------------|----------|--------|
-| G1 | **gRPC gateway** — generic `CivitasGateway` service; RPC→message-type mapping; bundled `.proto`; custom `.proto` loading from `proto_dir`; `civitas[grpc]` (grpclib) + `civitas[grpc-fast]` (grpcio) extras | 🔴 High | http-gateway.md Phase 3 |
+| G1 | **gRPC gateway** — generic `civitas.Agent` service proxying any agent by name; `Invoke`/`Cast` unary RPCs with a `Struct` payload; committed `.proto` + `_pb2` stubs; health + server reflection; `civitas[grpc]` (grpcio default). `Stream` (server-streaming) deferred to G3; per-agent `proto_dir` loading is a non-goal | ✅ Done | grpc-gateway.md |
 | G2 | **WebSocket upgrade** — long-lived bidirectional sessions mapped to a `cast()` stream on the bus | 🔴 High | http-gateway.md Phase 4, gateway.md |
 | G3 | **SSE / true streaming responses** — chunked/Server-Sent-Events instead of the current `{"chunks": [...]}` buffer-and-serialise workaround | 🔴 High | gateway-api-surface.md Q4 |
 | G4 | **Rate-limiting middleware** — `RateLimiter` GenServer wired as gateway middleware | 🟡 Medium | http-gateway.md Phase 4 |
 | G5 | **Auth middleware** — JWT / API-key / mTLS client-cert authentication middleware (integration point already documented; ship first-party implementations) | 🟡 Medium | http-gateway.md Phase 4, security-hardening.md |
 | G6 | **File uploads** — `multipart/form-data` request handling | 🟢 Low | gateway-api-surface.md |
 | G7 | **HTTP/2 server push** — requires explicit push directives from agents | 🟢 Low | http-gateway.md |
-| G8 | **gRPC reflection service** — generic reflection for the gRPC surface | 🟢 Low | http-gateway.md Phase 4 |
+| G8 | **gRPC reflection service** — generic reflection for the gRPC surface | ✅ Done (shipped in G1) | grpc-gateway.md |
 | G9 | **Evaluate quiche-python** (Rust QUIC) as a drop-in replacement for aioquic in the HTTP/3 path | 🟢 Low | http-gateway.md |
 
 **Suggested cut line:** G1–G3 (gRPC + streaming) are the headline value and a shippable v0.6.0 on

@@ -149,11 +149,17 @@ client stubs. Optionally register the standard gRPC health service (cheap; nice 
 |---|---|
 | no agent registered (`MessageRoutingError`) | `NOT_FOUND` |
 | `request_timeout` exceeded (`TimeoutError`) | `DEADLINE_EXCEEDED` |
-| reply payload has `error` | `INVALID_ARGUMENT` (or `ABORTED`) + message in trailer |
+| reply payload has `error` | **`OK` — `AgentReply` with the `error` field set in-band** (the agent was reached and chose to fail; the payload is preserved) |
 | unhandled exception | `INTERNAL` |
 | agent suspended (future, when bus exposes it) | `UNAVAILABLE` |
 
-Mirrors the HTTP 404/504/400/500 mapping via the shared dispatcher (D3), just different codes.
+Mirrors the HTTP 404/504/500 mapping via the shared dispatcher (D3) for transport failures. Agent
+business errors are the one deliberate divergence (resolved 2026-07-03): HTTP returns 400 + the error
+body, and gRPC likewise keeps the call successful and returns the agent's payload with `AgentReply.error`
+set in-band, rather than aborting with `INVALID_ARGUMENT`. This preserves the structured error payload
+(an abort would reduce it to a trailer string) and wires up the `.proto`'s `error` field. Transport
+failures (no agent / timeout / crash) still abort with gRPC status codes so interceptors, health
+probes, and load balancers see genuine RPC failures.
 
 ---
 
