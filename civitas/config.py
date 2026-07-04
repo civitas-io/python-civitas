@@ -51,6 +51,8 @@ class Settings:
         openai_api_key:     OpenAI API key (masked in logs).
         gemini_api_key:     Google Gemini API key (masked in logs).
         fiddler_api_key:    Fiddler API key (masked in logs).
+        gateway_api_key:    Shared secret the gateway's require_api_key middleware
+                            requires from clients in the X-API-Key header (masked).
         nats_url:           NATS server URL for distributed transport.
     """
 
@@ -75,6 +77,7 @@ class Settings:
         self.openai_api_key = SecretStr(_env.get("OPENAI_API_KEY"))
         self.gemini_api_key = SecretStr(_env.get("GEMINI_API_KEY"))
         self.fiddler_api_key = SecretStr(_env.get("FIDDLER_API_KEY"))
+        self.gateway_api_key = SecretStr(_env.get("CIVITAS_GATEWAY_API_KEY"))
 
 
 settings = Settings()

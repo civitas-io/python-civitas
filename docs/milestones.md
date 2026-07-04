@@ -851,16 +851,16 @@ precede implementation (they were written pre-v0.4 and predate the shipped ASGI/
 | G1 | **gRPC gateway** — generic `civitas.Agent` service proxying any agent by name; `Invoke`/`Cast` unary RPCs with a `Struct` payload; committed `.proto` + `_pb2` stubs; health + server reflection; `civitas[grpc]` (grpcio default). `Stream` (server-streaming) deferred to G3; per-agent `proto_dir` loading is a non-goal | ✅ Done | grpc-gateway.md |
 | G2 | **WebSocket upgrade** — long-lived bidirectional sessions: inbound frames `cast()` to an agent, agent streams back over the same socket (`ws_routes`) | ✅ Done | gateway-streaming.md |
 | G3 | **SSE / true streaming responses** — `mode: "stream"` routes stream agent output as Server-Sent Events (replaces the `{"chunks": [...]}` workaround); also completes the gRPC `Stream` RPC deferred in G1 | ✅ Done | gateway-streaming.md |
-| G4 | **Rate-limiting middleware** — `RateLimiter` GenServer wired as gateway middleware | 🟡 Medium | http-gateway.md Phase 4 |
-| G5 | **Auth middleware** — JWT / API-key / mTLS client-cert authentication middleware (integration point already documented; ship first-party implementations) | 🟡 Medium | http-gateway.md Phase 4, security-hardening.md |
-| G6 | **File uploads** — `multipart/form-data` request handling | 🟢 Low | gateway-api-surface.md |
-| G7 | **HTTP/2 server push** — requires explicit push directives from agents | 🟢 Low | http-gateway.md |
+| G4 | **Rate-limiting middleware** — `RateLimiter` GenServer + `rate_limit` middleware (`civitas.gateway.ratelimit`) | ✅ Done | gateway-api-surface.md |
+| G5 | **Auth middleware** — first-party API-key auth (`civitas.gateway.auth.require_api_key`, fail-closed, `CIVITAS_GATEWAY_API_KEY`); JWT (opt-in `civitas[jwt]`) + mTLS remain integration points | ✅ Done (API-key; JWT/mTLS deferred) | gateway-api-surface.md |
+| G6 | **File uploads** — `multipart/form-data` parsed at the ASGI edge; files delivered base64 under `__files__` | ✅ Done | gateway-api-surface.md |
+| G7 | **HTTP/2 server push** | ⛔ Won't do — Server Push was removed from Chrome (2022) and is effectively dead across browsers; use SSE/WebSocket (G2/G3) for server-initiated data | http-gateway.md |
 | G8 | **gRPC reflection service** — generic reflection for the gRPC surface | ✅ Done (shipped in G1) | grpc-gateway.md |
-| G9 | **Evaluate quiche-python** (Rust QUIC) as a drop-in replacement for aioquic in the HTTP/3 path | 🟢 Low | http-gateway.md |
+| G9 | **Evaluate quiche-python** (Rust QUIC) as a drop-in for aioquic | ✅ Done (evaluated) — no official/production-ready Python binding exists today; stay on aioquic, revisit when one matures | http-gateway.md |
 
-**Suggested cut line:** G1–G3 (gRPC + streaming) are the headline value and a shippable v0.6.0 on
-their own; G4–G5 (middleware) are strong companions; G6–G9 are opportunistic and can slip to a
-later patch without holding the release.
+**Status (2026-07-04): feature-complete.** G1–G6 and G8 shipped; G7 dropped (HTTP/2 Server Push is
+dead in browsers — use G2/G3 instead); G9 evaluated (no viable Rust QUIC Python binding — stay on
+aioquic). v0.6.0 Gateway Completion is ready to release.
 
 **Non-goals for v0.6.0:** business logic in the gateway, load balancing, request queuing — the
 gateway stays a thin translate-and-route edge ([`http-gateway.md`](design/http-gateway.md) Non-Goals).
@@ -897,6 +897,8 @@ nothing is lost. Owner column: `core` = python-civitas, else the target repo.
 | Postgres: PgBouncer deployment guide | core | ⏸️ docs pass | §Postgres StateStore |
 | Personal AI Assistant demo (Telegram gateway + skills) | core | ⏸️ | §M1.8 |
 | Bus-native streaming primitive (`AgentProcess.stream()` + `Transport.stream()` across in-proc/ZMQ/NATS, agent-to-agent) — v0.6.0 ships gateway-mediated streaming instead | core | ⏸️ v0.x | design/gateway-streaming.md §D1 (Option B) |
+| First-party JWT gateway auth (opt-in `civitas[jwt]`) + mTLS client-cert auth — G5 shipped API-key only (no new core dep) | core | ⏸️ v0.x | §v0.6.0 G5 |
+| Dynamic spawn: non-blocking spawn (#9) and `spawn_into()` cross-tree helper (#10) | core | ⏸️ v0.x | GH #9, #10 |
 
 ### Other repos (per [`boundary.md`](https://github.com/civitas-io/context))
 

@@ -26,6 +26,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
     `async with self.stream_reply() as stream:` context manager. Streams are bounded per-connection with a
     `slow_consumer` fail-fast plus idle/duration timeouts (`GatewayConfig.stream_queue_maxsize` /
     `stream_idle_timeout` / `max_stream_duration`).
+- **Gateway middleware & uploads** (v0.6.0 / G4–G6) — first-party gateway building blocks:
+  - **Rate limiting** (G4): a `RateLimiter` GenServer + `civitas.gateway.ratelimit.rate_limit`
+    middleware (per-client sliding window; HTTP 429 + `Retry-After`).
+  - **API-key auth** (G5): `civitas.gateway.auth.require_api_key` — fail-closed `X-API-Key` check
+    against `CIVITAS_GATEWAY_API_KEY` (constant-time compare). JWT/mTLS remain integration points.
+  - **File uploads** (G6): `multipart/form-data` is parsed at the ASGI edge; uploaded files reach the
+    agent base64-encoded under `payload["__files__"]`, keeping payloads primitives-only.
 - **Accelerated JSON serialization** (`civitas[fast]`) — installs Rust-backed `orjson`, which
   `JsonSerializer` uses automatically for a large encode/decode speedup, transparently falling back to
   the standard-library `json` module when it isn't installed. The wire format stays plain JSON, so the

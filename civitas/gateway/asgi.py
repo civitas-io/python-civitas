@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import contextlib
 import json
 import logging
+from email.parser import BytesParser
+from email.policy import default as email_policy
 from typing import TYPE_CHECKING, Any
 
 from civitas.gateway.contracts import validate_request, validate_response
@@ -56,6 +59,36 @@ def _parse_query(query_string: bytes) -> dict[str, str]:
         if "=" in pair:
             k, _, v = pair.partition("=")
             result[k] = v
+    return result
+
+
+def _parse_multipart(body: bytes, content_type: str) -> dict[str, Any]:
+    """Parse ``multipart/form-data`` into a JSON-serializable dict (G6).
+
+    Text fields land under their field name; uploaded files land under
+    ``__files__[name]`` as ``{filename, content_type, size, content_base64}`` so
+    the resulting payload stays primitives-only (files are base64-encoded).
+    """
+    header = f"Content-Type: {content_type}\r\n\r\n".encode()
+    parsed = BytesParser(policy=email_policy).parsebytes(header + body)
+    result: dict[str, Any] = {}
+    for part in parsed.iter_parts():
+        name = part.get_param("name", header="content-disposition")
+        if name is None:
+            continue
+        raw = part.get_payload(decode=True)
+        content = raw if isinstance(raw, bytes) else b""
+        filename = part.get_filename()
+        if filename is not None:
+            files: dict[str, Any] = result.setdefault("__files__", {})
+            files[str(name)] = {
+                "filename": filename,
+                "content_type": part.get_content_type(),
+                "size": len(content),
+                "content_base64": base64.b64encode(content).decode(),
+            }
+        else:
+            result[str(name)] = content.decode(errors="replace")
     return result
 
 
@@ -230,9 +263,18 @@ class GatewayASGI:
             if not chunk.get("more_body", False):
                 break
 
-        # Parse JSON body (empty body → empty dict)
+        # Parse body: multipart/form-data uploads (G6), else JSON (empty → {})
+        content_type = headers.get("content-type", "")
         body: dict[str, Any] = {}
-        if body_bytes:
+        if body_bytes and content_type.startswith("multipart/form-data"):
+            try:
+                body = _parse_multipart(body_bytes, content_type)
+            except Exception:
+                await self._respond(
+                    send, GatewayResponse(400, {"error": "invalid multipart/form-data body"})
+                )
+                return
+        elif body_bytes:
             try:
                 parsed = json.loads(body_bytes)
                 if isinstance(parsed, dict):
