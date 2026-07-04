@@ -1,0 +1,2270 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="The production runtime for Python agents">
+      
+      
+      
+        <link rel="canonical" href="https://civitas-io.github.io/python-civitas/design/gateway-streaming/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
+    
+    
+      
+        <title>Design: Gateway Streaming — WebSocket (G2) + SSE / true streaming (G3) - civitas</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+  
+
+
+  
+  
+
+<script id="__analytics">function __md_analytics(){function e(){dataLayer.push(arguments)}window.dataLayer=window.dataLayer||[],e("js",new Date),e("config",""),document.addEventListener("DOMContentLoaded",(function(){document.forms.search&&document.forms.search.query.addEventListener("blur",(function(){this.value&&e("event","search",{search_term:this.value})}));document$.subscribe((function(){var t=document.forms.feedback;if(void 0!==t)for(var a of t.querySelectorAll("[type=submit]"))a.addEventListener("click",(function(a){a.preventDefault();var n=document.location.pathname,d=this.getAttribute("data-md-value");e("event","feedback",{page:n,data:d}),t.firstElementChild.disabled=!0;var r=t.querySelector(".md-feedback__note [data-md-value='"+d+"']");r&&(r.hidden=!1)})),t.hidden=!1})),location$.subscribe((function(t){e("config","",{page_path:t.pathname})}))}));var t=document.createElement("script");t.async=!0,t.src="https://www.googletagmanager.com/gtag/js?id=",document.getElementById("__analytics").insertAdjacentElement("afterEnd",t)}</script>
+  
+    <script>"undefined"!=typeof __md_analytics&&__md_analytics()</script>
+  
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#design-gateway-streaming-websocket-g2-sse-true-streaming-g3" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="civitas" class="md-header__button md-logo" aria-label="civitas" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            civitas
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Design: Gateway Streaming — WebSocket (G2) + SSE / true streaming (G3)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/civitas-io/python-civitas" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    civitas-io/python-civitas
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting Started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../concepts/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../architecture/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../milestones/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Milestones
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../mcp-integration/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../rfc/0001-tool-retrieval/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  RFCs
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../contributing/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Contributing
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="civitas" class="md-nav__button md-logo" aria-label="civitas" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    civitas
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/civitas-io/python-civitas" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    civitas-io/python-civitas
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../supervision/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Supervision
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../messaging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Messaging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../transports/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Transports
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../topology/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Topology YAML
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FAQ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/process/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AgentProcess
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/genserver/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GenServer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/supervisor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Supervisor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/messages/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Message
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/bus/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MessageBus
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/transport/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Transport
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../milestones/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Milestones
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp-integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Integration (M3.4)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../genserver/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GenServer (M3.5)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../http-gateway/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP Gateway (M4.x)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gateway-api-surface/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gateway API Surface (M4.x)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RFCs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    RFCs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../rfc/0001-tool-retrieval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RFC 0001 — Selective Tool Retrieval
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#motivation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Motivation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reconciliation-with-the-shipped-runtime-what-exists-in-v05-g1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reconciliation with the shipped runtime (what exists in v0.5 / G1)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture-the-shared-streaming-core" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture — the shared streaming core
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Architecture — the shared streaming core">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#d1-streaming-core-mechanism-the-pivotal-decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D1 — Streaming core mechanism (the pivotal decision)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d2-agent-side-streaming-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D2 — Agent-side streaming API
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g2-websocket-upgrade" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G2 — WebSocket upgrade
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#g3-sse-true-streaming-and-grpc-stream" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G3 — SSE / true streaming (and gRPC Stream)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="G3 — SSE / true streaming (and gRPC Stream)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#sse-server-sent-events-over-http" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SSE (Server-Sent Events) over HTTP
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#grpc-server-streaming-stream" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        gRPC server-streaming (Stream)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d5-sse-reconnection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D5 — SSE reconnection
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#config-additions-gatewayconfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config additions (GatewayConfig)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#d6-backpressure-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D6 — Backpressure &amp; lifecycle
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing plan
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decisions-summary-need-sign-off" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decisions summary (need sign-off)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#non-goals-v060" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-goals (v0.6.0)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-checklist-on-approval" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation checklist (on approval)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="design-gateway-streaming-websocket-g2-sse-true-streaming-g3">Design: Gateway Streaming — WebSocket (G2) + SSE / true streaming (G3)<a class="headerlink" href="#design-gateway-streaming-websocket-g2-sse-true-streaming-g3" title="Permanent link">&para;</a></h1>
+<p><strong>Status:</strong> DRAFT — for review (2026-07-04)
+<strong>Author:</strong> Sisyphus
+<strong>Covers:</strong> v0.6.0 milestones <strong>G2</strong> (WebSocket upgrade) and <strong>G3</strong> (SSE / true streaming responses),
+and completes the <strong>gRPC <code>Stream</code></strong> RPC that G1 deferred.</p>
+<blockquote>
+<p><strong>Guiding principle:</strong> G2 and G3 are not two independent features — they are three client-facing
+shapes (WebSocket frames, SSE events, gRPC server-stream) over <strong>one shared streaming core</strong>. The
+G1 design already called this out ("build all three streaming surfaces together on one streaming
+core"). This doc designs that core first, then the three surfaces on top of it. Same gateway ethos
+as G1: the agent never sees the wire; the gateway owns every protocol concept.</p>
+</blockquote>
+<p>This doc supersedes the streaming sketches in <a href="../http-gateway/"><code>http-gateway.md</code></a> Phase 4 and answers
+<a href="../gateway-api-surface/"><code>gateway-api-surface.md</code></a> <strong>Q4</strong> (streaming was deferred with the
+<code>{"chunks": [...]}</code> buffer-and-serialise workaround; G3 replaces it with real streaming).</p>
+<hr />
+<h2 id="motivation">Motivation<a class="headerlink" href="#motivation" title="Permanent link">&para;</a></h2>
+<p>Three gaps remain in the gateway after G1:</p>
+<ol>
+<li><strong>No streaming responses.</strong> A route can only <code>call</code> (one reply) or <code>cast</code> (no reply). An agent that
+   produces output incrementally (token-by-token LLM output, progress events, tailing logs) must
+   buffer everything into one <code>{"chunks": [...]}</code> reply — high latency, no progress, unbounded memory.</li>
+<li><strong>No WebSocket.</strong> <code>GatewayASGI.__call__</code> handles only <code>http</code> and <code>lifespan</code> scopes; a <code>websocket</code>
+   upgrade is silently dropped. There is no way to hold a long-lived bidirectional session to an agent.</li>
+<li><strong>gRPC <code>Stream</code> is a stub.</strong> G1 shipped <code>Stream</code> in the <code>.proto</code> but the servicer returns
+   <code>UNIMPLEMENTED</code> — deliberately deferred here.</li>
+</ol>
+<p>All three need the same thing: <strong>a way for an agent to emit a <em>sequence</em> of messages to a single
+client connection, and for the gateway to forward that sequence over the wire until it ends.</strong></p>
+<hr />
+<h2 id="reconciliation-with-the-shipped-runtime-what-exists-in-v05-g1">Reconciliation with the shipped runtime (what exists in v0.5 / G1)<a class="headerlink" href="#reconciliation-with-the-shipped-runtime-what-exists-in-v05-g1" title="Permanent link">&para;</a></h2>
+<p>Grounding the design in current facts (confirmed by reading the code):</p>
+<ul>
+<li><strong>The bus has no streaming primitive.</strong> <code>AgentProcess</code> exposes <code>send</code> (fire-and-forget), <code>ask</code>
+  (single request→single reply), and <code>broadcast</code> (fire-and-forget fan-out). There is <strong>no</strong> <code>stream</code>,
+  no pub/sub, no topic subscription. <code>Transport.subscribe</code>/<code>publish</code> exist but are internal wiring.</li>
+<li><strong>Request-reply correlation is fully built and proven.</strong> <code>ask()</code> stamps a <code>correlation_id</code>; the
+  transport allocates an ephemeral <code>reply_to = "_reply.{uuid}"</code> backed by a one-slot queue; the
+  handler's <code>self.reply(payload)</code> echoes <code>correlation_id</code> and targets <code>reply_to</code>. <strong>The streaming core
+  generalises exactly this pattern from <em>one</em> reply to <em>many</em>.</strong></li>
+<li><strong><code>HTTPGateway</code> is itself a registered <code>AgentProcess</code></strong> whose <code>handle()</code> is currently a no-op
+  (<code>pass</code>). Agents can already <code>send()</code> to it by name. This is the hook the streaming core uses to
+  receive chunks back.</li>
+<li><strong><code>GatewayDispatcher</code> (D3 from G1) is the shared translate-and-route core</strong> for HTTP and gRPC, with
+  <code>dispatch(mode="call"|"cast")</code>. Streaming adds a third mode.</li>
+<li><strong>ASGI response path is single-shot.</strong> <code>_respond()</code> sends one <code>http.response.start</code> + one
+  <code>http.response.body</code> (no <code>more_body=True</code>). SSE needs an incremental variant.</li>
+<li><strong>WebSocket wire protocol is already available</strong> — <code>uvicorn[standard]</code> bundles <code>websockets</code>. The
+  ASGI <em>server</em> handles the handshake/framing; we only need to handle the <code>websocket</code> <strong>scope</strong> in our
+  app. <strong>No new dependency for G2.</strong></li>
+</ul>
+<hr />
+<h2 id="architecture-the-shared-streaming-core">Architecture — the shared streaming core<a class="headerlink" href="#architecture-the-shared-streaming-core" title="Permanent link">&para;</a></h2>
+<p><img alt="Gateway streaming core" src="../../assets/gateway-streaming-core.svg" /></p>
+<p>The core generalises request-reply into request-<strong>stream</strong>:</p>
+<ol>
+<li>The gateway opens a <strong>stream sink</strong>: a bounded <code>asyncio.Queue</code> registered under a fresh
+   <code>correlation_id</code> in a per-gateway <code>dict[str, StreamSink]</code>.</li>
+<li>It dispatches the request to the agent as a normal bus message with <code>reply_to = &lt;gateway name&gt;</code>,
+   the <code>correlation_id</code>, and a marker (<code>message_type = "*.stream"</code>) telling the agent a stream is
+   expected.</li>
+<li>The agent emits chunks back to the gateway over the bus (one message per chunk, same
+   <code>correlation_id</code>), then a <strong>terminator</strong>. Because chunks are addressed to the gateway's own name,
+   they land in the gateway's mailbox and flow through <code>handle()</code>.</li>
+<li><code>HTTPGateway.handle()</code> (no longer a no-op) demultiplexes by <code>correlation_id</code> and enqueues each chunk
+   onto the matching sink; the terminator closes the sink.</li>
+<li>The gateway surface (WebSocket / SSE / gRPC) consumes the sink as an <code>AsyncIterator[dict]</code> and
+   writes each chunk to the wire. When the iterator ends (terminator, timeout, or client disconnect),
+   the sink is unregistered.</li>
+</ol>
+<p>This is deliberately <strong>the same ephemeral-address + correlation_id mechanism that <code>ask()</code> already
+uses</strong> — just many-to-one instead of one-to-one, and demultiplexed in <code>handle()</code> instead of a
+transport reply queue.</p>
+<h3 id="d1-streaming-core-mechanism-the-pivotal-decision">D1 — Streaming core mechanism (the pivotal decision)<a class="headerlink" href="#d1-streaming-core-mechanism-the-pivotal-decision" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>What it is</th>
+<th>Cost / risk</th>
+<th>Verdict</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>A. Gateway-mediated correlation_id multiplexing</strong></td>
+<td>Stream sinks live in the gateway; agent emits chunks back to the gateway by name; <code>handle()</code> demuxes by <code>correlation_id</code>. One small additive <code>AgentProcess</code> helper (<code>emit</code>/<code>end_stream</code>). <strong>No transport/bus change.</strong></td>
+<td>Backpressure is coarse (bounded queue + overflow policy, see D6); streaming is a gateway-scoped capability, not a general agent-to-agent one.</td>
+<td><strong>✅ Recommended</strong></td>
+</tr>
+<tr>
+<td>B. First-class bus streaming</td>
+<td>Add <code>Transport.stream()</code> across in-process/ZMQ/NATS + <code>AgentProcess.stream()</code> returning <code>AsyncIterator[Message]</code>. Agents everywhere can stream.</td>
+<td>Large surface across all transports; ZMQ/NATS multi-reply semantics are genuinely hard; destabilises the core for a gateway feature. A milestone of its own.</td>
+<td>Rejected for v0.6.0 (revisit if agent-to-agent streaming becomes a first-class need)</td>
+</tr>
+<tr>
+<td>C. Ephemeral sink agents</td>
+<td>Register a throwaway receiver agent per stream in the registry; agent streams to it.</td>
+<td>Requires dynamic registration of non-agent receivers + registry churn per request; more moving parts than A for no real gain.</td>
+<td>Rejected</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Recommendation: Option A.</strong> It ships G2+G3 surgically, reuses the proven correlation_id/reply_to
+pattern, adds no dependency and no transport-protocol change, and keeps streaming a <em>gateway</em> concern
+(consistent with "all HTTP/protocol concerns live at the gateway boundary"). Option B is a legitimate
+future ("bus-native streaming") but is out of proportion to a gateway-completion milestone.</p>
+<h3 id="d2-agent-side-streaming-api">D2 — Agent-side streaming API<a class="headerlink" href="#d2-agent-side-streaming-api" title="Permanent link">&para;</a></h3>
+<p>The agent needs a minimal, ergonomic way to emit a stream. Two shapes:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Option D2-a — explicit helpers (mirrors self.reply)</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">handle</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="n">Message</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="k">async</span> <span class="k">for</span> <span class="n">token</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">llm</span><span class="o">.</span><span class="n">stream</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>        <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;token&quot;</span><span class="p">:</span> <span class="n">token</span><span class="p">})</span>   <span class="c1"># one chunk</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">end_stream</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>                    <span class="c1"># terminator</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c1"># Option D2-b — async context manager (auto-terminates, exception-safe)</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">handle</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="n">Message</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="k">async</span> <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">stream_reply</span><span class="p">(</span><span class="n">message</span><span class="p">)</span> <span class="k">as</span> <span class="n">stream</span><span class="p">:</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>        <span class="k">async</span> <span class="k">for</span> <span class="n">token</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">llm</span><span class="o">.</span><span class="n">stream</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>            <span class="k">await</span> <span class="n">stream</span><span class="o">.</span><span class="n">send</span><span class="p">({</span><span class="s2">&quot;token&quot;</span><span class="p">:</span> <span class="n">token</span><span class="p">})</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="c1"># terminator (and error terminator on exception) sent automatically</span>
+</span></code></pre></div>
+<p><strong>Recommendation: D2-b (context manager) as the primary API, with <code>emit</code>/<code>end_stream</code> as the
+low-level primitives it's built on.</strong> The context manager guarantees the terminator is always sent
+(including on exception → an <em>error</em> terminator the client can see), which is the #1 correctness
+footgun of manual streaming. Both are tiny, additive, and mirror the existing <code>self.reply()</code>
+construction (recipient = <code>reply_to</code>, echo <code>correlation_id</code>). This is the <strong>only</strong> change outside the
+gateway package, and it is purely additive to the public SDK.</p>
+<p><code>emit</code>/<code>end_stream</code>/<code>stream_reply</code> build a <code>Message</code> exactly like <code>reply()</code> does, but stamp a control
+field (<code>payload["__stream__"] = "chunk" | "end" | "error"</code>) so <code>handle()</code> can classify without
+guessing. <code>_agency.*</code>-reserved typing is respected (we use a payload marker, not a reserved type).</p>
+<hr />
+<h2 id="g2-websocket-upgrade">G2 — WebSocket upgrade<a class="headerlink" href="#g2-websocket-upgrade" title="Permanent link">&para;</a></h2>
+<p><img alt="WebSocket session sequence" src="../../assets/ws-session-sequence.svg" /></p>
+<p>A WebSocket is a <strong>long-lived, bidirectional session</strong> bound to one agent. Per the roadmap, inbound
+frames map to <code>cast()</code> and the agent streams messages back over the same socket.</p>
+<p><strong>Flow:</strong>
+1. <code>GatewayASGI.__call__</code> gains <code>elif scope["type"] == "websocket": await self._handle_websocket(...)</code>.
+2. On <code>websocket.connect</code>, the gateway matches the path to a <strong>ws route</strong> (below), <code>accept</code>s the
+   socket, allocates a <strong>session id</strong> (a long-lived <code>correlation_id</code>), and registers a session sink.
+3. <strong>Client → agent:</strong> each <code>websocket.receive</code> frame (JSON) is dispatched <code>mode="cast"</code> to the route's
+   agent, carrying <code>reply_to = &lt;gateway&gt;</code>, the session id, and the parsed payload. The agent handles it
+   like any cast.
+4. <strong>Agent → client:</strong> the agent emits chunks (via <code>emit</code>/<code>stream_reply</code>) tagged with the session id;
+   <code>handle()</code> routes them to the session sink; a background pump task per socket drains the sink and
+   <code>websocket.send</code>s each as a text frame.
+5. On <code>websocket.disconnect</code> (or agent error terminator), the pump stops, the sink is unregistered, and
+   the agent is notified with a <code>cast</code> (<code>{"__session__": "closed"}</code>) so it can release per-session
+   state.</p>
+<p><strong>Config — ws routes</strong> (topology YAML, mirrors HTTP routes):</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">config</span><span class="p">:</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">ws_routes</span><span class="p">:</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/ws/chat</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">      </span><span class="nt">agent</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">assistant</span><span class="w">           </span><span class="c1"># frames → cast(assistant); agent streams back</span>
+</span></code></pre></div>
+<p><strong>Scope for G2:</strong> WebSocket over HTTP/1.1 + HTTP/2 via uvicorn (the common case). WebSocket-over-HTTP/3
+(the WebTransport/aioquic path) is <strong>out of scope</strong> — noted as future. SSE (G3) already covers the
+HTTP/3 streaming case since it is plain chunked HTTP.</p>
+<hr />
+<h2 id="g3-sse-true-streaming-and-grpc-stream">G3 — SSE / true streaming (and gRPC <code>Stream</code>)<a class="headerlink" href="#g3-sse-true-streaming-and-grpc-stream" title="Permanent link">&para;</a></h2>
+<p><img alt="SSE and gRPC streaming sequence" src="../../assets/sse-stream-sequence.svg" /></p>
+<p>G3 turns the streaming core into <strong>outbound-only</strong> streams on the request/response surfaces.</p>
+<h3 id="sse-server-sent-events-over-http">SSE (Server-Sent Events) over HTTP<a class="headerlink" href="#sse-server-sent-events-over-http" title="Permanent link">&para;</a></h3>
+<ul>
+<li>A route declares <code>mode: "stream"</code>. The terminal dispatch uses the streaming core (not <code>call</code>).</li>
+<li>A new <code>_respond_stream()</code> sends <code>http.response.start</code> with <code>content-type: text/event-stream</code> and
+  <strong>no <code>content-length</code></strong>, then, per chunk, <code>http.response.body</code> with <code>more_body=True</code>, formatting each
+  as an SSE event:
+  <div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>id: 7
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>data: {&quot;token&quot;: &quot;Hel&quot;}
+</span></code></pre></div>
+  The terminator sends a final <code>http.response.body</code> with <code>more_body=False</code>. Errors emit an
+  <code>event: error</code> frame before closing.</li>
+<li>This <strong>replaces the <code>{"chunks": [...]}</code> workaround</strong> (Q4): the agent emits chunks incrementally
+  instead of buffering them into one reply.</li>
+<li>Works across HTTP/1.1, HTTP/2, and HTTP/3 (it is ordinary chunked HTTP).</li>
+</ul>
+<h3 id="grpc-server-streaming-stream">gRPC server-streaming (<code>Stream</code>)<a class="headerlink" href="#grpc-server-streaming-stream" title="Permanent link">&para;</a></h3>
+<ul>
+<li>The G1 <code>Stream</code> stub is completed: <code>_AgentServicer.Stream</code> calls the streaming core and <code>yield</code>s one
+  <code>AgentReply(payload=Struct)</code> per chunk, ending when the core iterator ends. Error terminators map to
+  the same D6 gRPC codes as G1 (transport failures → status codes; agent error terminator → an
+  <code>AgentReply.error</code> before the stream closes, consistent with G1's in-band decision).</li>
+</ul>
+<h3 id="d5-sse-reconnection">D5 — SSE reconnection<a class="headerlink" href="#d5-sse-reconnection" title="Permanent link">&para;</a></h3>
+<p>Emit a monotonically increasing <code>id:</code> per event. On reconnect, the browser sends <code>Last-Event-ID</code>.
+<strong>Recommendation: best-effort for v0.6.0</strong> — the gateway forwards <code>Last-Event-ID</code> to the agent in the
+initial payload; <em>replay of missed events is the agent's responsibility</em> (the gateway keeps no per-
+stream history). Durable replay is a non-goal (would require gateway-side buffering / a store).</p>
+<hr />
+<h2 id="config-additions-gatewayconfig">Config additions (<code>GatewayConfig</code>)<a class="headerlink" href="#config-additions-gatewayconfig" title="Permanent link">&para;</a></h2>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">ws_routes</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>   <span class="c1"># WebSocket routes (G2)</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">stream_queue_maxsize</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">256</span>      <span class="c1"># per-stream sink bound (backpressure, D6)</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">stream_idle_timeout</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">300.0</span>   <span class="c1"># close a stream with no chunk for this long</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">max_stream_duration</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">3600.0</span>  <span class="c1"># hard cap on a single stream/session</span>
+</span></code></pre></div>
+<p>HTTP SSE routes reuse the existing <code>routes:</code> block with <code>mode: "stream"</code> — no new route config needed
+for SSE, only for WebSocket.</p>
+<hr />
+<h2 id="d6-backpressure-lifecycle">D6 — Backpressure &amp; lifecycle<a class="headerlink" href="#d6-backpressure-lifecycle" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Each sink is a <strong>bounded</strong> <code>asyncio.Queue(maxsize=stream_queue_maxsize)</code>. <code>handle()</code> enqueues with
+  <code>put_nowait</code>; <strong>on overflow the stream is closed with a <code>slow_consumer</code> error terminator</strong> rather
+  than blocking the gateway message loop (blocking <code>handle()</code> would stall <em>all</em> streams). Rationale:
+  in Option A the bus is fire-and-forget, so we cannot push backpressure to the agent; failing fast on
+  a slow client is the honest behaviour. Configurable queue size lets deployments tune the tolerance.</li>
+<li><strong>Timeouts:</strong> <code>stream_idle_timeout</code> (no chunk) and <code>max_stream_duration</code> (total) both close the sink
+  and, for WS, the socket. Prevents zombie streams from leaking sinks/sockets.</li>
+<li><strong>Client disconnect</strong> (SSE connection dropped / WS closed): the surface cancels its pump, unregisters
+  the sink, and casts a close notice to the agent so it can stop producing.</li>
+<li><strong>Gateway shutdown</strong> (<code>on_stop</code>): all sinks are closed, pumps cancelled, sockets closed with a
+  going-away code.</li>
+</ul>
+<hr />
+<h2 id="testing-plan">Testing plan<a class="headerlink" href="#testing-plan" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Streaming core (unit):</strong> sink register/enqueue/terminate/overflow/timeout; <code>handle()</code> demux by
+  correlation_id; <code>emit</code>/<code>end_stream</code>/<code>stream_reply</code> message shape (recipient/correlation/marker);
+  context-manager terminator-on-exception.</li>
+<li><strong>G2 (unit + integration):</strong> drive <code>GatewayASGI</code> with a synthetic <code>websocket</code> scope
+  (connect/receive/send/disconnect); frame→cast; agent-emitted chunk→frame; disconnect→agent notice;
+  idle/duration timeout.</li>
+<li><strong>G3 SSE (unit + integration):</strong> <code>mode: "stream"</code> route → <code>text/event-stream</code>, <code>more_body</code> chunk
+  sequence, <code>data:</code>/<code>id:</code> framing, error frame, replaces <code>{"chunks"}</code>; real HTTP client reads the
+  event stream.</li>
+<li><strong>gRPC <code>Stream</code> (integration):</strong> real <code>grpc.aio</code> channel, <code>AgentStub.Stream</code> yields N replies then
+  completes; agent error terminator surfaces on the last reply.</li>
+<li>Coverage ≥ 85% gate held; generated proto stays omitted.</li>
+</ul>
+<hr />
+<h2 id="decisions-summary-need-sign-off">Decisions summary (need sign-off)<a class="headerlink" href="#decisions-summary-need-sign-off" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Decision</th>
+<th>Recommendation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>D1</td>
+<td>Streaming core mechanism</td>
+<td><strong>A — gateway-mediated correlation_id multiplexing</strong> (no transport change)</td>
+</tr>
+<tr>
+<td>D2</td>
+<td>Agent-side streaming API</td>
+<td><strong><code>async with self.stream_reply(msg)</code></strong> primary; <code>emit</code>/<code>end_stream</code> low-level</td>
+</tr>
+<tr>
+<td>D3</td>
+<td>WebSocket wire library</td>
+<td><strong>Reuse <code>uvicorn[standard]</code>'s <code>websockets</code></strong> — no new dependency</td>
+</tr>
+<tr>
+<td>D4</td>
+<td>WS client→agent semantics</td>
+<td>Each frame → <strong><code>cast()</code></strong> (per roadmap); agent streams back on the same socket</td>
+</tr>
+<tr>
+<td>D5</td>
+<td>SSE reconnection</td>
+<td><strong>Best-effort</strong> (<code>id:</code> + forward <code>Last-Event-ID</code>); durable replay is a non-goal</td>
+</tr>
+<tr>
+<td>D6</td>
+<td>Backpressure</td>
+<td><strong>Bounded sink; close with <code>slow_consumer</code> on overflow</strong>; idle + duration timeouts</td>
+</tr>
+<tr>
+<td>D7</td>
+<td>Doc/route config</td>
+<td>SSE via existing <code>routes:</code> <code>mode: "stream"</code>; WebSocket via new <code>ws_routes:</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="non-goals-v060">Non-goals (v0.6.0)<a class="headerlink" href="#non-goals-v060" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Bus-native agent-to-agent streaming (Option B) — separate future initiative.</li>
+<li>Durable SSE replay / event history (agent's responsibility if needed).</li>
+<li>WebSocket over HTTP/3 / WebTransport (uvicorn HTTP/1.1+2 path only for G2).</li>
+<li>gRPC client-streaming and bidirectional streaming (server-streaming only; matches G1 non-goals).</li>
+<li>Per-message auth handshakes beyond the existing middleware chain (auth middleware is G5).</li>
+</ul>
+<hr />
+<h2 id="implementation-checklist-on-approval">Implementation checklist (on approval)<a class="headerlink" href="#implementation-checklist-on-approval" title="Permanent link">&para;</a></h2>
+<p>Order minimises risk — the shared core lands first with its own tests, then each surface:</p>
+<ol>
+<li><strong>Streaming core:</strong> <code>AgentProcess.emit</code> / <code>end_stream</code> / <code>stream_reply</code> (additive); <code>StreamSink</code> +
+   registry on <code>HTTPGateway</code>; wire <code>HTTPGateway.handle()</code> to demux; <code>GatewayDispatcher.stream()</code> /
+   <code>mode="stream"</code> returning <code>AsyncIterator[dict]</code>. Unit tests.</li>
+<li><strong>G3 SSE:</strong> <code>_respond_stream()</code> in <code>asgi.py</code>; <code>mode: "stream"</code> route handling; error/<code>id:</code> framing.
+   Unit + integration tests.</li>
+<li><strong>G3 gRPC <code>Stream</code>:</strong> complete <code>_AgentServicer.Stream</code> on the core. Integration test.</li>
+<li><strong>G2 WebSocket:</strong> <code>_handle_websocket()</code> + <code>websocket</code> scope branch; <code>ws_routes</code> config; per-socket
+   pump + session sink; disconnect/timeout handling. Unit + integration tests.</li>
+<li><strong>Config + docs:</strong> <code>GatewayConfig</code> fields; topology validate/show for <code>ws_routes</code>; CHANGELOG;
+   flip milestones G2/G3 to done; update the (now-stale-again) <code>http-gateway-arch.svg</code> note if needed.</li>
+<li>Full gate (ruff + mypy + pytest + coverage), strip <code>uv.lock</code> artifact, commit.</li>
+</ol>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Apache 2.0 License
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/civitas-io/python-civitas" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand", "navigation.top", "navigation.instant", "navigation.indexes", "content.code.copy", "content.code.annotate", "search.highlight", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="https://unpkg.com/mermaid@11/dist/mermaid.min.js"></script>
+      
+    
+  </body>
+</html>

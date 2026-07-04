@@ -4386,65 +4386,68 @@ precede implementation (they were written pre-v0.4 and predate the shipped ASGI/
 <tbody>
 <tr>
 <td>G1</td>
-<td><strong>gRPC gateway</strong> — generic <code>CivitasGateway</code> service; RPC→message-type mapping; bundled <code>.proto</code>; custom <code>.proto</code> loading from <code>proto_dir</code>; <code>civitas[grpc]</code> (grpclib) + <code>civitas[grpc-fast]</code> (grpcio) extras</td>
-<td>🔴 High</td>
-<td>http-gateway.md Phase 3</td>
+<td><strong>gRPC gateway</strong> — generic <code>civitas.Agent</code> service proxying any agent by name; <code>Invoke</code>/<code>Cast</code> unary RPCs with a <code>Struct</code> payload; committed <code>.proto</code> + <code>_pb2</code> stubs; health + server reflection; <code>civitas[grpc]</code> (grpcio default). <code>Stream</code> (server-streaming) deferred to G3; per-agent <code>proto_dir</code> loading is a non-goal</td>
+<td>✅ Done</td>
+<td>grpc-gateway.md</td>
 </tr>
 <tr>
 <td>G2</td>
-<td><strong>WebSocket upgrade</strong> — long-lived bidirectional sessions mapped to a <code>cast()</code> stream on the bus</td>
-<td>🔴 High</td>
-<td>http-gateway.md Phase 4, gateway.md</td>
+<td><strong>WebSocket upgrade</strong> — long-lived bidirectional sessions: inbound frames <code>cast()</code> to an agent, agent streams back over the same socket (<code>ws_routes</code>)</td>
+<td>✅ Done</td>
+<td>gateway-streaming.md</td>
 </tr>
 <tr>
 <td>G3</td>
-<td><strong>SSE / true streaming responses</strong> — chunked/Server-Sent-Events instead of the current <code>{"chunks": [...]}</code> buffer-and-serialise workaround</td>
-<td>🔴 High</td>
-<td>gateway-api-surface.md Q4</td>
+<td><strong>SSE / true streaming responses</strong> — <code>mode: "stream"</code> routes stream agent output as Server-Sent Events (replaces the <code>{"chunks": [...]}</code> workaround); also completes the gRPC <code>Stream</code> RPC deferred in G1</td>
+<td>✅ Done</td>
+<td>gateway-streaming.md</td>
 </tr>
 <tr>
 <td>G4</td>
-<td><strong>Rate-limiting middleware</strong> — <code>RateLimiter</code> GenServer wired as gateway middleware</td>
-<td>🟡 Medium</td>
-<td>http-gateway.md Phase 4</td>
+<td><strong>Rate-limiting middleware</strong> — <code>RateLimiter</code> GenServer + <code>rate_limit</code> middleware (<code>civitas.gateway.ratelimit</code>)</td>
+<td>✅ Done</td>
+<td>gateway-api-surface.md</td>
 </tr>
 <tr>
 <td>G5</td>
-<td><strong>Auth middleware</strong> — JWT / API-key / mTLS client-cert authentication middleware (integration point already documented; ship first-party implementations)</td>
-<td>🟡 Medium</td>
-<td>http-gateway.md Phase 4, security-hardening.md</td>
+<td><strong>Auth middleware</strong> — first-party API-key auth (<code>civitas.gateway.auth.require_api_key</code>, fail-closed, <code>CIVITAS_GATEWAY_API_KEY</code>); JWT (opt-in <code>civitas[jwt]</code>) + mTLS remain integration points</td>
+<td>✅ Done (API-key; JWT/mTLS deferred)</td>
+<td>gateway-api-surface.md</td>
 </tr>
 <tr>
 <td>G6</td>
-<td><strong>File uploads</strong> — <code>multipart/form-data</code> request handling</td>
-<td>🟢 Low</td>
+<td><strong>File uploads</strong> — <code>multipart/form-data</code> parsed at the ASGI edge; files delivered base64 under <code>__files__</code></td>
+<td>✅ Done</td>
 <td>gateway-api-surface.md</td>
 </tr>
 <tr>
 <td>G7</td>
-<td><strong>HTTP/2 server push</strong> — requires explicit push directives from agents</td>
-<td>🟢 Low</td>
+<td><strong>HTTP/2 server push</strong></td>
+<td>⛔ Won't do — Server Push was removed from Chrome (2022) and is effectively dead across browsers; use SSE/WebSocket (G2/G3) for server-initiated data</td>
 <td>http-gateway.md</td>
 </tr>
 <tr>
 <td>G8</td>
 <td><strong>gRPC reflection service</strong> — generic reflection for the gRPC surface</td>
-<td>🟢 Low</td>
-<td>http-gateway.md Phase 4</td>
+<td>✅ Done (shipped in G1)</td>
+<td>grpc-gateway.md</td>
 </tr>
 <tr>
 <td>G9</td>
-<td><strong>Evaluate quiche-python</strong> (Rust QUIC) as a drop-in replacement for aioquic in the HTTP/3 path</td>
-<td>🟢 Low</td>
+<td><strong>Evaluate quiche-python</strong> (Rust QUIC) as a drop-in for aioquic</td>
+<td>✅ Done (evaluated) — no official/production-ready Python binding exists today; stay on aioquic, revisit when one matures</td>
 <td>http-gateway.md</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Suggested cut line:</strong> G1–G3 (gRPC + streaming) are the headline value and a shippable v0.6.0 on
-their own; G4–G5 (middleware) are strong companions; G6–G9 are opportunistic and can slip to a
-later patch without holding the release.</p>
+<p><strong>Status (2026-07-04): feature-complete.</strong> G1–G6 and G8 shipped; G7 dropped (HTTP/2 Server Push is
+dead in browsers — use G2/G3 instead); G9 evaluated (no viable Rust QUIC Python binding — stay on
+aioquic). v0.6.0 Gateway Completion is ready to release.</p>
 <p><strong>Non-goals for v0.6.0:</strong> business logic in the gateway, load balancing, request queuing — the
-gateway stays a thin translate-and-route edge (<a href="../design/http-gateway/"><code>http-gateway.md</code></a> Non-Goals).</p>
+gateway stays a thin translate-and-route edge (<a href="../design/http-gateway/"><code>http-gateway.md</code></a> Non-Goals).
+A <strong>bus-native streaming primitive</strong> (agent-to-agent <code>stream()</code> across all transports) is also out of
+scope — G2/G3 use gateway-mediated streaming; the first-class version is tracked in the
+<a href="#deferred-backlog">Deferred Backlog</a> (see <a href="../design/gateway-streaming/"><code>gateway-streaming.md</code></a> §D1, Option B).</p>
 <hr />
 <h2 id="deferred-backlog">Deferred Backlog<a class="headerlink" href="#deferred-backlog" title="Permanent link">&para;</a></h2>
 <p><strong>Status: 🗂️ Tracked</strong> — the single index of everything deferred and not in v0.6.0. Items with a
@@ -4556,6 +4559,24 @@ nothing is lost. Owner column: <code>core</code> = python-civitas, else the targ
 <td>core</td>
 <td>⏸️</td>
 <td>§M1.8</td>
+</tr>
+<tr>
+<td>Bus-native streaming primitive (<code>AgentProcess.stream()</code> + <code>Transport.stream()</code> across in-proc/ZMQ/NATS, agent-to-agent) — v0.6.0 ships gateway-mediated streaming instead</td>
+<td>core</td>
+<td>⏸️ v0.x</td>
+<td>design/gateway-streaming.md §D1 (Option B)</td>
+</tr>
+<tr>
+<td>First-party JWT gateway auth (opt-in <code>civitas[jwt]</code>) + mTLS client-cert auth — G5 shipped API-key only (no new core dep)</td>
+<td>core</td>
+<td>⏸️ v0.x</td>
+<td>§v0.6.0 G5</td>
+</tr>
+<tr>
+<td>Dynamic spawn: non-blocking spawn (#9) and <code>spawn_into()</code> cross-tree helper (#10)</td>
+<td>core</td>
+<td>⏸️ v0.x</td>
+<td>GH #9, #10</td>
 </tr>
 </tbody>
 </table>

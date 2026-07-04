@@ -2553,7 +2553,7 @@
 <p>The <code>Alt-Svc: h3=":8443"</code> header is automatically injected into HTTP/1.1 and HTTP/2 responses, advertising the QUIC endpoint to clients that support it.</p>
 <p><strong>Required extra:</strong> <code>pip install civitas[http3]</code> (installs <code>aioquic&gt;=1.0</code>)</p>
 <h3 id="why-aioquic-and-whats-next">Why aioquic (and what's next)<a class="headerlink" href="#why-aioquic-and-whats-next" title="Permanent link">&para;</a></h3>
-<p>aioquic is the established Python QUIC library and adequate for most deployments. The QUIC ecosystem is maturing fast — <a href="https://github.com/cloudflare/quiche">quiche</a> (Cloudflare's QUIC implementation in Rust) exposes Python bindings via <a href="https://github.com/cloudflare/quiche/tree/master/quiche/examples">quiche-python</a>. When those bindings stabilise for production use, <code>civitas[http3]</code> will transparently upgrade to the Rust backend for near-native QUIC performance. No API changes to <code>HTTPGateway</code> are needed — only the underlying driver swaps.</p>
+<p>aioquic is the established pure-Python QUIC library, is adequate for most deployments, and is the backend today. A Rust-backed QUIC stack (e.g. Cloudflare's <a href="https://github.com/cloudflare/quiche">quiche</a>) would offer near-native performance, but quiche ships <strong>no official, production-ready Python binding</strong> — the code under its repo is example/demo material, not a published package. A Rust QUIC swap therefore remains a <em>future evaluation</em> (roadmap G9), not a committed upgrade path. Because <code>HTTPGateway</code> isolates the transport behind its own driver, such a swap would require no public API change if a viable binding later emerges.</p>
 <hr />
 <h2 id="grpc">gRPC<a class="headerlink" href="#grpc" title="Permanent link">&para;</a></h2>
 <p>gRPC uses HTTP/2 as transport and Protocol Buffers (protobuf) as the serialization format. Civitas exposes a <strong>generic reflection service</strong> so clients don't need pre-generated stubs for basic use.</p>
@@ -2744,7 +2744,7 @@
 <td><code>civitas[http3]</code></td>
 <td><code>aioquic&gt;=1.0</code></td>
 <td>HTTP/3 / QUIC</td>
-<td>Pure Python (Rust upgrade path via quiche)</td>
+<td>Pure Python (aioquic; Rust QUIC swap under evaluation — G9)</td>
 </tr>
 <tr>
 <td><code>civitas[grpc]</code></td>
