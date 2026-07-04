@@ -137,11 +137,19 @@
          <lastmod>2026-07-04</lastmod>
     </url>
     <url>
+         <loc>https://civitas-io.github.io/python-civitas/design/encrypted-statestore/</loc>
+         <lastmod>2026-07-04</lastmod>
+    </url>
+    <url>
          <loc>https://civitas-io.github.io/python-civitas/design/evalloop/</loc>
          <lastmod>2026-07-04</lastmod>
     </url>
     <url>
          <loc>https://civitas-io.github.io/python-civitas/design/gateway-api-surface/</loc>
+         <lastmod>2026-07-04</lastmod>
+    </url>
+    <url>
+         <loc>https://civitas-io.github.io/python-civitas/design/gateway-auth/</loc>
          <lastmod>2026-07-04</lastmod>
     </url>
     <url>

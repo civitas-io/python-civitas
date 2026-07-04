@@ -1,0 +1,2001 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="The production runtime for Python agents">
+      
+      
+      
+        <link rel="canonical" href="https://civitas-io.github.io/python-civitas/design/gateway-auth/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
+    
+    
+      
+        <title>Gateway Auth — JWT + mTLS (v0.7.0 · R3) - civitas</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+  
+
+
+  
+  
+
+<script id="__analytics">function __md_analytics(){function e(){dataLayer.push(arguments)}window.dataLayer=window.dataLayer||[],e("js",new Date),e("config",""),document.addEventListener("DOMContentLoaded",(function(){document.forms.search&&document.forms.search.query.addEventListener("blur",(function(){this.value&&e("event","search",{search_term:this.value})}));document$.subscribe((function(){var t=document.forms.feedback;if(void 0!==t)for(var a of t.querySelectorAll("[type=submit]"))a.addEventListener("click",(function(a){a.preventDefault();var n=document.location.pathname,d=this.getAttribute("data-md-value");e("event","feedback",{page:n,data:d}),t.firstElementChild.disabled=!0;var r=t.querySelector(".md-feedback__note [data-md-value='"+d+"']");r&&(r.hidden=!1)})),t.hidden=!1})),location$.subscribe((function(t){e("config","",{page_path:t.pathname})}))}));var t=document.createElement("script");t.async=!0,t.src="https://www.googletagmanager.com/gtag/js?id=",document.getElementById("__analytics").insertAdjacentElement("afterEnd",t)}</script>
+  
+    <script>"undefined"!=typeof __md_analytics&&__md_analytics()</script>
+  
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#gateway-auth-jwt-mtls-v070-r3" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="civitas" class="md-header__button md-logo" aria-label="civitas" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            civitas
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Gateway Auth — JWT + mTLS (v0.7.0 · R3)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/civitas-io/python-civitas" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    civitas-io/python-civitas
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting Started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../concepts/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../architecture/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../milestones/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Milestones
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../mcp-integration/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../rfc/0001-tool-retrieval/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  RFCs
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../contributing/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Contributing
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="civitas" class="md-nav__button md-logo" aria-label="civitas" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    civitas
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/civitas-io/python-civitas" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    civitas-io/python-civitas
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../supervision/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Supervision
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../messaging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Messaging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../transports/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Transports
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../topology/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Topology YAML
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FAQ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/process/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AgentProcess
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/genserver/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GenServer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/supervisor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Supervisor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/messages/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Message
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/bus/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MessageBus
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/transport/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Transport
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../milestones/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Milestones
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp-integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Integration (M3.4)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../genserver/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GenServer (M3.5)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../http-gateway/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP Gateway (M4.x)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gateway-api-surface/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gateway API Surface (M4.x)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RFCs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    RFCs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../rfc/0001-tool-retrieval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RFC 0001 — Selective Tool Retrieval
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Problem
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-current-behavior-ground-truth-line-refs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Current behavior (ground truth, line refs)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-goals-non-goals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Goals / Non-goals
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Decisions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-threat-model-condensed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Threat model (condensed)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-resolved-decisions-maintainer-sign-off-2026-07-04-go-with-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Resolved decisions (maintainer sign-off — 2026-07-04: "go with recommendations")
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-test-plan-outline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Test plan (outline)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-implementer-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Implementer checklist
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="gateway-auth-jwt-mtls-v070-r3">Gateway Auth — JWT + mTLS (v0.7.0 · R3)<a class="headerlink" href="#gateway-auth-jwt-mtls-v070-r3" title="Permanent link">&para;</a></h1>
+<p><strong>Status:</strong> ✅ Approved — Oracle-reviewed; maintainer signed off 2026-07-04 (go with recommendations). Implementation in progress.
+<strong>Source:</strong> v0.6.0 §G5 (API-key shipped; "JWT + mTLS remain integration points")
+<strong>Related:</strong> <a href="../gateway-api-surface/"><code>gateway-api-surface.md</code></a>, <a href="../security-hardening/"><code>security-hardening.md</code></a>, <a href="../http-gateway/"><code>http-gateway.md</code></a>
+<strong>Roadmap:</strong> <a href="../../milestones/"><code>milestones.md</code></a> v0.7.0 R3</p>
+<blockquote>
+<p><strong>v2 changelog (Oracle review — code inspection found fail-open holes):</strong> Added <strong>M1</strong> (the middleware
+loader silently drops a middleware it can't load → serves unauthenticated; must be <strong>fatal</strong>); <strong>M2</strong>
+<code>PyJWKClient</code> blocks the event loop (wrap in <code>to_thread</code>, one client at startup); <strong>M3</strong> <code>exp</code>/<code>aud</code>/<code>iss</code>
+are only checked <em>if present</em> unless <code>options={"require":[...]}</code> — tokens without <code>exp</code> never expire;
+<strong>M4</strong> WebSocket / gRPC / <code>/docs</code> <strong>bypass the chain</strong> — enumerate as the security boundary; <strong>M5</strong> fixed
+the 401/403 matrix (aud/iss → 401); <strong>M6</strong> add <code>GatewayRequest.auth</code> so authN can feed authZ; <strong>M7</strong>
+mTLS config preconditions; <strong>M8</strong> dedicated-CA mandate + full-DN exact match. Plus: token-size cap,
+leeway cap, rate-limit before JWT, <code>WWW-Authenticate</code> on 401, never read identity from headers.</p>
+</blockquote>
+<hr />
+<h2 id="1-problem">1. Problem<a class="headerlink" href="#1-problem" title="Permanent link">&para;</a></h2>
+<p>G5 shipped first-party <strong>API-key</strong> gateway auth. JWT and mTLS were deferred. R3 makes both first-party:
+<strong>JWT bearer verification</strong> (opt-in <code>civitas[jwt]</code>) and <strong>mTLS client-cert auth</strong> — and closes a fail-open
+gap that would otherwise undermine all three.</p>
+<h2 id="2-current-behavior-ground-truth-line-refs">2. Current behavior (ground truth, line refs)<a class="headerlink" href="#2-current-behavior-ground-truth-line-refs" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Middleware model</strong> (<code>gateway/types.py</code>): <code>(GatewayRequest, NextMiddleware) -&gt; GatewayResponse</code>; short-circuit by returning a <code>GatewayResponse</code>. <code>require_api_key</code> (<code>gateway/auth.py:29-41</code>) is the template (NOT Starlette). Chain built in <code>middleware.py:build_chain</code>, run in <code>asgi.py</code> (~305).</li>
+<li><strong>⚠️ Loader fails open</strong> (<code>asgi.py:128-132</code> global, <code>:148-159</code> per-route): <code>except Exception: logger.exception(...)</code> then <strong>continues without the middleware</strong>. A security middleware that fails to import/construct is silently dropped → gateway serves <strong>unauthenticated</strong>.</li>
+<li><strong><code>GatewayRequest</code></strong> (<code>types.py:13-24</code>): <code>method,path,path_params,query_params,headers,body,client_ip,gateway</code> — no TLS field, no auth/claims field.</li>
+<li><strong>TLS</strong> (<code>gateway/core.py</code>): uvicorn gets <code>ssl_certfile/ssl_keyfile</code> only (no <code>ssl_cert_reqs</code>/<code>ssl_ca_certs</code>). HTTP/3 (<code>h3.py</code>) server-cert only; <strong>aioquic hardcodes client certs off</strong>.</li>
+<li><strong>Bypass paths:</strong> WebSocket (<code>asgi._handle_websocket</code>, ~186-230) never builds the chain; gRPC (<code>grpc_server.py</code>) dispatches straight to the bus; <code>/docs</code>+<code>/openapi.json</code> served (~249-256) <strong>before</strong> the chain (~307).</li>
+<li><strong>Config</strong> (<code>config.py</code>): <code>Settings</code>+<code>SecretStr</code>. <strong>Extras</strong> (<code>pyproject.toml</code>): <code>http/http3/grpc/security/fast</code>. <strong>Security dataclasses</strong> (<code>security/config.py</code>): <code>from_dict</code>+<code>build_ssl_context</code>. <strong>Errors</strong>: no <code>AuthError</code>; return <code>GatewayResponse(401/403/500)</code>. <code>request.headers</code> is lowercased (<code>asgi.py:244</code>). <code>ratelimit.py</code> middleware exists.</li>
+</ul>
+<h2 id="3-goals-non-goals">3. Goals / Non-goals<a class="headerlink" href="#3-goals-non-goals" title="Permanent link">&para;</a></h2>
+<p><strong>Goals:</strong> first-party JWT + mTLS gateway middleware, secure-by-default, fail-closed; make middleware-load
+failures fatal (M1); minimal/opt-in deps.</p>
+<p><strong>Non-goals (explicit security boundary — M4):</strong> token <em>issuance</em> / auth server; OAuth2/OIDC flows; HTTP/3
+mTLS (aioquic can't); <strong>and R3 auth does NOT cover WebSocket routes, the gRPC surface, or <code>/docs</code>+<code>/openapi.json</code></strong> — these bypass the ASGI middleware chain. Documented + a follow-up issue filed for WS/gRPC auth. <strong>Never</strong> derive client identity from request headers (a forwarded <code>X-SSL-Client-*</code> is client-spoofable).</p>
+<h2 id="4-decisions">4. Decisions<a class="headerlink" href="#4-decisions" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Decision</th>
+<th>Rationale</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>M1</strong> ⚠️</td>
+<td><strong>Middleware-load failures are FATAL at startup.</strong> <code>on_start</code> (not construction) resolves the chain; a failed <code>load_middleware</code> (missing PyJWT, <code>ConfigurationError</code>, typo) <strong>crashes the gateway</strong> instead of being logged-and-skipped.</td>
+<td>Today's fail-open silently serves unauthenticated. This is the enabling correctness fix for the whole feature.</td>
+</tr>
+<tr>
+<td><strong>D1</strong></td>
+<td>JWT lib = <strong>PyJWT[cryptography]≥2.13</strong>, opt-in <code>jwt = ["pyjwt[cryptography]&gt;=2.13"]</code>, lazy import w/ <code>ConfigurationError</code>.</td>
+<td>Best-maintained; algorithm-confusion defense built in; 2.13 JWKS cache fix.</td>
+</tr>
+<tr>
+<td><strong>D2</strong></td>
+<td><code>require_jwt</code>: <code>Authorization: Bearer</code> (parse case-insensitively off lowercased <code>authorization</code>); explicit <code>algorithms</code> (<strong>default <code>["RS256"]</code></strong>); <strong><code>options={"require":["exp","iss","aud"]}</code></strong> (M3) + <code>verify_aud/iss</code>; bounded <code>leeway</code> (<strong>cap ≤120s</strong>); <strong>cap token length ~8KB</strong> pre-decode. JWKS via <code>PyJWKClient</code> <strong>or</strong> static key — exactly one source.</td>
+<td>M3: PyJWT doesn't require claims unless told; a token w/o <code>exp</code> never expires.</td>
+</tr>
+<tr>
+<td><strong>M2</strong></td>
+<td><strong>Verifier built + validated eagerly in <code>on_start</code></strong> (one <code>PyJWKClient</code>); the per-request signing-key lookup is wrapped in <strong><code>asyncio.to_thread</code></strong> (blocking urllib).</td>
+<td>Don't stall the event loop on JWKS refetch; "refuse to start" must mean startup, not first-request 500.</td>
+</tr>
+<tr>
+<td><strong>D3</strong></td>
+<td>Threat rules (§6): reject <code>alg=none</code>; no RS/HS mixing (enforced at config); <code>aud</code>+<code>iss</code> required; <code>https://</code> JWKS only; order <code>rate_limit</code> <strong>before</strong> <code>require_jwt</code> (throttle unknown-<code>kid</code> JWKS refetch amplification).</td>
+<td>The JWT footguns, encoded not left to users.</td>
+</tr>
+<tr>
+<td><strong>D4</strong></td>
+<td><strong>mTLS plumbing:</strong> add <code>GatewayRequest.client_cert: dict\|None=None</code>, populated in <code>asgi.py</code> from <code>scope["extensions"]["tls"]</code> <strong>only when a leaf is present</strong> (else <code>None</code>). <code>require_client_cert</code> authorizes on the <strong>full Subject DN, exact match</strong> (not CN substring) against an allowlist; fails <strong>closed</strong> on <code>None</code>. SAN parsing deferred (needs only <code>cryptography</code>, no new server plumbing).</td>
+<td>Middleware has no TLS access today; one optional field bridges it. Full-DN exact avoids CN spoofing.</td>
+</tr>
+<tr>
+<td><strong>M8</strong></td>
+<td><strong>Dedicated private CA is mandatory</strong> for client auth: <code>ssl_ca_certs</code> is the trust anchor — a public/broad CA means <em>any</em> cert it signed passes authN and the DN allowlist becomes the sole (spoofable) gate. Document loudly.</td>
+<td>TLS proves "signed by a trusted CA," not "is this identity."</td>
+</tr>
+<tr>
+<td><strong>D5/M7</strong></td>
+<td><code>GatewayConfig</code>: <code>tls_ca_cert</code>, <code>client_cert_mode: "none"\|"optional"\|"required"</code>. <code>core.py</code> passes <code>ssl_ca_certs</code> + <code>ssl_cert_reqs</code>. <code>__post_init__</code> (raise <strong><code>ConfigurationError</code></strong>): reject unknown mode; <code>mode!=none ⇒ tls_ca_cert AND tls_cert+tls_key set</code>; <strong><code>mode!=none</code> + <code>enable_http3</code> ⇒ error</strong> (aioquic can't enforce client certs → silent bypass). <code>required</code>=TLS-layer authN of the chain (still needs the middleware for DN authZ); <code>optional</code>=per-route, middleware fails closed.</td>
+<td>Honest about the h3 gap; preconditions prevent misconfig.</td>
+</tr>
+<tr>
+<td><strong>M6</strong></td>
+<td>Add <strong><code>GatewayRequest.auth: dict\|None=None</code></strong>; <code>require_jwt</code> sets verified claims, <code>require_client_cert</code> sets cert info. Do <strong>not</strong> merge into the dispatched <code>payload</code> (reserved-key collisions). AuthZ (scopes/<code>sub</code>) can stay deferred, but the field ships now.</td>
+<td>Without it, authN can't feed authZ — a dead end.</td>
+</tr>
+<tr>
+<td><strong>M5/D8</strong></td>
+<td><strong>Status matrix</strong> (RFC 6750): missing/malformed/expired/bad-sig/<strong>bad-aud/bad-iss</strong> JWT → <strong>401</strong> (+ <code>WWW-Authenticate: Bearer error="invalid_token"</code>); missing cert (optional) → <strong>401</strong>; valid cert DN not allowlisted → <strong>403</strong>; valid token, insufficient scope → 403; misconfig → 500. Never log token/cert contents (log <code>sub</code>/<code>kid</code>/DN at most).</td>
+<td>Fixes the D2/D8 contradiction; standard semantics.</td>
+</tr>
+<tr>
+<td><strong>D6</strong></td>
+<td>Composable; recommended order <code>rate_limit → mTLS → JWT → API-key</code>. A middleware is a no-op only if <strong>not added to the chain</strong>; a listed-but-unconfigured verifier → 500 (fail-closed, after M1).</td>
+<td>Users pick any subset.</td>
+</tr>
+<tr>
+<td><strong>D7</strong></td>
+<td><code>settings</code>: <code>CIVITAS_JWT_*</code> (jwks_url, audience, issuer, algorithms, public_key/secret <code>SecretStr</code>); <code>GatewayAuthConfig.from_dict</code> (mirrors <code>NatsTlsConfig</code>).</td>
+<td>Consistent config surface.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="5-threat-model-condensed">5. Threat model (condensed)<a class="headerlink" href="#5-threat-model-condensed" title="Permanent link">&para;</a></h2>
+<p><strong>JWT:</strong> explicit <code>algorithms</code> + <code>require:[exp,iss,aud]</code> + <code>verify_aud/iss</code> (M3/D2); reject <code>alg=none</code>, no RS/HS mixing; <strong>PyJWT does not fetch keys from <code>jku</code>/<code>x5u</code>/<code>jwk</code>/<code>x5c</code> headers</strong> (confirmed — <code>kid</code> is only a selector into the trusted set) → add a regression test that such tokens are ignored; JWKS URL is operator-config (not SSRF) but pin <code>https://</code>; <strong>no revocation before <code>exp</code></strong> → keep <code>exp</code> short (document); cap token size + leeway; rate-limit before JWT to blunt unknown-<code>kid</code> refetch amplification.</p>
+<p><strong>mTLS:</strong> cert verification is fatal at the TLS layer under <code>CERT_REQUIRED</code> (bad cert never reaches ASGI); under <code>CERT_OPTIONAL</code>, <code>require_client_cert</code> must reject <code>None</code>; only the <strong>leaf</strong> is exposed → authorize on issuer-anchored full DN with a <strong>dedicated CA</strong> (M8); HTTP/3 has no client-cert enforcement → <strong>fail-loud at config</strong> (M7); <code>alt-svc</code> advertises h3 whenever enabled, so under <code>optional</code>+h3 an mTLS-protected route is unreachable over h3 (fail-closed but confusing — document).</p>
+<h2 id="6-resolved-decisions-maintainer-sign-off-2026-07-04-go-with-recommendations">6. Resolved decisions (maintainer sign-off — 2026-07-04: "go with recommendations")<a class="headerlink" href="#6-resolved-decisions-maintainer-sign-off-2026-07-04-go-with-recommendations" title="Permanent link">&para;</a></h2>
+<ol>
+<li>✅ Add opt-in <code>civitas[jwt] → pyjwt[cryptography]&gt;=2.13</code>.</li>
+<li>✅ <strong>M1</strong>: gateway middleware-load failures are <strong>FATAL</strong> (fixes the live fail-open auth-bypass). <strong>Folded into this R3 PR</strong> (not a separate fast-track).</li>
+<li>✅ <strong>M4</strong>: R3 covers HTTP request routes only; <strong>WebSocket, gRPC, <code>/docs</code> are NOT protected</strong> — documented boundary; a follow-up issue is filed for WS/gRPC auth; <code>docs_enabled</code> defaults to <code>False</code> when any gateway auth middleware is configured.</li>
+<li>✅ JWT supports <strong>both</strong> JWKS URL and static key (recommend RS256+JWKS).</li>
+<li>✅ <code>client_cert_mode</code> (<code>none</code> default; <code>optional</code>+middleware; <code>required</code>); DN-allowlist now, SAN deferred.</li>
+<li>✅ Scope: verification-only; mTLS on uvicorn only (fail-loud on http3); never trust forwarded identity headers.</li>
+</ol>
+<h2 id="7-test-plan-outline">7. Test plan (outline)<a class="headerlink" href="#7-test-plan-outline" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>M1:</strong> a middleware that raises on load → gateway <code>on_start</code> <strong>crashes</strong> (no silent unauthenticated serving).</li>
+<li><strong>JWT:</strong> valid RS256 (JWKS + static) → 200, claims on <code>request.auth</code>; expired / missing-<code>exp</code> (M3) / <code>nbf</code>-future → 401; bad <code>aud</code>/<code>iss</code> → <strong>401</strong>; <code>alg=none</code> + RS/HS-confusion + <code>jku</code>/<code>x5c</code>-header tokens → 401/ignored; oversized token → 401; missing/malformed header → 401 (+<code>WWW-Authenticate</code>); unconfigured → 500; JWKS <code>kid</code> rotation refreshes; <code>pyjwt</code> absent → <code>ConfigurationError</code> at startup (M1); JWKS lookup offloaded (no event-loop block).</li>
+<li><strong>mTLS:</strong> <code>asgi.py</code> sets <code>client_cert</code> from a simulated TLS scope; <strong>plus a real-uvicorn TLS integration test</strong> (verifies the extension is actually emitted); allowlisted DN → 200, unlisted → 403, absent under <code>optional</code> → 401; <code>core.py</code> passes <code>ssl_cert_reqs</code>/<code>ssl_ca_certs</code>; <code>mode!=none</code>+<code>enable_http3</code> → <code>ConfigurationError</code>; <code>mode!=none</code> without <code>tls_ca_cert</code> → <code>ConfigurationError</code>.</li>
+<li><strong>Compose:</strong> rate_limit→mTLS→JWT→API-key; <code>request.auth</code> populated; order preserved.</li>
+</ul>
+<h2 id="8-implementer-checklist">8. Implementer checklist<a class="headerlink" href="#8-implementer-checklist" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>M1:</strong> move global middleware resolution into <code>on_start</code>; make load failures propagate (fatal). Keep per-route resolution but fail fatally too (or resolve all at startup).</li>
+<li><code>gateway/jwt_auth.py</code> (<code>require_jwt</code> + <code>JwtVerifier</code>: eager init, one <code>PyJWKClient</code>, <code>to_thread</code> lookup, <code>require</code>/<code>leeway</code>/size caps); <code>gateway/mtls.py</code> (<code>require_client_cert</code>, full-DN exact, fail-closed).</li>
+<li><code>GatewayRequest.client_cert</code> + <code>GatewayRequest.auth</code> (types.py); populate <code>client_cert</code> in <code>asgi.py</code> from the TLS ext.</li>
+<li><code>GatewayConfig</code>: <code>tls_ca_cert</code>, <code>client_cert_mode</code>; <code>core.py</code> <code>ssl_ca_certs</code>/<code>ssl_cert_reqs</code>; <code>__post_init__</code> preconditions (<code>ConfigurationError</code>).</li>
+<li><code>config.py</code> <code>CIVITAS_JWT_*</code>; <code>GatewayAuthConfig.from_dict</code>; <code>pyproject.toml</code> <code>jwt</code> extra.</li>
+<li>Docs: security-boundary section (WS/gRPC/<code>/docs</code> not covered), dedicated-CA mandate, <code>docs_enabled=False</code> in prod; <code>CHANGELOG</code>; <code>AGENTS.md</code> install matrix. File follow-up issue: WS + gRPC auth.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Apache 2.0 License
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/civitas-io/python-civitas" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand", "navigation.top", "navigation.instant", "navigation.indexes", "content.code.copy", "content.code.annotate", "search.highlight", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="https://unpkg.com/mermaid@11/dist/mermaid.min.js"></script>
+      
+    
+  </body>
+</html>
