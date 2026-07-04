@@ -11,6 +11,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+
+- **Dynamically-spawned agents now inherit audit + metrics wiring** — agents created at runtime via
+  `self.spawn()` / `DynamicSupervisor` were wired with the bus, tracer, registry, model provider, tools,
+  and state store, but not the audit sink or metrics sink. Their audit events were silently dropped and
+  their activity was invisible to metrics collectors. `DynamicSupervisor._handle_spawn` now also propagates
+  `_audit_sink` and `_metrics`, matching `ComponentSet.inject` for statically-wired agents.
+
 ## [0.6.0] — 2026-07-04
 
 ### Added

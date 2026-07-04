@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from civitas import AgentProcess, DynamicSupervisor, Runtime, Supervisor
+from civitas import AgentProcess, DynamicSupervisor, NullSink, Runtime, Supervisor
 from civitas.errors import SpawnError
 from civitas.messages import Message
 from civitas.process import ProcessStatus
@@ -62,6 +62,20 @@ class TerminationRecorder(AgentProcess):
 
     async def on_child_terminated(self, name: str, reason: str) -> None:
         self.terminated.append((name, reason))
+
+
+class _StubMetrics:
+    def message_handled(self, agent_name: str, latency_ms: float) -> None:
+        pass
+
+    def message_sent(self, agent_name: str) -> None:
+        pass
+
+    def agent_error(self, agent_name: str) -> None:
+        pass
+
+    def agent_restarted(self, agent_name: str, reason: str = "") -> None:
+        pass
 
 
 def _make_dyn(**kwargs: Any) -> DynamicSupervisor:
@@ -283,6 +297,22 @@ class TestRuntimeSpawn:
             name = await rt.spawn("workers", ConfigAgent, name="cfg-1", config={"topic": "quantum"})
             reply = await rt.ask(name, {})
             assert reply.payload["config"] == {"topic": "quantum"}
+        finally:
+            await rt.stop()
+
+    @pytest.mark.asyncio
+    async def test_spawn_inherits_audit_sink_and_metrics(self):
+        audit = NullSink()
+        metrics = _StubMetrics()
+        dyn = _make_dyn()
+        rt = Runtime(supervisor=Supervisor("root", children=[dyn]), metrics=metrics)
+        rt._audit_sink = audit
+        await rt.start()
+        try:
+            await rt.spawn("workers", EchoAgent, name="echo-1")
+            child = dyn._dynamic_children["echo-1"]
+            assert child._audit_sink is audit
+            assert child._metrics is metrics
         finally:
             await rt.stop()
 

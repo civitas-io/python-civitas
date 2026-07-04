@@ -603,6 +603,8 @@ class DynamicSupervisor(AgentProcess):
         agent.llm = self.llm
         agent.tools = self.tools
         agent.store = self.store
+        agent._audit_sink = self._audit_sink
+        agent._metrics = self._metrics
         agent.config = config
 
         if self._registry is not None:
