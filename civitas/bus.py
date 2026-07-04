@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from civitas.audit.types import AuditEvent, AuditSink
 from civitas.errors import MessageRoutingError, MessageValidationError
-from civitas.messages import SYSTEM_MESSAGE_TYPES, Message
+from civitas.messages import SYSTEM_MESSAGE_TYPES, Message, _new_span_id
 from civitas.observability.tracer import Tracer
 from civitas.registry import Registry, RoutingEntry
 from civitas.serializer import Serializer
@@ -15,6 +16,8 @@ from civitas.transport import Transport
 
 if TYPE_CHECKING:
     from civitas.process import AgentProcess
+
+logger = logging.getLogger(__name__)
 
 
 class MessageBus:
@@ -43,6 +46,7 @@ class MessageBus:
         self._serializer = serializer
         self._tracer = tracer
         self._audit_sink = audit_sink
+        self._local_agents: dict[str, AgentProcess] = {}
 
     async def setup_agent(self, agent: AgentProcess) -> None:
         """Subscribe the transport to deliver messages to an agent's mailbox."""
@@ -55,7 +59,47 @@ class MessageBus:
             finally:
                 span.end()
 
+        self._local_agents[agent.name] = agent
         await self._transport.subscribe(agent.name, _on_message_received)
+
+    async def teardown_agent(self, name: str) -> None:
+        """Unsubscribe an agent and fail any messages still bound to it (R1 · D9).
+
+        Called when a dynamically spawned child is terminated so that callers do
+        not hang. Idempotent — a repeat call for an already-torn-down agent is a
+        no-op. Steps: (a) unsubscribe the transport; (b) drain the child's mailbox,
+        answering buffered request-reply messages with an error reply so pending
+        ``ask()`` callers fail fast instead of waiting for their timeout, and
+        dropping fire-and-forget messages with a log line.
+        """
+        await self._transport.unsubscribe(name)
+
+        agent = self._local_agents.pop(name, None)
+        if agent is None:
+            return
+
+        for message in agent._mailbox.drain():
+            if message.correlation_id is not None and (message.reply_to or message.sender):
+                error_reply = Message(
+                    type="reply",
+                    sender=name,
+                    recipient=message.reply_to or message.sender,
+                    payload={"status": "error", "error": f"agent '{name}' was terminated"},
+                    correlation_id=message.correlation_id,
+                    trace_id=message.trace_id,
+                    span_id=_new_span_id(),
+                    parent_span_id=message.span_id,
+                )
+                try:
+                    await self.route(error_reply)
+                except MessageRoutingError:
+                    logger.warning(
+                        "teardown_agent(%r): could not deliver error reply for %r",
+                        name,
+                        message.type,
+                    )
+            else:
+                logger.info("teardown_agent(%r): dropping buffered message %r", name, message.type)
 
     def _validate_message_type(self, message: Message) -> None:
         """Raise MessageValidationError for unknown _agency.* message types."""

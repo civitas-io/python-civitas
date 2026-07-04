@@ -9,6 +9,7 @@ import random
 import time
 from collections import deque
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
@@ -495,6 +496,19 @@ class RestartMode(Enum):
     NEVER = "never"
 
 
+@dataclass
+class _ChildRec:
+    """Bookkeeping for one dynamic child (R1).
+
+    ``acknowledged`` is True once an ``ok`` spawn reply has been sent — it gates
+    whether a later terminal outcome notifies the spawner (D6).
+    """
+
+    agent: AgentProcess
+    task: asyncio.Task[None]
+    acknowledged: bool = False
+
+
 class DynamicSupervisor(AgentProcess):
     """Dynamic supervisor — starts empty, children added at runtime via spawn().
 
@@ -525,7 +539,7 @@ class DynamicSupervisor(AgentProcess):
         self._ds_restart_window = restart_window
 
         # Live child tracking
-        self._dynamic_children: dict[str, AgentProcess] = {}
+        self._dynamic_children: dict[str, _ChildRec] = {}
         self._child_tasks: dict[str, asyncio.Task[None]] = {}
         self._spawner_names: dict[str, str] = {}
         self._child_restart_counts: dict[str, int] = {}
@@ -566,6 +580,7 @@ class DynamicSupervisor(AgentProcess):
         child_name: str = payload.get("name", "")
         config: dict[str, Any] = payload.get("config", {})
         spawner: str = payload.get("spawner", "")
+        wait: bool = bool(payload.get("wait", True))
 
         if child_name in self._dynamic_children:
             return self.reply(
@@ -612,30 +627,51 @@ class DynamicSupervisor(AgentProcess):
         if self._bus is not None:
             await self._bus.setup_agent(agent)
 
-        await agent._start()
-
-        self._dynamic_children[child_name] = agent
-        self._spawner_names[child_name] = spawner
+        # Admission — count the attempt now, never refund it (D10). Everything from
+        # here to the reply is one synchronous block (no await before an ok reply)
+        # so acknowledged is set before the child task can run (§9.6).
         self._total_spawns += 1
+        task = agent._start_nowait()
+        self._dynamic_children[child_name] = _ChildRec(agent=agent, task=task)
+        self._spawner_names[child_name] = spawner
+        self._child_tasks[child_name] = task
+        task.add_done_callback(lambda t: self._on_child_done(child_name, t))
+        logger.info("[%s] spawned '%s' (%s, wait=%s)", self.name, child_name, class_path, wait)
 
-        if agent._task is not None:
-            self._child_tasks[child_name] = agent._task
+        if not wait:
+            self._dynamic_children[child_name].acknowledged = True
+            return self.reply(
+                {"status": "ok", "name": child_name, "ready": False, "state": agent._status.value}
+            )
 
-            def _make_cb(n: str) -> Callable[[asyncio.Task[None]], None]:
-                def _cb(t: asyncio.Task[None]) -> None:
-                    self._on_child_done(n, t)
+        # wait=True — race readiness against task-completion, then inspect status (D4).
+        running = agent._running_event
+        if running is not None:
+            ready = asyncio.ensure_future(running.wait())
+            try:
+                await asyncio.wait({ready, task}, return_when=asyncio.FIRST_COMPLETED)
+            finally:
+                ready.cancel()
 
-                return _cb
+        if agent._status in (ProcessStatus.RUNNING, ProcessStatus.SUSPENDED):
+            self._dynamic_children[child_name].acknowledged = True
+            return self.reply(
+                {"status": "ok", "name": child_name, "ready": True, "state": agent._status.value}
+            )
 
-            agent._task.add_done_callback(_make_cb(child_name))
-
-        logger.info("[%s] spawned '%s' (%s)", self.name, child_name, class_path)
-        return self.reply({"status": "ok", "name": child_name})
+        # Start failed — clean up inline before replying so the post-state is
+        # deterministic (B2); idempotent with the done-callback path (D7).
+        phase = agent._start_phase
+        err = None if task.cancelled() else task.exception()
+        await self._terminal_cleanup(child_name)
+        return self.reply(
+            {"status": "error", "name": child_name, "phase": phase, "error": repr(err)}
+        )
 
     async def _handle_despawn(self, message: Message) -> Message | None:
         name = message.payload.get("name", "")
-        agent = self._dynamic_children.get(name)
-        if agent is None:
+        rec = self._dynamic_children.get(name)
+        if rec is None:
             return self.reply({"status": "error", "reason": f"no dynamic agent '{name}'"})
 
         task = self._child_tasks.get(name)
@@ -658,9 +694,10 @@ class DynamicSupervisor(AgentProcess):
         drain = message.payload.get("drain", "current")
         timeout = float(message.payload.get("timeout", 30.0))
 
-        agent = self._dynamic_children.get(name)
-        if agent is None:
+        rec = self._dynamic_children.get(name)
+        if rec is None:
             return self.reply({"status": "error", "reason": f"no dynamic agent '{name}'"})
+        agent = rec.agent
 
         task = self._child_tasks.get(name)
 
@@ -709,10 +746,20 @@ class DynamicSupervisor(AgentProcess):
         t.add_done_callback(self._pending_child_tasks.discard)
 
     async def _handle_child_exit(self, name: str, exc: Exception | None) -> None:
-        if name not in self._dynamic_children:
-            return  # already removed by stop/despawn handler
+        rec = self._dynamic_children.get(name)
+        if rec is None:
+            return  # already removed by stop/despawn or an inline terminal cleanup
 
         crashed = exc is not None
+
+        # D8: a child that crashed without ever entering the dispatch loop failed
+        # during start — terminal, never restarted. Notify the spawner only if an
+        # ok reply was already sent (D6); a wait=True error reply is its own signal.
+        if crashed and not rec.agent._reached_loop:
+            await self._terminal_cleanup(name)
+            if rec.acknowledged:
+                await self._notify_spawner(name, f"{rec.agent._start_phase}: {exc!r}")
+            return
 
         if self._restart_mode == RestartMode.NEVER:
             await self._clear_child_marker(name)
@@ -751,9 +798,7 @@ class DynamicSupervisor(AgentProcess):
             )
             return
 
-        agent = self._dynamic_children.get(name)
-        if agent is None:
-            return
+        agent = rec.agent
 
         logger.info(
             "[%s] restarting '%s' (attempt %d/%d)",
@@ -769,28 +814,34 @@ class DynamicSupervisor(AgentProcess):
         await agent._start()
 
         if agent._task is not None:
+            rec.task = agent._task
             self._child_tasks[name] = agent._task
-
-            def _make_cb(n: str) -> Callable[[asyncio.Task[None]], None]:
-                def _cb(t: asyncio.Task[None]) -> None:
-                    self._on_child_done(n, t)
-
-                return _cb
-
-            agent._task.add_done_callback(_make_cb(name))
+            agent._task.add_done_callback(lambda t: self._on_child_done(name, t))
 
     def _remove_child(self, name: str) -> None:
         self._dynamic_children.pop(name, None)
         self._child_tasks.pop(name, None)
+
+    async def _terminal_cleanup(self, name: str) -> None:
+        """Deregister, tear down the bus subscription, and drop a child (D7).
+
+        Idempotent — safe to call inline on a wait=True start failure and again
+        from the done-callback path; a second call finds nothing left to do.
+        """
+        if self._registry is not None:
+            self._registry.deregister(name)
+        if self._bus is not None:
+            await self._bus.teardown_agent(name)
+        self._remove_child(name)
 
     async def _clear_child_marker(self, name: str) -> None:
         """Clear a child's durable suspend marker on permanent removal (S8).
 
         Prevents a future agent reusing this name from resurrecting suspended.
         """
-        agent = self._dynamic_children.get(name)
-        if agent is not None:
-            await agent._clear_suspend_marker()
+        rec = self._dynamic_children.get(name)
+        if rec is not None:
+            await rec.agent._clear_suspend_marker()
 
     async def _notify_spawner(self, child_name: str, reason: str) -> None:
         spawner_name = self._spawner_names.get(child_name)
@@ -808,7 +859,7 @@ class DynamicSupervisor(AgentProcess):
 
     def all_dynamic_agents(self) -> list[AgentProcess]:
         """Return the currently live dynamic children."""
-        return list(self._dynamic_children.values())
+        return [rec.agent for rec in self._dynamic_children.values()]
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -816,7 +867,7 @@ class DynamicSupervisor(AgentProcess):
 
     async def on_stop(self) -> None:
         """Cancel all dynamic children on shutdown."""
-        for name, _agent in list(self._dynamic_children.items()):
+        for name, _rec in list(self._dynamic_children.items()):
             task = self._child_tasks.get(name)
             if task is not None and not task.done():
                 task.cancel()

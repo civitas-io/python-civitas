@@ -188,6 +188,16 @@ class NATSTransport:
 
         self._subscriptions[address] = sub
 
+    async def unsubscribe(self, address: str) -> None:
+        """Remove a handler and best-effort unsubscribe the NATS subscription."""
+        self._handlers.pop(address, None)
+        sub = self._subscriptions.pop(address, None)
+        if sub is not None:
+            try:
+                await sub.unsubscribe()
+            except Exception as exc:  # noqa: BLE001 — best-effort cleanup
+                logger.warning("[NATSTransport] unsubscribe(%r) failed: %s", address, exc)
+
     async def publish(self, address: str, data: bytes) -> None:
         """Publish a message to an address (fire-and-forget).
 

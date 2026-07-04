@@ -21,6 +21,7 @@ from civitas.errors import ErrorAction
 from civitas.messages import Message
 from civitas.plugins.state import InMemoryStateStore
 from civitas.process import Mailbox, ProcessStatus
+from civitas.supervisor import _ChildRec
 from tests.conftest import EchoAgent, wait_for, wait_for_status
 
 MARKER = AgentProcess._SUSPEND_STATE_KEY
@@ -569,10 +570,12 @@ async def test_dynamic_supervisor_clear_child_marker():
     store.get.return_value = None
     agent.store = store
     agent.state[MARKER] = {"reason": "r", "since": 1.0, "approver": None}
-    dyn._dynamic_children["w1"] = agent
+    task = asyncio.create_task(asyncio.sleep(0))
+    dyn._dynamic_children["w1"] = _ChildRec(agent=agent, task=task)
 
     await dyn._clear_child_marker("w1")
     assert MARKER not in agent.state
+    await task
 
 
 async def test_despawn_clears_persisted_marker():
@@ -585,7 +588,7 @@ async def test_despawn_clears_persisted_marker():
     await rt.start()
     try:
         await rt.spawn("workers", EchoAgent, name="echo-1")
-        agent = dyn._dynamic_children["echo-1"]
+        agent = dyn._dynamic_children["echo-1"].agent
         await rt.suspend("echo-1", reason="hitl")
         await wait_for_status(agent, ProcessStatus.SUSPENDED)
         assert MARKER in agent.state

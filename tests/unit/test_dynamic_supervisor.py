@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import textwrap
 from pathlib import Path
 from typing import Any
@@ -9,11 +10,11 @@ from typing import Any
 import pytest
 
 from civitas import AgentProcess, DynamicSupervisor, NullSink, Runtime, Supervisor
-from civitas.errors import SpawnError
+from civitas.errors import ErrorAction, SpawnError
 from civitas.messages import Message
 from civitas.process import ProcessStatus
 from civitas.supervisor import RestartMode
-from tests.conftest import EchoAgent, wait_for
+from tests.conftest import EchoAgent, wait_for, wait_for_status
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -310,7 +311,7 @@ class TestRuntimeSpawn:
         await rt.start()
         try:
             await rt.spawn("workers", EchoAgent, name="echo-1")
-            child = dyn._dynamic_children["echo-1"]
+            child = dyn._dynamic_children["echo-1"].agent
             assert child._audit_sink is audit
             assert child._metrics is metrics
         finally:
@@ -512,7 +513,7 @@ class TestRestartSemantics:
         await rt.start()
         try:
             await rt.spawn("workers", CleanExitAgent, name="clean-1")
-            agent = dyn._dynamic_children["clean-1"]
+            agent = dyn._dynamic_children["clean-1"].agent
             # Trigger clean exit by sending a message
             await agent._mailbox.put(Message(type="go", sender="_test", recipient="clean-1"))
             # Wait for exit and removal
@@ -545,7 +546,7 @@ class TestRestartSemantics:
             assert reply.payload["status"] == "ok"
 
             # Trigger crash by sending messages — agent crashes immediately on handle()
-            agent = dyn._dynamic_children["crash-1"]
+            agent = dyn._dynamic_children["crash-1"].agent
             for _ in range(5):
                 await agent._mailbox.put(Message(type="go", sender="_test", recipient="crash-1"))
 
@@ -618,3 +619,464 @@ def test_print_tree_shows_dyn_label():
     tree = rt.print_tree()
     assert "[dyn]" in tree
     assert "workers" in tree
+
+
+# ---------------------------------------------------------------------------
+# R1 non-blocking spawn — helper agents, gates, fixtures
+# ---------------------------------------------------------------------------
+
+# Module-level maps let spawned agents (created deep inside the supervisor) report
+# lifecycle phases and be gated mid-on_start without passing non-serializable
+# objects through the spawn config.
+_LIFECYCLE: dict[str, list[Any]] = {}
+_START_GATES: dict[str, asyncio.Event] = {}
+
+_CLASS = "tests.unit.test_dynamic_supervisor.LifecycleAgent"
+
+
+@pytest.fixture(autouse=True)
+def _reset_r1_state():
+    _LIFECYCLE.clear()
+    _START_GATES.clear()
+    yield
+    _LIFECYCLE.clear()
+    _START_GATES.clear()
+
+
+class LifecycleAgent(AgentProcess):
+    """Config-driven agent that records start-lifecycle phases into _LIFECYCLE.
+
+    config keys: ``fail_on`` ("restore"|"on_start"), ``throw_on_stop`` (bool),
+    ``gate`` (block in on_start until ``_START_GATES[name]`` is set).
+    """
+
+    async def _restore_state(self) -> None:
+        _LIFECYCLE.setdefault(self.name, []).append("restore")
+        if self.config.get("fail_on") == "restore":
+            raise RuntimeError("restore boom")
+        await super()._restore_state()
+
+    async def on_start(self) -> None:
+        if self.config.get("gate"):
+            gate = _START_GATES.get(self.name)
+            if gate is not None:
+                await gate.wait()
+        _LIFECYCLE.setdefault(self.name, []).append("on_start")
+        if self.config.get("fail_on") == "on_start":
+            raise RuntimeError("on_start boom")
+
+    async def on_stop(self) -> None:
+        _LIFECYCLE.setdefault(self.name, []).append("on_stop")
+        if self.config.get("throw_on_stop"):
+            raise RuntimeError("on_stop boom too")
+
+    async def handle(self, message: Message) -> Message | None:
+        _LIFECYCLE.setdefault(self.name, []).append(("handle", message.payload.get("seq")))
+        return self.reply({"echo": message.payload})
+
+
+class SuspendedCrashAgent(AgentProcess):
+    """Escalates on any dispatched message — used to crash a SUSPENDED child."""
+
+    async def handle(self, message: Message) -> Message | None:
+        raise RuntimeError("crash while suspended")
+
+    async def on_error(self, error: Exception, message: Message) -> ErrorAction:
+        return ErrorAction.ESCALATE
+
+
+async def _spawn_via_ask(
+    rt: Runtime,
+    name: str,
+    *,
+    wait: bool,
+    config: dict[str, Any] | None = None,
+    spawner: str = "",
+    class_path: str = _CLASS,
+) -> Message:
+    """Send a civitas.dynamic.spawn message directly so spawner/wait can be set."""
+    return await rt.ask(
+        "workers",
+        {
+            "class_path": class_path,
+            "name": name,
+            "config": config or {},
+            "spawner": spawner,
+            "wait": wait,
+        },
+        message_type="civitas.dynamic.spawn",
+    )
+
+
+# ---------------------------------------------------------------------------
+# R1 — reply timing / backward compatibility
+# ---------------------------------------------------------------------------
+
+
+class TestR1ReplyTiming:
+    @pytest.mark.asyncio
+    async def test_wait_true_success_reply_ready_and_running(self):
+        dyn = _make_dyn()
+        rt = _build_runtime(dyn)
+        await rt.start()
+        try:
+            reply = await _spawn_via_ask(rt, "w1", wait=True, class_path="tests.conftest.EchoAgent")
+            assert reply.payload["status"] == "ok"
+            assert reply.payload["ready"] is True
+            assert reply.payload["state"] == "RUNNING"
+            echo = await rt.ask("w1", {"msg": "hi"}, timeout=3.0)
+            assert echo.payload["echo"]["msg"] == "hi"
+        finally:
+            await rt.stop()
+
+    @pytest.mark.asyncio
+    async def test_wait_false_success_reply_not_ready(self):
+        dyn = _make_dyn()
+        rt = _build_runtime(dyn)
+        await rt.start()
+        try:
+            _START_GATES["gw"] = asyncio.Event()
+            reply = await _spawn_via_ask(rt, "gw", wait=False, config={"gate": True})
+            assert reply.payload["status"] == "ok"
+            assert reply.payload["ready"] is False
+            agent = dyn._dynamic_children["gw"].agent
+            assert agent.status == ProcessStatus.INITIALIZING
+            _START_GATES["gw"].set()
+            await wait_for_status(agent, ProcessStatus.RUNNING, timeout=3.0)
+        finally:
+            await rt.stop()
+
+    @pytest.mark.asyncio
+    async def test_wait_false_buffered_asks_resolve_fifo(self):
+        dyn = _make_dyn()
+        rt = _build_runtime(dyn)
+        await rt.start()
+        try:
+            _START_GATES["fifo"] = asyncio.Event()
+            reply = await _spawn_via_ask(rt, "fifo", wait=False, config={"gate": True})
+            assert reply.payload["ready"] is False
+            tasks = []
+            for seq in range(3):
+                tasks.append(asyncio.create_task(rt.ask("fifo", {"seq": seq}, timeout=5.0)))
+                await asyncio.sleep(0.02)
+            _START_GATES["fifo"].set()
+            replies = await asyncio.gather(*tasks)
+            assert [r.payload["echo"]["seq"] for r in replies] == [0, 1, 2]
+            handled = [x for x in _LIFECYCLE["fifo"] if isinstance(x, tuple)]
+            assert handled == [("handle", 0), ("handle", 1), ("handle", 2)]
+        finally:
+            await rt.stop()
+
+    @pytest.mark.asyncio
+    async def test_spawn_nowait_alias_returns_before_on_start(self):
+        dyn = _make_dyn()
+        rt = _build_runtime(dyn)
+        await rt.start()
+        try:
+            _START_GATES["nw"] = asyncio.Event()
+            name = await rt.spawn_nowait("workers", LifecycleAgent, "nw", config={"gate": True})
+            assert name == "nw"
+            agent = dyn._dynamic_children["nw"].agent
+            assert agent.status == ProcessStatus.INITIALIZING
+            _START_GATES["nw"].set()
+            await wait_for_status(agent, ProcessStatus.RUNNING, timeout=3.0)
+        finally:
+            await rt.stop()
+
+    @pytest.mark.asyncio
+    async def test_wait_true_suspended_marker_reply_state_suspended(self):
+        dyn = _make_dyn()
+        rt = _build_runtime(dyn)
+        await rt.start()
+        try:
+            await rt._state_store.set(
+                "susp", {AgentProcess._SUSPEND_STATE_KEY: {"reason": "seed", "since": 0.0}}
+            )
+            reply = await _spawn_via_ask(
+                rt, "susp", wait=True, class_path="tests.conftest.EchoAgent"
+            )
+            assert reply.payload["status"] == "ok"
+            assert reply.payload["ready"] is True
+            assert reply.payload["state"] == "SUSPENDED"
+            agent = dyn._dynamic_children["susp"].agent
+            assert agent.status == ProcessStatus.SUSPENDED
+            assert agent._reached_loop is True
+        finally:
+            await rt.stop()
+
+
+# ---------------------------------------------------------------------------
+# R1 — failure semantics
+# ---------------------------------------------------------------------------
+
+
+class TestR1FailureSemantics:
+    @pytest.mark.asyncio
+    async def test_wait_true_on_start_failure_error_reply_and_cleanup(self):
+        recorder = TerminationRecorder("orchestrator")
+        dyn = _make_dyn()
+        rt = Runtime(supervisor=Supervisor("root", children=[recorder, dyn]))
+        await rt.start()
+        try:
+            reply = await _spawn_via_ask(
+                rt, "f", wait=True, config={"fail_on": "on_start"}, spawner="orchestrator"
+            )
+            assert reply.payload["status"] == "error"
+            assert reply.payload["phase"] == "on_start"
+            assert "on_start boom" in reply.payload["error"]
+            # Cleaned up before the reply is observed (B2/D7).
+            assert "f" not in dyn._dynamic_children
+            assert not rt._registry.has("f")
+            assert "f" not in rt._transport._handlers
+            # wait=True failure reply IS the notification — no on_child_terminated (D6).
+            assert recorder.terminated == []
+            # on_stop ran on on_start failure; restore-phase happened first.
+            assert _LIFECYCLE["f"] == ["restore", "on_start", "on_stop"]
+        finally:
+            await rt.stop()
+
+    @pytest.mark.asyncio
+    async def test_wait_false_on_start_failure_fails_pending_ask_and_notifies(
+        self, caplog: pytest.LogCaptureFixture
+    ):
+        recorder = TerminationRecorder("orchestrator")
+        dyn = _make_dyn()
+        rt = Runtime(supervisor=Supervisor("root", children=[recorder, dyn]))
+        await rt.start()
+        try:
+            _START_GATES["c1"] = asyncio.Event()
+            reply = await _spawn_via_ask(
+                rt,
+                "c1",
+                wait=False,
+                config={"gate": True, "fail_on": "on_start"},
+                spawner="orchestrator",
+            )
+            assert reply.payload["ready"] is False
+            ask_task = asyncio.create_task(rt.ask("c1", {"q": 1}, timeout=5.0))
+            await asyncio.sleep(0.05)
+            await rt.send("c1", {"fire": 1})
+            await asyncio.sleep(0.05)
+            with caplog.at_level("INFO", logger="civitas.bus"):
+                _START_GATES["c1"].set()
+                pending = await asyncio.wait_for(ask_task, timeout=3.0)
+            assert pending.payload["status"] == "error"
+            await wait_for(
+                lambda: any(n == "c1" for n, _ in recorder.terminated),
+                timeout=3.0,
+                msg="terminated notification",
+            )
+            assert recorder.terminated[0][1].startswith("on_start:")
+            assert any("dropping buffered message" in r.message for r in caplog.records)
+        finally:
+            await rt.stop()
+
+    @pytest.mark.asyncio
+    async def test_restore_failure_skips_on_stop(self):
+        recorder = TerminationRecorder("orchestrator")
+        dyn = _make_dyn()
+        rt = Runtime(supervisor=Supervisor("root", children=[recorder, dyn]))
+        await rt.start()
+        try:
+            reply = await _spawn_via_ask(
+                rt, "rf", wait=True, config={"fail_on": "restore"}, spawner="orchestrator"
+            )
+            assert reply.payload["status"] == "error"
+            assert reply.payload["phase"] == "restore"
+            assert _LIFECYCLE["rf"] == ["restore"]
+            assert "rf" not in dyn._dynamic_children
+            assert not rt._registry.has("rf")
+            assert recorder.terminated == []
+        finally:
+            await rt.stop()
+
+    @pytest.mark.asyncio
+    async def test_restore_failure_wait_false_notifies_restore_phase(self):
+        recorder = TerminationRecorder("orchestrator")
+        dyn = _make_dyn()
+        rt = Runtime(supervisor=Supervisor("root", children=[recorder, dyn]))
+        await rt.start()
+        try:
+            await _spawn_via_ask(
+                rt, "rf2", wait=False, config={"fail_on": "restore"}, spawner="orchestrator"
+            )
+            await wait_for(
+                lambda: any(n == "rf2" for n, _ in recorder.terminated),
+                timeout=3.0,
+                msg="terminated notification",
+            )
+            assert recorder.terminated[0][1].startswith("restore:")
+            assert _LIFECYCLE["rf2"] == ["restore"]
+        finally:
+            await rt.stop()
+
+    @pytest.mark.asyncio
+    async def test_cancel_during_on_start_no_restart_no_notify(self):
+        recorder = TerminationRecorder("orchestrator")
+        dyn = _make_dyn(restart="permanent")
+        rt = Runtime(supervisor=Supervisor("root", children=[recorder, dyn]))
+        await rt.start()
+        try:
+            _START_GATES["cx"] = asyncio.Event()
+            await _spawn_via_ask(
+                rt, "cx", wait=False, config={"gate": True}, spawner="orchestrator"
+            )
+            rec = dyn._dynamic_children["cx"]
+            rec.task.cancel()
+            await asyncio.gather(rec.task, return_exceptions=True)
+            await asyncio.sleep(0.05)
+            assert recorder.terminated == []
+            assert dyn._child_restart_counts.get("cx", 0) == 0
+        finally:
+            await rt.stop()
+
+    @pytest.mark.asyncio
+    async def test_cancel_during_running_no_restart_no_notify(self):
+        recorder = TerminationRecorder("orchestrator")
+        dyn = _make_dyn(restart="permanent")
+        rt = Runtime(supervisor=Supervisor("root", children=[recorder, dyn]))
+        await rt.start()
+        try:
+            reply = await _spawn_via_ask(
+                rt, "cr", wait=True, spawner="orchestrator", class_path="tests.conftest.EchoAgent"
+            )
+            assert reply.payload["ready"] is True
+            rec = dyn._dynamic_children["cr"]
+            rec.task.cancel()
+            await asyncio.gather(rec.task, return_exceptions=True)
+            await asyncio.sleep(0.05)
+            assert recorder.terminated == []
+            assert dyn._child_restart_counts.get("cr", 0) == 0
+        finally:
+            await rt.stop()
+
+    @pytest.mark.asyncio
+    async def test_d8_init_failure_is_terminal_no_restart(self):
+        dyn = _make_dyn(restart="permanent")
+        rt = _build_runtime(dyn)
+        await rt.start()
+        try:
+            reply = await _spawn_via_ask(rt, "t", wait=True, config={"fail_on": "on_start"})
+            assert reply.payload["status"] == "error"
+            assert "t" not in dyn._dynamic_children
+            assert dyn._child_restart_counts.get("t", 0) == 0
+        finally:
+            await rt.stop()
+
+    @pytest.mark.asyncio
+    async def test_d8_post_running_crash_restarts(self):
+        dyn = _make_dyn(restart="permanent", max_restarts=5)
+        rt = _build_runtime(dyn)
+        await rt.start()
+        try:
+            reply = await _spawn_via_ask(
+                rt,
+                "crash-1",
+                wait=True,
+                class_path="tests.unit.test_dynamic_supervisor.CrashAgent",
+            )
+            assert reply.payload["ready"] is True
+            agent = dyn._dynamic_children["crash-1"].agent
+            await agent._mailbox.put(Message(type="go", sender="_t", recipient="crash-1"))
+            await wait_for(
+                lambda: dyn._child_restart_counts.get("crash-1", 0) >= 1,
+                timeout=3.0,
+                msg="restart after post-RUNNING crash",
+            )
+        finally:
+            await rt.stop()
+
+    @pytest.mark.asyncio
+    async def test_d8_suspended_then_crash_restarts(self):
+        dyn = _make_dyn(restart="permanent", max_restarts=5)
+        rt = _build_runtime(dyn)
+        await rt.start()
+        try:
+            await rt._state_store.set(
+                "sc", {AgentProcess._SUSPEND_STATE_KEY: {"reason": "seed", "since": 0.0}}
+            )
+            reply = await _spawn_via_ask(
+                rt,
+                "sc",
+                wait=True,
+                class_path="tests.unit.test_dynamic_supervisor.SuspendedCrashAgent",
+            )
+            assert reply.payload["state"] == "SUSPENDED"
+            agent = dyn._dynamic_children["sc"].agent
+            assert agent._reached_loop is True
+            await agent._mailbox.put(Message(type="go", sender="_t", recipient="sc", priority=1))
+            await wait_for(
+                lambda: dyn._child_restart_counts.get("sc", 0) >= 1,
+                timeout=3.0,
+                msg="restart after suspended crash",
+            )
+        finally:
+            await rt.stop()
+
+    @pytest.mark.asyncio
+    async def test_d12_throwing_on_stop_is_swallowed(self):
+        dyn = _make_dyn()
+        rt = _build_runtime(dyn)
+        await rt.start()
+        try:
+            reply = await _spawn_via_ask(
+                rt, "d12", wait=True, config={"fail_on": "on_start", "throw_on_stop": True}
+            )
+            assert reply.payload["status"] == "error"
+            assert reply.payload["phase"] == "on_start"
+            assert "on_start boom" in reply.payload["error"]
+            assert "on_stop boom" not in reply.payload["error"]
+            assert _LIFECYCLE["d12"] == ["restore", "on_start", "on_stop"]
+        finally:
+            await rt.stop()
+
+    @pytest.mark.asyncio
+    async def test_d7_double_terminal_cleanup_is_idempotent(self):
+        dyn = _make_dyn()
+        rt = _build_runtime(dyn)
+        await rt.start()
+        try:
+            reply = await _spawn_via_ask(rt, "idem", wait=True, config={"fail_on": "on_start"})
+            assert reply.payload["status"] == "error"
+            assert "idem" not in dyn._dynamic_children
+            assert not rt._registry.has("idem")
+            await dyn._terminal_cleanup("idem")
+            assert "idem" not in dyn._dynamic_children
+            assert not rt._registry.has("idem")
+        finally:
+            await rt.stop()
+
+
+# ---------------------------------------------------------------------------
+# R1 — accounting
+# ---------------------------------------------------------------------------
+
+
+class TestR1Accounting:
+    @pytest.mark.asyncio
+    async def test_max_total_spawns_not_refunded_on_failure(self):
+        dyn = _make_dyn(max_total_spawns=1)
+        rt = _build_runtime(dyn)
+        await rt.start()
+        try:
+            reply = await _spawn_via_ask(rt, "f1", wait=True, config={"fail_on": "on_start"})
+            assert reply.payload["status"] == "error"
+            assert dyn._total_spawns == 1
+            with pytest.raises(SpawnError, match="max_total_spawns"):
+                await rt.spawn("workers", EchoAgent, name="f2")
+        finally:
+            await rt.stop()
+
+    @pytest.mark.asyncio
+    async def test_max_children_slot_freed_after_failed_spawn(self):
+        dyn = _make_dyn(max_children=1)
+        rt = _build_runtime(dyn)
+        await rt.start()
+        try:
+            reply = await _spawn_via_ask(rt, "mc1", wait=True, config={"fail_on": "on_start"})
+            assert reply.payload["status"] == "error"
+            assert "mc1" not in dyn._dynamic_children
+            name = await rt.spawn("workers", EchoAgent, name="mc2")
+            assert name == "mc2"
+        finally:
+            await rt.stop()

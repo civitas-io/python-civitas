@@ -193,3 +193,90 @@ async def test_route_allows_application_message(components):
     assert received.type == "custom_type"
 
     await transport.stop()
+
+
+async def test_teardown_agent_unsubscribes(components):
+    """teardown_agent removes the transport handler for the agent."""
+    bus, transport, registry, _, _ = components
+    await transport.start()
+
+    agent = CollectorAgent("agent_a")
+    agent._bus = bus
+    registry.register("agent_a")
+    await bus.setup_agent(agent)
+    assert "agent_a" in transport._handlers
+
+    await bus.teardown_agent("agent_a")
+    assert "agent_a" not in transport._handlers
+
+    await transport.stop()
+
+
+async def test_teardown_agent_error_replies_to_buffered_request(components):
+    """A buffered request-reply message gets an error reply on teardown (D9)."""
+    bus, transport, registry, _, _ = components
+    await transport.start()
+
+    child = CollectorAgent("child")
+    caller = CollectorAgent("caller")
+    child._bus = bus
+    caller._bus = bus
+    registry.register("child")
+    registry.register("caller")
+    await bus.setup_agent(child)
+    await bus.setup_agent(caller)
+
+    await child._mailbox.put(
+        Message(
+            type="ask",
+            sender="caller",
+            recipient="child",
+            reply_to="caller",
+            correlation_id="corr-1",
+        )
+    )
+
+    await bus.teardown_agent("child")
+
+    reply = await caller._mailbox.get()
+    assert reply.payload["status"] == "error"
+    assert reply.correlation_id == "corr-1"
+
+    await transport.stop()
+
+
+async def test_teardown_agent_drops_fire_and_forget(components, caplog):
+    """A buffered fire-and-forget message is dropped and logged on teardown (D9)."""
+    bus, transport, registry, _, _ = components
+    await transport.start()
+
+    child = CollectorAgent("child")
+    child._bus = bus
+    registry.register("child")
+    await bus.setup_agent(child)
+
+    await child._mailbox.put(Message(type="fire", sender="x", recipient="child"))
+
+    with caplog.at_level("INFO", logger="civitas.bus"):
+        await bus.teardown_agent("child")
+
+    assert any("dropping buffered message" in r.message for r in caplog.records)
+
+    await transport.stop()
+
+
+async def test_teardown_agent_is_idempotent(components):
+    """Repeat teardown and teardown of an unknown name are safe no-ops (D9)."""
+    bus, transport, registry, _, _ = components
+    await transport.start()
+
+    child = CollectorAgent("child")
+    child._bus = bus
+    registry.register("child")
+    await bus.setup_agent(child)
+
+    await bus.teardown_agent("child")
+    await bus.teardown_agent("child")
+    await bus.teardown_agent("never-existed")
+
+    await transport.stop()

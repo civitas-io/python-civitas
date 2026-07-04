@@ -222,6 +222,15 @@ class ZMQTransport:
         self._handlers[address] = handler
         self._sub.subscribe(address.encode() + _TOPIC_SEP)
 
+    async def unsubscribe(self, address: str) -> None:
+        """Remove a handler and best-effort unsubscribe the SUB socket."""
+        self._handlers.pop(address, None)
+        if self._sub is not None:
+            try:
+                self._sub.unsubscribe(address.encode() + _TOPIC_SEP)
+            except zmq.ZMQError as exc:
+                logger.warning("[ZMQTransport] unsubscribe(%r) failed: %s", address, exc)
+
     async def publish(self, address: str, data: bytes) -> None:
         """Send a message to an address via PUB/SUB through the proxy.
 
