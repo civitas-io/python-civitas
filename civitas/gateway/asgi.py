@@ -6,8 +6,8 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
-from civitas.errors import MessageRoutingError
 from civitas.gateway.contracts import validate_request, validate_response
+from civitas.gateway.dispatch import DispatchResult, DispatchStatus, GatewayDispatcher
 from civitas.gateway.middleware import build_chain, load_middleware
 from civitas.gateway.openapi import build_spec, swagger_html
 from civitas.gateway.types import GatewayRequest, GatewayResponse, MiddlewareCallable
@@ -58,10 +58,12 @@ class GatewayASGI:
         gateway: HTTPGateway,
         route_table: RouteTable,
         config: GatewayConfig,
+        dispatcher: GatewayDispatcher | None = None,
     ) -> None:
         self._gateway = gateway
         self._route_table = route_table
         self._config = config
+        self._dispatcher = dispatcher or GatewayDispatcher(gateway, config.request_timeout)
 
         # Load global middleware from config at construction time
         self._middlewares: list[MiddlewareCallable] = []
@@ -215,33 +217,25 @@ class GatewayASGI:
                 if not valid:
                     return GatewayResponse(422, err or {})
 
-            result = await self._call_or_cast(entry.agent, entry.mode, payload, msg_type, trace_id)
-            if isinstance(result, GatewayResponse):
-                return result
-
-            # Response contract validation
-            reply_msg = result
-            if entry.response_schema is not None:
-                valid, err_msg = validate_response(entry.response_schema, reply_msg.payload)
-                if not valid:
-                    logger.error("Response validation failed for %s %s: %s", method, path, err_msg)
-                    return GatewayResponse(500, {"error": "response validation failed"})
-
-            if "error" in reply_msg.payload:
-                return GatewayResponse(400, reply_msg.payload)
-            return GatewayResponse(200, reply_msg.payload)
+            result = await self._dispatcher.dispatch(
+                recipient=entry.agent,
+                msg_type=msg_type,
+                payload=payload,
+                mode=entry.mode,
+                trace_id=trace_id,
+            )
+            return self._result_to_response(
+                result, response_schema=entry.response_schema, method=method, path=path
+            )
 
         # Default route fallback
         default = self._default_route(method, path, body)
         if default is not None:
             agent, mode, payload = default
-            result = await self._call_or_cast(agent, mode, payload, msg_type, trace_id)
-            if isinstance(result, GatewayResponse):
-                return result
-            reply_msg = result
-            if "error" in reply_msg.payload:
-                return GatewayResponse(400, reply_msg.payload)
-            return GatewayResponse(200, reply_msg.payload)
+            result = await self._dispatcher.dispatch(
+                recipient=agent, msg_type=msg_type, payload=payload, mode=mode, trace_id=trace_id
+            )
+            return self._result_to_response(result)
 
         return GatewayResponse(404, {"error": f"no route for {method} {path}"})
 
@@ -270,38 +264,33 @@ class GatewayASGI:
     # Dispatch helpers
     # ------------------------------------------------------------------
 
-    async def _call_or_cast(
+    def _result_to_response(
         self,
-        agent: str,
-        mode: str,
-        payload: dict[str, Any],
-        msg_type: str,
-        trace_id: str,
-    ) -> Any:
-        """Dispatch to agent. Returns Message on call, GatewayResponse(202) on cast."""
-        if mode == "cast":
-            try:
-                await self._gateway.send(agent, payload, message_type=msg_type)
-            except MessageRoutingError:
-                return GatewayResponse(404, {"error": f"agent '{agent}' not found"})
-            except Exception:
-                logger.exception("Gateway cast error to '%s'", agent)
-                return GatewayResponse(500, {"error": "internal error"})
+        result: DispatchResult,
+        response_schema: Any | None = None,
+        method: str = "",
+        path: str = "",
+    ) -> GatewayResponse:
+        """Map a normalized DispatchResult onto an HTTP GatewayResponse."""
+        if result.status is DispatchStatus.ACCEPTED:
             return GatewayResponse(202, {})
+        if result.status is DispatchStatus.NOT_FOUND:
+            return GatewayResponse(404, {"error": result.error})
+        if result.status is DispatchStatus.TIMEOUT:
+            return GatewayResponse(504, {"error": result.error})
+        if result.status is DispatchStatus.INTERNAL:
+            return GatewayResponse(500, {"error": result.error})
 
-        try:
-            reply = await self._gateway.ask(
-                agent, payload, message_type=msg_type, timeout=self._config.request_timeout
-            )
-        except MessageRoutingError:
-            return GatewayResponse(404, {"error": f"agent '{agent}' not found"})
-        except TimeoutError:
-            return GatewayResponse(504, {"error": "upstream timeout"})
-        except Exception:
-            logger.exception("Gateway call error to '%s'", agent)
-            return GatewayResponse(500, {"error": "internal error"})
+        # OK or AGENT_ERROR: validate the reply payload before mapping the error.
+        if response_schema is not None:
+            valid, err_msg = validate_response(response_schema, result.payload)
+            if not valid:
+                logger.error("Response validation failed for %s %s: %s", method, path, err_msg)
+                return GatewayResponse(500, {"error": "response validation failed"})
 
-        return reply
+        if result.status is DispatchStatus.AGENT_ERROR:
+            return GatewayResponse(400, result.payload)
+        return GatewayResponse(200, result.payload)
 
     # ------------------------------------------------------------------
     # OpenAPI / docs
