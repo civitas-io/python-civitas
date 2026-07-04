@@ -1719,10 +1719,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#v060-gateway-completion-planned" class="md-nav__link">
+  <a href="#v060-gateway-completion-released" class="md-nav__link">
     <span class="md-ellipsis">
       
-        v0.6.0 — Gateway Completion (Planned)
+        v0.6.0 — Gateway Completion (Released)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v070-spawn-maturation-gateway-auth-proposed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.7.0 — Spawn Maturation &amp; Gateway Auth (Proposed)
       
     </span>
   </a>
@@ -2510,10 +2521,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#v060-gateway-completion-planned" class="md-nav__link">
+  <a href="#v060-gateway-completion-released" class="md-nav__link">
     <span class="md-ellipsis">
       
-        v0.6.0 — Gateway Completion (Planned)
+        v0.6.0 — Gateway Completion (Released)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v070-spawn-maturation-gateway-auth-proposed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.7.0 — Spawn Maturation &amp; Gateway Auth (Proposed)
       
     </span>
   </a>
@@ -2811,8 +2833,14 @@
 </tr>
 <tr>
 <td>—</td>
-<td><a href="#v060--gateway-completion-planned">v0.6.0 — Gateway Completion</a></td>
-<td>⏳ Planned</td>
+<td><a href="#v060--gateway-completion-released">v0.6.0 — Gateway Completion</a></td>
+<td>✅ Released</td>
+<td>Jul 2026</td>
+</tr>
+<tr>
+<td>—</td>
+<td><a href="#v070--spawn-maturation--gateway-auth-proposed">v0.7.0 — Spawn Maturation &amp; Gateway Auth</a></td>
+<td>⏳ Proposed</td>
 <td>next</td>
 </tr>
 <tr>
@@ -2820,6 +2848,12 @@
 <td><a href="#deferred-backlog">Deferred Backlog</a></td>
 <td>🗂️ Tracked</td>
 <td>—</td>
+</tr>
+<tr>
+<td>—</td>
+<td>Self-Healing / Autonomous Remediation</td>
+<td>💡 Idea</td>
+<td>design/self-healing.md (draft)</td>
 </tr>
 <tr>
 <td>4</td>
@@ -2910,9 +2944,9 @@
 </tr>
 <tr>
 <td>M1.8</td>
-<td>Personal AI Assistant demo (Telegram gateway + skill agents)</td>
+<td><strong>Medicus self-healing hero demo</strong> (P0+P1) — flagship example; replaces the deferred Telegram assistant</td>
 <td>🟡 Medium</td>
-<td>⏸️ Deferred</td>
+<td>💡 Idea</td>
 </tr>
 </tbody>
 </table>
@@ -4367,8 +4401,8 @@ repo-ownership split in four places, all corrected in this pass:</p>
 Playground, Skills Gateway, CrewAI adapter full implementation, MySQL StateStore, Fabrica. All
 belong to civitas-contrib or the separate <code>civitas-forge</code> repo — revisit there, not here.</p>
 <hr />
-<h2 id="v060-gateway-completion-planned">v0.6.0 — Gateway Completion (Planned)<a class="headerlink" href="#v060-gateway-completion-planned" title="Permanent link">&para;</a></h2>
-<p><strong>Status: ⏳ Planned — next 0.x release</strong></p>
+<h2 id="v060-gateway-completion-released">v0.6.0 — Gateway Completion (Released)<a class="headerlink" href="#v060-gateway-completion-released" title="Permanent link">&para;</a></h2>
+<p><strong>Status: ✅ Released — 2026-07-04</strong> (<a href="https://github.com/civitas-io/python-civitas/releases/tag/v0.6.0">v0.6.0</a>, <a href="https://pypi.org/project/civitas/0.6.0/">PyPI</a>)</p>
 <p>The HTTP Gateway shipped in v0.4 with HTTP/1.1, HTTP/2, and HTTP/3 (QUIC), but several planned
 transport and middleware features were deferred across the gateway design docs
 (<a href="../design/http-gateway/"><code>http-gateway.md</code></a> Phases 3–4, <a href="../design/gateway-api-surface/"><code>gateway-api-surface.md</code></a>).
@@ -4448,6 +4482,69 @@ gateway stays a thin translate-and-route edge (<a href="../design/http-gateway/"
 A <strong>bus-native streaming primitive</strong> (agent-to-agent <code>stream()</code> across all transports) is also out of
 scope — G2/G3 use gateway-mediated streaming; the first-class version is tracked in the
 <a href="#deferred-backlog">Deferred Backlog</a> (see <a href="../design/gateway-streaming/"><code>gateway-streaming.md</code></a> §D1, Option B).</p>
+<hr />
+<h2 id="v070-spawn-maturation-gateway-auth-proposed">v0.7.0 — Spawn Maturation &amp; Gateway Auth (Proposed)<a class="headerlink" href="#v070-spawn-maturation-gateway-auth-proposed" title="Permanent link">&para;</a></h2>
+<p><strong>Status: ⏳ Proposed</strong> — scoped from the actionable <a href="#deferred-backlog">Deferred Backlog</a> items; not yet started.</p>
+<p>Theme: <em>finish what v0.6.0 deferred.</em> The largest coherent cluster is <strong>dynamic-spawn maturation</strong>
+(the #8 / #9 / #10 follow-ups + quotas + cross-process), plus completing <strong>gateway auth</strong> and one
+<strong>data-at-rest</strong> security item. This also lays groundwork for a possible future <strong>self-healing</strong>
+capability, which builds on supervision + dynamic spawn + telemetry (under investigation).</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Deliverable</th>
+<th>Priority</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>R1</td>
+<td><strong>Non-blocking dynamic spawn</strong> — reply once the message loop is created; run <code>on_start()</code> inside the task. Design-first (ordering + error-propagation tradeoffs).</td>
+<td>🔴 High</td>
+<td>GH #9 (from #8)</td>
+</tr>
+<tr>
+<td>R2</td>
+<td><strong><code>spawn_into(supervisor_name, …)</code></strong> — public cross-tree spawn helper (no hand-built internal messages)</td>
+<td>🟡 Medium</td>
+<td>GH #10</td>
+</tr>
+<tr>
+<td>R3</td>
+<td><strong>First-party JWT auth</strong> (opt-in <code>civitas[jwt]</code>) + <strong>mTLS</strong> client-cert auth</td>
+<td>🟡 Medium</td>
+<td>v0.6.0 §G5</td>
+</tr>
+<tr>
+<td>R4</td>
+<td><strong>Encrypted <code>StateStore</code> at rest</strong></td>
+<td>🟡 Medium</td>
+<td>design/security-hardening.md</td>
+</tr>
+<tr>
+<td>R5</td>
+<td><strong>Per-agent spawn quotas</strong> (beyond the global <code>max_children</code>)</td>
+<td>🟢 Low</td>
+<td>design/dynamic-spawning.md Non-Goals</td>
+</tr>
+<tr>
+<td>R6</td>
+<td><strong>Cross-process dynamic spawning</strong> (ZMQ / NATS)</td>
+<td>🟡 Medium</td>
+<td>design/dynamic-spawning.md Non-Goals</td>
+</tr>
+<tr>
+<td>R7</td>
+<td><strong>Bus-native streaming primitive</strong> (<code>AgentProcess.stream()</code> + <code>Transport.stream()</code>) — stretch</td>
+<td>🟢 Stretch</td>
+<td>design/gateway-streaming.md §D1 (Option B)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Suggested cut line:</strong> R1–R2 (spawn follow-ups) are the headline; R3 (auth) + R4 (encrypted store)
+are strong companions; R5–R7 are opportunistic and can slip to a later patch.</p>
 <hr />
 <h2 id="deferred-backlog">Deferred Backlog<a class="headerlink" href="#deferred-backlog" title="Permanent link">&para;</a></h2>
 <p><strong>Status: 🗂️ Tracked</strong> — the single index of everything deferred and not in v0.6.0. Items with a
@@ -4555,10 +4652,10 @@ nothing is lost. Owner column: <code>core</code> = python-civitas, else the targ
 <td>§Postgres StateStore</td>
 </tr>
 <tr>
-<td>Personal AI Assistant demo (Telegram gateway + skills)</td>
+<td><strong>Medicus self-healing hero demo</strong> (P0+P1: detect → diagnose → verified PR) — flagship example; supersedes the Telegram personal assistant (which drops to a minor gateway+skills sample)</td>
 <td>core</td>
-<td>⏸️</td>
-<td>§M1.8</td>
+<td>💡 idea</td>
+<td>design/medicus-demo.md</td>
 </tr>
 <tr>
 <td>Bus-native streaming primitive (<code>AgentProcess.stream()</code> + <code>Transport.stream()</code> across in-proc/ZMQ/NATS, agent-to-agent) — v0.6.0 ships gateway-mediated streaming instead</td>
@@ -4577,6 +4674,18 @@ nothing is lost. Owner column: <code>core</code> = python-civitas, else the targ
 <td>core</td>
 <td>⏸️ v0.x</td>
 <td>GH #9, #10</td>
+</tr>
+<tr>
+<td><strong>Self-healing / autonomous remediation agent</strong> — monitor (metrics/audit/OTEL/crash) → diagnose (LLM) → sandbox-verify → canary-deploy → auto-rollback, under staged autonomy + safety gates</td>
+<td>core (+ contrib tools)</td>
+<td>💡 idea</td>
+<td>design/self-healing.md</td>
+</tr>
+<tr>
+<td>Worker-level <strong>restart-with-new-code</strong> (blue-green drain) — the deploy primitive enabling self-healing &amp; near-zero-downtime code updates (Python has no safe in-place reload)</td>
+<td>core</td>
+<td>⏸️ v0.x</td>
+<td>design/self-healing.md</td>
 </tr>
 </tbody>
 </table>

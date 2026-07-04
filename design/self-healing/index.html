@@ -1,0 +1,2309 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="The production runtime for Python agents">
+      
+      
+      
+        <link rel="canonical" href="https://civitas-io.github.io/python-civitas/design/self-healing/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
+    
+    
+      
+        <title>Design: Self-Healing / Autonomous Remediation - civitas</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+  
+
+
+  
+  
+
+<script id="__analytics">function __md_analytics(){function e(){dataLayer.push(arguments)}window.dataLayer=window.dataLayer||[],e("js",new Date),e("config",""),document.addEventListener("DOMContentLoaded",(function(){document.forms.search&&document.forms.search.query.addEventListener("blur",(function(){this.value&&e("event","search",{search_term:this.value})}));document$.subscribe((function(){var t=document.forms.feedback;if(void 0!==t)for(var a of t.querySelectorAll("[type=submit]"))a.addEventListener("click",(function(a){a.preventDefault();var n=document.location.pathname,d=this.getAttribute("data-md-value");e("event","feedback",{page:n,data:d}),t.firstElementChild.disabled=!0;var r=t.querySelector(".md-feedback__note [data-md-value='"+d+"']");r&&(r.hidden=!1)})),t.hidden=!1})),location$.subscribe((function(t){e("config","",{page_path:t.pathname})}))}));var t=document.createElement("script");t.async=!0,t.src="https://www.googletagmanager.com/gtag/js?id=",document.getElementById("__analytics").insertAdjacentElement("afterEnd",t)}</script>
+  
+    <script>"undefined"!=typeof __md_analytics&&__md_analytics()</script>
+  
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#design-self-healing-autonomous-remediation" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="civitas" class="md-header__button md-logo" aria-label="civitas" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            civitas
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Design: Self-Healing / Autonomous Remediation
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/civitas-io/python-civitas" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    civitas-io/python-civitas
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting Started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../concepts/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../architecture/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../milestones/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Milestones
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../mcp-integration/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../rfc/0001-tool-retrieval/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  RFCs
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../contributing/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Contributing
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="civitas" class="md-nav__button md-logo" aria-label="civitas" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    civitas
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/civitas-io/python-civitas" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    civitas-io/python-civitas
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../supervision/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Supervision
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../messaging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Messaging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../transports/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Transports
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../topology/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Topology YAML
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FAQ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/process/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AgentProcess
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/genserver/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GenServer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/supervisor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Supervisor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/messages/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Message
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/bus/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MessageBus
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/transport/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Transport
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../milestones/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Milestones
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp-integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Integration (M3.4)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../genserver/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GenServer (M3.5)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../http-gateway/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP Gateway (M4.x)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gateway-api-surface/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gateway API Surface (M4.x)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RFCs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    RFCs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../rfc/0001-tool-retrieval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RFC 0001 — Selective Tool Retrieval
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#oracle-review-verdict-required-revisions-2026-07-04" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Oracle review — verdict &amp; required revisions (2026-07-04)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Oracle review — verdict &amp; required revisions (2026-07-04)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#must-fix-before-build-ready" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Must-fix before build-ready
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#motivation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Motivation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reconciliation-with-what-exists-honest-inventory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reconciliation with what exists (honest inventory)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-hard-truth-about-reload-otp-vs-python-decides-d1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The hard truth about "reload" (OTP vs Python) — decides D1
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture-the-self-healing-loop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture — the self-healing loop
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Architecture — the self-healing loop">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#where-each-piece-lives-d2-respects-boundarymd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where each piece lives (D2 — respects boundary.md)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#staged-autonomy-model-d3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Staged autonomy model (D3)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#safety-controls-non-negotiable-from-aiops-prior-art" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Safety controls (non-negotiable — from AIOps prior art)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#new-primitives-to-build-the-gaps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New primitives to build (the gaps)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decisions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#non-goals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-goals
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-phases-staged-safety-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation phases (staged, safety-first)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="design-self-healing-autonomous-remediation">Design: Self-Healing / Autonomous Remediation<a class="headerlink" href="#design-self-healing-autonomous-remediation" title="Permanent link">&para;</a></h1>
+<p><strong>Status:</strong> DRAFT — Oracle-reviewed 2026-07-04, revised per critique. Not approved; build P0–P1 only when greenlit.
+<strong>Author:</strong> Sisyphus
+<strong>Date:</strong> 2026-07-04
+<strong>Verdict (Oracle):</strong> feasible-with-caveats as an SRE copilot (P0–P1); the deploy primitive is
+<strong>orchestrator-first</strong>, in-runtime canary deferred. See "Oracle review" below.
+<strong>Reference demo:</strong> <a href="../medicus-demo/"><code>medicus-demo.md</code></a> — the P0+P1 hero demo (detect → diagnose → verified PR).</p>
+<blockquote>
+<p><strong>One-line framing:</strong> Civitas already gives agents <em>fault-tolerance</em> (crash → supervised restart).
+Self-healing extends that from "restart the same code" to "diagnose the fault, propose a code fix,
+verify it in a sandbox, and roll it out safely" — under <strong>staged autonomy</strong> with a human able to set
+exactly how much the system may do on its own. This is an SRE-agent capability layered on the
+runtime, <strong>not</strong> Erlang-style in-place hot code loading (which Python cannot do safely).</p>
+</blockquote>
+<hr />
+<h2 id="oracle-review-verdict-required-revisions-2026-07-04">Oracle review — verdict &amp; required revisions (2026-07-04)<a class="headerlink" href="#oracle-review-verdict-required-revisions-2026-07-04" title="Permanent link">&para;</a></h2>
+<p>Oracle pressure-tested this design against the runtime code. <strong>Verdict: feasible-with-caveats as an SRE
+copilot (P0–P1); <em>not as described</em> for the deploy primitive (D1/P2).</strong> Detect → diagnose →
+sandboxed-verified PR is buildable on existing seams; the "blue-green worker restart" primitive was
+wishful and is reframed here. <strong>This section supersedes any conflicting canary/blue-green framing
+below.</strong></p>
+<p><strong>D1 reframed — no in-runtime code swap, no overlapping canary:</strong>
+- In-process reload is impossible — every class load is <code>importlib.import_module</code> → <code>sys.modules</code> cache
+  (<code>supervisor.py:588</code>); restart reuses the <em>same instance</em> (<code>supervisor.py:332-348</code>). New code exists
+  only in a <strong>new OS process</strong>.
+- The registry forbids two same-named instances (<code>registry.py:119-120,191-195</code>) and the runtime
+  silently swallows the collision (<code>runtime.py:712-713</code>) → <strong>no overlapping canary</strong>; today's reality
+  is <strong>stop-then-start (brief downtime)</strong>.
+- Worker restart <strong>drops in-flight mailbox messages</strong> (<code>process.py:977</code>, <code>worker.py:202</code>), reply
+  routing breaks mid-cutover, retries aren't idempotent, and cross-process state continuity <strong>requires
+  a shared durable store</strong> (default is in-memory, <code>state.py:33</code>).
+- <strong>Resolution (Q1):</strong> deploy is <strong>orchestrator-first</strong> — civitas emits a typed <code>redeploy vX</code> request +
+  best-effort drain; k8s/systemd does the rollout + health-check + rollback. In-runtime canary
+  (versioned names + alias routing) is a <strong>large separate primitive, deferred / cut from v1</strong>.</p>
+<p><strong>Safety hardened (was necessary-but-naive):</strong>
+- <strong>Verification anchored to reality (D8):</strong> the failing test must be <strong>derived from the real signal</strong>
+  (reproduce the actual crash/trace/input) — an LLM-authored test proves nothing. Require the <strong>full
+  existing suite + coverage on changed lines</strong>. Restrict auto-deploy to <strong>crash-class</strong> faults until a
+  correctness signal (golden output / shadow compare) exists — canary metrics are error/latency-only
+  (<code>metrics.py:17-30</code>), blind to silent wrong-output regressions.
+- <strong>Injection is structural (D9):</strong> the deterministic controller <strong>never lets free-text telemetry
+  authorize a transition</strong> — only typed/signed signals drive the machine; logs/traces/audit text are
+  <em>evidence for humans</em>, not control input (telemetry is attacker-influenceable, <code>bus.py:105-120</code>).
+- <strong>Self-guardrail isolation enforced, not prompted (Q5):</strong> healer/governance/CI paths mounted
+  <strong>read-only</strong> (<code>sandbox/config.py:18-23</code>) <strong>plus</strong> a deploy-gate that refuses diffs touching them;
+  Medicus's own supervision isolated so a bad self-fix can't disable the healer or its kill switch.
+- <strong>Deploy/fix circuit breaker (D10, core):</strong> global fix-rate limit + auto-freeze-on-regression +
+  kill-switch-to-known-good. Restart budgets today are per-crash only (<code>supervisor.py:270-293</code>).</p>
+<p><strong>Boundary corrected (D2):</strong> the <strong>safety floor</strong> (kill switch, protected-path refusal, circuit
+breaker) is <strong>runtime safety and ships in core/contrib</strong> — OSS is safe-by-default <em>without</em> Presidium.
+The governance seams already exist (<code>on_spawn_requested</code>, <code>Registry.add_listener</code>, suspend/resume,
+audit), so the minimal built-in gate needs no Presidium dependency; Presidium adds policy richness on
+top.</p>
+<p><strong>Phasing re-sized:</strong> insert a <strong>shadow stage</strong> (generate + verify a fix, measure precision, no PR)
+between P0 and P1; <strong>split P2</strong> into P2a = orchestrator rollout + health-check + auto-rollback (cheap,
+standard) and ~~P2b = in-runtime canary~~ <strong>cut from v1</strong>.</p>
+<h3 id="must-fix-before-build-ready">Must-fix before build-ready<a class="headerlink" href="#must-fix-before-build-ready" title="Permanent link">&para;</a></h3>
+<ol>
+<li>D1 / Q1 reframed orchestrator-first (done above).</li>
+<li>Drop overlapping canary for v1 — accept brief downtime + orchestrator rollback.</li>
+<li>Verification anchored to the real signal + full suite + coverage-on-diff; auto-deploy crash-class only.</li>
+<li>Structural guardrail isolation — read-only mounts + deploy-gate refusing healer/governance/CI diffs.</li>
+<li>Deploy/fix circuit breaker + kill-switch-to-known-good in core (Presidium-independent).</li>
+<li><strong>Runtime bug to fix first:</strong> <code>DynamicSupervisor._handle_spawn</code> wires deps but <strong>omits <code>_audit_sink</code>
+   and <code>_metrics</code></strong> (<code>supervisor.py:598-606</code> vs <code>components.py:84-93</code>) — a dynamically-spawned Medicus
+   would run with <strong>no audit trail or metrics</strong>. Fix the wiring, or mandate Medicus be a <em>static</em> child.</li>
+</ol>
+<p><strong>Build recommendation:</strong> ship <strong>P0 (observe) + P1 (suggest → verified PR) only</strong> for now — ~80% of the
+value at ~20% of the risk, mostly on existing primitives. Gate P2+ hard.</p>
+<hr />
+<h2 id="motivation">Motivation<a class="headerlink" href="#motivation" title="Permanent link">&para;</a></h2>
+<p>The customer ask: an agent that watches logs / traffic / audit trail / OTEL, has access to the
+codebase, detects bugs, raises fixes, deploys them, and reloads the affected component — "something
+Erlang OTP does."</p>
+<p>Civitas is unusually well-positioned for the <em>runtime</em> half of this: it is an OTP-inspired
+supervision runtime with first-class observability and dynamic process control. The gap is the
+<strong>closed loop</strong> (detect → diagnose → fix → verify → deploy → rollback) and, above all, the <strong>safety
+envelope</strong> that makes autonomous code changes responsible rather than reckless.</p>
+<hr />
+<h2 id="reconciliation-with-what-exists-honest-inventory">Reconciliation with what exists (honest inventory)<a class="headerlink" href="#reconciliation-with-what-exists-honest-inventory" title="Permanent link">&para;</a></h2>
+<p><strong>We do NOT have hot code reload today.</strong> <code>grep</code> for <code>reload|hot.?swap|code_change|importlib.reload</code>
+across <code>civitas/</code> returns zero matches; supervisor restart <em>reuses the same instance</em> and never
+re-imports the class; deploying fixed code means <strong>rebuild image + restart process</strong>.</p>
+<p>What already exists — the OTP-shaped skeleton the loop builds on:</p>
+<table>
+<thead>
+<tr>
+<th>Capability</th>
+<th>Where</th>
+<th>Use in self-healing</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Supervision: crash → restart (ONE_FOR_ONE/ALL/REST, backoff)</td>
+<td><code>supervisor.py</code></td>
+<td>Baseline fault-tolerance; restart budget = a failure signal</td>
+</tr>
+<tr>
+<td><code>runtime.on_crash(cb)</code> → <code>(agent_name, exc)</code></td>
+<td><code>runtime.py</code></td>
+<td><strong>Detect</strong> crashes (push)</td>
+</tr>
+<tr>
+<td>Metrics (<code>MetricsSink</code> push, <code>MetricsCollector.snapshot</code> pull)</td>
+<td><code>observability/metrics.py</code>, <code>dashboard/collector.py</code></td>
+<td><strong>Monitor</strong> latency/error/throughput</td>
+</tr>
+<tr>
+<td>Audit trail (<code>AuditSink</code>, <code>message.route</code> on every message)</td>
+<td><code>audit/</code></td>
+<td><strong>Monitor</strong> behavior; <strong>immutable audit</strong> for the loop</td>
+</tr>
+<tr>
+<td>OTEL spans (<code>send</code>/<code>recv</code>/<code>handle</code>/<code>llm</code>/<code>tool</code>/<code>supervisor.restart</code>)</td>
+<td><code>observability/tracer.py</code></td>
+<td><strong>Monitor/diagnose</strong> traces</td>
+</tr>
+<tr>
+<td>Live topology API (HTTP)</td>
+<td><code>topology_server.py</code></td>
+<td><strong>Monitor</strong> agent health (pull)</td>
+</tr>
+<tr>
+<td>Dynamic spawn/despawn/stop</td>
+<td><code>supervisor.py</code>, <code>process.py</code>, <code>runtime.py</code></td>
+<td><strong>Deploy</strong> via new instance; drain old</td>
+</tr>
+<tr>
+<td>Durable state (<code>checkpoint()</code> + <code>StateStore</code>)</td>
+<td><code>process.py</code>, <code>plugins/state.py</code></td>
+<td><strong>State continuity</strong> across restart</td>
+</tr>
+<tr>
+<td><code>self.llm.chat(tools=…)</code></td>
+<td><code>plugins/model.py</code></td>
+<td><strong>Diagnose</strong> + generate fix</td>
+</tr>
+<tr>
+<td>Tools / MCP / sandbox config</td>
+<td><code>plugins/tools.py</code>, <code>process.py connect_mcp</code>, <code>sandbox/</code></td>
+<td><strong>Fix</strong> (read/write/test/git); sandbox via fabrica bubblewrap</td>
+</tr>
+</tbody>
+</table>
+<p>Every monitoring signal is consumable by an ordinary <code>AgentProcess</code> <strong>without monkey-patching</strong>.</p>
+<hr />
+<h2 id="the-hard-truth-about-reload-otp-vs-python-decides-d1">The hard truth about "reload" (OTP vs Python) — decides D1<a class="headerlink" href="#the-hard-truth-about-reload-otp-vs-python-decides-d1" title="Permanent link">&para;</a></h2>
+<p>Erlang/OTP hot code upgrade (two-version code, <code>gen_server:code_change/3</code> state migration,
+<code>sys:suspend → change_code → resume</code>, fully-qualified-call switching) is a <strong>BEAM VM</strong> feature. Python
+has no safe equivalent:</p>
+<ul>
+<li><code>importlib.reload()</code> is fundamentally unreliable — existing instances keep the old class, <code>from x
+  import y</code> aliases don't update, C-extensions break, and running coroutines keep old code (per the
+  CPython docs and jurigged/reloadium's own caveats).</li>
+<li><strong>Every</strong> production Python framework (uvicorn <code>--reload</code>, Django, Gunicorn <code>HUP</code>) reloads by <strong>full
+  process restart</strong>, never in-place swap.</li>
+</ul>
+<p><strong>Therefore the "reload the affected component" step = spawn-new-process + drain + retire-old</strong>
+(blue-green at the worker/process level). This is not a downgrade of the OTP idea — it is the <em>same</em>
+supervisor-restarts-child-with-new-code pattern, at <strong>process granularity</strong> instead of module
+granularity. It maps cleanly onto Civitas's worker + supervision model.</p>
+<hr />
+<h2 id="architecture-the-self-healing-loop">Architecture — the self-healing loop<a class="headerlink" href="#architecture-the-self-healing-loop" title="Permanent link">&para;</a></h2>
+<p><img alt="Self-healing loop" src="../../assets/self-healing-loop.svg" /></p>
+<p>A MAPE-K loop (Monitor → Analyze → Plan → Execute → Knowledge), run by a dedicated <strong>healer agent</strong>
+(working name <strong>Medicus</strong>), with a <strong>deterministic controller</strong> wrapping the LLM (the LLM proposes;
+the controller decides — see D5):</p>
+<ol>
+<li><strong>Monitor</strong> — subscribe to the signals above (metrics/audit/OTEL/on_crash) + poll topology. Feed a
+   rolling window into a <strong>failure classifier</strong>.</li>
+<li><strong>Analyze / Diagnose</strong> — on a qualifying signal, gather evidence (failing trace, stack, correlated
+   logs, the offending code via a filesystem tool) and ask the LLM for a root-cause hypothesis +
+   candidate fix. Screen all tool/telemetry inputs for prompt injection first.</li>
+<li><strong>Plan</strong> — produce a bounded change: a minimal diff within blast-radius limits, plus the
+   verification it must pass. Classify reversibility.</li>
+<li><strong>Verify</strong> — apply the diff in an <strong>isolated sandbox</strong> (fabrica bubblewrap / ephemeral worker), run
+   the affected tests + static analysis. Fail → rollback snapshot, retry with budget, else escalate.</li>
+<li><strong>Execute / Deploy</strong> — per the autonomy stage (below): open a PR (default), or canary-deploy via a
+   <strong>new worker with the fixed code</strong> and drain the old one, watching health.</li>
+<li><strong>Rollback / Verify-in-prod</strong> — automatic rollback on health/metric regression; post-hoc watch for
+   recurrence; write the outcome (and failed hypotheses) back to Knowledge.</li>
+</ol>
+<h3 id="where-each-piece-lives-d2-respects-boundarymd">Where each piece lives (D2 — respects <code>boundary.md</code>)<a class="headerlink" href="#where-each-piece-lives-d2-respects-boundarymd" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>civitas (core):</strong> the monitoring surfaces (exist), a new <strong><code>restart-with-new-code</code> worker
+  primitive</strong> (blue-green drain), dynamic spawn/despawn, sandbox config, and a generic
+  <strong>remediation/health hook</strong>. Runtime only — no LLM, no policy.</li>
+<li><strong>civitas-contrib (or a new <code>medicus</code> package):</strong> the healer agent + code-fix tools
+  (filesystem/subprocess/git) + failure classifier. Application-level, depends on core.</li>
+<li><strong>presidium (governance):</strong> approval gates, fix-policy (what may be changed), budgets, and
+  <strong>graduated-autonomy enforcement</strong> + audit. The safety envelope is a <em>governance</em> concern, exactly
+  Presidium's role. A minimal built-in gate ships for OSS users without Presidium (see Q4).</li>
+</ul>
+<hr />
+<h2 id="staged-autonomy-model-d3">Staged autonomy model (D3)<a class="headerlink" href="#staged-autonomy-model-d3" title="Permanent link">&para;</a></h2>
+<p><img alt="Staged autonomy &amp; safety gates" src="../../assets/self-healing-autonomy.svg" /></p>
+<p>Autonomy is a <strong>dial</strong>, defaulting to the safest useful setting. A component earns higher autonomy only
+after proven behavior:</p>
+<table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>What the healer may do</th>
+<th>Human role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>0 · Observe</strong></td>
+<td>Detect + diagnose + report (no changes)</td>
+<td>Reads findings</td>
+</tr>
+<tr>
+<td><strong>1 · Suggest</strong> <em>(default)</em></td>
+<td>Everything in Observe + open a <strong>fix PR</strong> (sandbox-verified)</td>
+<td>Reviews/merges every fix</td>
+</tr>
+<tr>
+<td><strong>2 · Supervised</strong></td>
+<td>Auto-apply <strong>low-risk, reversible</strong> fixes via canary; <strong>HITL</strong> for anything else</td>
+<td>Approves the exceptions; watches</td>
+</tr>
+<tr>
+<td><strong>3 · Autonomous</strong></td>
+<td>Full loop for <strong>proven, bounded</strong> failure classes; canary + auto-rollback</td>
+<td>Monitors dashboards; kill switch</td>
+</tr>
+</tbody>
+</table>
+<p>Progression is per-failure-class and per-component, gated on metrics + audit review — never a global
+flip.</p>
+<hr />
+<h2 id="safety-controls-non-negotiable-from-aiops-prior-art">Safety controls (non-negotiable — from AIOps prior art)<a class="headerlink" href="#safety-controls-non-negotiable-from-aiops-prior-art" title="Permanent link">&para;</a></h2>
+<p>Reversibility beats approval clicks for high-consequence, short-window actions; humans review the rare
+irreversible ones. Tiered:</p>
+<ul>
+<li><strong>Structural:</strong> sandboxed validation; <strong>canary + automatic rollback</strong> (reversible actions);
+  blast-radius limits (max diff, <strong>no new dependencies</strong>, no schema/migration auto-apply, protected
+  paths); immutable audit; <strong>kill switch</strong> that leaves a known-good state.</li>
+<li><strong>Control-flow (D5):</strong> a <strong>deterministic state machine</strong>, not the LLM, owns the critical path
+  (auto-apply-if-generated, auto-commit-if-tests-pass, force-progress after N reads, bounded retries).
+  Reliability of comparable systems jumped ~10%→90% precisely by taking the LLM <em>out</em> of control.</li>
+<li><strong>Classification (D6):</strong> escalate — do <strong>not</strong> auto-fix — infrastructure/resource failures (a real
+  cautionary case: bumping memory weekly instead of fixing a leak), security-policy changes, and
+  anything without a clear reproduction + a test that goes red→green.</li>
+<li><strong>Oversight:</strong> confidence + risk routing to an approval queue (HMAC-locked payloads); maker-checker
+  for irreversible actions; a separate reviewer/classifier that only sees user-intent + tool calls
+  (defends against the agent talking itself into a bad action); <strong>prompt-injection screening</strong> of
+  telemetry/tool outputs before they enter the healer's context.</li>
+</ul>
+<hr />
+<h2 id="new-primitives-to-build-the-gaps">New primitives to build (the gaps)<a class="headerlink" href="#new-primitives-to-build-the-gaps" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong><code>restart-with-new-code</code> (core)</strong> — a worker-level blue-green swap: start a fresh worker importing
+   the new code, drain/hand-off, retire the old. This is the only genuinely missing <em>runtime</em> piece.</li>
+<li><strong>Code-fix toolset (contrib)</strong> — <code>read_file</code> / <code>write_file</code> / <code>run_command</code> / <code>git</code> tools (≈4 small
+   <code>ToolProvider</code>s) or MCP filesystem/bash servers, executed under sandbox.</li>
+<li><strong>Failure classifier (contrib)</strong> — maps a signal to {logic-bug (remediable) | infra/resource
+   (escalate) | security (escalate) | flaky (observe)}.</li>
+<li><strong>Canary + auto-rollback controller (core/contrib)</strong> — health-watch + revert.</li>
+<li><strong>Governance hooks (presidium)</strong> — policy + approval + graduated-autonomy enforcement + audit.</li>
+</ol>
+<hr />
+<h2 id="decisions">Decisions<a class="headerlink" href="#decisions" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Decision</th>
+<th>Resolution</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>D1</td>
+<td>Deploy / "reload" mechanism</td>
+<td><strong>Orchestrator-first new-process deploy</strong> — emit a typed <code>redeploy vX</code> signal + best-effort drain; k8s/systemd rolls out + health-checks + rolls back. <em>No</em> in-place reload (Python) and <em>no</em> in-runtime overlapping canary in v1 (registry is 1-name→1-address).</td>
+</tr>
+<tr>
+<td>D2</td>
+<td>Component boundaries</td>
+<td>Runtime + primitive in <strong>core</strong>; healer agent + tools in <strong>contrib</strong>; governance/approval in <strong>presidium</strong> (minimal built-in gate for OSS).</td>
+</tr>
+<tr>
+<td>D3</td>
+<td>Autonomy</td>
+<td><strong>Staged</strong> (Observe → Suggest → Supervised → Autonomous); default <strong>Suggest</strong> (PR + HITL). Per class/component.</td>
+</tr>
+<tr>
+<td>D4</td>
+<td>Deploy safety</td>
+<td><strong>Reversibility-first</strong>: orchestrator rollout + health-check + <strong>auto-rollback</strong>; maker-checker only for irreversible ops. Auto-deploy restricted to <strong>crash-class</strong> faults until a correctness signal exists.</td>
+</tr>
+<tr>
+<td>D5</td>
+<td>Control loop</td>
+<td><strong>Deterministic state machine</strong> wraps the LLM; LLM proposes, controller decides; bounded retries + anti-loop.</td>
+</tr>
+<tr>
+<td>D6</td>
+<td>Scope of auto-fix</td>
+<td><strong>Logic bugs with a red→green test only.</strong> Escalate infra/resource/security.</td>
+</tr>
+<tr>
+<td>D7</td>
+<td>Verification</td>
+<td>Sandboxed test + static-analysis gate before any deploy (see D8 for anchoring).</td>
+</tr>
+<tr>
+<td>D8</td>
+<td>Verification anchoring</td>
+<td>Failing test <strong>derived from the real signal</strong> (reproduce actual crash/trace/input) + full suite + <strong>coverage on changed lines</strong>. LLM-authored-only tests are insufficient.</td>
+</tr>
+<tr>
+<td>D9</td>
+<td>Injection defense</td>
+<td>Deterministic controller transitions <strong>only on typed/signed signals</strong>; free-text telemetry is human evidence, never control input.</td>
+</tr>
+<tr>
+<td>D10</td>
+<td>Safety-floor location</td>
+<td>Kill switch, protected-path deploy-gate, and fix/deploy <strong>circuit breaker</strong> ship in <strong>core/contrib</strong> (OSS safe-by-default); Presidium adds policy richness.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="open-questions">Open questions<a class="headerlink" href="#open-questions" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Q1</strong> — Does <code>restart-with-new-code</code> live in core (single-deployment blue-green) or defer to the
+  orchestrator (k8s rolling update)? Proposed: a thin core primitive <strong>and</strong> a documented orchestrator
+  path for clustered deployments.</li>
+<li><strong>Q2</strong> — Name: <strong>Medicus</strong> (Latin <em>physician</em>, fits Civitas/Presidium/Fabrica) vs plain
+  <code>SelfHealingAgent</code>.</li>
+<li><strong>Q3</strong> — Default fix output per stage: PR-only (Suggest) → canary (Supervised) → auto (Autonomous).</li>
+<li><strong>Q4</strong> — Minimum viable governance for OSS users without Presidium (a built-in HITL gate + audit),
+  vs full policy via Presidium.</li>
+<li><strong>Q5</strong> — Should Medicus itself be supervised/sandboxed so a broken healer can't cascade (it must not
+  be able to "fix" or disable its own guardrails)?</li>
+</ul>
+<h2 id="non-goals">Non-goals<a class="headerlink" href="#non-goals" title="Permanent link">&para;</a></h2>
+<ul>
+<li>True OTP in-place module hot-swap / <code>code_change/3</code> live migration.</li>
+<li>Auto-remediating infrastructure, resource, or security-policy issues (always escalate).</li>
+<li>Auto-applying database migrations or other irreversible operations.</li>
+<li>Multi-service refactors or dependency changes without human sign-off.</li>
+</ul>
+<h2 id="implementation-phases-staged-safety-first">Implementation phases (staged, safety-first)<a class="headerlink" href="#implementation-phases-staged-safety-first" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>P0 — Observe:</strong> monitoring adapters + failure classifier; detect + report only. Zero risk;
+  validates detection precision (which gates everything downstream).</li>
+<li><strong>P0.5 — Shadow:</strong> generate + sandbox-verify a fix but <strong>do not</strong> open a PR — measure fix precision
+  before humans get PR spam.</li>
+<li><strong>P1 — Suggest:</strong> diagnose + reproduce-from-real-signal + sandboxed verify (full suite +
+  coverage-on-diff) → <strong>PR</strong> (HITL). The code-fix toolset + verification gate. <strong>← smallest safe build (P0+P1).</strong></li>
+<li><strong>P2a — Deploy (orchestrator):</strong> emit a typed <code>redeploy vX</code> signal + best-effort drain; k8s/systemd
+  does the rollout + health-check + <strong>auto-rollback</strong>. Plus the core safety floor (protected-path
+  deploy-gate, fix/deploy circuit breaker, kill switch).</li>
+<li><strong>~~P2b — in-runtime canary~~ (cut from v1):</strong> versioned names + alias routing is a large
+  distributed-systems primitive; defer until there is a real need.</li>
+<li><strong>P3 — Supervised:</strong> auto-apply low-risk <strong>crash-class</strong> reversible fixes behind policy + graduated
+  autonomy.</li>
+<li><strong>P4 — Autonomous (bounded):</strong> proven failure classes only, with kill switch + post-hoc validation.</li>
+</ul>
+<p>Each phase is independently shippable and gated on the previous phase's measured reliability.</p>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Apache 2.0 License
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/civitas-io/python-civitas" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand", "navigation.top", "navigation.instant", "navigation.indexes", "content.code.copy", "content.code.annotate", "search.highlight", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="https://unpkg.com/mermaid@11/dist/mermaid.min.js"></script>
+      
+    
+  </body>
+</html>
