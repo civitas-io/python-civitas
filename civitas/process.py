@@ -5,8 +5,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections.abc import Iterator
-from contextlib import contextmanager
+from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager, contextmanager
 from datetime import UTC, datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any
@@ -18,6 +18,12 @@ from civitas.observability.tracer import Span
 from civitas.plugins.loader import resolve_plugin_class
 
 logger = logging.getLogger(__name__)
+
+# Streaming-reply protocol: an agent emits N chunk messages then an end (or error)
+# terminator; the gateway demultiplexes them by correlation_id (G2/G3).
+_STREAM_CHUNK = "civitas.stream.chunk"
+_STREAM_END = "civitas.stream.end"
+_STREAM_ERROR = "civitas.stream.error"
 
 if TYPE_CHECKING:
     from civitas.bus import MessageBus
@@ -129,6 +135,22 @@ class Mailbox:
         return self._priority_queue.empty() and self._queue.empty()
 
 
+class StreamReply:
+    """Handle for emitting a streaming reply, yielded by ``stream_reply()``.
+
+    ``send()`` emits one chunk to the original caller. The end terminator (or an
+    error terminator, on exception) is sent automatically when the surrounding
+    ``async with`` block exits — callers never terminate the stream by hand.
+    """
+
+    def __init__(self, agent: AgentProcess, message: Message) -> None:
+        self._agent = agent
+        self._message = message
+
+    async def send(self, payload: dict[str, Any]) -> None:
+        await self._agent._emit_stream(self._message, payload, _STREAM_CHUNK)
+
+
 class AgentProcess:
     """Base class for all agent processes in Civitas.
 
@@ -191,6 +213,7 @@ class AgentProcess:
         self.llm: ModelProvider | None = None
         self.tools: ToolRegistry | None = None
         self.store: StateStore | None = None
+        self.config: dict[str, Any] = {}
 
         # Per-agent credential map — populated from topology credentials: block.
         # Keys are provider names (e.g. "anthropic"); values are credential strings.
@@ -286,7 +309,16 @@ class AgentProcess:
     # ------------------------------------------------------------------
 
     async def on_start(self) -> None:
-        """Called once before the first message. Initialize self.state here."""
+        """Called once before the first message. Initialize self.state here.
+
+        Runs synchronously during startup — for a dynamically spawned agent it
+        executes *inside* the spawn call, so ``await self.spawn(...)`` does not
+        return until ``on_start()`` finishes (and raises ``TimeoutError`` if it
+        outlasts the ask timeout). Keep it fast: do slow / I/O-bound work (LLM
+        calls, browser sessions) in ``handle()``, kicked off by a fire-and-forget
+        message the spawner sends right after the spawn is confirmed. Spawn-time
+        ``config`` is available here as ``self.config``.
+        """
 
     async def handle(self, message: Message) -> Message | None:
         """Called for every incoming message.
@@ -737,6 +769,66 @@ class AgentProcess:
             span_id=_new_span_id(),
             parent_span_id=msg.span_id,
         )
+
+    async def emit(self, payload: dict[str, Any]) -> None:
+        """Emit one chunk of a streaming reply to the caller. Call from ``handle()``.
+
+        For incremental output surfaced by the gateway as SSE / WebSocket frames /
+        gRPC server-streaming. Pair with :meth:`end_stream`, or prefer
+        :meth:`stream_reply` which sends the terminator automatically.
+        """
+        if self._current_message is None:
+            raise RuntimeError("emit() called outside of handle()")
+        await self._emit_stream(self._current_message, payload, _STREAM_CHUNK)
+
+    async def end_stream(self) -> None:
+        """Signal the end of a streaming reply to the caller. Call from ``handle()``."""
+        if self._current_message is None:
+            raise RuntimeError("end_stream() called outside of handle()")
+        await self._emit_stream(self._current_message, {}, _STREAM_END)
+
+    @asynccontextmanager
+    async def stream_reply(self) -> AsyncIterator[StreamReply]:
+        """Stream a reply to the caller, terminating automatically on block exit.
+
+        Preferred over manual :meth:`emit` / :meth:`end_stream`: the end terminator
+        is always sent on success, and an error terminator carrying the exception
+        message is sent if the body raises — so the client always sees a clean end::
+
+            async def handle(self, message: Message) -> None:
+                async with self.stream_reply() as stream:
+                    async for token in produce():
+                        await stream.send({"token": token})
+        """
+        if self._current_message is None:
+            raise RuntimeError("stream_reply() called outside of handle()")
+        message = self._current_message
+        try:
+            yield StreamReply(self, message)
+        except Exception as exc:
+            await self._emit_stream(message, {"error": str(exc)}, _STREAM_ERROR)
+            raise
+        else:
+            await self._emit_stream(message, {}, _STREAM_END)
+
+    async def _emit_stream(
+        self, message: Message, payload: dict[str, Any], stream_type: str
+    ) -> None:
+        if self._bus is None:
+            raise RuntimeError("AgentProcess not wired to a MessageBus")
+        out = Message(
+            type=stream_type,
+            sender=self.name,
+            recipient=message.reply_to or message.sender,
+            payload=payload,
+            correlation_id=message.correlation_id,
+            trace_id=message.trace_id,
+            span_id=_new_span_id(),
+            parent_span_id=message.span_id,
+        )
+        await self._bus.route(out)
+        if self._metrics is not None:
+            self._metrics.message_sent(self.name)
 
     # ------------------------------------------------------------------
     # Observability helpers — call from inside handle()

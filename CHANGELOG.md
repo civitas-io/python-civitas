@@ -11,6 +11,58 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+### Added
+
+- **Gateway streaming** (v0.6.0 / G2 + G3) — long-lived and incremental client connections built on one
+  shared streaming core:
+  - **WebSocket** (`GatewayConfig.ws_routes`) — bidirectional sessions: each inbound frame is `cast()` to
+    an agent and the agent streams messages back over the same socket. No new dependency (uses
+    `uvicorn[standard]`'s bundled `websockets`).
+  - **Server-Sent Events / true streaming** — a route with `mode: "stream"` streams an agent's output
+    incrementally as `text/event-stream`, replacing the old `{"chunks": [...]}` buffer-and-serialise
+    workaround. Works over HTTP/1.1, HTTP/2, and HTTP/3.
+  - **gRPC server-streaming** — the `Agent.Stream` RPC deferred in G1 is now implemented on the same core.
+  - New agent API: `self.emit(chunk)` / `self.end_stream()` and the auto-terminating, error-safe
+    `async with self.stream_reply() as stream:` context manager. Streams are bounded per-connection with a
+    `slow_consumer` fail-fast plus idle/duration timeouts (`GatewayConfig.stream_queue_maxsize` /
+    `stream_idle_timeout` / `max_stream_duration`).
+- **Gateway middleware & uploads** (v0.6.0 / G4–G6) — first-party gateway building blocks:
+  - **Rate limiting** (G4): a `RateLimiter` GenServer + `civitas.gateway.ratelimit.rate_limit`
+    middleware (per-client sliding window; HTTP 429 + `Retry-After`).
+  - **API-key auth** (G5): `civitas.gateway.auth.require_api_key` — fail-closed `X-API-Key` check
+    against `CIVITAS_GATEWAY_API_KEY` (constant-time compare). JWT/mTLS remain integration points.
+  - **File uploads** (G6): `multipart/form-data` is parsed at the ASGI edge; uploaded files reach the
+    agent base64-encoded under `payload["__files__"]`, keeping payloads primitives-only.
+- **Accelerated JSON serialization** (`civitas[fast]`) — installs Rust-backed `orjson`, which
+  `JsonSerializer` uses automatically for a large encode/decode speedup, transparently falling back to
+  the standard-library `json` module when it isn't installed. The wire format stays plain JSON, so the
+  two backends interoperate. The `Message` payload primitives-only validation gate deliberately keeps
+  using stdlib `json` — orjson natively accepts `datetime`/`UUID`/dataclasses and would weaken that
+  enforcement.
+- **gRPC gateway** (`civitas[grpc]`) — a generic `grpc.aio` surface on the gateway (v0.6.0 / G1). One
+  `civitas.Agent` service proxies any agent by name, so callers need no per-agent `.proto` or civitas
+  SDK: `Invoke` (unary → agent `call()`) and `Cast` (unary → `cast()`) carry a
+  `google.protobuf.Struct` payload that maps to/from the JSON-ish dict a `Message` holds. Enabled with
+  `GatewayConfig(grpc_enabled=True, grpc_port=…, grpc_reflection=True)` alongside the existing
+  HTTP/1.1/2/3 surfaces; every transport shares one `GatewayDispatcher` so routing and error semantics
+  stay identical. Ships the standard gRPC health service and optional server reflection (for
+  `grpcurl`). Error mapping: no agent → `NOT_FOUND`, timeout → `DEADLINE_EXCEEDED`, unhandled error →
+  `INTERNAL`; an agent's own business error is returned in-band on `AgentReply.error` with the payload
+  preserved (mirrors the HTTP 400-with-body behaviour). `Stream` (server-streaming) is defined in the
+  `.proto` but returns `UNIMPLEMENTED` until G3. Generated `_pb2` stubs are committed (no build-time
+  `protoc` needed by consumers).
+
+### Fixed
+
+- **`DynamicSupervisor` spawn now applies `config` to the spawned agent** ([#8]) — the `config` passed
+  to `spawn()` was parsed and governance-checked but never reached the agent. It is now available as
+  `self.config` (readable in `on_start()` and `handle()`). Also documented that `on_start()` runs
+  **synchronously inside the spawn call** — so `await self.spawn(...)` blocks until it returns; keep it
+  fast and do slow/background work in `handle()`, kicked off by a post-spawn message (`on_start()`
+  docstring + `docs/design/dynamic-spawning.md`).
+
+[#8]: https://github.com/civitas-io/python-civitas/issues/8
+
 ## [0.5.0] — 2026-07-03
 
 ### Added

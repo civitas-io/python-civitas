@@ -2,15 +2,27 @@
 
 from __future__ import annotations
 
+import asyncio
+import base64
+import contextlib
 import json
 import logging
+from email.parser import BytesParser
+from email.policy import default as email_policy
 from typing import TYPE_CHECKING, Any
 
-from civitas.errors import MessageRoutingError
 from civitas.gateway.contracts import validate_request, validate_response
+from civitas.gateway.dispatch import (
+    DispatchResult,
+    DispatchStatus,
+    GatewayDispatcher,
+    StreamSink,
+    _StreamClosed,
+)
 from civitas.gateway.middleware import build_chain, load_middleware
 from civitas.gateway.openapi import build_spec, swagger_html
 from civitas.gateway.types import GatewayRequest, GatewayResponse, MiddlewareCallable
+from civitas.messages import _uuid7
 
 if TYPE_CHECKING:
     from civitas.gateway.core import GatewayConfig, HTTPGateway
@@ -50,6 +62,51 @@ def _parse_query(query_string: bytes) -> dict[str, str]:
     return result
 
 
+def _parse_multipart(body: bytes, content_type: str) -> dict[str, Any]:
+    """Parse ``multipart/form-data`` into a JSON-serializable dict (G6).
+
+    Text fields land under their field name; uploaded files land under
+    ``__files__[name]`` as ``{filename, content_type, size, content_base64}`` so
+    the resulting payload stays primitives-only (files are base64-encoded).
+    """
+    header = f"Content-Type: {content_type}\r\n\r\n".encode()
+    parsed = BytesParser(policy=email_policy).parsebytes(header + body)
+    result: dict[str, Any] = {}
+    for part in parsed.iter_parts():
+        name = part.get_param("name", header="content-disposition")
+        if name is None:
+            continue
+        raw = part.get_payload(decode=True)
+        content = raw if isinstance(raw, bytes) else b""
+        filename = part.get_filename()
+        if filename is not None:
+            files: dict[str, Any] = result.setdefault("__files__", {})
+            files[str(name)] = {
+                "filename": filename,
+                "content_type": part.get_content_type(),
+                "size": len(content),
+                "content_base64": base64.b64encode(content).decode(),
+            }
+        else:
+            result[str(name)] = content.decode(errors="replace")
+    return result
+
+
+def _ws_parse(event: dict[str, Any]) -> dict[str, Any] | None:
+    """Parse a ``websocket.receive`` event into a JSON object, or None to skip."""
+    text = event.get("text")
+    if text is None:
+        raw = event.get("bytes")
+        text = raw.decode(errors="replace") if raw else None
+    if not text:
+        return None
+    try:
+        parsed = json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        return None
+    return parsed if isinstance(parsed, dict) else {"data": parsed}
+
+
 class GatewayASGI:
     """ASGI app served by uvicorn. Dispatches requests onto the Civitas bus."""
 
@@ -58,10 +115,13 @@ class GatewayASGI:
         gateway: HTTPGateway,
         route_table: RouteTable,
         config: GatewayConfig,
+        dispatcher: GatewayDispatcher | None = None,
     ) -> None:
         self._gateway = gateway
         self._route_table = route_table
         self._config = config
+        self._dispatcher = dispatcher or GatewayDispatcher(gateway, config.request_timeout)
+        self._ws_routes: dict[str, str] = {r["path"]: r["agent"] for r in config.ws_routes}
 
         # Load global middleware from config at construction time
         self._middlewares: list[MiddlewareCallable] = []
@@ -103,6 +163,8 @@ class GatewayASGI:
             await self._handle_lifespan(receive, send)
         elif scope["type"] == "http":
             await self._handle_http(scope, receive, send)
+        elif scope["type"] == "websocket":
+            await self._handle_websocket(scope, receive, send)
 
     # ------------------------------------------------------------------
     # Lifespan
@@ -116,6 +178,61 @@ class GatewayASGI:
             elif event["type"] == "lifespan.shutdown":
                 await send({"type": "lifespan.shutdown.complete"})
                 return
+
+    # ------------------------------------------------------------------
+    # WebSocket handling (G2)
+    # ------------------------------------------------------------------
+
+    async def _handle_websocket(self, scope: _Scope, receive: _Receive, send: _Send) -> None:
+        """Bridge a WebSocket session to an agent: frames → cast, replies → frames.
+
+        Each inbound frame is dispatched as a stream request keyed by a per-session
+        correlation_id; the agent's emitted chunks stream back over the same socket
+        via a pump task draining the session sink until the client disconnects.
+        """
+        agent = self._ws_routes.get(scope["path"])
+        event = await receive()
+        if event["type"] != "websocket.connect":
+            return
+        if agent is None:
+            await send({"type": "websocket.close", "code": 4404})
+            return
+        await send({"type": "websocket.accept"})
+
+        session_id = _uuid7()
+        sink = self._gateway._open_stream(session_id)
+        pump = asyncio.create_task(self._ws_pump(send, sink))
+        try:
+            while True:
+                event = await receive()
+                if event["type"] == "websocket.disconnect":
+                    break
+                if event["type"] == "websocket.receive":
+                    payload = _ws_parse(event)
+                    if payload is not None:
+                        await self._gateway._send_stream_request(
+                            recipient=agent,
+                            payload=payload,
+                            correlation_id=session_id,
+                            msg_type="ws.message",
+                        )
+        finally:
+            pump.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await pump
+            self._gateway._close_stream(session_id)
+            with contextlib.suppress(Exception):
+                await self._gateway._send_stream_request(
+                    recipient=agent,
+                    payload={"__session__": "closed"},
+                    correlation_id=session_id,
+                    msg_type="ws.close",
+                )
+
+    async def _ws_pump(self, send: _Send, sink: StreamSink) -> None:
+        with contextlib.suppress(_StreamClosed):
+            async for chunk in sink.drain():
+                await send({"type": "websocket.send", "text": json.dumps(chunk)})
 
     # ------------------------------------------------------------------
     # HTTP request handling
@@ -146,9 +263,18 @@ class GatewayASGI:
             if not chunk.get("more_body", False):
                 break
 
-        # Parse JSON body (empty body → empty dict)
+        # Parse body: multipart/form-data uploads (G6), else JSON (empty → {})
+        content_type = headers.get("content-type", "")
         body: dict[str, Any] = {}
-        if body_bytes:
+        if body_bytes and content_type.startswith("multipart/form-data"):
+            try:
+                body = _parse_multipart(body_bytes, content_type)
+            except Exception:
+                await self._respond(
+                    send, GatewayResponse(400, {"error": "invalid multipart/form-data body"})
+                )
+                return
+        elif body_bytes:
             try:
                 parsed = json.loads(body_bytes)
                 if isinstance(parsed, dict):
@@ -215,33 +341,34 @@ class GatewayASGI:
                 if not valid:
                     return GatewayResponse(422, err or {})
 
-            result = await self._call_or_cast(entry.agent, entry.mode, payload, msg_type, trace_id)
-            if isinstance(result, GatewayResponse):
-                return result
+            if entry.mode == "stream":
+                stream = self._dispatcher.stream(
+                    recipient=entry.agent,
+                    msg_type=msg_type,
+                    payload=payload,
+                    trace_id=trace_id,
+                )
+                return GatewayResponse(200, stream=stream)
 
-            # Response contract validation
-            reply_msg = result
-            if entry.response_schema is not None:
-                valid, err_msg = validate_response(entry.response_schema, reply_msg.payload)
-                if not valid:
-                    logger.error("Response validation failed for %s %s: %s", method, path, err_msg)
-                    return GatewayResponse(500, {"error": "response validation failed"})
-
-            if "error" in reply_msg.payload:
-                return GatewayResponse(400, reply_msg.payload)
-            return GatewayResponse(200, reply_msg.payload)
+            result = await self._dispatcher.dispatch(
+                recipient=entry.agent,
+                msg_type=msg_type,
+                payload=payload,
+                mode=entry.mode,
+                trace_id=trace_id,
+            )
+            return self._result_to_response(
+                result, response_schema=entry.response_schema, method=method, path=path
+            )
 
         # Default route fallback
         default = self._default_route(method, path, body)
         if default is not None:
             agent, mode, payload = default
-            result = await self._call_or_cast(agent, mode, payload, msg_type, trace_id)
-            if isinstance(result, GatewayResponse):
-                return result
-            reply_msg = result
-            if "error" in reply_msg.payload:
-                return GatewayResponse(400, reply_msg.payload)
-            return GatewayResponse(200, reply_msg.payload)
+            result = await self._dispatcher.dispatch(
+                recipient=agent, msg_type=msg_type, payload=payload, mode=mode, trace_id=trace_id
+            )
+            return self._result_to_response(result)
 
         return GatewayResponse(404, {"error": f"no route for {method} {path}"})
 
@@ -270,38 +397,33 @@ class GatewayASGI:
     # Dispatch helpers
     # ------------------------------------------------------------------
 
-    async def _call_or_cast(
+    def _result_to_response(
         self,
-        agent: str,
-        mode: str,
-        payload: dict[str, Any],
-        msg_type: str,
-        trace_id: str,
-    ) -> Any:
-        """Dispatch to agent. Returns Message on call, GatewayResponse(202) on cast."""
-        if mode == "cast":
-            try:
-                await self._gateway.send(agent, payload, message_type=msg_type)
-            except MessageRoutingError:
-                return GatewayResponse(404, {"error": f"agent '{agent}' not found"})
-            except Exception:
-                logger.exception("Gateway cast error to '%s'", agent)
-                return GatewayResponse(500, {"error": "internal error"})
+        result: DispatchResult,
+        response_schema: Any | None = None,
+        method: str = "",
+        path: str = "",
+    ) -> GatewayResponse:
+        """Map a normalized DispatchResult onto an HTTP GatewayResponse."""
+        if result.status is DispatchStatus.ACCEPTED:
             return GatewayResponse(202, {})
+        if result.status is DispatchStatus.NOT_FOUND:
+            return GatewayResponse(404, {"error": result.error})
+        if result.status is DispatchStatus.TIMEOUT:
+            return GatewayResponse(504, {"error": result.error})
+        if result.status is DispatchStatus.INTERNAL:
+            return GatewayResponse(500, {"error": result.error})
 
-        try:
-            reply = await self._gateway.ask(
-                agent, payload, message_type=msg_type, timeout=self._config.request_timeout
-            )
-        except MessageRoutingError:
-            return GatewayResponse(404, {"error": f"agent '{agent}' not found"})
-        except TimeoutError:
-            return GatewayResponse(504, {"error": "upstream timeout"})
-        except Exception:
-            logger.exception("Gateway call error to '%s'", agent)
-            return GatewayResponse(500, {"error": "internal error"})
+        # OK or AGENT_ERROR: validate the reply payload before mapping the error.
+        if response_schema is not None:
+            valid, err_msg = validate_response(response_schema, result.payload)
+            if not valid:
+                logger.error("Response validation failed for %s %s: %s", method, path, err_msg)
+                return GatewayResponse(500, {"error": "response validation failed"})
 
-        return reply
+        if result.status is DispatchStatus.AGENT_ERROR:
+            return GatewayResponse(400, result.payload)
+        return GatewayResponse(200, result.payload)
 
     # ------------------------------------------------------------------
     # OpenAPI / docs
@@ -352,6 +474,9 @@ class GatewayASGI:
         response: GatewayResponse,
         extra_headers: dict[str, str] | None = None,
     ) -> None:
+        if response.stream is not None:
+            await self._respond_stream(send, response, extra_headers)
+            return
         encoded = json.dumps(response.body).encode()
         headers: list[tuple[bytes, bytes]] = [
             _CONTENT_TYPE_JSON,
@@ -364,3 +489,39 @@ class GatewayASGI:
 
         await send({"type": "http.response.start", "status": response.status, "headers": headers})
         await send({"type": "http.response.body", "body": encoded})
+
+    async def _respond_stream(
+        self,
+        send: _Send,
+        response: GatewayResponse,
+        extra_headers: dict[str, str] | None = None,
+    ) -> None:
+        stream = response.stream
+        if stream is None:
+            return
+        headers: list[tuple[bytes, bytes]] = [
+            (b"content-type", b"text/event-stream"),
+            (b"cache-control", b"no-cache"),
+        ]
+        if self._config.enable_http3 and self._config.port_quic:
+            headers.append((b"alt-svc", f'h3=":{self._config.port_quic}"'.encode()))
+        for k, v in response.headers.items():
+            headers.append((k.encode(), v.encode()))
+        for k, v in (extra_headers or {}).items():
+            headers.append((k.encode(), v.encode()))
+        await send({"type": "http.response.start", "status": response.status, "headers": headers})
+
+        event_id = 0
+        try:
+            async for chunk in stream:
+                event_id += 1
+                frame = f"id: {event_id}\ndata: {json.dumps(chunk)}\n\n".encode()
+                await send({"type": "http.response.body", "body": frame, "more_body": True})
+        except _StreamClosed as exc:
+            frame = f"event: error\ndata: {json.dumps({'error': str(exc)})}\n\n".encode()
+            await send({"type": "http.response.body", "body": frame, "more_body": True})
+        finally:
+            aclose = getattr(stream, "aclose", None)
+            if aclose is not None:
+                await aclose()
+        await send({"type": "http.response.body", "body": b"", "more_body": False})

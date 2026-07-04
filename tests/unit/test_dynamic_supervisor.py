@@ -25,6 +25,14 @@ class NullAgent(AgentProcess):
         return None
 
 
+class ConfigAgent(AgentProcess):
+    async def on_start(self) -> None:
+        self.state["seen_config"] = dict(self.config)
+
+    async def handle(self, message: Message) -> Message | None:
+        return self.reply({"config": self.state.get("seen_config", {})})
+
+
 class CleanExitAgent(AgentProcess):
     """Agent that stops cleanly on the first message."""
 
@@ -263,6 +271,18 @@ class TestRuntimeSpawn:
             assert name == "echo-1"
             reply = await rt.ask("echo-1", {"msg": "hello"})
             assert reply.payload["echo"]["msg"] == "hello"
+        finally:
+            await rt.stop()
+
+    @pytest.mark.asyncio
+    async def test_spawn_config_applied_to_agent(self):
+        dyn = _make_dyn()
+        rt = _build_runtime(dyn)
+        await rt.start()
+        try:
+            name = await rt.spawn("workers", ConfigAgent, name="cfg-1", config={"topic": "quantum"})
+            reply = await rt.ask(name, {})
+            assert reply.payload["config"] == {"topic": "quantum"}
         finally:
             await rt.stop()
 
