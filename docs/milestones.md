@@ -849,8 +849,8 @@ precede implementation (they were written pre-v0.4 and predate the shipped ASGI/
 | # | Deliverable | Priority | Source |
 |---|-------------|----------|--------|
 | G1 | **gRPC gateway** — generic `civitas.Agent` service proxying any agent by name; `Invoke`/`Cast` unary RPCs with a `Struct` payload; committed `.proto` + `_pb2` stubs; health + server reflection; `civitas[grpc]` (grpcio default). `Stream` (server-streaming) deferred to G3; per-agent `proto_dir` loading is a non-goal | ✅ Done | grpc-gateway.md |
-| G2 | **WebSocket upgrade** — long-lived bidirectional sessions mapped to a `cast()` stream on the bus | 🔴 High | http-gateway.md Phase 4, gateway.md |
-| G3 | **SSE / true streaming responses** — chunked/Server-Sent-Events instead of the current `{"chunks": [...]}` buffer-and-serialise workaround | 🔴 High | gateway-api-surface.md Q4 |
+| G2 | **WebSocket upgrade** — long-lived bidirectional sessions: inbound frames `cast()` to an agent, agent streams back over the same socket (`ws_routes`) | ✅ Done | gateway-streaming.md |
+| G3 | **SSE / true streaming responses** — `mode: "stream"` routes stream agent output as Server-Sent Events (replaces the `{"chunks": [...]}` workaround); also completes the gRPC `Stream` RPC deferred in G1 | ✅ Done | gateway-streaming.md |
 | G4 | **Rate-limiting middleware** — `RateLimiter` GenServer wired as gateway middleware | 🟡 Medium | http-gateway.md Phase 4 |
 | G5 | **Auth middleware** — JWT / API-key / mTLS client-cert authentication middleware (integration point already documented; ship first-party implementations) | 🟡 Medium | http-gateway.md Phase 4, security-hardening.md |
 | G6 | **File uploads** — `multipart/form-data` request handling | 🟢 Low | gateway-api-surface.md |
@@ -864,6 +864,9 @@ later patch without holding the release.
 
 **Non-goals for v0.6.0:** business logic in the gateway, load balancing, request queuing — the
 gateway stays a thin translate-and-route edge ([`http-gateway.md`](design/http-gateway.md) Non-Goals).
+A **bus-native streaming primitive** (agent-to-agent `stream()` across all transports) is also out of
+scope — G2/G3 use gateway-mediated streaming; the first-class version is tracked in the
+[Deferred Backlog](#deferred-backlog) (see [`gateway-streaming.md`](design/gateway-streaming.md) §D1, Option B).
 
 ---
 
@@ -893,6 +896,7 @@ nothing is lost. Owner column: `core` = python-civitas, else the target repo.
 | Postgres: zero-downtime dual-write migration | core | ⏸️ | §Postgres StateStore |
 | Postgres: PgBouncer deployment guide | core | ⏸️ docs pass | §Postgres StateStore |
 | Personal AI Assistant demo (Telegram gateway + skills) | core | ⏸️ | §M1.8 |
+| Bus-native streaming primitive (`AgentProcess.stream()` + `Transport.stream()` across in-proc/ZMQ/NATS, agent-to-agent) — v0.6.0 ships gateway-mediated streaming instead | core | ⏸️ v0.x | design/gateway-streaming.md §D1 (Option B) |
 
 ### Other repos (per [`boundary.md`](https://github.com/civitas-io/context))
 
