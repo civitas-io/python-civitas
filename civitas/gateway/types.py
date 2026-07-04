@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -26,11 +26,16 @@ class GatewayRequest:
 
 @dataclass
 class GatewayResponse:
-    """Thin HTTP response produced by middleware or terminal dispatch handler."""
+    """Thin HTTP response produced by middleware or terminal dispatch handler.
+
+    When ``stream`` is set, the body is delivered incrementally as Server-Sent
+    Events (G3); ``status`` and ``headers`` still apply and ``body`` is ignored.
+    """
 
     status: int = 200
     body: dict[str, Any] = field(default_factory=dict)
     headers: dict[str, str] = field(default_factory=dict)
+    stream: AsyncIterator[dict[str, Any]] | None = field(default=None, repr=False)
 
 
 # Middleware callable: (request, next) → response

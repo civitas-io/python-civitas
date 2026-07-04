@@ -2,15 +2,24 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import json
 import logging
 from typing import TYPE_CHECKING, Any
 
 from civitas.gateway.contracts import validate_request, validate_response
-from civitas.gateway.dispatch import DispatchResult, DispatchStatus, GatewayDispatcher
+from civitas.gateway.dispatch import (
+    DispatchResult,
+    DispatchStatus,
+    GatewayDispatcher,
+    StreamSink,
+    _StreamClosed,
+)
 from civitas.gateway.middleware import build_chain, load_middleware
 from civitas.gateway.openapi import build_spec, swagger_html
 from civitas.gateway.types import GatewayRequest, GatewayResponse, MiddlewareCallable
+from civitas.messages import _uuid7
 
 if TYPE_CHECKING:
     from civitas.gateway.core import GatewayConfig, HTTPGateway
@@ -50,6 +59,21 @@ def _parse_query(query_string: bytes) -> dict[str, str]:
     return result
 
 
+def _ws_parse(event: dict[str, Any]) -> dict[str, Any] | None:
+    """Parse a ``websocket.receive`` event into a JSON object, or None to skip."""
+    text = event.get("text")
+    if text is None:
+        raw = event.get("bytes")
+        text = raw.decode(errors="replace") if raw else None
+    if not text:
+        return None
+    try:
+        parsed = json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        return None
+    return parsed if isinstance(parsed, dict) else {"data": parsed}
+
+
 class GatewayASGI:
     """ASGI app served by uvicorn. Dispatches requests onto the Civitas bus."""
 
@@ -64,6 +88,7 @@ class GatewayASGI:
         self._route_table = route_table
         self._config = config
         self._dispatcher = dispatcher or GatewayDispatcher(gateway, config.request_timeout)
+        self._ws_routes: dict[str, str] = {r["path"]: r["agent"] for r in config.ws_routes}
 
         # Load global middleware from config at construction time
         self._middlewares: list[MiddlewareCallable] = []
@@ -105,6 +130,8 @@ class GatewayASGI:
             await self._handle_lifespan(receive, send)
         elif scope["type"] == "http":
             await self._handle_http(scope, receive, send)
+        elif scope["type"] == "websocket":
+            await self._handle_websocket(scope, receive, send)
 
     # ------------------------------------------------------------------
     # Lifespan
@@ -118,6 +145,61 @@ class GatewayASGI:
             elif event["type"] == "lifespan.shutdown":
                 await send({"type": "lifespan.shutdown.complete"})
                 return
+
+    # ------------------------------------------------------------------
+    # WebSocket handling (G2)
+    # ------------------------------------------------------------------
+
+    async def _handle_websocket(self, scope: _Scope, receive: _Receive, send: _Send) -> None:
+        """Bridge a WebSocket session to an agent: frames → cast, replies → frames.
+
+        Each inbound frame is dispatched as a stream request keyed by a per-session
+        correlation_id; the agent's emitted chunks stream back over the same socket
+        via a pump task draining the session sink until the client disconnects.
+        """
+        agent = self._ws_routes.get(scope["path"])
+        event = await receive()
+        if event["type"] != "websocket.connect":
+            return
+        if agent is None:
+            await send({"type": "websocket.close", "code": 4404})
+            return
+        await send({"type": "websocket.accept"})
+
+        session_id = _uuid7()
+        sink = self._gateway._open_stream(session_id)
+        pump = asyncio.create_task(self._ws_pump(send, sink))
+        try:
+            while True:
+                event = await receive()
+                if event["type"] == "websocket.disconnect":
+                    break
+                if event["type"] == "websocket.receive":
+                    payload = _ws_parse(event)
+                    if payload is not None:
+                        await self._gateway._send_stream_request(
+                            recipient=agent,
+                            payload=payload,
+                            correlation_id=session_id,
+                            msg_type="ws.message",
+                        )
+        finally:
+            pump.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await pump
+            self._gateway._close_stream(session_id)
+            with contextlib.suppress(Exception):
+                await self._gateway._send_stream_request(
+                    recipient=agent,
+                    payload={"__session__": "closed"},
+                    correlation_id=session_id,
+                    msg_type="ws.close",
+                )
+
+    async def _ws_pump(self, send: _Send, sink: StreamSink) -> None:
+        with contextlib.suppress(_StreamClosed):
+            async for chunk in sink.drain():
+                await send({"type": "websocket.send", "text": json.dumps(chunk)})
 
     # ------------------------------------------------------------------
     # HTTP request handling
@@ -216,6 +298,15 @@ class GatewayASGI:
                 valid, err = validate_request(entry.request_schema, payload)
                 if not valid:
                     return GatewayResponse(422, err or {})
+
+            if entry.mode == "stream":
+                stream = self._dispatcher.stream(
+                    recipient=entry.agent,
+                    msg_type=msg_type,
+                    payload=payload,
+                    trace_id=trace_id,
+                )
+                return GatewayResponse(200, stream=stream)
 
             result = await self._dispatcher.dispatch(
                 recipient=entry.agent,
@@ -341,6 +432,9 @@ class GatewayASGI:
         response: GatewayResponse,
         extra_headers: dict[str, str] | None = None,
     ) -> None:
+        if response.stream is not None:
+            await self._respond_stream(send, response, extra_headers)
+            return
         encoded = json.dumps(response.body).encode()
         headers: list[tuple[bytes, bytes]] = [
             _CONTENT_TYPE_JSON,
@@ -353,3 +447,39 @@ class GatewayASGI:
 
         await send({"type": "http.response.start", "status": response.status, "headers": headers})
         await send({"type": "http.response.body", "body": encoded})
+
+    async def _respond_stream(
+        self,
+        send: _Send,
+        response: GatewayResponse,
+        extra_headers: dict[str, str] | None = None,
+    ) -> None:
+        stream = response.stream
+        if stream is None:
+            return
+        headers: list[tuple[bytes, bytes]] = [
+            (b"content-type", b"text/event-stream"),
+            (b"cache-control", b"no-cache"),
+        ]
+        if self._config.enable_http3 and self._config.port_quic:
+            headers.append((b"alt-svc", f'h3=":{self._config.port_quic}"'.encode()))
+        for k, v in response.headers.items():
+            headers.append((k.encode(), v.encode()))
+        for k, v in (extra_headers or {}).items():
+            headers.append((k.encode(), v.encode()))
+        await send({"type": "http.response.start", "status": response.status, "headers": headers})
+
+        event_id = 0
+        try:
+            async for chunk in stream:
+                event_id += 1
+                frame = f"id: {event_id}\ndata: {json.dumps(chunk)}\n\n".encode()
+                await send({"type": "http.response.body", "body": frame, "more_body": True})
+        except _StreamClosed as exc:
+            frame = f"event: error\ndata: {json.dumps({'error': str(exc)})}\n\n".encode()
+            await send({"type": "http.response.body", "body": frame, "more_body": True})
+        finally:
+            aclose = getattr(stream, "aclose", None)
+            if aclose is not None:
+                await aclose()
+        await send({"type": "http.response.body", "body": b"", "more_body": False})

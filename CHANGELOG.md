@@ -13,6 +13,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ### Added
 
+- **Gateway streaming** (v0.6.0 / G2 + G3) — long-lived and incremental client connections built on one
+  shared streaming core:
+  - **WebSocket** (`GatewayConfig.ws_routes`) — bidirectional sessions: each inbound frame is `cast()` to
+    an agent and the agent streams messages back over the same socket. No new dependency (uses
+    `uvicorn[standard]`'s bundled `websockets`).
+  - **Server-Sent Events / true streaming** — a route with `mode: "stream"` streams an agent's output
+    incrementally as `text/event-stream`, replacing the old `{"chunks": [...]}` buffer-and-serialise
+    workaround. Works over HTTP/1.1, HTTP/2, and HTTP/3.
+  - **gRPC server-streaming** — the `Agent.Stream` RPC deferred in G1 is now implemented on the same core.
+  - New agent API: `self.emit(chunk)` / `self.end_stream()` and the auto-terminating, error-safe
+    `async with self.stream_reply() as stream:` context manager. Streams are bounded per-connection with a
+    `slow_consumer` fail-fast plus idle/duration timeouts (`GatewayConfig.stream_queue_maxsize` /
+    `stream_idle_timeout` / `max_stream_duration`).
 - **Accelerated JSON serialization** (`civitas[fast]`) — installs Rust-backed `orjson`, which
   `JsonSerializer` uses automatically for a large encode/decode speedup, transparently falling back to
   the standard-library `json` module when it isn't installed. The wire format stays plain JSON, so the

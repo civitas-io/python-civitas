@@ -174,16 +174,6 @@ class TestServicerCast:
         assert exc.value.code == grpc.StatusCode.NOT_FOUND
 
 
-class TestServicerStream:
-    @pytest.mark.asyncio
-    async def test_stream_unimplemented(self) -> None:
-        servicer, _ = _servicer_with_gateway()
-
-        with pytest.raises(_Abort) as exc:
-            await servicer.Stream(_request(), _FakeContext())
-        assert exc.value.code == grpc.StatusCode.UNIMPLEMENTED
-
-
 # ---------------------------------------------------------------------------
 # End-to-end: real grpc.aio server + channel
 # ---------------------------------------------------------------------------
@@ -247,15 +237,6 @@ class TestGrpcEndToEnd:
 
         gateway.send.assert_awaited_once()
 
-    @pytest.mark.asyncio
-    async def test_stream_unimplemented(self, grpc_endpoint: Any) -> None:
-        channel, _ = grpc_endpoint
-        stub = civitas_pb2_grpc.AgentStub(channel)
-
-        with pytest.raises(grpc.aio.AioRpcError) as exc:
-            async for _ in stub.Stream(_request()):
-                pass
-        assert exc.value.code() == grpc.StatusCode.UNIMPLEMENTED
 
     @pytest.mark.asyncio
     async def test_health_check_serving(self, grpc_endpoint: Any) -> None:

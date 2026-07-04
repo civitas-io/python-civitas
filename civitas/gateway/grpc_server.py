@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any
 
 import grpc
@@ -25,7 +26,7 @@ from google.protobuf.json_format import MessageToDict
 from grpc_health.v1 import health, health_pb2, health_pb2_grpc
 from grpc_reflection.v1alpha import reflection
 
-from civitas.gateway.dispatch import DispatchStatus
+from civitas.gateway.dispatch import DispatchStatus, _StreamClosed
 from civitas.gateway.proto import civitas_pb2, civitas_pb2_grpc
 
 if TYPE_CHECKING:
@@ -44,6 +45,14 @@ _ABORT_CODES: dict[DispatchStatus, grpc.StatusCode] = {
 
 _AGENT_SERVICE: str = civitas_pb2.DESCRIPTOR.services_by_name["Agent"].full_name
 _HEALTH_SERVICE: str = health_pb2.DESCRIPTOR.services_by_name["Health"].full_name
+
+# Stream-failure reason -> gRPC status code. A reason not listed here is treated as
+# an agent business error and surfaced in-band as a final AgentReply.error (D6).
+_STREAM_ABORT_CODES: dict[str, grpc.StatusCode] = {
+    "slow_consumer": grpc.StatusCode.RESOURCE_EXHAUSTED,
+    "stream idle timeout": grpc.StatusCode.DEADLINE_EXCEEDED,
+    "max_stream_duration exceeded": grpc.StatusCode.DEADLINE_EXCEEDED,
+}
 
 
 def _struct_to_dict(payload: struct_pb2.Struct) -> dict[str, Any]:
@@ -102,9 +111,24 @@ class _AgentServicer(civitas_pb2_grpc.AgentServicer):
 
     async def Stream(
         self, request: civitas_pb2.AgentRequest, context: grpc.aio.ServicerContext
-    ) -> Any:
-        """Server-streaming: advertised in the ``.proto`` but deferred to G3."""
-        await context.abort(grpc.StatusCode.UNIMPLEMENTED, "Stream is deferred to G3")
+    ) -> AsyncIterator[civitas_pb2.AgentReply]:
+        """Server-streaming: one AgentReply per chunk the agent emits (G3)."""
+        stream = self._dispatcher.stream(
+            recipient=request.recipient,
+            msg_type=request.type or "grpc.request",
+            payload=_struct_to_dict(request.payload),
+            trace_id=request.traceparent,
+        )
+        try:
+            async for chunk in stream:
+                yield civitas_pb2.AgentReply(payload=_dict_to_struct(chunk), error="")
+        except _StreamClosed as exc:
+            reason = str(exc)
+            code = _STREAM_ABORT_CODES.get(reason)
+            if code is not None:
+                await context.abort(code, reason)
+            # Agent business error: surface in-band as a final reply, then complete.
+            yield civitas_pb2.AgentReply(payload=_dict_to_struct({}), error=reason)
 
 
 class GrpcServer:
