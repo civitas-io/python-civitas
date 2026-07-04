@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 400" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#9CA3AF"/>
+    </marker>
+  </defs>
+
+  <text x="440" y="22" text-anchor="middle" font-size="11" font-weight="700" fill="#6B7280" letter-spacing="0.5">SELF-HEALING LOOP (Medicus) — MAPE-K over Civitas primitives</text>
+
+  <!-- Runtime signals (inputs, already exist) -->
+  <rect x="40" y="42" width="800" height="34" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="440" y="59" text-anchor="middle" font-size="10" font-weight="600" fill="#374151">Runtime signals — already in Civitas</text>
+  <text x="440" y="72" text-anchor="middle" font-size="8" fill="#6B7280">metrics · audit trail · OTEL spans · on_crash · live topology</text>
+
+  <line x1="110" y1="76" x2="110" y2="116" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Pipeline stages -->
+  <rect x="40" y="118" width="140" height="56" rx="6" fill="#1e3a5f"/>
+  <text x="110" y="143" text-anchor="middle" font-size="11" font-weight="600" fill="white">1 · Monitor</text>
+  <text x="110" y="159" text-anchor="middle" font-size="8" fill="#93c5fd">ingest + classify</text>
+
+  <rect x="205" y="118" width="140" height="56" rx="6" fill="#1e3a5f"/>
+  <text x="275" y="143" text-anchor="middle" font-size="11" font-weight="600" fill="white">2 · Diagnose</text>
+  <text x="275" y="159" text-anchor="middle" font-size="8" fill="#93c5fd">LLM root-cause + fix</text>
+
+  <rect x="370" y="118" width="140" height="56" rx="6" fill="#1e3a5f"/>
+  <text x="440" y="143" text-anchor="middle" font-size="11" font-weight="600" fill="white">3 · Plan</text>
+  <text x="440" y="159" text-anchor="middle" font-size="8" fill="#93c5fd">bounded diff</text>
+
+  <rect x="535" y="118" width="140" height="56" rx="6" fill="#1e3a5f"/>
+  <text x="605" y="143" text-anchor="middle" font-size="11" font-weight="600" fill="white">4 · Verify</text>
+  <text x="605" y="159" text-anchor="middle" font-size="8" fill="#93c5fd">sandbox: tests + SAST</text>
+
+  <rect x="700" y="118" width="140" height="56" rx="6" fill="#1e3a5f"/>
+  <text x="770" y="143" text-anchor="middle" font-size="11" font-weight="600" fill="white">5 · Deploy</text>
+  <text x="770" y="159" text-anchor="middle" font-size="8" fill="#93c5fd">redeploy signal → orchestrator</text>
+
+  <!-- stage arrows -->
+  <line x1="180" y1="146" x2="203" y2="146" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="345" y1="146" x2="368" y2="146" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="510" y1="146" x2="533" y2="146" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="675" y1="146" x2="698" y2="146" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- feedback loop (dashed U back to Monitor) -->
+  <path d="M770 176 L770 206 L110 206 L110 178" fill="none" stroke="#9CA3AF" stroke-width="1.2" stroke-dasharray="5,3" marker-end="url(#arr)"/>
+  <text x="440" y="200" text-anchor="middle" font-size="8" fill="#6B7280">watch → auto-rollback on regression → re-monitor (Knowledge: past fixes &amp; failed hypotheses)</text>
+
+  <!-- safety gate band -->
+  <text x="522" y="238" text-anchor="middle" font-size="8" fill="#6B7280">↑ governs stages 2–5 — the LLM proposes, the controller decides</text>
+  <rect x="205" y="245" width="635" height="48" rx="6" fill="#6b4c11"/>
+  <text x="522" y="266" text-anchor="middle" font-size="11" font-weight="600" fill="white">Deterministic controller + safety gates</text>
+  <text x="522" y="283" text-anchor="middle" font-size="8" fill="#fde68a">blast-radius limits · reversibility-first · sandboxed verify · immutable audit · kill switch</text>
+
+  <!-- human / presidium -->
+  <line x1="522" y1="293" x2="522" y2="326" stroke="#9CA3AF" stroke-width="1.2" stroke-dasharray="5,3" marker-end="url(#arr)"/>
+  <text x="532" y="312" text-anchor="start" font-size="8" fill="#6B7280">escalate / approve</text>
+  <rect x="432" y="328" width="180" height="44" rx="6" fill="#2d6a4f"/>
+  <text x="522" y="348" text-anchor="middle" font-size="11" font-weight="600" fill="white">Human / Presidium</text>
+  <text x="522" y="363" text-anchor="middle" font-size="8" fill="#a7f3d0">approve · policy · graduated autonomy</text>
+</svg>
