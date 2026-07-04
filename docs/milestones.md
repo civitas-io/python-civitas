@@ -883,7 +883,7 @@ capability, which builds on supervision + dynamic spawn + telemetry (under inves
 
 | # | Deliverable | Priority | Source |
 |---|-------------|----------|--------|
-| R1 | **Non-blocking dynamic spawn** — reply once the message loop is created; run `on_start()` inside the task. Design-first (ordering + error-propagation tradeoffs). | 🔴 High | GH #9 (from #8) |
+| R1 | **Non-blocking dynamic spawn** — reply once the message loop is created; run `on_start()` inside the task. Design-first (ordering + error-propagation tradeoffs). Design: [`non-blocking-spawn.md`](design/non-blocking-spawn.md) (draft, Oracle-reviewed). | 🔴 High | GH #9 (from #8) |
 | R2 | **`spawn_into(supervisor_name, …)`** — public cross-tree spawn helper (no hand-built internal messages) | 🟡 Medium | GH #10 |
 | R3 | **First-party JWT auth** (opt-in `civitas[jwt]`) + **mTLS** client-cert auth | 🟡 Medium | v0.6.0 §G5 |
 | R4 | **Encrypted `StateStore` at rest** | 🟡 Medium | design/security-hardening.md |
