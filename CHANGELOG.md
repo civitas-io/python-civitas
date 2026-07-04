@@ -11,6 +11,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-07-04
+
 ### Fixed
 
 - **Dynamically-spawned agents now inherit audit + metrics wiring** — agents created at runtime via
