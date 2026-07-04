@@ -13,6 +13,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ### Added
 
+- **Accelerated JSON serialization** (`civitas[fast]`) — installs Rust-backed `orjson`, which
+  `JsonSerializer` uses automatically for a large encode/decode speedup, transparently falling back to
+  the standard-library `json` module when it isn't installed. The wire format stays plain JSON, so the
+  two backends interoperate. The `Message` payload primitives-only validation gate deliberately keeps
+  using stdlib `json` — orjson natively accepts `datetime`/`UUID`/dataclasses and would weaken that
+  enforcement.
 - **gRPC gateway** (`civitas[grpc]`) — a generic `grpc.aio` surface on the gateway (v0.6.0 / G1). One
   `civitas.Agent` service proxies any agent by name, so callers need no per-agent `.proto` or civitas
   SDK: `Invoke` (unary → agent `call()`) and `Cast` (unary → `cast()`) carry a
