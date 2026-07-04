@@ -13,6 +13,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ### Added
 
+- **Cross-tree spawn** (v0.7.0 · R2) — `AgentProcess.spawn_into(supervisor_name, agent_class, name,
+  config=None, *, wait=True)` spawns a child into any *named* `DynamicSupervisor` in the tree, not just
+  the nearest ancestor. `spawn()` is now the nearest-ancestor special case of `spawn_into()` and delegates
+  to it, so R1 semantics (`wait` / cleanup / `on_child_terminated`) are inherited unchanged. It fails fast
+  with `SpawnError` instead of hanging: an unknown target, a non-`DynamicSupervisor` target, or a
+  self-target are rejected before sending, and a valid but unresponsive target (e.g. `SUSPENDED`) surfaces
+  as `SpawnError` via a bounded reply timeout. Every `DynamicSupervisor` now carries a reserved
+  `_agency.dynamic_supervisor` capability, injected at registration (surviving a YAML `capabilities:`
+  override and propagated to nested dynamically-spawned supervisors) so it appears in registry /
+  `topology show` introspection. See [`docs/design/spawn-into.md`](docs/design/spawn-into.md).
+- **Cross-tree spawn authorization** (v0.7.0 · R2) — because a cross-tree child runs the *spawner's* chosen
+  code with the *target* supervisor's `llm` / `tools` / `store` (a confused-deputy surface), R2 ships the
+  controls to let the target say no: a new `DynamicSupervisor(..., spawner_allowlist: set[str] | None =
+  None)` rejects spawners not in the set *before* the governance hook (default `None` keeps today's open
+  behavior); a read-only `DynamicSupervisor.current_spawner` property lets an `on_spawn_requested` override
+  authorize by spawner without a signature change (valid only during the hook); and every admitted spawn
+  emits a `dynamic.spawn` audit event (`spawner`, `child`, `class_path`, `supervisor`) via the wired audit
+  sink.
 - **Non-blocking dynamic spawn** (v0.7.0 · R1) — `DynamicSupervisor` spawning no longer forces the
   spawner to block on the child's `on_start()`. `spawn(..., wait=False)` — and the `spawn_nowait()`
   alias on both `AgentProcess` and `Runtime` — return as soon as the child's task exists; the child
@@ -32,6 +50,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ### Fixed
 
+- **Name collision no longer crashes the target `DynamicSupervisor`** (v0.7.0 · R2, P0) — spawning a child
+  whose name already exists anywhere in the global registry previously let the `ValueError` from
+  `registry.register()` escalate and crash the supervisor. `DynamicSupervisor._handle_spawn` now rejects a
+  duplicate name with a `SpawnError` reply via a global pre-check and, for the cross-supervisor race, a
+  wrapped `register()` — the supervisor stays running. Latent before R2 (ancestor-only spawn made it hard
+  to reach); `spawn_into` turned it into a one-line cross-tree denial-of-service, so it is fixed here.
 - Dynamically-spawned agents that fail `on_start()` no longer **leak** their registry entry or transport
   subscription — the supervisor runs a unified, idempotent terminal cleanup.
 

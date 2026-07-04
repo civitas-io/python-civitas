@@ -12,7 +12,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 from civitas.audit.types import AuditEvent, AuditSink
-from civitas.errors import ConfigurationError, ErrorAction, SpawnError
+from civitas.errors import ConfigurationError, ErrorAction, MessageRoutingError, SpawnError
 from civitas.messages import Message, _new_span_id, _uuid7
 from civitas.observability.tracer import Span
 from civitas.plugins.loader import resolve_plugin_class
@@ -24,6 +24,14 @@ logger = logging.getLogger(__name__)
 _STREAM_CHUNK = "civitas.stream.chunk"
 _STREAM_END = "civitas.stream.end"
 _STREAM_ERROR = "civitas.stream.error"
+
+# Reserved marker capability (D3): lets spawn_into() fast-fail on a non-supervisor
+# target. Injected at registration so a YAML capabilities: override cannot strip it.
+DYNAMIC_SUPERVISOR_CAPABILITY = "_agency.dynamic_supervisor"
+
+# Backstops the marker check: a SUSPENDED target passes the marker check but buffers
+# non-priority messages and never replies, so bound the wait instead of hanging (§8).
+_SPAWN_ASK_TIMEOUT = 30.0
 
 if TYPE_CHECKING:
     from civitas.bus import MessageBus
@@ -657,6 +665,80 @@ class AgentProcess:
             message_type="civitas.eval.event",
         )
 
+    async def spawn_into(
+        self,
+        supervisor_name: str,
+        agent_class: type,
+        name: str,
+        config: dict[str, Any] | None = None,
+        *,
+        wait: bool = True,
+    ) -> str:
+        """Spawn a dynamic agent into a *named* DynamicSupervisor anywhere in the tree.
+
+        Where :meth:`spawn` targets the nearest ancestor DynamicSupervisor, this
+        targets ``supervisor_name`` explicitly — enabling cross-tree spawns. The
+        child is equipped with the *target* supervisor's ``llm`` / ``tools`` /
+        ``store`` (the target vouches for and equips it); the caller only proposes
+        the class and config. It sends the same ``civitas.dynamic.spawn`` message as
+        :meth:`spawn`, so admission, wait semantics, and cleanup are identical.
+
+        Fails fast with :class:`SpawnError` (never a silent hang): an unknown target,
+        a target that is not a DynamicSupervisor, or the caller itself are rejected
+        before sending; a valid but unresponsive target (e.g. SUSPENDED) surfaces as
+        ``SpawnError`` via a bounded reply timeout.
+
+        Args:
+            supervisor_name: Registered name of the target DynamicSupervisor.
+            agent_class: Agent class to instantiate.
+            name: Registry name for the new child.
+            config: Optional spawn-time config, readable as ``self.config``.
+            wait: When True (default) return only after the child reaches
+                RUNNING/SUSPENDED, raising SpawnError on start failure. When False
+                return as soon as the child's task exists; a later start failure is
+                delivered via ``on_child_terminated`` (R1 · D2).
+
+        Returns:
+            The child agent name on success.
+
+        Raises:
+            SpawnError: self-target; unknown supervisor; target not a
+                DynamicSupervisor; governance or allowlist denial; routing failure;
+                reply timeout; or child start failure.
+        """
+        if supervisor_name == self.name:
+            raise SpawnError("cannot spawn into self")
+        if self._registry is not None:
+            entry = self._registry.lookup(supervisor_name)
+            if entry is None:
+                raise SpawnError(f"no such supervisor '{supervisor_name}'")
+            if DYNAMIC_SUPERVISOR_CAPABILITY not in entry.capabilities:
+                raise SpawnError(f"'{supervisor_name}' is not a DynamicSupervisor")
+        class_path = f"{agent_class.__module__}.{agent_class.__qualname__}"
+        try:
+            reply = await self.ask(
+                supervisor_name,
+                {
+                    "class_path": class_path,
+                    "name": name,
+                    "config": config or {},
+                    "spawner": self.name,
+                    "wait": wait,
+                },
+                message_type="civitas.dynamic.spawn",
+                timeout=_SPAWN_ASK_TIMEOUT,
+            )
+        except MessageRoutingError as exc:
+            raise SpawnError(f"cannot route spawn to '{supervisor_name}': {exc}") from exc
+        except TimeoutError as exc:
+            raise SpawnError(
+                f"spawn into '{supervisor_name}' timed out (target unresponsive)"
+            ) from exc
+        if reply.payload.get("status") != "ok":
+            reason = reply.payload.get("reason") or reply.payload.get("error") or "spawn failed"
+            raise SpawnError(reason)
+        return name
+
     async def spawn(
         self,
         agent_class: type,
@@ -667,9 +749,11 @@ class AgentProcess:
     ) -> str:
         """Spawn a dynamic agent via the nearest ancestor DynamicSupervisor.
 
-        Sends a civitas.dynamic.spawn message and awaits confirmation.
-        Raises SpawnError if no DynamicSupervisor ancestor exists or spawn is denied.
-        Returns the agent name on success.
+        The nearest-ancestor special case of :meth:`spawn_into` — it resolves the
+        ancestor DynamicSupervisor name wired at startup and delegates. Sends a
+        civitas.dynamic.spawn message and awaits confirmation. Raises SpawnError if
+        no DynamicSupervisor ancestor exists or spawn is denied. Returns the agent
+        name on success.
 
         With ``wait=True`` (default) the call returns only after the child reaches
         RUNNING/SUSPENDED and raises SpawnError if its start fails. With
@@ -678,22 +762,9 @@ class AgentProcess:
         """
         if self._dynamic_supervisor_name is None:
             raise SpawnError("No DynamicSupervisor ancestor found in supervision tree")
-        class_path = f"{agent_class.__module__}.{agent_class.__qualname__}"
-        reply = await self.ask(
-            self._dynamic_supervisor_name,
-            {
-                "class_path": class_path,
-                "name": name,
-                "config": config or {},
-                "spawner": self.name,
-                "wait": wait,
-            },
-            message_type="civitas.dynamic.spawn",
+        return await self.spawn_into(
+            self._dynamic_supervisor_name, agent_class, name, config, wait=wait
         )
-        if reply.payload.get("status") != "ok":
-            reason = reply.payload.get("reason") or reply.payload.get("error") or "spawn failed"
-            raise SpawnError(reason)
-        return name
 
     async def spawn_nowait(
         self,

@@ -13,6 +13,7 @@ from civitas import AgentProcess, DynamicSupervisor, NullSink, Runtime, Supervis
 from civitas.errors import ErrorAction, SpawnError
 from civitas.messages import Message
 from civitas.process import ProcessStatus
+from civitas.registry import LocalRegistry
 from civitas.supervisor import RestartMode
 from tests.conftest import EchoAgent, wait_for, wait_for_status
 
@@ -1078,5 +1079,411 @@ class TestR1Accounting:
             assert "mc1" not in dyn._dynamic_children
             name = await rt.spawn("workers", EchoAgent, name="mc2")
             assert name == "mc2"
+        finally:
+            await rt.stop()
+
+
+# ---------------------------------------------------------------------------
+# R2 cross-tree spawn — spawn_into(), P0 collision guard, current_spawner,
+# spawner_allowlist + audit, reserved marker capability
+# ---------------------------------------------------------------------------
+
+_MARKER = "_agency.dynamic_supervisor"
+
+
+class SpawnIntoDriver(AgentProcess):
+    """Agent that calls spawn_into()/spawn() on request and records terminations."""
+
+    def __init__(self, name: str) -> None:
+        super().__init__(name)
+        self.terminated: list[tuple[str, str]] = []
+
+    async def on_child_terminated(self, name: str, reason: str) -> None:
+        self.terminated.append((name, reason))
+
+    async def handle(self, message: Message) -> Message | None:
+        p = message.payload
+        agent_cls = LifecycleAgent if p.get("lifecycle") else EchoAgent
+        try:
+            if p.get("op") == "spawn":
+                name = await self.spawn(
+                    agent_cls, p["child"], p.get("config"), wait=p.get("wait", True)
+                )
+            else:
+                name = await self.spawn_into(
+                    p["target"], agent_cls, p["child"], p.get("config"), wait=p.get("wait", True)
+                )
+            return self.reply({"ok": True, "name": name})
+        except SpawnError as exc:
+            return self.reply({"ok": False, "error": str(exc)})
+
+
+class _RecordingAuditSink:
+    """AuditSink that records emitted events for assertions."""
+
+    def __init__(self) -> None:
+        self.events: list[Any] = []
+
+    async def emit(self, event: Any) -> None:
+        self.events.append(event)
+
+    async def flush(self) -> None:
+        pass
+
+    async def close(self) -> None:
+        pass
+
+
+class _RaceRegistry(LocalRegistry):
+    """LocalRegistry whose register() always raises — models the cross-supervisor race.
+
+    lookup() still returns None for unknown names, so the global pre-check passes and
+    execution reaches the wrapped register() call (the load-bearing P0 guard).
+    """
+
+    def register(
+        self,
+        name: str,
+        address: str | None = None,
+        *,
+        is_local: bool = True,
+        capabilities: Any = None,
+        capability_metadata: Any = None,
+    ) -> None:
+        raise ValueError(f"Process already registered: {name!r}")
+
+
+def _two_dynsup_runtime() -> tuple[Runtime, SpawnIntoDriver, DynamicSupervisor, DynamicSupervisor]:
+    driver = SpawnIntoDriver("x")
+    a = DynamicSupervisor("A")
+    b = DynamicSupervisor("B")
+    rt = Runtime(supervisor=Supervisor("root", children=[driver, a, b]))
+    return rt, driver, a, b
+
+
+class TestP0CollisionGuard:
+    @pytest.mark.asyncio
+    async def test_collision_precheck_error_reply_supervisor_survives(self):
+        dyn = _make_dyn()
+        rt = _build_runtime(dyn, extra_children=[EchoAgent("dup")])
+        await rt.start()
+        try:
+            with pytest.raises(SpawnError, match="already registered"):
+                await rt.spawn("workers", EchoAgent, "dup")
+            workers = rt.get_agent("workers")
+            assert workers is not None
+            assert workers.status == ProcessStatus.RUNNING
+            # The supervisor is unharmed — a fresh spawn still succeeds.
+            assert await rt.spawn("workers", EchoAgent, "fresh") == "fresh"
+        finally:
+            await rt.stop()
+
+    async def test_collision_register_valueerror_path_no_crash(self):
+        ds = _make_dyn()
+        ds._registry = _RaceRegistry()
+        msg = _fake_message(
+            "civitas.dynamic.spawn",
+            {"class_path": "tests.conftest.EchoAgent", "name": "dup", "config": {}, "spawner": ""},
+        )
+        reply = await _dispatch(ds, msg)
+        assert reply is not None
+        assert reply.payload["status"] == "error"
+        assert "already registered" in reply.payload["reason"]
+        assert "dup" not in ds._dynamic_children
+        assert ds._total_spawns == 0
+
+
+class TestReservedMarker:
+    @pytest.mark.asyncio
+    async def test_marker_present_on_code_first_dynsup(self):
+        dyn = _make_dyn()
+        rt = _build_runtime(dyn)
+        await rt.start()
+        try:
+            entry = rt._registry.lookup("workers")
+            assert entry is not None
+            assert _MARKER in entry.capabilities
+        finally:
+            await rt.stop()
+
+    @pytest.mark.asyncio
+    async def test_marker_survives_yaml_capabilities_override(self, tmp_path: Path):
+        yaml_text = textwrap.dedent("""\
+            supervision:
+              name: root
+              children:
+                - name: workers
+                  type: dynamic_supervisor
+                  capabilities: [custom.tag]
+        """)
+        config_file = tmp_path / "topology.yaml"
+        config_file.write_text(yaml_text)
+        rt = Runtime.from_config(config_file)
+        await rt.start()
+        try:
+            entry = rt._registry.lookup("workers")
+            assert entry is not None
+            assert _MARKER in entry.capabilities
+            assert "custom.tag" in entry.capabilities
+        finally:
+            await rt.stop()
+
+    @pytest.mark.asyncio
+    async def test_nested_dynamic_dynsup_gets_marker(self):
+        dyn = _make_dyn()
+        rt = _build_runtime(dyn)
+        await rt.start()
+        try:
+            await rt.spawn("workers", DynamicSupervisor, "sub")
+            entry = rt._registry.lookup("sub")
+            assert entry is not None
+            assert _MARKER in entry.capabilities
+        finally:
+            await rt.stop()
+
+
+class TestSpawnInto:
+    @pytest.mark.asyncio
+    async def test_places_child_under_named_supervisor(self):
+        rt, _driver, a, b = _two_dynsup_runtime()
+        await rt.start()
+        try:
+            reply = await rt.ask("x", {"op": "spawn_into", "target": "B", "child": "c1"})
+            assert reply.payload["ok"] is True
+            assert "c1" in b._dynamic_children
+            assert "c1" not in a._dynamic_children
+        finally:
+            await rt.stop()
+
+    @pytest.mark.asyncio
+    async def test_spawn_still_targets_nearest_ancestor(self):
+        rt, _driver, a, b = _two_dynsup_runtime()
+        await rt.start()
+        try:
+            reply = await rt.ask("x", {"op": "spawn", "child": "c2"})
+            assert reply.payload["ok"] is True
+            assert "c2" in a._dynamic_children
+            assert "c2" not in b._dynamic_children
+        finally:
+            await rt.stop()
+
+    @pytest.mark.asyncio
+    async def test_unknown_supervisor_raises(self):
+        rt, _driver, _a, _b = _two_dynsup_runtime()
+        await rt.start()
+        try:
+            reply = await rt.ask("x", {"op": "spawn_into", "target": "nope", "child": "c"})
+            assert reply.payload["ok"] is False
+            assert "no such supervisor" in reply.payload["error"]
+        finally:
+            await rt.stop()
+
+    @pytest.mark.asyncio
+    async def test_non_supervisor_target_raises(self):
+        driver = SpawnIntoDriver("x")
+        a = DynamicSupervisor("A")
+        plain = EchoAgent("plain")
+        rt = Runtime(supervisor=Supervisor("root", children=[driver, a, plain]))
+        await rt.start()
+        try:
+            reply = await rt.ask("x", {"op": "spawn_into", "target": "plain", "child": "c"})
+            assert reply.payload["ok"] is False
+            assert "not a DynamicSupervisor" in reply.payload["error"]
+        finally:
+            await rt.stop()
+
+    async def test_self_target_raises(self):
+        agent = NullAgent("solo")
+        with pytest.raises(SpawnError, match="cannot spawn into self"):
+            await agent.spawn_into("solo", EchoAgent, "child")
+
+    @pytest.mark.asyncio
+    async def test_wait_false_cross_tree_success(self):
+        rt, _driver, _a, b = _two_dynsup_runtime()
+        await rt.start()
+        try:
+            _START_GATES["okc"] = asyncio.Event()
+            reply = await rt.ask(
+                "x",
+                {
+                    "op": "spawn_into",
+                    "target": "B",
+                    "child": "okc",
+                    "wait": False,
+                    "lifecycle": True,
+                    "config": {"gate": True},
+                },
+            )
+            assert reply.payload["ok"] is True
+            agent = b._dynamic_children["okc"].agent
+            assert agent.status == ProcessStatus.INITIALIZING
+            _START_GATES["okc"].set()
+            await wait_for_status(agent, ProcessStatus.RUNNING, timeout=3.0)
+        finally:
+            await rt.stop()
+
+    @pytest.mark.asyncio
+    async def test_wait_false_cross_tree_start_failure_notifies_spawner(self):
+        rt, driver, a, b = _two_dynsup_runtime()
+        await rt.start()
+        try:
+            _START_GATES["cf"] = asyncio.Event()
+            reply = await rt.ask(
+                "x",
+                {
+                    "op": "spawn_into",
+                    "target": "B",
+                    "child": "cf",
+                    "wait": False,
+                    "lifecycle": True,
+                    "config": {"gate": True, "fail_on": "on_start"},
+                },
+            )
+            assert reply.payload["ok"] is True  # immediate ok before on_start runs
+            assert "cf" in b._dynamic_children
+            assert "cf" not in a._dynamic_children
+            _START_GATES["cf"].set()
+            await wait_for(
+                lambda: any(n == "cf" for n, _ in driver.terminated),
+                timeout=3.0,
+                msg="cross-tree terminated notification",
+            )
+            assert driver.terminated[0][1].startswith("on_start:")
+        finally:
+            await rt.stop()
+
+    @pytest.mark.asyncio
+    async def test_suspended_target_times_out(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setattr("civitas.process._SPAWN_ASK_TIMEOUT", 0.3)
+        rt, _driver, _a, b = _two_dynsup_runtime()
+        await rt.start()
+        try:
+            await rt.suspend("B")
+            await wait_for_status(b, ProcessStatus.SUSPENDED, timeout=2.0)
+            reply = await rt.ask("x", {"op": "spawn_into", "target": "B", "child": "c"})
+            assert reply.payload["ok"] is False
+            assert "timed out" in reply.payload["error"]
+        finally:
+            await rt.stop()
+
+
+class TestCurrentSpawner:
+    @pytest.mark.asyncio
+    async def test_visible_in_hook_and_none_outside(self):
+        seen: dict[str, str | None] = {}
+
+        class RecordingSup(DynamicSupervisor):
+            async def on_spawn_requested(self, agent_class, name, config) -> bool:
+                seen["during"] = self.current_spawner
+                return True
+
+        driver = SpawnIntoDriver("x")
+        sup = RecordingSup("A")
+        rt = Runtime(supervisor=Supervisor("root", children=[driver, sup]))
+        await rt.start()
+        try:
+            reply = await rt.ask("x", {"op": "spawn", "child": "c"})
+            assert reply.payload["ok"] is True
+            assert seen["during"] == "x"
+            assert sup.current_spawner is None
+        finally:
+            await rt.stop()
+
+    @pytest.mark.asyncio
+    async def test_cleared_after_governance_denial(self):
+        class DenySup(DynamicSupervisor):
+            async def on_spawn_requested(self, agent_class, name, config) -> bool:
+                return False
+
+        sup = DenySup("A")
+        rt = Runtime(supervisor=Supervisor("root", children=[sup]))
+        await rt.start()
+        try:
+            reply = await rt.ask(
+                "A",
+                {
+                    "class_path": "tests.conftest.EchoAgent",
+                    "name": "c",
+                    "config": {},
+                    "spawner": "z",
+                },
+                message_type="civitas.dynamic.spawn",
+            )
+            assert reply.payload["status"] == "error"
+            assert sup.current_spawner is None
+        finally:
+            await rt.stop()
+
+
+class TestSpawnerAllowlist:
+    @pytest.mark.asyncio
+    async def test_default_none_allows_any_spawner(self):
+        dyn = _make_dyn()
+        rt = _build_runtime(dyn)
+        await rt.start()
+        try:
+            assert await rt.spawn("workers", EchoAgent, "c") == "c"
+        finally:
+            await rt.stop()
+
+    @pytest.mark.asyncio
+    async def test_unlisted_spawner_rejected_before_hook(self):
+        hook_calls: list[str] = []
+
+        class TrackingSup(DynamicSupervisor):
+            async def on_spawn_requested(self, agent_class, name, config) -> bool:
+                hook_calls.append(name)
+                return True
+
+        sup = TrackingSup("A", spawner_allowlist={"allowed"})
+        rt = Runtime(supervisor=Supervisor("root", children=[sup]))
+        await rt.start()
+        try:
+            reply = await rt.ask(
+                "A",
+                {
+                    "class_path": "tests.conftest.EchoAgent",
+                    "name": "c1",
+                    "config": {},
+                    "spawner": "blocked",
+                },
+                message_type="civitas.dynamic.spawn",
+            )
+            assert reply.payload["status"] == "error"
+            assert "not allowed" in reply.payload["reason"]
+            assert "c1" not in sup._dynamic_children
+            assert hook_calls == []
+        finally:
+            await rt.stop()
+
+    @pytest.mark.asyncio
+    async def test_allowed_spawner_spawns_and_emits_audit(self):
+        sink = _RecordingAuditSink()
+        sup = DynamicSupervisor("A", spawner_allowlist={"allowed"})
+        rt = Runtime(supervisor=Supervisor("root", children=[sup]))
+        rt._audit_sink = sink
+        await rt.start()
+        try:
+            reply = await rt.ask(
+                "A",
+                {
+                    "class_path": "tests.conftest.EchoAgent",
+                    "name": "c1",
+                    "config": {},
+                    "spawner": "allowed",
+                },
+                message_type="civitas.dynamic.spawn",
+            )
+            assert reply.payload["status"] == "ok"
+            assert "c1" in sup._dynamic_children
+            spawn_events = [e for e in sink.events if e["event"] == "dynamic.spawn"]
+            assert len(spawn_events) == 1
+            assert spawn_events[0]["agent"] == "A"
+            assert spawn_events[0]["details"] == {
+                "spawner": "allowed",
+                "child": "c1",
+                "class_path": "tests.conftest.EchoAgent",
+                "supervisor": "A",
+            }
         finally:
             await rt.stop()
