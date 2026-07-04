@@ -9,6 +9,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from civitas import AgentProcess, Runtime
+from civitas.messages import Message
 from civitas.security.config import (
     NatsTlsConfig,
     SecurityConfig,
@@ -371,15 +373,13 @@ class TestNATSTransportTLS:
 # ---------------------------------------------------------------------------
 
 
+class _Agent(AgentProcess):
+    async def handle(self, msg: Message) -> None:
+        pass
+
+
 class TestRuntimeTransportSecurity:
     def test_zmq_curve_parsed_from_yaml(self, tmp_path: Path):
-        from civitas import AgentProcess, Runtime
-        from civitas.messages import Message
-
-        class _Agent(AgentProcess):
-            async def handle(self, msg: Message) -> None:
-                pass
-
         yaml_file = tmp_path / "t.yaml"
         yaml_file.write_text(
             textwrap.dedent("""\
@@ -408,13 +408,6 @@ class TestRuntimeTransportSecurity:
         assert rt._transport_security.zmq.server_public_key == "SPUB"
 
     def test_no_transport_block_gives_none(self, tmp_path: Path):
-        from civitas import AgentProcess, Runtime
-        from civitas.messages import Message
-
-        class _Agent(AgentProcess):
-            async def handle(self, msg: Message) -> None:
-                pass
-
         yaml_file = tmp_path / "t.yaml"
         yaml_file.write_text(
             textwrap.dedent("""\
@@ -430,13 +423,6 @@ class TestRuntimeTransportSecurity:
         assert rt._transport_security is None
 
     def test_security_without_transport_gives_none(self, tmp_path: Path):
-        from civitas import AgentProcess, Runtime
-        from civitas.messages import Message
-
-        class _Agent(AgentProcess):
-            async def handle(self, msg: Message) -> None:
-                pass
-
         yaml_file = tmp_path / "t.yaml"
         yaml_file.write_text(
             textwrap.dedent("""\
