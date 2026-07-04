@@ -2840,8 +2840,8 @@
 <tr>
 <td>—</td>
 <td><a href="#v070--spawn-maturation--gateway-auth-proposed">v0.7.0 — Spawn Maturation &amp; Gateway Auth</a></td>
-<td>⏳ Proposed</td>
-<td>next</td>
+<td>🔄 In progress</td>
+<td>R1 ✅</td>
 </tr>
 <tr>
 <td>—</td>
@@ -4501,7 +4501,7 @@ capability, which builds on supervision + dynamic spawn + telemetry (under inves
 <tbody>
 <tr>
 <td>R1</td>
-<td><strong>Non-blocking dynamic spawn</strong> — reply once the message loop is created; run <code>on_start()</code> inside the task. Design-first (ordering + error-propagation tradeoffs). Design: <a href="../design/non-blocking-spawn/"><code>non-blocking-spawn.md</code></a> (draft, Oracle-reviewed).</td>
+<td>✅ <strong>Done (PR #14)</strong> — <strong>Non-blocking dynamic spawn</strong>: <code>spawn(wait=False)</code> / <code>spawn_nowait()</code>; <code>on_start()</code> runs in-task; failures via <code>on_child_terminated</code>. Design: <a href="../design/non-blocking-spawn/"><code>non-blocking-spawn.md</code></a> (Oracle + Momus reviewed).</td>
 <td>🔴 High</td>
 <td>GH #9 (from #8)</td>
 </tr>
@@ -4539,7 +4539,7 @@ capability, which builds on supervision + dynamic spawn + telemetry (under inves
 <td>R7</td>
 <td><strong>Bus-native streaming primitive</strong> (<code>AgentProcess.stream()</code> + <code>Transport.stream()</code>) — stretch</td>
 <td>🟢 Stretch</td>
-<td>design/gateway-streaming.md §D1 (Option B)</td>
+<td><a href="https://github.com/civitas-io/python-civitas/issues/15">GH #15</a> · design/gateway-streaming.md §D1 (Option B)</td>
 </tr>
 </tbody>
 </table>
@@ -4661,7 +4661,7 @@ nothing is lost. Owner column: <code>core</code> = python-civitas, else the targ
 <td>Bus-native streaming primitive (<code>AgentProcess.stream()</code> + <code>Transport.stream()</code> across in-proc/ZMQ/NATS, agent-to-agent) — v0.6.0 ships gateway-mediated streaming instead</td>
 <td>core</td>
 <td>⏸️ v0.x</td>
-<td>design/gateway-streaming.md §D1 (Option B)</td>
+<td><a href="https://github.com/civitas-io/python-civitas/issues/15">GH #15</a> · design/gateway-streaming.md §D1 (Option B)</td>
 </tr>
 <tr>
 <td>First-party JWT gateway auth (opt-in <code>civitas[jwt]</code>) + mTLS client-cert auth — G5 shipped API-key only (no new core dep)</td>
@@ -4670,9 +4670,9 @@ nothing is lost. Owner column: <code>core</code> = python-civitas, else the targ
 <td>§v0.6.0 G5</td>
 </tr>
 <tr>
-<td>Dynamic spawn: non-blocking spawn (#9) and <code>spawn_into()</code> cross-tree helper (#10)</td>
+<td>Dynamic spawn: non-blocking spawn (#9) ✅ done (PR #14); <code>spawn_into()</code> cross-tree helper (#10) in progress</td>
 <td>core</td>
-<td>⏸️ v0.x</td>
+<td>🔄 v0.7.0</td>
 <td>GH #9, #10</td>
 </tr>
 <tr>
