@@ -862,20 +862,46 @@ class Runtime:
         agent_class: type[AgentProcess],
         name: str,
         config: dict[str, Any] | None = None,
+        *,
+        wait: bool = True,
     ) -> str:
         """Spawn a dynamic agent via the named DynamicSupervisor.
 
         Returns the agent name on success. Raises SpawnError on failure.
+
+        With ``wait=False`` the call returns as soon as the child's task exists,
+        before ``on_start()`` completes; a later start failure is delivered to the
+        spawner via ``on_child_terminated`` (R1 · D2).
         """
         class_path = f"{agent_class.__module__}.{agent_class.__qualname__}"
         reply = await self.ask(
             supervisor_name,
-            {"class_path": class_path, "name": name, "config": config or {}, "spawner": "_runtime"},
+            {
+                "class_path": class_path,
+                "name": name,
+                "config": config or {},
+                "spawner": "_runtime",
+                "wait": wait,
+            },
             message_type="civitas.dynamic.spawn",
         )
         if reply.payload.get("status") != "ok":
-            raise SpawnError(reply.payload.get("reason", "spawn failed"))
+            reason = reply.payload.get("reason") or reply.payload.get("error") or "spawn failed"
+            raise SpawnError(reason)
         return name
+
+    async def spawn_nowait(
+        self,
+        supervisor_name: str,
+        agent_class: type[AgentProcess],
+        name: str,
+        config: dict[str, Any] | None = None,
+    ) -> str:
+        """Spawn a dynamic agent without blocking on its ``on_start()`` (R1 · D2).
+
+        Alias for ``spawn(..., wait=False)``.
+        """
+        return await self.spawn(supervisor_name, agent_class, name, config, wait=False)
 
     async def despawn(self, supervisor_name: str, name: str) -> None:
         """Hard-stop a dynamic child via the named DynamicSupervisor."""

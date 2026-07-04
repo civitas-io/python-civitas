@@ -11,6 +11,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+### Added
+
+- **Non-blocking dynamic spawn** (v0.7.0 · R1) — `DynamicSupervisor` spawning no longer forces the
+  spawner to block on the child's `on_start()`. `spawn(..., wait=False)` — and the `spawn_nowait()`
+  alias on both `AgentProcess` and `Runtime` — return as soon as the child's task exists; the child
+  initialises in parallel and messages buffered in the meantime are dispatched FIFO once it is ready.
+  `wait=True` remains the default and preserves the previous semantics, including synchronous
+  start-failure reporting. Start failures after a non-blocking spawn are delivered to the spawner via
+  `on_child_terminated`. See [`docs/design/non-blocking-spawn.md`](docs/design/non-blocking-spawn.md).
+- `MessageBus.teardown_agent()` and `Transport.unsubscribe()` — unwire a terminated agent and fail any
+  pending `ask()` bound to it (so callers fail fast instead of hanging).
+
+### Changed
+
+- `DynamicSupervisor` `max_total_spawns` now counts **every spawn attempt at admission** (previously
+  only successful spawns); a failed spawn is no longer refunded, giving stricter spawn-storm protection.
+- On `on_start()` failure, `on_stop()` is now called **best-effort** (a throwing `on_stop()` is logged
+  and no longer masks the original start error).
+
+### Fixed
+
+- Dynamically-spawned agents that fail `on_start()` no longer **leak** their registry entry or transport
+  subscription — the supervisor runs a unified, idempotent terminal cleanup.
+
 ## [0.6.1] — 2026-07-04
 
 ### Fixed

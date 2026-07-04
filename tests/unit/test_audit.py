@@ -5,9 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 import textwrap
-from datetime import UTC
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -373,4 +372,3 @@ class TestRuntimeAuditParsing:
         )
         rt = Runtime.from_config(yaml_file)
         assert rt._audit_sink is None
-

@@ -25,6 +25,10 @@ class Transport(Protocol):
         """Register a handler for messages arriving at this address."""
         ...
 
+    async def unsubscribe(self, address: str) -> None:
+        """Remove the handler for an address. No-op if not subscribed."""
+        ...
+
     async def publish(self, address: str, data: bytes) -> None:
         """Send a message to an address (fire-and-forget)."""
         ...

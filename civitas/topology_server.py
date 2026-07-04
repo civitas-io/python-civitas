@@ -158,8 +158,8 @@ class TopologyServer(GenServer):
                 "max_total_spawns": node.max_total_spawns,
                 "live_count": len(node._dynamic_children),
                 "children": [
-                    {"name": n, "type": "agent", "status": a.status.value}
-                    for n, a in node._dynamic_children.items()
+                    {"name": n, "type": "agent", "status": rec.agent.status.value}
+                    for n, rec in node._dynamic_children.items()
                 ],
             }
         if isinstance(node, Supervisor):
@@ -187,8 +187,8 @@ class TopologyServer(GenServer):
 
     def _collect_dynamic_children(self, node: Any, result: list[dict[str, Any]]) -> None:
         if isinstance(node, DynamicSupervisor):
-            for n, a in node._dynamic_children.items():
-                result.append({"name": n, "status": a.status.value})
+            for n, rec in node._dynamic_children.items():
+                result.append({"name": n, "status": rec.agent.status.value})
         elif isinstance(node, Supervisor):
             for child in node.children:
                 self._collect_dynamic_children(child, result)
@@ -208,7 +208,8 @@ class TopologyServer(GenServer):
 
     def _search_tree(self, node: Any, name: str) -> Any | None:
         if isinstance(node, DynamicSupervisor):
-            return node._dynamic_children.get(name)
+            rec = node._dynamic_children.get(name)
+            return rec.agent if rec is not None else None
         if isinstance(node, Supervisor):
             for child in node.children:
                 found = self._search_tree(child, name)

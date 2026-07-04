@@ -24,6 +24,13 @@ def _make_mock_agent(name: str, status: str = "RUNNING") -> MagicMock:
     return agent
 
 
+def _make_mock_child_rec(agent: MagicMock) -> MagicMock:
+    """Wrap a mock agent as a _ChildRec-like value (R1 — .agent holds the agent)."""
+    rec = MagicMock()
+    rec.agent = agent
+    return rec
+
+
 def _make_mock_supervisor(
     name: str,
     strategy: str = "ONE_FOR_ONE",
@@ -49,7 +56,9 @@ def _make_mock_dyn(
     dyn.status.value = "RUNNING"
     dyn.max_children = max_children
     dyn.max_total_spawns = max_total_spawns
-    dyn._dynamic_children = dynamic_children or {}
+    dyn._dynamic_children = {
+        n: _make_mock_child_rec(a) for n, a in (dynamic_children or {}).items()
+    }
     return dyn
 
 

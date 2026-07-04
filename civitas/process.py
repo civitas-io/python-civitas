@@ -134,6 +134,15 @@ class Mailbox:
         """Return True if both priority and normal queues are empty."""
         return self._priority_queue.empty() and self._queue.empty()
 
+    def drain(self) -> list[Message]:
+        """Remove and return all buffered messages, priority queue first."""
+        drained: list[Message] = []
+        while not self._priority_queue.empty():
+            drained.append(self._priority_queue.get_nowait())
+        while not self._queue.empty():
+            drained.append(self._queue.get_nowait())
+        return drained
+
 
 class StreamReply:
     """Handle for emitting a streaming reply, yielded by ``stream_reply()``.
@@ -237,6 +246,11 @@ class AgentProcess:
 
         # Signalled when the message loop enters RUNNING
         self._running_event: asyncio.Event | None = None
+
+        # _reached_loop gates restart eligibility (D8): only children that entered
+        # the dispatch loop restart. _start_phase names where a start failure hit.
+        self._reached_loop = False
+        self._start_phase = "restore"
 
         # Non-blocking suspend intent (S2): set by suspend() / _agency.suspend,
         # actioned at the next message-loop boundary. Reason carried alongside.
@@ -648,24 +662,50 @@ class AgentProcess:
         agent_class: type,
         name: str,
         config: dict[str, Any] | None = None,
+        *,
+        wait: bool = True,
     ) -> str:
         """Spawn a dynamic agent via the nearest ancestor DynamicSupervisor.
 
         Sends a civitas.dynamic.spawn message and awaits confirmation.
         Raises SpawnError if no DynamicSupervisor ancestor exists or spawn is denied.
         Returns the agent name on success.
+
+        With ``wait=True`` (default) the call returns only after the child reaches
+        RUNNING/SUSPENDED and raises SpawnError if its start fails. With
+        ``wait=False`` it returns as soon as the child's task exists; a later start
+        failure is delivered via ``on_child_terminated`` (R1 · D2).
         """
         if self._dynamic_supervisor_name is None:
             raise SpawnError("No DynamicSupervisor ancestor found in supervision tree")
         class_path = f"{agent_class.__module__}.{agent_class.__qualname__}"
         reply = await self.ask(
             self._dynamic_supervisor_name,
-            {"class_path": class_path, "name": name, "config": config or {}, "spawner": self.name},
+            {
+                "class_path": class_path,
+                "name": name,
+                "config": config or {},
+                "spawner": self.name,
+                "wait": wait,
+            },
             message_type="civitas.dynamic.spawn",
         )
         if reply.payload.get("status") != "ok":
-            raise SpawnError(reply.payload.get("reason", "spawn failed"))
+            reason = reply.payload.get("reason") or reply.payload.get("error") or "spawn failed"
+            raise SpawnError(reason)
         return name
+
+    async def spawn_nowait(
+        self,
+        agent_class: type,
+        name: str,
+        config: dict[str, Any] | None = None,
+    ) -> str:
+        """Spawn a dynamic agent without blocking on its ``on_start()`` (R1 · D2).
+
+        Alias for ``spawn(..., wait=False)``.
+        """
+        return await self.spawn(agent_class, name, config, wait=False)
 
     async def despawn(self, name: str) -> None:
         """Hard-stop a dynamic child immediately.
@@ -904,13 +944,25 @@ class AgentProcess:
     # Internal lifecycle — called by Supervisor / Runtime
     # ------------------------------------------------------------------
 
-    async def _start(self) -> None:
-        """Initialize the agent and start the message loop as a task."""
+    def _start_nowait(self) -> asyncio.Task[None]:
+        """Create the agent's run task and return immediately (R1 · D1).
+
+        The task runs ``_restore_state()`` then ``on_start()`` then the dispatch
+        loop — all inside the task, so no lifecycle work runs in the caller's
+        context. Callers that need blocking-until-ready semantics use ``_start()``.
+        """
         self._status = ProcessStatus.INITIALIZING
         self._running_event = asyncio.Event()
-        await self._restore_state()
+        self._reached_loop = False
+        self._start_phase = "restore"
+        self._task = asyncio.create_task(self._run(), name=self.name)
+        return self._task
 
-        # Emit agent.start span
+    async def _run(self) -> None:
+        """Run the full start lifecycle inside the agent's own task (R1 · D1)."""
+        await self._restore_state()
+        self._start_phase = "on_start"
+
         start_span = None
         if self._tracer is not None:
             start_span = self._tracer.start_span(
@@ -920,15 +972,19 @@ class AgentProcess:
 
         try:
             await self.on_start()
+        except asyncio.CancelledError:
+            raise
         except Exception as exc:
-            # on_start() failed — the message loop (and its finally block)
-            # never runs, so run the equivalent cleanup here. Mirrors OTP's
-            # terminate/2-after-failed-init/1 semantics.
             if start_span is not None:
                 start_span.set_error(exc)
                 start_span.end()
             self._status = ProcessStatus.CRASHED
-            await self.on_stop()
+            # D12: on_stop() is best-effort here so a throwing on_stop cannot mask
+            # the on_start failure the caller needs to see.
+            try:
+                await self.on_stop()
+            except Exception:
+                logger.exception("[%s] on_stop() after failed on_start()", self.name)
             for _client in list(self._mcp_clients.values()):
                 try:
                     await _client.disconnect()
@@ -940,9 +996,31 @@ class AgentProcess:
         if start_span is not None:
             start_span.end()
 
-        self._task = asyncio.create_task(self._message_loop(), name=self.name)
-        # Wait until the message loop has entered RUNNING
-        await self._running_event.wait()
+        await self._message_loop()
+
+    async def _start(self) -> None:
+        """Start the agent and block until it is ready or its start fails.
+
+        Preserves static-agent semantics: returns once the loop reaches
+        RUNNING/SUSPENDED, and re-raises if ``_restore_state()`` or ``on_start()``
+        fails (restore failure never runs ``on_stop`` — B3).
+        """
+        task = self._start_nowait()
+        running = self._running_event
+        if running is None:
+            return
+        ready = asyncio.ensure_future(running.wait())
+        try:
+            await asyncio.wait({ready, task}, return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            ready.cancel()
+        # Re-raise only a genuine start failure — the task finished without ever
+        # signalling readiness. A task that reached the loop and then crashed is
+        # left to the crash/restart plumbing (its done-callback), matching pre-R1.
+        if not running.is_set() and task.done() and not task.cancelled():
+            exc = task.exception()
+            if exc is not None:
+                raise exc
 
     async def _message_loop(self) -> None:
         """Main loop: dequeue messages and dispatch to handle().
@@ -956,6 +1034,8 @@ class AgentProcess:
             self._status = ProcessStatus.SUSPENDED
         else:
             self._status = ProcessStatus.RUNNING
+        self._reached_loop = True
+        self._start_phase = "running"
         if self._running_event is not None:
             self._running_event.set()
 
