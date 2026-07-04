@@ -11,6 +11,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-07-04
+
 ### Added
 
 - **Gateway streaming** (v0.6.0 / G2 + G3) — long-lived and incremental client connections built on one
