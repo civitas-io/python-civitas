@@ -14,7 +14,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 from civitas.messages import Message, _new_span_id, _uuid7
-from civitas.process import AgentProcess, ProcessStatus
+from civitas.process import DYNAMIC_SUPERVISOR_CAPABILITY, AgentProcess, ProcessStatus
 
 logger = logging.getLogger(__name__)
 
@@ -519,6 +519,11 @@ class DynamicSupervisor(AgentProcess):
     Agents call self.spawn() / self.despawn() / self.stop() to manage children.
     All requests travel as bus messages (civitas.dynamic.*) so the same API works
     in-process (v0.4) and cross-process (v0.5).
+
+    ``spawner_allowlist`` (optional) restricts *who* may spawn children here: when a
+    set is given, a spawn whose spawner is not in it is rejected before the
+    ``on_spawn_requested`` hook runs. Default ``None`` keeps the open behavior. It is
+    the built-in authorization control for cross-tree ``spawn_into`` (D8).
     """
 
     def __init__(
@@ -529,6 +534,7 @@ class DynamicSupervisor(AgentProcess):
         restart: str = "transient",
         max_restarts: int = 3,
         restart_window: float = 60.0,
+        spawner_allowlist: set[str] | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(name, **kwargs)
@@ -537,6 +543,8 @@ class DynamicSupervisor(AgentProcess):
         self._restart_mode = RestartMode(restart)
         self._ds_max_restarts = max_restarts
         self._ds_restart_window = restart_window
+        self.spawner_allowlist = spawner_allowlist
+        self._current_spawner: str | None = None
 
         # Live child tracking
         self._dynamic_children: dict[str, _ChildRec] = {}
@@ -557,9 +565,20 @@ class DynamicSupervisor(AgentProcess):
         """Governance veto hook. Return False to deny the spawn request.
 
         Default implementation approves all requests. Subclass to enforce
-        allowlists, rate limits, or policy checks.
+        allowlists, rate limits, or policy checks. Read :attr:`current_spawner`
+        inside this hook to authorize by the requesting agent's name.
         """
         return True
+
+    @property
+    def current_spawner(self) -> str | None:
+        """Name of the agent whose spawn request is being evaluated.
+
+        Valid only during ``on_spawn_requested`` — ``None`` outside that window. Lets
+        a governance override authorize by spawner without changing the hook's
+        signature (D4); safe because the supervisor dispatches one spawn at a time.
+        """
+        return self._current_spawner
 
     # ------------------------------------------------------------------
     # Message handling
@@ -586,6 +605,10 @@ class DynamicSupervisor(AgentProcess):
             return self.reply(
                 {"status": "error", "reason": f"agent '{child_name}' already running"}
             )
+        if self._registry is not None and self._registry.lookup(child_name) is not None:
+            return self.reply(
+                {"status": "error", "reason": f"name '{child_name}' already registered"}
+            )
         if self.max_children is not None and len(self._dynamic_children) >= self.max_children:
             return self.reply(
                 {"status": "error", "reason": f"max_children ({self.max_children}) reached"}
@@ -605,7 +628,14 @@ class DynamicSupervisor(AgentProcess):
         except Exception as exc:
             return self.reply({"status": "error", "reason": f"cannot import '{class_path}': {exc}"})
 
-        approved = await self.on_spawn_requested(agent_class, child_name, config)
+        if self.spawner_allowlist is not None and spawner not in self.spawner_allowlist:
+            return self.reply({"status": "error", "reason": f"spawner '{spawner}' not allowed"})
+
+        self._current_spawner = spawner
+        try:
+            approved = await self.on_spawn_requested(agent_class, child_name, config)
+        finally:
+            self._current_spawner = None
         if not approved:
             return self.reply({"status": "error", "reason": "spawn denied by governance policy"})
 
@@ -623,9 +653,31 @@ class DynamicSupervisor(AgentProcess):
         agent.config = config
 
         if self._registry is not None:
-            self._registry.register(child_name)
+            child_caps = (
+                [DYNAMIC_SUPERVISOR_CAPABILITY] if isinstance(agent, DynamicSupervisor) else None
+            )
+            try:
+                self._registry.register(child_name, capabilities=child_caps)
+            except ValueError:
+                # Cross-supervisor race (P0/D6): another supervisor claimed this
+                # global name between our pre-check and here. register() is the first
+                # external step, so nothing of this child is wired yet — return an
+                # error reply (never crash) and never touch the winner's entry.
+                return self.reply(
+                    {"status": "error", "reason": f"name '{child_name}' already registered"}
+                )
         if self._bus is not None:
             await self._bus.setup_agent(agent)
+
+        await self._emit_audit(
+            "dynamic.spawn",
+            {
+                "spawner": spawner,
+                "child": child_name,
+                "class_path": class_path,
+                "supervisor": self.name,
+            },
+        )
 
         # Admission — count the attempt now, never refund it (D10). Everything from
         # here to the reply is one synchronous block (no await before an ok reply)

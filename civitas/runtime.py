@@ -21,7 +21,7 @@ from civitas.mcp.types import MCPServerConfig
 from civitas.messages import Message, _new_span_id, _uuid7
 from civitas.observability.otel_agent import run_otel_agent
 from civitas.plugins.loader import load_plugins_from_config
-from civitas.process import AgentProcess
+from civitas.process import DYNAMIC_SUPERVISOR_CAPABILITY, AgentProcess
 from civitas.sandbox.config import SandboxConfig
 from civitas.secrets.substitution import substitute_vars
 from civitas.security.config import SecurityConfig
@@ -680,6 +680,8 @@ class Runtime:
             else:
                 caps = list(agent.capabilities)
                 meta = dict(agent.capability_metadata)
+            if isinstance(agent, DynamicSupervisor) and DYNAMIC_SUPERVISOR_CAPABILITY not in caps:
+                caps = [*caps, DYNAMIC_SUPERVISOR_CAPABILITY]
             self._registry.register(agent.name, capabilities=caps, capability_metadata=meta)
         self._agents_by_name = {a.name: a for a in all_agents}
 
