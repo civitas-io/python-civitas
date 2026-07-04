@@ -1,6 +1,6 @@
 # Non-Blocking Dynamic Spawn (v0.7.0 · R1)
 
-**Status:** ✅ Approved — Oracle + Momus reviewed; maintainer signed off 2026-07-04. Implementation in progress.
+**Status:** ✅ Done — Oracle + Momus reviewed; maintainer signed off 2026-07-04; implemented + merged in [PR #14](https://github.com/civitas-io/python-civitas/pull/14).
 **Source:** [GH #8](https://github.com/civitas-io/python-civitas/issues/8) (parent), [GH #9](https://github.com/civitas-io/python-civitas/issues/9) (this)
 **Related:** [`dynamic-spawning.md`](dynamic-spawning.md) (M4.1b), [`durable-suspension.md`](durable-suspension.md) (F11-5, suspend/resume)
 **Roadmap:** [`milestones.md`](../milestones.md) v0.7.0 R1 — headline, *design-first*

@@ -40,7 +40,7 @@ Development progress across all phases of Civitas.
 | — | [v0.4.0 Release Fixes](#v040-release-fixes) | ✅ Completed | Jul 2026 |
 | — | [v0.5.0 — Released](#v050--released) | ✅ Released | Jul 2026 |
 | — | [v0.6.0 — Gateway Completion](#v060--gateway-completion-released) | ✅ Released | Jul 2026 |
-| — | [v0.7.0 — Spawn Maturation & Gateway Auth](#v070--spawn-maturation--gateway-auth-proposed) | ⏳ Proposed | next |
+| — | [v0.7.0 — Spawn Maturation & Gateway Auth](#v070--spawn-maturation--gateway-auth-proposed) | 🔄 In progress | R1 ✅ |
 | — | [Deferred Backlog](#deferred-backlog) | 🗂️ Tracked | — |
 | — | Self-Healing / Autonomous Remediation | 💡 Idea | design/self-healing.md (draft) |
 | 4 | [Visual Topology Editor](#m41-visual-topology-editor) | ⏸️ Deferred | — |
@@ -883,13 +883,13 @@ capability, which builds on supervision + dynamic spawn + telemetry (under inves
 
 | # | Deliverable | Priority | Source |
 |---|-------------|----------|--------|
-| R1 | **Non-blocking dynamic spawn** — reply once the message loop is created; run `on_start()` inside the task. Design-first (ordering + error-propagation tradeoffs). Design: [`non-blocking-spawn.md`](design/non-blocking-spawn.md) (draft, Oracle-reviewed). | 🔴 High | GH #9 (from #8) |
+| R1 | ✅ **Done (PR #14)** — **Non-blocking dynamic spawn**: `spawn(wait=False)` / `spawn_nowait()`; `on_start()` runs in-task; failures via `on_child_terminated`. Design: [`non-blocking-spawn.md`](design/non-blocking-spawn.md) (Oracle + Momus reviewed). | 🔴 High | GH #9 (from #8) |
 | R2 | **`spawn_into(supervisor_name, …)`** — public cross-tree spawn helper (no hand-built internal messages) | 🟡 Medium | GH #10 |
 | R3 | **First-party JWT auth** (opt-in `civitas[jwt]`) + **mTLS** client-cert auth | 🟡 Medium | v0.6.0 §G5 |
 | R4 | **Encrypted `StateStore` at rest** | 🟡 Medium | design/security-hardening.md |
 | R5 | **Per-agent spawn quotas** (beyond the global `max_children`) | 🟢 Low | design/dynamic-spawning.md Non-Goals |
 | R6 | **Cross-process dynamic spawning** (ZMQ / NATS) | 🟡 Medium | design/dynamic-spawning.md Non-Goals |
-| R7 | **Bus-native streaming primitive** (`AgentProcess.stream()` + `Transport.stream()`) — stretch | 🟢 Stretch | design/gateway-streaming.md §D1 (Option B) |
+| R7 | **Bus-native streaming primitive** (`AgentProcess.stream()` + `Transport.stream()`) — stretch | 🟢 Stretch | [GH #15](https://github.com/civitas-io/python-civitas/issues/15) · design/gateway-streaming.md §D1 (Option B) |
 
 **Suggested cut line:** R1–R2 (spawn follow-ups) are the headline; R3 (auth) + R4 (encrypted store)
 are strong companions; R5–R7 are opportunistic and can slip to a later patch.
@@ -922,9 +922,9 @@ nothing is lost. Owner column: `core` = python-civitas, else the target repo.
 | Postgres: zero-downtime dual-write migration | core | ⏸️ | §Postgres StateStore |
 | Postgres: PgBouncer deployment guide | core | ⏸️ docs pass | §Postgres StateStore |
 | **Medicus self-healing hero demo** (P0+P1: detect → diagnose → verified PR) — flagship example; supersedes the Telegram personal assistant (which drops to a minor gateway+skills sample) | core | 💡 idea | design/medicus-demo.md |
-| Bus-native streaming primitive (`AgentProcess.stream()` + `Transport.stream()` across in-proc/ZMQ/NATS, agent-to-agent) — v0.6.0 ships gateway-mediated streaming instead | core | ⏸️ v0.x | design/gateway-streaming.md §D1 (Option B) |
+| Bus-native streaming primitive (`AgentProcess.stream()` + `Transport.stream()` across in-proc/ZMQ/NATS, agent-to-agent) — v0.6.0 ships gateway-mediated streaming instead | core | ⏸️ v0.x | [GH #15](https://github.com/civitas-io/python-civitas/issues/15) · design/gateway-streaming.md §D1 (Option B) |
 | First-party JWT gateway auth (opt-in `civitas[jwt]`) + mTLS client-cert auth — G5 shipped API-key only (no new core dep) | core | ⏸️ v0.x | §v0.6.0 G5 |
-| Dynamic spawn: non-blocking spawn (#9) and `spawn_into()` cross-tree helper (#10) | core | ⏸️ v0.x | GH #9, #10 |
+| Dynamic spawn: non-blocking spawn (#9) ✅ done (PR #14); `spawn_into()` cross-tree helper (#10) in progress | core | 🔄 v0.7.0 | GH #9, #10 |
 | **Self-healing / autonomous remediation agent** — monitor (metrics/audit/OTEL/crash) → diagnose (LLM) → sandbox-verify → canary-deploy → auto-rollback, under staged autonomy + safety gates | core (+ contrib tools) | 💡 idea | design/self-healing.md |
 | Worker-level **restart-with-new-code** (blue-green drain) — the deploy primitive enabling self-healing & near-zero-downtime code updates (Python has no safe in-place reload) | core | ⏸️ v0.x | design/self-healing.md |
 
