@@ -213,6 +213,7 @@ class AgentProcess:
         self.llm: ModelProvider | None = None
         self.tools: ToolRegistry | None = None
         self.store: StateStore | None = None
+        self.config: dict[str, Any] = {}
 
         # Per-agent credential map — populated from topology credentials: block.
         # Keys are provider names (e.g. "anthropic"); values are credential strings.
@@ -308,7 +309,16 @@ class AgentProcess:
     # ------------------------------------------------------------------
 
     async def on_start(self) -> None:
-        """Called once before the first message. Initialize self.state here."""
+        """Called once before the first message. Initialize self.state here.
+
+        Runs synchronously during startup — for a dynamically spawned agent it
+        executes *inside* the spawn call, so ``await self.spawn(...)`` does not
+        return until ``on_start()`` finishes (and raises ``TimeoutError`` if it
+        outlasts the ask timeout). Keep it fast: do slow / I/O-bound work (LLM
+        calls, browser sessions) in ``handle()``, kicked off by a fire-and-forget
+        message the spawner sends right after the spawn is confirmed. Spawn-time
+        ``config`` is available here as ``self.config``.
+        """
 
     async def handle(self, message: Message) -> Message | None:
         """Called for every incoming message.

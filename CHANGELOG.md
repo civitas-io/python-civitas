@@ -45,6 +45,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
   `.proto` but returns `UNIMPLEMENTED` until G3. Generated `_pb2` stubs are committed (no build-time
   `protoc` needed by consumers).
 
+### Fixed
+
+- **`DynamicSupervisor` spawn now applies `config` to the spawned agent** ([#8]) — the `config` passed
+  to `spawn()` was parsed and governance-checked but never reached the agent. It is now available as
+  `self.config` (readable in `on_start()` and `handle()`). Also documented that `on_start()` runs
+  **synchronously inside the spawn call** — so `await self.spawn(...)` blocks until it returns; keep it
+  fast and do slow/background work in `handle()`, kicked off by a post-spawn message (`on_start()`
+  docstring + `docs/design/dynamic-spawning.md`).
+
+[#8]: https://github.com/civitas-io/python-civitas/issues/8
+
 ## [0.5.0] — 2026-07-03
 
 ### Added

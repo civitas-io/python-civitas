@@ -603,6 +603,7 @@ class DynamicSupervisor(AgentProcess):
         agent.llm = self.llm
         agent.tools = self.tools
         agent.store = self.store
+        agent.config = config
 
         if self._registry is not None:
             self._registry.register(child_name)

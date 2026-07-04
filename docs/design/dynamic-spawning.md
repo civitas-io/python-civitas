@@ -83,6 +83,21 @@ agent_name = await self.spawn(ResearchAgent, name="researcher-1", config={"topic
 await self.despawn("researcher-1")
 ```
 
+> **`on_start()` runs *inside* the spawn call — keep it fast.** The spawn is only
+> confirmed once the new agent's `on_start()` returns, so `await self.spawn(...)`
+> blocks the spawner for the full `on_start()` duration and raises `TimeoutError`
+> if it outlasts the ask timeout. Put slow / I/O-bound work (LLM calls, browser
+> sessions) in `handle()`, kicked off by a fire-and-forget message sent right after
+> the spawn is confirmed — not in `on_start()`:
+>
+> ```python
+> name = await self.spawn(WorkerAgent, name="worker-1", config={"job": job_id})
+> await self.send(name, {"type": "start_job"})   # fire-and-forget kickoff
+> ```
+>
+> The `config` passed to `spawn()` is applied to the spawned agent and readable as
+> `self.config` (in both `on_start()` and `handle()`).
+
 ### D4 — `on_spawn_requested` is a governance veto hook
 
 Before a spawn is executed, the runtime calls `on_spawn_requested(agent_class, name, config)` on the `DynamicSupervisor`. The default implementation approves all requests. Subclassing allows governance logic: rate limits, allowlists, policy checks.
