@@ -144,7 +144,7 @@ The `Alt-Svc: h3=":8443"` header is automatically injected into HTTP/1.1 and HTT
 
 ### Why aioquic (and what's next)
 
-aioquic is the established Python QUIC library and adequate for most deployments. The QUIC ecosystem is maturing fast — [quiche](https://github.com/cloudflare/quiche) (Cloudflare's QUIC implementation in Rust) exposes Python bindings via [quiche-python](https://github.com/cloudflare/quiche/tree/master/quiche/examples). When those bindings stabilise for production use, `civitas[http3]` will transparently upgrade to the Rust backend for near-native QUIC performance. No API changes to `HTTPGateway` are needed — only the underlying driver swaps.
+aioquic is the established pure-Python QUIC library, is adequate for most deployments, and is the backend today. A Rust-backed QUIC stack (e.g. Cloudflare's [quiche](https://github.com/cloudflare/quiche)) would offer near-native performance, but quiche ships **no official, production-ready Python binding** — the code under its repo is example/demo material, not a published package. A Rust QUIC swap therefore remains a *future evaluation* (roadmap G9), not a committed upgrade path. Because `HTTPGateway` isolates the transport behind its own driver, such a swap would require no public API change if a viable binding later emerges.
 
 ---
 
@@ -324,7 +324,7 @@ supervision:
 | Extra | Installs | Enables | Backend |
 |-------|----------|---------|---------|
 | `civitas[http]` | `uvicorn[standard]>=0.30` | HTTP/1.1 + HTTP/2 | C (uvloop + httptools) |
-| `civitas[http3]` | `aioquic>=1.0` | HTTP/3 / QUIC | Pure Python (Rust upgrade path via quiche) |
+| `civitas[http3]` | `aioquic>=1.0` | HTTP/3 / QUIC | Pure Python (aioquic; Rust QUIC swap under evaluation — G9) |
 | `civitas[grpc]` | `grpclib>=0.4`, `protobuf>=4` | gRPC | Pure Python async |
 | `civitas[grpc-fast]` | `grpcio>=1.62`, `protobuf>=4` | gRPC (high throughput) | C core (Google) |
 
