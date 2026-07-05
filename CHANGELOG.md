@@ -11,6 +11,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-07-05
+
 ### Added
 
 - **Per-agent spawn quotas** (v0.7.0 · R5) — `DynamicSupervisor` gains `max_children_per_spawner` and

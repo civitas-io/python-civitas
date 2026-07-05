@@ -40,7 +40,7 @@ Development progress across all phases of Civitas.
 | — | [v0.4.0 Release Fixes](#v040-release-fixes) | ✅ Completed | Jul 2026 |
 | — | [v0.5.0 — Released](#v050--released) | ✅ Released | Jul 2026 |
 | — | [v0.6.0 — Gateway Completion](#v060--gateway-completion-released) | ✅ Released | Jul 2026 |
-| — | [v0.7.0 — Spawn Maturation & Gateway Auth](#v070--spawn-maturation--gateway-auth-proposed) | 🔄 In progress | R1 ✅ |
+| — | [v0.7.0 — Spawn Maturation & Gateway Auth](#v070--spawn-maturation--gateway-auth-released) | ✅ Released | Jul 2026 |
 | — | [Deferred Backlog](#deferred-backlog) | 🗂️ Tracked | — |
 | — | Self-Healing / Autonomous Remediation | 💡 Idea | design/self-healing.md (draft) |
 | 4 | [Visual Topology Editor](#m41-visual-topology-editor) | ⏸️ Deferred | — |
@@ -872,7 +872,9 @@ scope — G2/G3 use gateway-mediated streaming; the first-class version is track
 
 ---
 
-## v0.7.0 — Spawn Maturation & Gateway Auth (Proposed)
+## v0.7.0 — Spawn Maturation & Gateway Auth (Released)
+
+**Released 2026-07-05.** R1 (non-blocking spawn, #14), R2 (`spawn_into`, #16), R3 (JWT+mTLS auth + fail-open fix, #18), R4 (encrypted StateStore, #19), R5 (per-agent spawn quotas, #21), R6 (cross-process spawn, #20) all shipped. R7 (bus-native streaming, #15) deferred as a stretch item.
 
 **Status: ⏳ Proposed** — scoped from the actionable [Deferred Backlog](#deferred-backlog) items; not yet started.
 
