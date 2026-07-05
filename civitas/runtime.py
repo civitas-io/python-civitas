@@ -355,6 +355,8 @@ class Runtime:
                     name=node["name"],
                     max_children=node.get("max_children"),
                     max_total_spawns=node.get("max_total_spawns"),
+                    max_children_per_spawner=node.get("max_children_per_spawner"),
+                    max_total_spawns_per_spawner=node.get("max_total_spawns_per_spawner"),
                     restart=node.get("restart", "transient"),
                     max_restarts=node.get("max_restarts", 3),
                     restart_window=node.get("restart_window", 60.0),

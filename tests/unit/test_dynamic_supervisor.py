@@ -113,6 +113,13 @@ class TestConstruction:
         assert ds.max_children == 10
         assert ds.max_total_spawns == 100
 
+    def test_per_spawner_quota_defaults_and_stored(self):
+        assert _make_dyn().max_children_per_spawner is None
+        assert _make_dyn().max_total_spawns_per_spawner is None
+        ds = _make_dyn(max_children_per_spawner=3, max_total_spawns_per_spawner=9)
+        assert ds.max_children_per_spawner == 3
+        assert ds.max_total_spawns_per_spawner == 9
+
     def test_all_dynamic_agents_initially_empty(self):
         ds = _make_dyn()
         assert ds.all_dynamic_agents() == []
@@ -202,6 +209,41 @@ class TestHandleSpawn:
         assert reply is not None
         assert reply.payload["status"] == "error"
         assert "max_total_spawns" in reply.payload["reason"]
+
+    async def test_max_children_per_spawner_limit_returns_error(self):
+        ds = _make_dyn(max_children_per_spawner=1)
+        ds._dynamic_children["a1"] = NullAgent("a1")
+        ds._spawner_names["a1"] = "agent-a"
+        msg = _fake_message(
+            "civitas.dynamic.spawn",
+            {
+                "class_path": "tests.conftest.EchoAgent",
+                "name": "a2",
+                "config": {},
+                "spawner": "agent-a",
+            },
+        )
+        reply = await _dispatch(ds, msg)
+        assert reply is not None
+        assert reply.payload["status"] == "error"
+        assert "max_children_per_spawner" in reply.payload["reason"]
+
+    async def test_max_total_spawns_per_spawner_limit_returns_error(self):
+        ds = _make_dyn(max_total_spawns_per_spawner=1)
+        ds._spawner_total_counts["agent-a"] = 1
+        msg = _fake_message(
+            "civitas.dynamic.spawn",
+            {
+                "class_path": "tests.conftest.EchoAgent",
+                "name": "a1",
+                "config": {},
+                "spawner": "agent-a",
+            },
+        )
+        reply = await _dispatch(ds, msg)
+        assert reply is not None
+        assert reply.payload["status"] == "error"
+        assert "max_total_spawns_per_spawner" in reply.payload["reason"]
 
     async def test_governance_veto_returns_error(self):
         class VetoSupervisor(DynamicSupervisor):
@@ -339,6 +381,87 @@ class TestRuntimeSpawn:
             await rt.spawn("workers", EchoAgent, name="echo-1")
             with pytest.raises(SpawnError, match="max_children"):
                 await rt.spawn("workers", EchoAgent, name="echo-2")
+        finally:
+            await rt.stop()
+
+    @pytest.mark.asyncio
+    async def test_max_children_per_spawner_independent_and_enforced(self):
+        dyn = _make_dyn(max_children_per_spawner=1)
+        rt = _build_runtime(dyn)
+        await rt.start()
+        try:
+            r1 = await rt.ask(
+                "workers",
+                {
+                    "class_path": "tests.conftest.EchoAgent",
+                    "name": "a1",
+                    "config": {},
+                    "spawner": "agent-a",
+                    "wait": True,
+                },
+                message_type="civitas.dynamic.spawn",
+            )
+            assert r1.payload["status"] == "ok"
+            r2 = await rt.ask(
+                "workers",
+                {
+                    "class_path": "tests.conftest.EchoAgent",
+                    "name": "a2",
+                    "config": {},
+                    "spawner": "agent-a",
+                    "wait": True,
+                },
+                message_type="civitas.dynamic.spawn",
+            )
+            assert r2.payload["status"] == "error"
+            assert "max_children_per_spawner" in r2.payload["reason"]
+            r3 = await rt.ask(
+                "workers",
+                {
+                    "class_path": "tests.conftest.EchoAgent",
+                    "name": "b1",
+                    "config": {},
+                    "spawner": "agent-b",
+                    "wait": True,
+                },
+                message_type="civitas.dynamic.spawn",
+            )
+            assert r3.payload["status"] == "ok"
+        finally:
+            await rt.stop()
+
+    @pytest.mark.asyncio
+    async def test_max_total_spawns_per_spawner_not_refunded(self):
+        dyn = _make_dyn(max_total_spawns_per_spawner=1)
+        rt = _build_runtime(dyn)
+        await rt.start()
+        try:
+            r1 = await rt.ask(
+                "workers",
+                {
+                    "class_path": "tests.conftest.EchoAgent",
+                    "name": "a1",
+                    "config": {},
+                    "spawner": "agent-a",
+                    "wait": True,
+                },
+                message_type="civitas.dynamic.spawn",
+            )
+            assert r1.payload["status"] == "ok"
+            await rt.despawn("workers", "a1")
+            r2 = await rt.ask(
+                "workers",
+                {
+                    "class_path": "tests.conftest.EchoAgent",
+                    "name": "a2",
+                    "config": {},
+                    "spawner": "agent-a",
+                    "wait": True,
+                },
+                message_type="civitas.dynamic.spawn",
+            )
+            assert r2.payload["status"] == "error"
+            assert "max_total_spawns_per_spawner" in r2.payload["reason"]
         finally:
             await rt.stop()
 
