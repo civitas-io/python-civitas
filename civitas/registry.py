@@ -36,6 +36,16 @@ class RoutingEntry:
 
     ``capability_metadata`` is a free-form dict passed through verbatim to
     registry listeners (e.g. Presidium). The runtime never interprets it.
+
+    ``owner`` is the authenticated identity (the announcing Worker-hosted
+    supervisor's name) that announced a cross-process entry, used to reject
+    name takeover by a different remote owner (R6 · D9). Empty for local
+    entries and legacy name-only announcements.
+
+    ``pubkey`` is the base64 Ed25519 verify key announced for a remotely-spawned
+    child (R6 · D3/D11); empty when signing is disabled. ``epoch`` is the
+    monotonic incarnation counter carried by the announcement, used to reject
+    stale/reordered register/deregister messages (R6 · D13).
     """
 
     name: str
@@ -43,6 +53,9 @@ class RoutingEntry:
     is_local: bool
     capabilities: tuple[str, ...] = ()
     capability_metadata: dict[str, Any] = dataclasses.field(default_factory=dict)
+    owner: str = ""
+    pubkey: str = ""
+    epoch: int = 0
 
 
 @runtime_checkable
@@ -94,6 +107,9 @@ class LocalRegistry:
     def __init__(self) -> None:
         self._entries: dict[str, RoutingEntry] = {}
         self._listeners: list[RegistryListener] = []
+        # Persists across deregister so a reordered late register cannot
+        # resurrect a dead name (R6 · D13).
+        self._remote_epochs: dict[str, int] = {}
 
     # ------------------------------------------------------------------
     # Registration
@@ -182,26 +198,79 @@ class LocalRegistry:
         name: str,
         capabilities: list[str] | tuple[str, ...] | None = None,
         capability_metadata: dict[str, Any] | None = None,
+        *,
+        owner: str = "",
+        pubkey: str = "",
+        epoch: int = 0,
     ) -> None:
         """Register a remote agent for cross-process pattern matching.
 
-        Idempotent for repeated announcements of the same remote agent.
-        Raises ``ValueError`` if the name is already registered as local.
+        Idempotent for repeated announcements of the same remote agent. The
+        cross-process arbiter for global name uniqueness (R6 · D9): a name owned
+        locally, or by a *different* remote ``owner``, or a name→``pubkey``
+        conflict is rejected rather than taken over (no last-writer-wins). A
+        register whose ``epoch`` is older than the last seen for the name is
+        dropped so a reordered announcement cannot resurrect a dead name (D13).
+
+        Raises:
+            ValueError: if the name is already local, owned by a different
+                remote owner, or announces a conflicting public key.
         """
+        last_epoch = self._remote_epochs.get(name)
+        if last_epoch is not None and epoch < last_epoch:
+            logger.warning(
+                "Dropping stale remote register for %r (epoch %d < %d)", name, epoch, last_epoch
+            )
+            return
+
         existing = self._entries.get(name)
         if existing is not None:
             if existing.is_local:
                 raise ValueError(f"Cannot register {name!r} as remote: already registered as local")
-            return  # idempotent re-announcement
+            if existing.owner != owner:
+                raise ValueError(
+                    f"Cannot register {name!r} as remote: already owned by {existing.owner!r}"
+                )
+            if existing.pubkey and pubkey and existing.pubkey != pubkey and epoch <= existing.epoch:
+                raise ValueError(f"Cannot register {name!r} as remote: public key conflict")
+            if epoch <= existing.epoch:
+                return  # idempotent / superseded re-announcement
+        elif last_epoch is not None and epoch <= last_epoch:
+            logger.warning(
+                "Ignoring resurrection of %r at epoch %d (last seen %d)", name, epoch, last_epoch
+            )
+            return
+
         entry = RoutingEntry(
             name=name,
             address=name,
             is_local=False,
             capabilities=tuple(capabilities) if capabilities else (),
             capability_metadata=dict(capability_metadata) if capability_metadata else {},
+            owner=owner,
+            pubkey=pubkey,
+            epoch=epoch,
         )
         self._entries[name] = entry
+        self._remote_epochs[name] = epoch if last_epoch is None else max(epoch, last_epoch)
         self._fire_listeners(entry, "register")
+
+    def deregister_remote(self, name: str, *, epoch: int = 0) -> None:
+        """Deregister a remote agent, honoring incarnation epochs (R6 · D13).
+
+        Records the epoch floor so a later reordered register at the same or an
+        older epoch cannot resurrect the name. A stale deregister (older than the
+        last seen epoch) is ignored. Only removes a *remote* entry — a local
+        entry of the same name is left untouched.
+        """
+        last_epoch = self._remote_epochs.get(name)
+        if last_epoch is not None and epoch < last_epoch:
+            return
+        self._remote_epochs[name] = epoch if last_epoch is None else max(epoch, last_epoch)
+        existing = self._entries.get(name)
+        if existing is not None and not existing.is_local:
+            self._entries.pop(name)
+            self._fire_listeners(existing, "deregister")
 
     def register_b64(self, name: str, public_key_b64: str) -> None:
         """Register a remote agent's public key for signing verification.

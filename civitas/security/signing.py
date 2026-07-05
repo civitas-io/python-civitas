@@ -54,6 +54,18 @@ class MessageSigner:
         self._config = config
         self._nonce_cache = NonceCache()
 
+    def add_identity(self, identity: AgentIdentity) -> None:
+        """Register a private signing identity for a locally-hosted agent.
+
+        Used to provision a per-incarnation key for a dynamically spawned child
+        (R6 · D11) so the child can sign its own outgoing messages.
+        """
+        self._identities[identity.name] = identity
+
+    def trust(self, name: str, verify_key: Any) -> None:
+        """Register a peer's public verify key so its signatures can be checked."""
+        self._registry.register(name, verify_key)
+
     def sign(self, msg_dict: dict[str, Any]) -> dict[str, Any]:
         """Wrap ``msg_dict`` in a v=2 signed envelope.
 
@@ -143,6 +155,11 @@ class SigningSerializer:
     def __init__(self, signer: MessageSigner, config: SigningConfig) -> None:
         self._signer = signer
         self._config = config
+
+    @property
+    def signer(self) -> MessageSigner:
+        """The underlying :class:`MessageSigner` (identity + key management)."""
+        return self._signer
 
     def serialize(self, message: Message) -> bytes:
         msg_dict = message.to_dict()
