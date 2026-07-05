@@ -65,6 +65,7 @@ pip install civitas[otel]                 # OTEL exporter backend
 
 # Security
 pip install civitas[security]            # transport-level Ed25519 message signing
+pip install civitas[encryption]          # encrypted StateStore at rest (ChaCha20-Poly1305 AEAD)
 
 # Model providers, state stores, framework adapters, eval exporters → civitas-contrib
 pip install civitas-contrib[anthropic]    # Anthropic Claude
@@ -219,6 +220,7 @@ and re-run `uv sync`.
 | `AGENCY_SERIALIZER` | `json` for human-readable debug output | `msgpack` |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OTEL collector endpoint (e.g. Jaeger) | console |
 | `NATS_URL` | NATS server for distributed transport | `nats://localhost:4222` |
+| `CIVITAS_STATE_KEY` | base64 32-byte key for the `civitas[encryption]` `EncryptingStateStore`. Store it in a secret manager and give every process (Runtime + Workers) the same key — **key loss = data loss**. | — |
 
 API keys for model providers (Anthropic, OpenAI, etc.) are configured in civitas-contrib,
 not here. Never read `os.environ` directly — use `civitas.config.settings`.

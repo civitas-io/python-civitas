@@ -13,6 +13,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ### Added
 
+- **Encrypted StateStore at rest** (v0.7.0 · R4) — new `EncryptingStateStore`
+  (`civitas.EncryptingStateStore`, opt-in `pip install 'civitas[encryption]'`) wraps any
+  `StateStore` and transparently encrypts persisted *values* with ChaCha20-Poly1305 (AEAD), leaving
+  agent *names* in the clear so `list_agents()` keeps working. The agent name is bound as AEAD
+  associated data, so an envelope written for one agent fails to decrypt under another. Values are
+  stored as a one-key envelope dict `{"__civitas_enc__": base64(version‖key_id‖nonce‖ciphertext)}`
+  (`__civitas_enc__` is a reserved top-level key). Key is a base64 32-byte value from
+  `CIVITAS_STATE_KEY` (via `SecretStr`); a missing/short key fails loud with `ConfigurationError`
+  and `cryptography` is lazily imported. Supports **key rotation** (a `{key_id: key}` ring decrypts
+  any past key while new writes use the current one) and fail-loud tamper/wrong-key detection (new
+  `StateDecryptionError`, referencing only the agent name + `key_id`, never contents). Legacy
+  plaintext is **strict by default** (raises) with an opt-in `allow_plaintext_read` dual-read for
+  gradual migration. Wire it in topology YAML with `plugins.state: {type: encrypted, config: {store:
+  {type: sqlite, config: {...}}, allow_plaintext_read: false}}`. `StateStore` is now also exported
+  from `civitas`. `civitas state list` renders encrypted values as `<encrypted>`. See
+  [`docs/design/encrypted-statestore.md`](docs/design/encrypted-statestore.md).
 - **Gateway JWT + mTLS auth** (v0.7.0 · R3) — two first-party, opt-in, secure-by-default gateway
   middleware alongside the existing API-key auth:
   - **JWT bearer verification** (`civitas.gateway.jwt_auth.require_jwt`, opt-in `pip install

@@ -61,6 +61,8 @@ otel      = [
 ]
 # Transport-level message signing
 security  = ["pynacl"]
+# Encrypted state store at rest (ChaCha20-Poly1305 AEAD)
+encryption = ["cryptography>=41"]
 # Performance — drop-in Rust-backed JSON (accelerates JsonSerializer)
 fast      = ["orjson>=3.10"]
 # Model providers, state stores, eval exporters, MCP, and framework adapters
@@ -85,6 +87,7 @@ dev       = [
     "grpcio-health-checking>=1.78,<2",
     "grpcio-tools>=1.78,<2",
     "orjson>=3.10",
+    "cryptography>=41",
 ]
 docs      = [
     "mkdocs-material>=9.5",

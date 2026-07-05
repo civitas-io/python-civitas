@@ -263,6 +263,7 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "cryptography" },
     { name = "grpcio" },
     { name = "grpcio-health-checking" },
     { name = "grpcio-reflection" },
@@ -287,6 +288,9 @@ docs = [
     { name = "mkdocs-gen-files" },
     { name = "mkdocs-material" },
     { name = "mkdocstrings", extra = ["python"] },
+]
+encryption = [
+    { name = "cryptography" },
 ]
 fast = [
     { name = "orjson" },
@@ -334,6 +338,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aioquic", marker = "extra == 'http3'", specifier = ">=1.0" },
+    { name = "cryptography", marker = "extra == 'dev'", specifier = ">=41" },
+    { name = "cryptography", marker = "extra == 'encryption'", specifier = ">=41" },
     { name = "grpcio", marker = "extra == 'dev'", specifier = ">=1.78,<2" },
     { name = "grpcio", marker = "extra == 'grpc'", specifier = ">=1.78,<2" },
     { name = "grpcio-health-checking", marker = "extra == 'dev'", specifier = ">=1.78,<2" },
@@ -377,7 +383,7 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'http'", specifier = ">=0.30" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'http3'", specifier = ">=0.30" },
 ]
-provides-extras = ["zmq", "nats", "nkeys", "http", "http3", "grpc", "jwt", "otel", "security", "fast", "dev", "docs"]
+provides-extras = ["zmq", "nats", "nkeys", "http", "http3", "grpc", "jwt", "otel", "security", "encryption", "fast", "dev", "docs"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pynacl", specifier = ">=1.6.2" }]

@@ -8,6 +8,8 @@ Public API:
     Runtime           — wires components, manages lifecycle
     Worker            — hosts agents in a remote worker process
     ComponentSet      — assembled infrastructure wiring (transport, bus, registry, tracer)
+    StateStore        — protocol for agent state persistence backends
+    EncryptingStateStore — wraps any StateStore to encrypt values at rest (civitas[encryption])
     Message           — standard message envelope
     CivitasError      — base exception
     ErrorAction       — enum: RETRY, SKIP, ESCALATE, STOP
@@ -49,6 +51,8 @@ from civitas.gateway.core import GatewayConfig, HTTPGateway
 from civitas.gateway.types import GatewayRequest, GatewayResponse, NextMiddleware
 from civitas.genserver import GenServer
 from civitas.messages import Message
+from civitas.plugins.encrypted_store import EncryptingStateStore
+from civitas.plugins.state import StateStore
 from civitas.process import AgentProcess
 from civitas.registry import RegistryListener, RoutingEntry
 from civitas.runtime import Runtime
@@ -68,6 +72,7 @@ __all__ = [
     "CivitasError",
     "CorrectionSignal",
     "DynamicSupervisor",
+    "EncryptingStateStore",
     "ErrorAction",
     "EvalAgent",
     "EvalEvent",
@@ -91,6 +96,7 @@ __all__ = [
     "SecretsProvider",
     "SignatureError",
     "SpawnError",
+    "StateStore",
     "Supervisor",
     "SyslogSink",
     "TopologyServer",
