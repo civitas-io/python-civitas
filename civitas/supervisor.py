@@ -537,6 +537,10 @@ class DynamicSupervisor(AgentProcess):
     set is given, a spawn whose spawner is not in it is rejected before the
     ``on_spawn_requested`` hook runs. Default ``None`` keeps the open behavior. It is
     the built-in authorization control for cross-tree ``spawn_into`` (D8).
+
+    ``max_children_per_spawner`` / ``max_total_spawns_per_spawner`` (optional, R5) cap a
+    single spawner's concurrent and lifetime spawns, in addition to the supervisor-wide
+    ``max_children`` / ``max_total_spawns``. Default ``None`` is unbounded per spawner.
     """
 
     def __init__(
@@ -548,6 +552,8 @@ class DynamicSupervisor(AgentProcess):
         max_restarts: int = 3,
         restart_window: float = 60.0,
         spawner_allowlist: set[str] | None = None,
+        max_children_per_spawner: int | None = None,
+        max_total_spawns_per_spawner: int | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(name, **kwargs)
@@ -557,6 +563,8 @@ class DynamicSupervisor(AgentProcess):
         self._ds_max_restarts = max_restarts
         self._ds_restart_window = restart_window
         self.spawner_allowlist = spawner_allowlist
+        self.max_children_per_spawner = max_children_per_spawner
+        self.max_total_spawns_per_spawner = max_total_spawns_per_spawner
         self._current_spawner: str | None = None
 
         # Live child tracking
@@ -566,6 +574,7 @@ class DynamicSupervisor(AgentProcess):
         self._child_restart_counts: dict[str, int] = {}
         self._child_restart_timestamps: dict[str, deque[float]] = {}
         self._total_spawns: int = 0
+        self._spawner_total_counts: dict[str, int] = {}
         self._pending_child_tasks: set[asyncio.Task[None]] = set()
         # Monotonic incarnation counter stamped on each child's cluster-wide
         # announcement so peers can reject stale/reordered register/deregister (D13).
@@ -679,6 +688,33 @@ class DynamicSupervisor(AgentProcess):
             return self.reply(
                 {"status": "error", "reason": f"max_total_spawns ({self.max_total_spawns}) reached"}
             )
+        if self.max_children_per_spawner is not None:
+            live_for_spawner = sum(
+                1 for n in self._dynamic_children if self._spawner_names.get(n) == spawner
+            )
+            if live_for_spawner >= self.max_children_per_spawner:
+                return self.reply(
+                    {
+                        "status": "error",
+                        "reason": (
+                            f"max_children_per_spawner ({self.max_children_per_spawner}) "
+                            f"reached for spawner '{spawner}'"
+                        ),
+                    }
+                )
+        if (
+            self.max_total_spawns_per_spawner is not None
+            and self._spawner_total_counts.get(spawner, 0) >= self.max_total_spawns_per_spawner
+        ):
+            return self.reply(
+                {
+                    "status": "error",
+                    "reason": (
+                        f"max_total_spawns_per_spawner ({self.max_total_spawns_per_spawner}) "
+                        f"reached for spawner '{spawner}'"
+                    ),
+                }
+            )
 
         # Resolve class from dotted path
         module_path, _, class_name = class_path.rpartition(".")
@@ -756,6 +792,7 @@ class DynamicSupervisor(AgentProcess):
         # here to the reply is one synchronous block (no await before an ok reply)
         # so acknowledged is set before the child task can run (§9.6).
         self._total_spawns += 1
+        self._spawner_total_counts[spawner] = self._spawner_total_counts.get(spawner, 0) + 1
         self._spawn_epoch += 1
         epoch = self._spawn_epoch
         task = agent._start_nowait()

@@ -13,6 +13,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ### Added
 
+- **Per-agent spawn quotas** (v0.7.0 · R5) — `DynamicSupervisor` gains `max_children_per_spawner` and
+  `max_total_spawns_per_spawner`, capping a single spawner's concurrent and lifetime children in addition
+  to the supervisor-wide `max_children` / `max_total_spawns`. Quotas key on the spawner identity (each
+  spawner has an independent budget; lifetime counts are never refunded), configurable per
+  `dynamic_supervisor` topology node. Default `None` is unbounded per spawner.
 - **Cross-process dynamic spawn** (v0.7.0 · R6) — `DynamicSupervisor` children can now be spawned in
   a *different* OS process over ZMQ/NATS, not just in the supervisor's own process. Cross-process spawn
   is simply `spawn_into(<supervisor hosted in a Worker>)`: a `type: dynamic_supervisor` topology node may
