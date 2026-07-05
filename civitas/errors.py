@@ -41,6 +41,16 @@ class ConfigurationError(CivitasError):
     """Invalid or missing runtime configuration."""
 
 
+class StateDecryptionError(CivitasError):
+    """Raised when persisted agent state cannot be decrypted.
+
+    Covers tampered ciphertext (AEAD ``InvalidTag``), an unknown envelope
+    ``key_id``, an unsupported envelope version, and unencrypted (legacy)
+    state read in strict mode. The message references the agent name and
+    ``key_id`` only — never the plaintext or the key.
+    """
+
+
 class DeserializationError(CivitasError):
     """Raised when incoming bytes cannot be decoded into a Message.
 

@@ -86,6 +86,39 @@ class NatsTlsConfig:
 
 
 @dataclass
+class StateEncryptionConfig:
+    """Encrypted state store configuration parsed from ``plugins.state.config``.
+
+    Keys are never stored here — only the environment variable names that hold
+    them. Actual key bytes are resolved at build time via
+    :func:`civitas.config.load_state_key`.
+
+    Attributes:
+        key_env: Env var holding the base64 current key (default CIVITAS_STATE_KEY).
+        current_key_id: Key id used to encrypt new writes.
+        keys: Optional rotation ring mapping key_id → env var name. The current
+            key (``key_env`` at ``current_key_id``) is always added to the ring.
+        allow_plaintext_read: Read legacy plaintext values instead of raising.
+    """
+
+    key_env: str = "CIVITAS_STATE_KEY"
+    current_key_id: int = 0
+    keys: dict[int, str] = field(default_factory=dict)
+    allow_plaintext_read: bool = False
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> StateEncryptionConfig:
+        raw_keys = data.get("keys", {})
+        keys = {int(k): str(v) for k, v in raw_keys.items()}
+        return cls(
+            key_env=data.get("key_env", "CIVITAS_STATE_KEY"),
+            current_key_id=int(data.get("current_key_id", 0)),
+            keys=keys,
+            allow_plaintext_read=bool(data.get("allow_plaintext_read", False)),
+        )
+
+
+@dataclass
 class GatewayAuthConfig:
     """HTTP gateway auth config parsed from the topology gateway ``auth:`` block.
 

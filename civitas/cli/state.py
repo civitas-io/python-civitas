@@ -11,6 +11,7 @@ import typer
 from rich.table import Table
 
 from civitas.cli.app import console, error, info, success, warn
+from civitas.plugins.encrypted_store import ENVELOPE_KEY
 
 try:
     from civitas_contrib.plugins.sqlite_store import SQLiteStateStore
@@ -68,7 +69,13 @@ def state_list(
     table.add_column("State", style="white", overflow="fold")
 
     for agent_name in agents:
-        state_str = json.dumps(states.get(agent_name), indent=2) if states.get(agent_name) else "{}"
+        state = states.get(agent_name)
+        if state and ENVELOPE_KEY in state:
+            state_str = "<encrypted>"
+        elif state:
+            state_str = json.dumps(state, indent=2)
+        else:
+            state_str = "{}"
         table.add_row(agent_name, state_str)
 
     console.print(table)
@@ -177,6 +184,12 @@ def state_migrate(
     """Migrate agent state between backends (SQLite ↔ Postgres).
 
     Runs in dry-run mode by default — pass --execute to write to the destination.
+
+    Note: migrate copies raw stored values between backends without an encryption
+    wrapper, so it does NOT encrypt or decrypt. To re-encrypt state in place, use
+    the dual-read sequence (design §7.5): deploy the encrypted store with
+    allow_plaintext_read=true so legacy plaintext is read and re-written as
+    ciphertext on the next checkpoint, then flip to strict.
 
     Examples:
 
