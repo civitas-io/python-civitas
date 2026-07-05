@@ -1837,10 +1837,32 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#cross-process-spawning-v070-r6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cross-Process Spawning (v0.7.0 · R6)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#non-goals-v04" class="md-nav__link">
     <span class="md-ellipsis">
       
         Non-Goals (v0.4)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#non-goals-r6-cross-process" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-Goals (R6 cross-process)
       
     </span>
   </a>
@@ -2148,13 +2170,69 @@ the spawn is confirmed — not in <code>on_start()</code>:</p>
 </span><span id="__span-12-27"><a id="__codelineno-12-27" name="__codelineno-12-27" href="#__codelineno-12-27"></a><span class="k">await</span> <span class="n">runtime</span><span class="o">.</span><span class="n">stop</span><span class="p">(</span><span class="s2">&quot;workers&quot;</span><span class="p">,</span> <span class="s2">&quot;researcher-1&quot;</span><span class="p">,</span> <span class="n">drain</span><span class="o">=</span><span class="s2">&quot;all&quot;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mf">30.0</span><span class="p">)</span>
 </span></code></pre></div>
 <hr />
+<h2 id="cross-process-spawning-v070-r6">Cross-Process Spawning (v0.7.0 · R6)<a class="headerlink" href="#cross-process-spawning-v070-r6" title="Permanent link">&para;</a></h2>
+<p>Cross-process spawn is now implemented. See
+<a href="../cross-process-spawn/"><code>cross-process-spawn.md</code></a> for the full design (decisions
+D1–D14). The essentials:</p>
+<ul>
+<li><strong>Mechanism — no new protocol.</strong> Cross-process spawn <em>is</em> <code>spawn_into(&lt;supervisor
+  hosted in a Worker&gt;)</code>. A <code>dynamic_supervisor</code> topology node may carry
+  <code>process: worker</code>; the Worker hosts it (a <code>DynamicSupervisor</code> is itself an
+  <code>AgentProcess</code>), and the existing <code>civitas.dynamic.spawn</code> request/reply routes to
+  it over ZMQ/NATS. <code>_handle_spawn</code> runs <em>in the Worker</em>, so the child is
+  instantiated in the Worker's process.</li>
+</ul>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nt">supervision</span><span class="p">:</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">root</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span><span class="nt">children</span><span class="p">:</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">orchestrator</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">myapp.Orchestrator</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">workers</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">dynamic_supervisor</span>
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="w">      </span><span class="nt">process</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">worker</span><span class="w">          </span><span class="c1"># hosted in a Worker, spawns children cross-process</span>
+</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="w">      </span><span class="nt">max_children</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50</span>
+</span></code></pre></div>
+<ul>
+<li>
+<p><strong>Homogeneous deployment only.</strong> Every process runs the same image, so the spawned
+  class is importable on the Worker — there is no code distribution (prior art:
+  Erlang/Akka assume code is present). A class missing on the Worker surfaces as an
+  import-error <code>SpawnError</code>.</p>
+</li>
+<li>
+<p><strong>Full distributed ComponentSet (linchpin).</strong> A Worker-hosted <code>DynamicSupervisor</code>
+  asserts at start that its <code>_bus</code>/<code>_registry</code> are the cluster-wide ones; otherwise a
+  spawned child would register locally only and be unreachable — the misconfiguration
+  fails fast with <code>ConfigurationError</code>.</p>
+</li>
+<li>
+<p><strong>Cluster-wide registration.</strong> After a child reaches RUNNING the supervisor
+  publishes a signed, epoch-tagged <code>_agency.register</code> (name, capabilities, and — when
+  signing is on — the child's per-incarnation public key). Termination publishes
+  <code>_agency.deregister</code>. In-process spawn (<code>InProcessTransport</code>) announces nothing, so
+  the v0.4 path is unchanged.</p>
+</li>
+<li>
+<p><strong>Security.</strong> Announcements are authenticated and the registry enforces name
+  ownership (no takeover, no last-writer-wins) and incarnation epochs (no
+  resurrection). With signing disabled (in-process / dev) the announcement degrades to
+  name-only.</p>
+</li>
+</ul>
 <h2 id="non-goals-v04">Non-Goals (v0.4)<a class="headerlink" href="#non-goals-v04" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Cross-process spawning (ZMQ / NATS) — deferred to v0.5</li>
+<li>~~Cross-process spawning (ZMQ / NATS)~~ → implemented in v0.7.0 · R6 (above)</li>
 <li>Spawning into a remote <code>DynamicSupervisor</code> by name from an unrelated subtree</li>
 <li>Visual topology editor integration (M4.1 is deferred)</li>
 <li>Per-agent spawn quotas (only global <code>max_children</code> per <code>DynamicSupervisor</code> in v0.4)</li>
 <li>Textual dashboard — planned as follow-on; <code>TopologyServer</code> endpoints are the foundation</li>
+</ul>
+<h2 id="non-goals-r6-cross-process">Non-Goals (R6 cross-process)<a class="headerlink" href="#non-goals-r6-cross-process" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Heterogeneous clusters / code serialization / hot-reload</li>
+<li>Placement groups / resource-aware scheduling</li>
+<li>The depth-1 spawner-vouch certificate chain (audit record only for now)</li>
+<li>Multi-datacenter (cross-cluster) spawn</li>
 </ul>
 
 
