@@ -44,7 +44,11 @@ from civitas.errors import (
     CivitasError,
     ErrorAction,
     SignatureError,
+    SlowConsumerError,
     SpawnError,
+    StreamError,
+    StreamInterrupted,
+    StreamTimeout,
 )
 from civitas.evalloop import CorrectionSignal, EvalAgent, EvalEvent, EvalExporter
 from civitas.gateway.core import GatewayConfig, HTTPGateway
@@ -95,8 +99,12 @@ __all__ = [
     "SecurityConfig",
     "SecretsProvider",
     "SignatureError",
+    "SlowConsumerError",
     "SpawnError",
     "StateStore",
+    "StreamError",
+    "StreamInterrupted",
+    "StreamTimeout",
     "Supervisor",
     "SyslogSink",
     "TopologyServer",

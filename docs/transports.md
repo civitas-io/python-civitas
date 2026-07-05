@@ -329,6 +329,9 @@ The only other difference between levels is how you launch processes — via the
 | **HA / clustering** | No | No | Yes (NATS cluster) |
 | **Production-ready** | Small workloads | Single-node | Multi-node |
 
+All three transports carry agent-to-agent [streaming](streaming.md) (`AgentProcess.stream()`) with no
+transport-specific code.
+
 ---
 
 ## Writing a custom transport

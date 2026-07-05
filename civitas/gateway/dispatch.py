@@ -9,7 +9,6 @@ routing/error semantics identical instead of drifting across two copies (D3).
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
@@ -18,6 +17,8 @@ from typing import TYPE_CHECKING, Any
 
 from civitas.errors import MessageRoutingError
 from civitas.messages import _uuid7
+from civitas.streaming import StreamSink as StreamSink
+from civitas.streaming import _StreamClosed as _StreamClosed
 
 if TYPE_CHECKING:
     from civitas.gateway.core import HTTPGateway
@@ -59,85 +60,6 @@ class DispatchResult:
     status: DispatchStatus
     payload: dict[str, Any] = field(default_factory=dict)
     error: str | None = None
-
-
-class _StreamClosed(Exception):
-    """Raised by :meth:`StreamSink.drain` when a stream ends abnormally.
-
-    Carries a short reason (``slow_consumer``, ``stream idle timeout``, an agent
-    error message, ...) that each surface translates into its own protocol.
-    """
-
-
-class StreamSink:
-    """Bounded buffer collecting one request's streamed chunks (D6).
-
-    The gateway opens one sink per in-flight stream (keyed by correlation_id) and
-    feeds it from ``handle()``; a surface drains it with :meth:`drain`. Buffering is
-    bounded — past ``maxsize`` unconsumed chunks the stream fails fast with
-    ``slow_consumer`` instead of growing without limit, since a fire-and-forget bus
-    gives us no way to push backpressure onto the producing agent.
-    """
-
-    def __init__(self, maxsize: int) -> None:
-        self._queue: asyncio.Queue[tuple[str, dict[str, Any]]] = asyncio.Queue()
-        self._maxsize = maxsize
-        self._pending = 0
-        self._done = False
-
-    def push(self, payload: dict[str, Any]) -> None:
-        """Buffer one chunk; fail the stream if the consumer is too far behind."""
-        if self._done:
-            return
-        if self._pending >= self._maxsize:
-            self._done = True
-            self._queue.put_nowait(("error", {"error": "slow_consumer"}))
-            return
-        self._pending += 1
-        self._queue.put_nowait(("chunk", payload))
-
-    def end(self) -> None:
-        if self._done:
-            return
-        self._done = True
-        self._queue.put_nowait(("end", {}))
-
-    def fail(self, error: str) -> None:
-        if self._done:
-            return
-        self._done = True
-        self._queue.put_nowait(("error", {"error": error}))
-
-    async def drain(
-        self, *, idle_timeout: float | None = None, max_duration: float | None = None
-    ) -> AsyncIterator[dict[str, Any]]:
-        """Yield chunks until the stream ends; raise ``_StreamClosed`` on error/timeout.
-
-        ``None`` timeouts mean unbounded — long-lived WebSocket sessions pass
-        ``None``; request-scoped SSE / gRPC streams pass the configured limits.
-        """
-        loop = asyncio.get_running_loop()
-        deadline = (loop.time() + max_duration) if max_duration is not None else None
-        while True:
-            wait = idle_timeout
-            if deadline is not None:
-                remaining = deadline - loop.time()
-                if remaining <= 0:
-                    raise _StreamClosed("max_stream_duration exceeded")
-                wait = remaining if wait is None else min(wait, remaining)
-            try:
-                async with asyncio.timeout(wait):
-                    kind, payload = await self._queue.get()
-            except TimeoutError:
-                if deadline is not None and loop.time() >= deadline:
-                    raise _StreamClosed("max_stream_duration exceeded") from None
-                raise _StreamClosed("stream idle timeout") from None
-            if kind == "end":
-                return
-            if kind == "error":
-                raise _StreamClosed(payload.get("error") or "stream error")
-            self._pending -= 1
-            yield payload
 
 
 class GatewayDispatcher:

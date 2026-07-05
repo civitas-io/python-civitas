@@ -7,15 +7,27 @@ import logging
 import time
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, contextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 from civitas.audit.types import AuditEvent, AuditSink
-from civitas.errors import ConfigurationError, ErrorAction, MessageRoutingError, SpawnError
+from civitas.errors import (
+    ConfigurationError,
+    ErrorAction,
+    MessageRoutingError,
+    MessageValidationError,
+    SlowConsumerError,
+    SpawnError,
+    StreamError,
+    StreamInterrupted,
+    StreamTimeout,
+)
 from civitas.messages import Message, _new_span_id, _uuid7
 from civitas.observability.tracer import Span
 from civitas.plugins.loader import resolve_plugin_class
+from civitas.streaming import StreamSink, _StreamClosed
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +36,7 @@ logger = logging.getLogger(__name__)
 _STREAM_CHUNK = "civitas.stream.chunk"
 _STREAM_END = "civitas.stream.end"
 _STREAM_ERROR = "civitas.stream.error"
+_STREAM_CANCEL = "civitas.stream.cancel"
 
 # Reserved marker capability (D3): lets spawn_into() fast-fail on a non-supervisor
 # target. Injected at registration so a YAML capabilities: override cannot strip it.
@@ -152,6 +165,22 @@ class Mailbox:
         return drained
 
 
+@dataclass
+class _OutStream:
+    """Producer-side state for one outbound stream (R7): seq counter, cap, cancel flag."""
+
+    started_at: float
+    max_frames: int | None = None
+    max_duration: float | None = None
+    seq: int = 0
+    frames: int = 0
+    cancelled: bool = False
+
+
+class _StreamStop(Exception):
+    """Internal: stop a producer stream cleanly (consumer cancelled, or cap reached)."""
+
+
 class StreamReply:
     """Handle for emitting a streaming reply, yielded by ``stream_reply()``.
 
@@ -165,6 +194,7 @@ class StreamReply:
         self._message = message
 
     async def send(self, payload: dict[str, Any]) -> None:
+        self._agent._raise_if_stream_stopped(self._message.correlation_id)
         await self._agent._emit_stream(self._message, payload, _STREAM_CHUNK)
 
 
@@ -265,6 +295,10 @@ class AgentProcess:
         self._suspend_requested = False
         self._suspend_reason = ""
 
+        self._pending_streams: dict[str, StreamSink] = {}
+        self._stream_producers: dict[str, str] = {}
+        self._out_streams: dict[str, _OutStream] = {}
+
     @property
     def status(self) -> ProcessStatus:
         return self._status
@@ -323,7 +357,15 @@ class AgentProcess:
         )
 
     async def receive(self, message: Message) -> None:
-        """Deliver an inbound message to this agent's mailbox."""
+        """Deliver an inbound message to this agent's mailbox.
+
+        Stream-control frames for a stream this agent is consuming (or a cancel for
+        one it is producing) are intercepted here — on the transport receive task,
+        not the message loop — so a ``handle()`` blocked on ``stream()`` is fed
+        concurrently and stream chunks bypass the business mailbox (R7 · D2).
+        """
+        if self._consume_stream_frame(message):
+            return
         await self._mailbox.put(message)
 
     # ------------------------------------------------------------------
@@ -555,6 +597,7 @@ class AgentProcess:
         message_type: str = "message",
     ) -> None:
         """Fire-and-forget: send a message to another agent by name."""
+        self._reject_reserved_type(message_type)
         if self._bus is None:
             raise RuntimeError("AgentProcess not wired to a MessageBus")
         trace_id = ""
@@ -584,6 +627,7 @@ class AgentProcess:
         timeout: float = 30.0,
     ) -> Message:
         """Request-reply: send a message and await a response."""
+        self._reject_reserved_type(message_type)
         if self._bus is None:
             raise RuntimeError("AgentProcess not wired to a MessageBus")
         trace_id = ""
@@ -619,6 +663,7 @@ class AgentProcess:
         that declare ``capability``. Raises ``CapabilityNotFoundError`` if no
         matching agent is registered.
         """
+        self._reject_reserved_type(message_type)
         from civitas.errors import CapabilityNotFoundError
 
         if self._registry is None:
@@ -893,6 +938,10 @@ class AgentProcess:
         """
         if self._current_message is None:
             raise RuntimeError("emit() called outside of handle()")
+        cid = self._current_message.correlation_id
+        ostream = self._out_streams.get(cid) if cid is not None else None
+        if ostream is not None and ostream.cancelled:
+            return
         await self._emit_stream(self._current_message, payload, _STREAM_CHUNK)
 
     async def end_stream(self) -> None:
@@ -902,7 +951,9 @@ class AgentProcess:
         await self._emit_stream(self._current_message, {}, _STREAM_END)
 
     @asynccontextmanager
-    async def stream_reply(self) -> AsyncIterator[StreamReply]:
+    async def stream_reply(
+        self, *, max_frames: int | None = None, max_duration: float | None = None
+    ) -> AsyncIterator[StreamReply]:
         """Stream a reply to the caller, terminating automatically on block exit.
 
         Preferred over manual :meth:`emit` / :meth:`end_stream`: the end terminator
@@ -913,36 +964,211 @@ class AgentProcess:
                 async with self.stream_reply() as stream:
                     async for token in produce():
                         await stream.send({"token": token})
+
+        ``max_frames`` / ``max_duration`` bound the producer so a lost cancel or a
+        vanished consumer cannot stream forever (R7 · D5).
         """
         if self._current_message is None:
             raise RuntimeError("stream_reply() called outside of handle()")
         message = self._current_message
+        cid = message.correlation_id
+        if cid is not None:
+            self._out_streams[cid] = _OutStream(
+                started_at=time.monotonic(), max_frames=max_frames, max_duration=max_duration
+            )
         try:
             yield StreamReply(self, message)
+        except _StreamStop:
+            await self._emit_stream(message, {}, _STREAM_END)
         except Exception as exc:
             await self._emit_stream(message, {"error": str(exc)}, _STREAM_ERROR)
             raise
         else:
             await self._emit_stream(message, {}, _STREAM_END)
+        finally:
+            if cid is not None:
+                self._out_streams.pop(cid, None)
 
     async def _emit_stream(
         self, message: Message, payload: dict[str, Any], stream_type: str
     ) -> None:
         if self._bus is None:
             raise RuntimeError("AgentProcess not wired to a MessageBus")
-        out = Message(
+        cid = message.correlation_id
+        ostream = self._out_streams.get(cid) if cid is not None else None
+        seq: int | None = None
+        if stream_type == _STREAM_CHUNK:
+            if ostream is None and cid is not None:
+                ostream = _OutStream(started_at=time.monotonic())
+                self._out_streams[cid] = ostream
+            if ostream is not None:
+                seq = ostream.seq
+                ostream.seq += 1
+                ostream.frames += 1
+        elif ostream is not None:
+            seq = ostream.seq
+        frame = Message(
             type=stream_type,
             sender=self.name,
             recipient=message.reply_to or message.sender,
             payload=payload,
-            correlation_id=message.correlation_id,
+            correlation_id=cid,
+            seq=seq,
             trace_id=message.trace_id,
             span_id=_new_span_id(),
             parent_span_id=message.span_id,
         )
-        await self._bus.route(out)
+        await self._bus.route(frame)
         if self._metrics is not None:
             self._metrics.message_sent(self.name)
+        if stream_type in (_STREAM_END, _STREAM_ERROR) and cid is not None:
+            self._out_streams.pop(cid, None)
+
+    async def stream(
+        self,
+        recipient: str,
+        payload: dict[str, Any],
+        message_type: str = "message",
+        *,
+        timeout: float = 30.0,
+        idle_timeout: float = 300.0,
+        max_duration: float = 3600.0,
+        maxsize: int = 256,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Stream a reply from another agent, yielding its chunks as they arrive.
+
+        The consumer counterpart to :meth:`stream_reply`. Sends a request to
+        ``recipient`` and async-iterates the chunks it emits until the terminator::
+
+            async for chunk in self.stream("summarizer", {"doc": doc}):
+                ...
+
+        Raises :class:`~civitas.errors.SlowConsumerError` if the consumer falls
+        behind, :class:`~civitas.errors.StreamTimeout` on idle/duration limits,
+        :class:`~civitas.errors.StreamInterrupted` if the local agent stops, and
+        :class:`~civitas.errors.StreamError` on a producer error or sequence gap.
+        """
+        self._reject_reserved_type(message_type)
+        if self._bus is None:
+            raise RuntimeError("AgentProcess not wired to a MessageBus")
+        cid = _uuid7()
+        sink = StreamSink(maxsize)
+        self._pending_streams[cid] = sink
+        self._stream_producers[cid] = recipient
+        trace_id = ""
+        parent_span_id: str | None = None
+        if self._current_message is not None:
+            trace_id = self._current_message.trace_id
+            parent_span_id = self._current_message.span_id
+        request = Message(
+            type=message_type,
+            sender=self.name,
+            recipient=recipient,
+            payload=payload,
+            correlation_id=cid,
+            reply_to=self.name,
+            trace_id=trace_id,
+            span_id=_new_span_id(),
+            parent_span_id=parent_span_id,
+        )
+        sent = False
+        try:
+            await self._bus.route(request)
+            sent = True
+            if self._metrics is not None:
+                self._metrics.message_sent(self.name)
+            async for chunk in sink.drain(
+                idle_timeout=idle_timeout, max_duration=max_duration, first_timeout=timeout
+            ):
+                yield chunk
+        except _StreamClosed as exc:
+            raise self._stream_error(str(exc)) from None
+        finally:
+            self._pending_streams.pop(cid, None)
+            self._stream_producers.pop(cid, None)
+            if sent:
+                await self._emit_cancel(recipient, cid)
+
+    def _consume_stream_frame(self, message: Message) -> bool:
+        """Route a stream-control frame to its sink or producer; True if consumed (R7)."""
+        cid = message.correlation_id
+        if cid is None:
+            return False
+        if message.type == _STREAM_CANCEL:
+            ostream = self._out_streams.get(cid)
+            if ostream is not None:
+                ostream.cancelled = True
+                return True
+            return False
+        sink = self._pending_streams.get(cid)
+        if sink is None:
+            return False
+        if message.sender != self._stream_producers.get(cid):
+            return True
+        if message.type == _STREAM_CHUNK:
+            sink.push(message.payload, seq=message.seq)
+        elif message.type == _STREAM_END:
+            sink.end(total=message.seq)
+        elif message.type == _STREAM_ERROR:
+            sink.fail(str(message.payload.get("error") or "stream error"))
+        else:
+            sink.push(message.payload)
+            sink.end()
+        return True
+
+    def _raise_if_stream_stopped(self, cid: str | None) -> None:
+        if cid is None:
+            return
+        ostream = self._out_streams.get(cid)
+        if ostream is None:
+            return
+        if ostream.cancelled:
+            raise _StreamStop
+        if ostream.max_frames is not None and ostream.frames >= ostream.max_frames:
+            raise _StreamStop
+        if (
+            ostream.max_duration is not None
+            and (time.monotonic() - ostream.started_at) >= ostream.max_duration
+        ):
+            raise _StreamStop
+
+    async def _emit_cancel(self, recipient: str, cid: str) -> None:
+        if self._bus is None:
+            return
+        try:
+            await self._bus.route(
+                Message(
+                    type=_STREAM_CANCEL,
+                    sender=self.name,
+                    recipient=recipient,
+                    correlation_id=cid,
+                    span_id=_new_span_id(),
+                )
+            )
+        except MessageRoutingError:
+            logger.debug("stream cancel to %r dropped (recipient gone)", recipient)
+
+    def _fail_local_streams(self, reason: str) -> None:
+        for sink in list(self._pending_streams.values()):
+            sink.fail(reason)
+
+    @staticmethod
+    def _stream_error(reason: str) -> StreamError:
+        if reason == "slow_consumer":
+            return SlowConsumerError(reason)
+        if reason in ("stream idle timeout", "max_stream_duration exceeded"):
+            return StreamTimeout(reason)
+        if reason == "agent_stopped":
+            return StreamInterrupted(reason)
+        return StreamError(reason)
+
+    @staticmethod
+    def _reject_reserved_type(message_type: str) -> None:
+        if message_type.startswith("_agency.") or message_type.startswith("civitas.stream."):
+            raise MessageValidationError(
+                f"Message type {message_type!r} uses a reserved prefix and is "
+                "framework-internal; application code must not send it."
+            )
 
     # ------------------------------------------------------------------
     # Observability helpers — call from inside handle()
@@ -1171,6 +1397,7 @@ class AgentProcess:
         finally:
             self._current_message = None
             self._current_handle_span = None
+            self._fail_local_streams("agent_stopped")
             # Preserve CRASHED — only move to STOPPING for normal/requested exits
             crashed = self._status == ProcessStatus.CRASHED
             if not crashed:

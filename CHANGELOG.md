@@ -11,6 +11,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+### Added
+
+- **Bus-native streaming** (v0.7.x · R7) — `AgentProcess.stream(recipient, payload, ...)` returns an
+  async iterator over another agent's streamed chunks: the consumer counterpart to the existing
+  `stream_reply()` / `emit()` producer API, working across in-process, ZMQ, and NATS with **no transport
+  change**. Chunks are demultiplexed on the receive path (so consuming inside `handle()` never deadlocks
+  and stream traffic bypasses the business mailbox). Adds a shared `civitas.streaming.StreamSink`, typed
+  errors (`StreamError`, `SlowConsumerError`, `StreamInterrupted`, `StreamTimeout`), an optional
+  `Message.seq` for ordering / gap detection, cooperative cancellation with a producer-side
+  `max_frames` / `max_duration` cap, sender verification, and reserved `civitas.stream.*` message types.
+  See [`docs/design/bus-native-streaming.md`](docs/design/bus-native-streaming.md).
+
 ## [0.7.0] — 2026-07-05
 
 ### Added

@@ -76,6 +76,7 @@ class Message:
     attempt: int = 0
     priority: int = 0
     ttl: float | None = None
+    seq: int | None = None
 
     def __post_init__(self) -> None:
         try:
@@ -107,6 +108,7 @@ class Message:
             "attempt": self.attempt,
             "priority": self.priority,
             "ttl": self.ttl,
+            "seq": self.seq,
         }
 
     @classmethod
@@ -131,5 +133,16 @@ SYSTEM_MESSAGE_TYPES: frozenset[str] = frozenset(
         "_agency.deregister",
         "_agency.suspend",
         "_agency.resume",
+    }
+)
+
+
+STREAM_MESSAGE_TYPES: frozenset[str] = frozenset(
+    {
+        "civitas.stream.chunk",
+        "civitas.stream.end",
+        "civitas.stream.error",
+        "civitas.stream.cancel",
+        "civitas.stream.credit",
     }
 )
