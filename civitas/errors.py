@@ -90,3 +90,19 @@ class CapabilityNotFoundError(CivitasError):
     def __init__(self, capability: str) -> None:
         self.capability = capability
         super().__init__(f"No agent registered with capability '{capability}'")
+
+
+class StreamError(CivitasError):
+    """Base error for bus-native streaming failures (R7)."""
+
+
+class SlowConsumerError(StreamError):
+    """Raised when a stream consumer falls behind and the bounded sink overflows."""
+
+
+class StreamInterrupted(StreamError):
+    """Raised when an in-flight stream is torn down (e.g. the consuming agent stops)."""
+
+
+class StreamTimeout(StreamError):
+    """Raised when a stream exceeds its idle timeout or maximum duration."""

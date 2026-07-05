@@ -741,7 +741,8 @@ route to agents by name via `self.send()` / `self.ask()`.
 
 ### 7. Using the `_agency.` message type prefix
 
-Names starting with `_agency.` are reserved for runtime internals.
+Names starting with `_agency.` or `civitas.stream.` are reserved for runtime internals;
+`send()` / `ask()` reject them with `MessageValidationError`.
 
 ```python
 # Wrong
