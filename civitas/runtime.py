@@ -24,7 +24,7 @@ from civitas.plugins.loader import load_plugins_from_config
 from civitas.process import DYNAMIC_SUPERVISOR_CAPABILITY, AgentProcess
 from civitas.sandbox.config import SandboxConfig
 from civitas.secrets.substitution import substitute_vars
-from civitas.security.config import SecurityConfig
+from civitas.security.config import GatewayAuthConfig, SecurityConfig
 from civitas.security.identity import AgentIdentity
 from civitas.security.registry import KeyRegistry
 from civitas.security.signing import MessageSigner, SigningSerializer
@@ -362,18 +362,22 @@ class Runtime:
                 )
             elif node.get("type") == "http_gateway" and "name" in node:
                 cfg_dict = node.get("config", {})
+                auth_cfg = GatewayAuthConfig.from_dict(cfg_dict.get("auth", {}))
+                docs_cfg = cfg_dict.get("docs", {})
                 gw_config = GatewayConfig(
                     host=cfg_dict.get("host", "0.0.0.0"),
                     port=cfg_dict.get("port", 8080),
                     port_quic=cfg_dict.get("port_quic"),
                     tls_cert=cfg_dict.get("tls_cert"),
                     tls_key=cfg_dict.get("tls_key"),
+                    tls_ca_cert=auth_cfg.tls_ca_cert,
+                    client_cert_mode=auth_cfg.client_cert_mode,
                     request_timeout=cfg_dict.get("request_timeout", 30.0),
                     enable_http3=cfg_dict.get("enable_http3", False),
                     routes=cfg_dict.get("routes", []),
                     middleware=cfg_dict.get("middleware", []),
-                    docs_enabled=cfg_dict.get("docs", {}).get("enabled", True),
-                    docs_path=cfg_dict.get("docs", {}).get("path", "/docs"),
+                    docs_enabled=docs_cfg.get("enabled"),
+                    docs_path=docs_cfg.get("path", "/docs"),
                 )
                 return HTTPGateway(name=node["name"], config=gw_config)
             elif "agent" in node:

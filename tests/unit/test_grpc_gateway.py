@@ -237,7 +237,6 @@ class TestGrpcEndToEnd:
 
         gateway.send.assert_awaited_once()
 
-
     @pytest.mark.asyncio
     async def test_health_check_serving(self, grpc_endpoint: Any) -> None:
         channel, _ = grpc_endpoint
