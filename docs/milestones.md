@@ -891,7 +891,7 @@ capability, which builds on supervision + dynamic spawn + telemetry (under inves
 | R4 | **Encrypted `StateStore` at rest** | 🟡 Medium | design/security-hardening.md |
 | R5 | **Per-agent spawn quotas** (beyond the global `max_children`) | 🟢 Low | design/dynamic-spawning.md Non-Goals |
 | R6 | **Cross-process dynamic spawning** (ZMQ / NATS) | 🟡 Medium | design/dynamic-spawning.md Non-Goals |
-| R7 | **Bus-native streaming primitive** (`AgentProcess.stream()` + `Transport.stream()`) — stretch | 🟢 Stretch | [GH #15](https://github.com/civitas-io/python-civitas/issues/15) · design/gateway-streaming.md §D1 (Option B) |
+| R7 | **Bus-native streaming primitive** (`AgentProcess.stream()`, agent-to-agent, no transport change) | ✅ Done (v0.7.1) | [#22](https://github.com/civitas-io/python-civitas/pull/22) · [bus-native-streaming.md](design/bus-native-streaming.md) |
 
 **Suggested cut line:** R1–R2 (spawn follow-ups) are the headline; R3 (auth) + R4 (encrypted store)
 are strong companions; R5–R7 are opportunistic and can slip to a later patch.
@@ -924,7 +924,7 @@ nothing is lost. Owner column: `core` = python-civitas, else the target repo.
 | Postgres: zero-downtime dual-write migration | core | ⏸️ | §Postgres StateStore |
 | Postgres: PgBouncer deployment guide | core | ⏸️ docs pass | §Postgres StateStore |
 | **Medicus self-healing hero demo** (P0+P1: detect → diagnose → verified PR) — flagship example; supersedes the Telegram personal assistant (which drops to a minor gateway+skills sample) | core | 💡 idea | design/medicus-demo.md |
-| Bus-native streaming primitive (`AgentProcess.stream()` + `Transport.stream()` across in-proc/ZMQ/NATS, agent-to-agent) — v0.6.0 ships gateway-mediated streaming instead | core | ⏸️ v0.x | [GH #15](https://github.com/civitas-io/python-civitas/issues/15) · design/gateway-streaming.md §D1 (Option B) |
+| Bus-native streaming primitive (`AgentProcess.stream()`, agent-to-agent across in-proc/ZMQ/NATS) | core | ✅ v0.7.1 | [#22](https://github.com/civitas-io/python-civitas/pull/22) · [bus-native-streaming.md](design/bus-native-streaming.md) |
 | First-party JWT gateway auth (opt-in `civitas[jwt]`) + mTLS client-cert auth — G5 shipped API-key only (no new core dep) | core | ⏸️ v0.x | §v0.6.0 G5 |
 | Dynamic spawn: non-blocking spawn (#9) ✅ done (PR #14); `spawn_into()` cross-tree helper (#10) in progress | core | 🔄 v0.7.0 | GH #9, #10 |
 | **Self-healing / autonomous remediation agent** — monitor (metrics/audit/OTEL/crash) → diagnose (LLM) → sandbox-verify → canary-deploy → auto-rollback, under staged autonomy + safety gates | core (+ contrib tools) | 💡 idea | design/self-healing.md |

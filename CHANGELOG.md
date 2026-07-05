@@ -11,6 +11,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+## [0.7.1] — 2026-07-05
+
 ### Added
 
 - **Bus-native streaming** (v0.7.x · R7) — `AgentProcess.stream(recipient, payload, ...)` returns an
