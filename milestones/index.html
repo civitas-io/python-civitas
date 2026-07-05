@@ -4538,9 +4538,9 @@ capability, which builds on supervision + dynamic spawn + telemetry (under inves
 </tr>
 <tr>
 <td>R7</td>
-<td><strong>Bus-native streaming primitive</strong> (<code>AgentProcess.stream()</code> + <code>Transport.stream()</code>) — stretch</td>
-<td>🟢 Stretch</td>
-<td><a href="https://github.com/civitas-io/python-civitas/issues/15">GH #15</a> · design/gateway-streaming.md §D1 (Option B)</td>
+<td><strong>Bus-native streaming primitive</strong> (<code>AgentProcess.stream()</code>, agent-to-agent, no transport change)</td>
+<td>✅ Done (v0.7.1)</td>
+<td><a href="https://github.com/civitas-io/python-civitas/pull/22">#22</a> · <a href="../design/bus-native-streaming/">bus-native-streaming.md</a></td>
 </tr>
 </tbody>
 </table>
@@ -4659,10 +4659,10 @@ nothing is lost. Owner column: <code>core</code> = python-civitas, else the targ
 <td>design/medicus-demo.md</td>
 </tr>
 <tr>
-<td>Bus-native streaming primitive (<code>AgentProcess.stream()</code> + <code>Transport.stream()</code> across in-proc/ZMQ/NATS, agent-to-agent) — v0.6.0 ships gateway-mediated streaming instead</td>
+<td>Bus-native streaming primitive (<code>AgentProcess.stream()</code>, agent-to-agent across in-proc/ZMQ/NATS)</td>
 <td>core</td>
-<td>⏸️ v0.x</td>
-<td><a href="https://github.com/civitas-io/python-civitas/issues/15">GH #15</a> · design/gateway-streaming.md §D1 (Option B)</td>
+<td>✅ v0.7.1</td>
+<td><a href="https://github.com/civitas-io/python-civitas/pull/22">#22</a> · <a href="../design/bus-native-streaming/">bus-native-streaming.md</a></td>
 </tr>
 <tr>
 <td>First-party JWT gateway auth (opt-in <code>civitas[jwt]</code>) + mTLS client-cert auth — G5 shipped API-key only (no new core dep)</td>
