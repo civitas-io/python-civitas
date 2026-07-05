@@ -37,8 +37,9 @@ from civitas.components import ComponentSet, build_component_set
 from civitas.errors import ConfigurationError
 from civitas.messages import Message
 from civitas.observability.otel_agent import run_otel_agent
-from civitas.process import AgentProcess, ProcessStatus
+from civitas.process import DYNAMIC_SUPERVISOR_CAPABILITY, AgentProcess, ProcessStatus
 from civitas.serializer import Serializer
+from civitas.supervisor import DynamicSupervisor
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +98,18 @@ class Worker:
         self._started = False
         self._stop_event = asyncio.Event()
 
+    @staticmethod
+    def _agent_capabilities(agent: AgentProcess) -> list[str] | None:
+        """Capabilities to register/announce, including the DynamicSupervisor marker.
+
+        A worker-hosted DynamicSupervisor must advertise its reserved marker so
+        peers can target it with cross-process ``spawn_into`` (R6 · D1).
+        """
+        caps = list(agent.capabilities)
+        if isinstance(agent, DynamicSupervisor) and DYNAMIC_SUPERVISOR_CAPABILITY not in caps:
+            caps.append(DYNAMIC_SUPERVISOR_CAPABILITY)
+        return caps or None
+
     async def start(self) -> None:
         """Start the worker: connect to proxy, wire agents, start loops."""
         # Workers never use in-process transport — they connect to an existing broker
@@ -147,7 +160,7 @@ class Worker:
         # Wire and subscribe agents
         for agent in self._agents.values():
             cs.inject(agent)
-            self._registry.register(agent.name)
+            self._registry.register(agent.name, capabilities=self._agent_capabilities(agent))
             await self._bus.setup_agent(agent)
 
         # Subscribe to restart commands and register in registry so bus.route() can find it (F03-2)
@@ -167,7 +180,7 @@ class Worker:
             maybe_agent: AgentProcess | None = self._agents.get(name)
             payload: dict[str, Any] = {"name": name}
             if maybe_agent is not None:
-                payload["capabilities"] = list(maybe_agent.capabilities)
+                payload["capabilities"] = self._agent_capabilities(maybe_agent) or []
                 payload["capability_metadata"] = dict(maybe_agent.capability_metadata)
             await self._transport.publish(
                 "_agency.register",

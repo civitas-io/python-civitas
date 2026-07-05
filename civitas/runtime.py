@@ -13,7 +13,7 @@ import yaml
 
 from civitas.audit.sinks import sink_from_config
 from civitas.components import ComponentSet, build_component_set
-from civitas.errors import ConfigurationError, SpawnError
+from civitas.errors import ConfigurationError, DeserializationError, SignatureError, SpawnError
 from civitas.evalloop import EvalAgent, EvalExporter
 from civitas.gateway.core import GatewayConfig, HTTPGateway
 from civitas.genserver import GenServer
@@ -175,6 +175,12 @@ class Runtime:
         # Security config — populated by from_config() when a security: block is present
         self._security_config: Any = None
         self._topology_public_keys: dict[str, str] = {}
+
+        # Signing infrastructure — built in start() when signing is enabled on a
+        # distributed transport; used to verify cross-process announcements (R6 · D8).
+        self._key_registry: Any = None
+        self._message_signer: Any = None
+        self._signing_on: bool = False
 
         # Per-agent credentials — populated by from_config() from credentials: blocks
         self._agent_credentials: dict[str, dict[str, str]] = {}
@@ -624,7 +630,10 @@ class Runtime:
             key_dir = self._security_config.identity.key_dir
             identities: dict[str, AgentIdentity] = {}
             for agent in all_agents:
-                if isinstance(agent, DynamicSupervisor | TopologyServer):
+                # A DynamicSupervisor needs an identity to sign the cluster-wide
+                # child announcements it publishes (R6 · D8); only TopologyServer
+                # (read-only, never signs) is exempt.
+                if isinstance(agent, TopologyServer):
                     continue
                 if self._security_config.identity.mode == "auto":
                     identities[agent.name] = AgentIdentity.load_or_generate(agent.name, key_dir)
@@ -642,6 +651,9 @@ class Runtime:
             signing_ser = SigningSerializer(signer, self._security_config.signing)
             self._serializer = signing_ser
             cs.bus._serializer = signing_ser
+            self._key_registry = registry
+            self._message_signer = signer
+            self._signing_on = True
 
         for agent in all_agents:
             cs.inject(agent)
@@ -705,29 +717,8 @@ class Runtime:
         # Subscribe to cross-process agent announcements from Worker processes.
         # Workers publish _agency.register on startup so this runtime's bus can
         # route messages to remote agents without a shared registry service.
-        async def _on_remote_register(data: bytes) -> None:
-            msg = cs.serializer.deserialize(data)
-            name: str = msg.payload.get("name", "")
-            if name:
-                try:
-                    self._registry.register_remote(
-                        name,
-                        capabilities=msg.payload.get("capabilities"),
-                        capability_metadata=msg.payload.get("capability_metadata"),
-                    )
-                except ValueError:
-                    pass  # already registered locally — ignore
-
-        async def _on_remote_deregister(data: bytes) -> None:
-            msg = cs.serializer.deserialize(data)
-            name: str = msg.payload.get("name", "")
-            if name:
-                entry = self._registry.lookup(name)
-                if entry is not None and not entry.is_local:
-                    self._registry.deregister(name)
-
-        await self._transport.subscribe("_agency.register", _on_remote_register)
-        await self._transport.subscribe("_agency.deregister", _on_remote_deregister)
+        await self._transport.subscribe("_agency.register", self._on_remote_register)
+        await self._transport.subscribe("_agency.deregister", self._on_remote_deregister)
 
         # Wait for subscriptions to propagate (ZMQ slow joiner mitigation)
         if hasattr(self._transport, "wait_ready"):
@@ -786,6 +777,73 @@ class Runtime:
 
         self._agents_by_name.clear()
         self._started = False
+
+    # ------------------------------------------------------------------
+    # Cross-process discovery — remote register/deregister handlers (R6)
+    # ------------------------------------------------------------------
+
+    async def _on_remote_register(self, data: bytes) -> None:
+        """Verify and apply an ``_agency.register`` announcement (R6 · D8/D9/D13).
+
+        When signing is on the announcement is verified during deserialization
+        against the trusted keyset — an unsigned or unknown-signer announcement
+        raises and is dropped. The authenticated ``sender`` is the owning
+        supervisor; the registry rejects name takeover by a different owner and
+        stale/reordered epochs. A verified child public key is recorded so this
+        process can later verify the child's own signed messages.
+        """
+        if self._serializer is None or self._registry is None:
+            return
+        try:
+            msg = self._serializer.deserialize(data)
+        except SignatureError:
+            logger.warning("Dropping _agency.register with missing/invalid signature")
+            return
+        except DeserializationError:
+            logger.warning("Dropping malformed _agency.register announcement")
+            return
+
+        name = msg.payload.get("name", "")
+        if not name:
+            return
+        pubkey = str(msg.payload.get("pubkey", "") or "")
+        epoch = int(msg.payload.get("epoch", 0) or 0)
+        try:
+            self._registry.register_remote(
+                name,
+                capabilities=msg.payload.get("capabilities"),
+                capability_metadata=msg.payload.get("capability_metadata"),
+                owner=msg.sender,
+                pubkey=pubkey,
+                epoch=epoch,
+            )
+        except ValueError as exc:
+            logger.warning("Rejecting remote registration for %r: %s", name, exc)
+            return
+
+        if pubkey and self._key_registry is not None:
+            try:
+                self._key_registry.register_b64(name, pubkey)
+            except (ValueError, TypeError):
+                logger.warning("Ignoring malformed announced public key for %r", name)
+
+    async def _on_remote_deregister(self, data: bytes) -> None:
+        """Verify and apply an ``_agency.deregister`` announcement (R6 · D13)."""
+        if self._serializer is None or self._registry is None:
+            return
+        try:
+            msg = self._serializer.deserialize(data)
+        except SignatureError:
+            logger.warning("Dropping _agency.deregister with missing/invalid signature")
+            return
+        except DeserializationError:
+            return
+
+        name = msg.payload.get("name", "")
+        if not name:
+            return
+        epoch = int(msg.payload.get("epoch", 0) or 0)
+        self._registry.deregister_remote(name, epoch=epoch)
 
     # ------------------------------------------------------------------
     # Public API — process lookup, send, and ask
@@ -888,6 +946,7 @@ class Runtime:
                 "config": config or {},
                 "spawner": "_runtime",
                 "wait": wait,
+                "spawn_id": _uuid7(),
             },
             message_type="civitas.dynamic.spawn",
         )

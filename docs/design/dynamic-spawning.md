@@ -308,10 +308,63 @@ await runtime.stop("workers", "researcher-1", drain="all", timeout=30.0)
 
 ---
 
+## Cross-Process Spawning (v0.7.0 · R6)
+
+Cross-process spawn is now implemented. See
+[`cross-process-spawn.md`](cross-process-spawn.md) for the full design (decisions
+D1–D14). The essentials:
+
+- **Mechanism — no new protocol.** Cross-process spawn *is* `spawn_into(<supervisor
+  hosted in a Worker>)`. A `dynamic_supervisor` topology node may carry
+  `process: worker`; the Worker hosts it (a `DynamicSupervisor` is itself an
+  `AgentProcess`), and the existing `civitas.dynamic.spawn` request/reply routes to
+  it over ZMQ/NATS. `_handle_spawn` runs *in the Worker*, so the child is
+  instantiated in the Worker's process.
+
+  ```yaml
+  supervision:
+    name: root
+    children:
+      - name: orchestrator
+        type: myapp.Orchestrator
+      - name: workers
+        type: dynamic_supervisor
+        process: worker          # hosted in a Worker, spawns children cross-process
+        max_children: 50
+  ```
+
+- **Homogeneous deployment only.** Every process runs the same image, so the spawned
+  class is importable on the Worker — there is no code distribution (prior art:
+  Erlang/Akka assume code is present). A class missing on the Worker surfaces as an
+  import-error `SpawnError`.
+
+- **Full distributed ComponentSet (linchpin).** A Worker-hosted `DynamicSupervisor`
+  asserts at start that its `_bus`/`_registry` are the cluster-wide ones; otherwise a
+  spawned child would register locally only and be unreachable — the misconfiguration
+  fails fast with `ConfigurationError`.
+
+- **Cluster-wide registration.** After a child reaches RUNNING the supervisor
+  publishes a signed, epoch-tagged `_agency.register` (name, capabilities, and — when
+  signing is on — the child's per-incarnation public key). Termination publishes
+  `_agency.deregister`. In-process spawn (`InProcessTransport`) announces nothing, so
+  the v0.4 path is unchanged.
+
+- **Security.** Announcements are authenticated and the registry enforces name
+  ownership (no takeover, no last-writer-wins) and incarnation epochs (no
+  resurrection). With signing disabled (in-process / dev) the announcement degrades to
+  name-only.
+
 ## Non-Goals (v0.4)
 
-- Cross-process spawning (ZMQ / NATS) — deferred to v0.5
+- ~~Cross-process spawning (ZMQ / NATS)~~ → implemented in v0.7.0 · R6 (above)
 - Spawning into a remote `DynamicSupervisor` by name from an unrelated subtree
 - Visual topology editor integration (M4.1 is deferred)
 - Per-agent spawn quotas (only global `max_children` per `DynamicSupervisor` in v0.4)
 - Textual dashboard — planned as follow-on; `TopologyServer` endpoints are the foundation
+
+## Non-Goals (R6 cross-process)
+
+- Heterogeneous clusters / code serialization / hot-reload
+- Placement groups / resource-aware scheduling
+- The depth-1 spawner-vouch certificate chain (audit record only for now)
+- Multi-datacenter (cross-cluster) spawn

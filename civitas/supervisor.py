@@ -13,8 +13,12 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
+from civitas.errors import ConfigurationError
 from civitas.messages import Message, _new_span_id, _uuid7
 from civitas.process import DYNAMIC_SUPERVISOR_CAPABILITY, AgentProcess, ProcessStatus
+from civitas.security.identity import AgentIdentity
+from civitas.security.signing import SigningSerializer
+from civitas.transport.inprocess import InProcessTransport
 
 logger = logging.getLogger(__name__)
 
@@ -502,11 +506,20 @@ class _ChildRec:
 
     ``acknowledged`` is True once an ``ok`` spawn reply has been sent — it gates
     whether a later terminal outcome notifies the spawner (D6).
+
+    ``spawn_id`` is the caller's idempotency token: a retry carrying the same
+    ``(name, spawn_id)`` returns the existing child instead of double-spawning
+    (R6 · D14). ``epoch`` is the monotonic incarnation stamped on the child's
+    cluster-wide announcement; ``announced`` records whether an ``_agency.register``
+    was published so the matching ``_agency.deregister`` fires exactly once (D13).
     """
 
     agent: AgentProcess
     task: asyncio.Task[None]
     acknowledged: bool = False
+    spawn_id: str = ""
+    epoch: int = 0
+    announced: bool = False
 
 
 class DynamicSupervisor(AgentProcess):
@@ -554,6 +567,9 @@ class DynamicSupervisor(AgentProcess):
         self._child_restart_timestamps: dict[str, deque[float]] = {}
         self._total_spawns: int = 0
         self._pending_child_tasks: set[asyncio.Task[None]] = set()
+        # Monotonic incarnation counter stamped on each child's cluster-wide
+        # announcement so peers can reject stale/reordered register/deregister (D13).
+        self._spawn_epoch: int = 0
 
     # ------------------------------------------------------------------
     # Governance hook — override in subclasses
@@ -581,6 +597,37 @@ class DynamicSupervisor(AgentProcess):
         return self._current_spawner
 
     # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
+
+    async def on_start(self) -> None:
+        """Verify the full distributed ComponentSet before hosting spawns (R6 · D10).
+
+        On a non-in-process transport a spawned child must register on the same
+        cluster-wide registry the bus routes with — otherwise the child registers
+        locally only and no other process can reach it, silently degrading a
+        cross-process spawn to local-only. This linchpin fails fast at start
+        rather than letting the degradation surface later as a routing black hole.
+        """
+        if self._is_distributed():
+            if self._bus is None or self._registry is None:
+                raise ConfigurationError(
+                    f"DynamicSupervisor '{self.name}' on a distributed transport requires a "
+                    f"message bus and registry to register spawned children cluster-wide."
+                )
+            if self._registry is not self._bus._registry:
+                raise ConfigurationError(
+                    f"DynamicSupervisor '{self.name}' must share the distributed registry used "
+                    f"by its message bus; children would otherwise register locally only."
+                )
+
+    def _is_distributed(self) -> bool:
+        """True when the bus rides a cross-process transport (not InProcess)."""
+        if self._bus is None:
+            return False
+        return not isinstance(self._bus._transport, InProcessTransport)
+
+    # ------------------------------------------------------------------
     # Message handling
     # ------------------------------------------------------------------
 
@@ -600,8 +647,23 @@ class DynamicSupervisor(AgentProcess):
         config: dict[str, Any] = payload.get("config", {})
         spawner: str = payload.get("spawner", "")
         wait: bool = bool(payload.get("wait", True))
+        spawn_id: str = payload.get("spawn_id", "")
 
-        if child_name in self._dynamic_children:
+        existing = self._dynamic_children.get(child_name)
+        if existing is not None:
+            # Idempotent retry (D14): a re-delivered request with the same
+            # (name, spawn_id) returns the live child instead of double-spawning.
+            if spawn_id and existing.spawn_id == spawn_id:
+                child = existing.agent
+                child_ready = child._status in (ProcessStatus.RUNNING, ProcessStatus.SUSPENDED)
+                return self.reply(
+                    {
+                        "status": "ok",
+                        "name": child_name,
+                        "ready": child_ready,
+                        "state": child._status.value,
+                    }
+                )
             return self.reply(
                 {"status": "error", "reason": f"agent '{child_name}' already running"}
             )
@@ -669,29 +731,54 @@ class DynamicSupervisor(AgentProcess):
         if self._bus is not None:
             await self._bus.setup_agent(agent)
 
-        await self._emit_audit(
-            "dynamic.spawn",
-            {
-                "spawner": spawner,
-                "child": child_name,
-                "class_path": class_path,
-                "supervisor": self.name,
-            },
-        )
+        distributed = self._is_distributed()
+        child_pubkey = self._provision_child_identity(child_name) if distributed else ""
+        announce_caps = list(agent.capabilities)
+        if (
+            isinstance(agent, DynamicSupervisor)
+            and DYNAMIC_SUPERVISOR_CAPABILITY not in announce_caps
+        ):
+            announce_caps.append(DYNAMIC_SUPERVISOR_CAPABILITY)
+        announce_meta = dict(agent.capability_metadata)
+
+        audit_details: dict[str, Any] = {
+            "spawner": spawner,
+            "child": child_name,
+            "class_path": class_path,
+            "supervisor": self.name,
+        }
+        if distributed:
+            audit_details["distributed"] = True
+            audit_details["pubkey"] = child_pubkey
+        await self._emit_audit("dynamic.spawn", audit_details)
 
         # Admission — count the attempt now, never refund it (D10). Everything from
         # here to the reply is one synchronous block (no await before an ok reply)
         # so acknowledged is set before the child task can run (§9.6).
         self._total_spawns += 1
+        self._spawn_epoch += 1
+        epoch = self._spawn_epoch
         task = agent._start_nowait()
-        self._dynamic_children[child_name] = _ChildRec(agent=agent, task=task)
+        rec = _ChildRec(agent=agent, task=task, spawn_id=spawn_id, epoch=epoch)
+        self._dynamic_children[child_name] = rec
         self._spawner_names[child_name] = spawner
         self._child_tasks[child_name] = task
         task.add_done_callback(lambda t: self._on_child_done(child_name, t))
         logger.info("[%s] spawned '%s' (%s, wait=%s)", self.name, child_name, class_path, wait)
 
         if not wait:
-            self._dynamic_children[child_name].acknowledged = True
+            rec.acknowledged = True
+            # Announce-after-start (D13): a background task waits for RUNNING then
+            # publishes _agency.register, so peers never route to a child that has
+            # not yet subscribed and a failed start is never announced.
+            if distributed:
+                ann = asyncio.create_task(
+                    self._announce_after_start(
+                        child_name, agent, announce_caps, announce_meta, child_pubkey, epoch
+                    )
+                )
+                self._pending_child_tasks.add(ann)
+                ann.add_done_callback(self._pending_child_tasks.discard)
             return self.reply(
                 {"status": "ok", "name": child_name, "ready": False, "state": agent._status.value}
             )
@@ -706,7 +793,12 @@ class DynamicSupervisor(AgentProcess):
                 ready.cancel()
 
         if agent._status in (ProcessStatus.RUNNING, ProcessStatus.SUSPENDED):
-            self._dynamic_children[child_name].acknowledged = True
+            rec.acknowledged = True
+            if distributed:
+                await self._announce_child(
+                    child_name, announce_caps, announce_meta, child_pubkey, epoch
+                )
+                rec.announced = True
             return self.reply(
                 {"status": "ok", "name": child_name, "ready": True, "state": agent._status.value}
             )
@@ -738,6 +830,7 @@ class DynamicSupervisor(AgentProcess):
         self._remove_child(name)
         if self._registry is not None:
             self._registry.deregister(name)
+        await self._maybe_announce_deregister(name, rec)
         logger.info("[%s] despawned '%s'", self.name, name)
         return self.reply({"status": "ok"})
 
@@ -781,6 +874,7 @@ class DynamicSupervisor(AgentProcess):
         self._remove_child(name)
         if self._registry is not None:
             self._registry.deregister(name)
+        await self._maybe_announce_deregister(name, rec)
         logger.info("[%s] stopped '%s' (drain=%s)", self.name, name, drain)
         return self.reply({"status": "ok"})
 
@@ -816,12 +910,14 @@ class DynamicSupervisor(AgentProcess):
         if self._restart_mode == RestartMode.NEVER:
             await self._clear_child_marker(name)
             self._remove_child(name)
+            await self._maybe_announce_deregister(name, rec)
             await self._notify_spawner(name, "restarts_exhausted" if crashed else "clean_exit")
             return
 
         if self._restart_mode == RestartMode.TRANSIENT and not crashed:
             await self._clear_child_marker(name)
             self._remove_child(name)
+            await self._maybe_announce_deregister(name, rec)
             await self._notify_spawner(name, "clean_exit")
             return
 
@@ -841,6 +937,7 @@ class DynamicSupervisor(AgentProcess):
             # Exhausted — remove and notify spawner; do NOT escalate to parent supervisor
             await self._clear_child_marker(name)
             self._remove_child(name)
+            await self._maybe_announce_deregister(name, rec)
             await self._notify_spawner(name, "restarts_exhausted")
             logger.warning(
                 "[%s] child '%s' exhausted restarts (%d) — removed",
@@ -880,11 +977,104 @@ class DynamicSupervisor(AgentProcess):
         Idempotent — safe to call inline on a wait=True start failure and again
         from the done-callback path; a second call finds nothing left to do.
         """
+        rec = self._dynamic_children.get(name)
         if self._registry is not None:
             self._registry.deregister(name)
         if self._bus is not None:
             await self._bus.teardown_agent(name)
         self._remove_child(name)
+        await self._maybe_announce_deregister(name, rec)
+
+    # ------------------------------------------------------------------
+    # Cross-process identity + announcements (R6)
+    # ------------------------------------------------------------------
+
+    def _provision_child_identity(self, child_name: str) -> str:
+        """Mint a fresh per-incarnation signing key for a child (R6 · D11).
+
+        When the bus serializer signs messages, generate a new keypair for the
+        child, register it so the child can sign and this process can verify, and
+        return its base64 public key for the cluster-wide announcement. A fresh
+        key per incarnation avoids replicating one private key to every Worker.
+        Returns an empty string when signing is disabled.
+        """
+        serializer = self._bus._serializer if self._bus is not None else None
+        if not isinstance(serializer, SigningSerializer):
+            return ""
+        identity = AgentIdentity.generate(child_name)
+        serializer.signer.add_identity(identity)
+        serializer.signer.trust(child_name, identity.verify_key)
+        return identity.public_key_b64()
+
+    async def _announce_child(
+        self,
+        child_name: str,
+        capabilities: list[str],
+        capability_metadata: dict[str, Any],
+        pubkey: str,
+        epoch: int,
+    ) -> None:
+        """Publish a signed ``_agency.register`` so peers can route to the child."""
+        if self._bus is None:
+            return
+        msg = Message(
+            type="_agency.register",
+            sender=self.name,
+            recipient="_agency.register",
+            payload={
+                "name": child_name,
+                "capabilities": capabilities,
+                "capability_metadata": capability_metadata,
+                "pubkey": pubkey,
+                "epoch": epoch,
+            },
+        )
+        data = self._bus._serializer.serialize(msg)
+        await self._bus._transport.publish("_agency.register", data)
+        logger.info("[%s] announced child '%s' (epoch %d)", self.name, child_name, epoch)
+
+    async def _announce_after_start(
+        self,
+        child_name: str,
+        agent: AgentProcess,
+        capabilities: list[str],
+        capability_metadata: dict[str, Any],
+        pubkey: str,
+        epoch: int,
+    ) -> None:
+        running = agent._running_event
+        task = self._child_tasks.get(child_name)
+        if running is not None and task is not None:
+            ready = asyncio.ensure_future(running.wait())
+            try:
+                await asyncio.wait({ready, task}, return_when=asyncio.FIRST_COMPLETED)
+            finally:
+                ready.cancel()
+        if agent._status not in (ProcessStatus.RUNNING, ProcessStatus.SUSPENDED):
+            return  # start failed — never announce (D13)
+        rec = self._dynamic_children.get(child_name)
+        if rec is None:
+            return  # already torn down
+        await self._announce_child(child_name, capabilities, capability_metadata, pubkey, epoch)
+        rec.announced = True
+
+    async def _announce_deregister(self, child_name: str, epoch: int) -> None:
+        """Publish ``_agency.deregister`` so peers reap the child's route (D13)."""
+        if self._bus is None:
+            return
+        msg = Message(
+            type="_agency.deregister",
+            sender=self.name,
+            recipient="_agency.deregister",
+            payload={"name": child_name, "epoch": epoch},
+        )
+        data = self._bus._serializer.serialize(msg)
+        await self._bus._transport.publish("_agency.deregister", data)
+
+    async def _maybe_announce_deregister(self, name: str, rec: _ChildRec | None) -> None:
+        """Deregister cluster-wide only for a child that was actually announced."""
+        if rec is not None and rec.announced and self._is_distributed():
+            await self._announce_deregister(name, rec.epoch)
 
     async def _clear_child_marker(self, name: str) -> None:
         """Clear a child's durable suspend marker on permanent removal (S8).

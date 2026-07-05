@@ -13,6 +13,33 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ### Added
 
+- **Cross-process dynamic spawn** (v0.7.0 · R6) — `DynamicSupervisor` children can now be spawned in
+  a *different* OS process over ZMQ/NATS, not just in the supervisor's own process. Cross-process spawn
+  is simply `spawn_into(<supervisor hosted in a Worker>)`: a `type: dynamic_supervisor` topology node may
+  carry `process: worker`, and the Worker hosts it with the full distributed `ComponentSet` so children it
+  spawns are wired (`llm`/`tools`/`store`) and registered cluster-wide. No new public API and the
+  in-process spawn path is unchanged (no announcement on `InProcessTransport`). Homogeneous deployments
+  only — the spawned class must be importable on the Worker (no code distribution). Hardened per Oracle
+  review (D8–D14):
+  - **Cluster-wide announcement, after-start, signed, epoched** — once a child reaches RUNNING (never at
+    request time), the supervisor publishes a signed `_agency.register` carrying `{name, capabilities,
+    capability_metadata, pubkey, epoch}`; on termination it publishes `_agency.deregister {name, epoch}`.
+    A monotonic incarnation `epoch` stops a reordered late announcement from resurrecting a dead name.
+  - **Authenticated receive + name ownership** — `Runtime._on_remote_register` verifies the announcement
+    signature against the trusted key set (dropping unsigned/unknown-signer announcements when signing is
+    on) and `LocalRegistry.register_remote`/`deregister_remote` reject a name owned locally, by a different
+    remote owner, or with a conflicting public key (no last-writer-wins takeover), and ignore stale epochs.
+    A verified child public key is recorded in the `KeyRegistry` so peers can verify the child's messages.
+  - **Per-incarnation child identity** — with signing enabled each spawn mints a fresh `AgentIdentity` for
+    the child on the Worker and announces its public key; a compromised Worker can never impersonate a
+    child elsewhere (no shared per-name private key).
+  - **Spawn idempotency + termination authority** — `spawn_into` carries a unique `spawn_id`; a retried
+    request for the same `(name, spawn_id)` returns the existing child instead of double-spawning. The
+    Worker-side supervisor owns termination; the original spawner treats a child `_agency.deregister` as
+    authoritative termination alongside `civitas.dynamic.terminated`.
+  - **Per-spawn audit** — the `dynamic.spawn` audit event gains `distributed` and `pubkey` fields for
+    cross-process spawns (in-process events are unchanged).
+  See [`docs/design/cross-process-spawn.md`](docs/design/cross-process-spawn.md).
 - **Encrypted StateStore at rest** (v0.7.0 · R4) — new `EncryptingStateStore`
   (`civitas.EncryptingStateStore`, opt-in `pip install 'civitas[encryption]'`) wraps any
   `StateStore` and transparently encrypts persisted *values* with ChaCha20-Poly1305 (AEAD), leaving

@@ -724,6 +724,9 @@ class AgentProcess:
                     "config": config or {},
                     "spawner": self.name,
                     "wait": wait,
+                    # Idempotency token (R6 · D14): a re-sent request is deduped by
+                    # the supervisor so a retry never double-spawns the child.
+                    "spawn_id": _uuid7(),
                 },
                 message_type="civitas.dynamic.spawn",
                 timeout=_SPAWN_ASK_TIMEOUT,
