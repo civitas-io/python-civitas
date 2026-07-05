@@ -13,6 +13,42 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ### Added
 
+- **Gateway JWT + mTLS auth** (v0.7.0 · R3) — two first-party, opt-in, secure-by-default gateway
+  middleware alongside the existing API-key auth:
+  - **JWT bearer verification** (`civitas.gateway.jwt_auth.require_jwt`, opt-in `pip install
+    'civitas[jwt]'`) — verifies `Authorization: Bearer` tokens against a `JwtVerifier` built once,
+    eagerly, at gateway `on_start` (a missing PyJWT or misconfiguration crashes startup, not the first
+    request). Secure by default: explicit `algorithms` (default `["RS256"]`), `exp`/`iss`/`aud`
+    **required** (a token without `exp` never expires otherwise) and verified, `alg=none` and RS/HS
+    algorithm confusion rejected, `jku`/`x5c`/`kid` header keys never fetched, tokens size-capped
+    (~8 KB), bounded leeway, and the blocking JWKS lookup offloaded via `asyncio.to_thread`. Supports
+    a JWKS URL (`https://` only) or a static key (exactly one source). Config via `CIVITAS_JWT_JWKS_URL`
+    / `CIVITAS_JWT_AUDIENCE` / `CIVITAS_JWT_ISSUER` / `CIVITAS_JWT_ALGORITHMS` /
+    `CIVITAS_JWT_PUBLIC_KEY` / `CIVITAS_JWT_SECRET`.
+  - **mTLS client-cert authorization** (`civitas.gateway.mtls.require_client_cert`) — authorizes on
+    the client certificate's **full subject DN, exact match** (never a CN substring) against
+    `CIVITAS_GATEWAY_MTLS_ALLOWED_DNS` (semicolon-separated). Fail-closed: no cert → 401, unlisted DN →
+    403, unconfigured allowlist → 500. New `GatewayConfig.tls_ca_cert` / `client_cert_mode`
+    (`none`/`optional`/`required`) wire uvicorn's `ssl_ca_certs` + `ssl_cert_reqs`; the CA **must** be
+    a dedicated private CA. `GatewayRequest.client_cert` is populated at the ASGI edge from the TLS
+    extension, and verified identity from either middleware is attached to the new
+    `GatewayRequest.auth` (authN feeding authZ) rather than the dispatched payload.
+  - **Security boundary (documented, not covered):** R3 auth applies to HTTP request routes only —
+    WebSocket routes, the gRPC surface, and `/docs` + `/openapi.json` bypass the middleware chain.
+    `/docs` now defaults to **off** whenever any gateway auth (API-key/JWT/mTLS middleware or
+    `client_cert_mode != "none"`) is configured, unless `docs_enabled` is explicitly set. mTLS over
+    HTTP/3 is refused at config time (aioquic cannot enforce client certs). WS/gRPC auth is a
+    follow-up. See [`docs/design/gateway-auth.md`](docs/design/gateway-auth.md).
+
+### Fixed
+
+- **Gateway middleware-load failures are now fatal (fail-open auth bypass fixed)** (v0.7.0 · R3, M1) —
+  the ASGI edge previously caught any error while loading a global or route-scoped middleware, logged
+  it, and **continued without that middleware** — so a security middleware that failed to import or
+  construct was silently dropped and the gateway served **unauthenticated**. Middleware is now resolved
+  eagerly at startup and a load failure raises `ConfigurationError` out of the gateway's `on_start`,
+  crashing the supervised gateway instead of serving requests with a missing auth layer.
+
 - **Cross-tree spawn** (v0.7.0 · R2) — `AgentProcess.spawn_into(supervisor_name, agent_class, name,
   config=None, *, wait=True)` spawns a child into any *named* `DynamicSupervisor` in the tree, not just
   the nearest ancestor. `spawn()` is now the nearest-ancestor special case of `spawn_into()` and delegates

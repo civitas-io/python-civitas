@@ -11,6 +11,7 @@ from email.parser import BytesParser
 from email.policy import default as email_policy
 from typing import TYPE_CHECKING, Any
 
+from civitas.errors import ConfigurationError
 from civitas.gateway.contracts import validate_request, validate_response
 from civitas.gateway.dispatch import (
     DispatchResult,
@@ -107,6 +108,22 @@ def _ws_parse(event: dict[str, Any]) -> dict[str, Any] | None:
     return parsed if isinstance(parsed, dict) else {"data": parsed}
 
 
+def _client_cert_from_scope(scope: _Scope) -> dict[str, Any] | None:
+    """Return the client's mTLS leaf from the ASGI TLS extension, or None.
+
+    Exposes only the leaf (``dn`` = full subject DN, ``leaf_pem`` = leaf PEM);
+    authorization is done on the full DN by ``require_client_cert``. Returns None
+    when the connection is plaintext or the client presented no certificate.
+    """
+    tls = scope.get("extensions", {}).get("tls")
+    if not tls:
+        return None
+    chain = tls.get("client_cert_chain")
+    if not chain:
+        return None
+    return {"dn": tls.get("client_cert_name"), "leaf_pem": chain[0]}
+
+
 class GatewayASGI:
     """ASGI app served by uvicorn. Dispatches requests onto the Civitas bus."""
 
@@ -123,40 +140,47 @@ class GatewayASGI:
         self._dispatcher = dispatcher or GatewayDispatcher(gateway, config.request_timeout)
         self._ws_routes: dict[str, str] = {r["path"]: r["agent"] for r in config.ws_routes}
 
-        # Load global middleware from config at construction time
-        self._middlewares: list[MiddlewareCallable] = []
-        for dotted_path in config.middleware:
-            try:
-                self._middlewares.append(load_middleware(dotted_path))
-            except Exception:
-                logger.exception("Failed to load middleware %r", dotted_path)
-
-        # Route-scoped middleware is resolved lazily per RouteEntry (keyed by
-        # object identity — entries live for the lifetime of the route table)
-        # and cached so repeated requests don't re-import on every call.
-        self._route_middleware_cache: dict[int, list[MiddlewareCallable]] = {}
+        # Resolve all middleware eagerly at construction (called from the gateway's
+        # on_start). A load failure now raises out of on_start and crashes the
+        # supervised gateway rather than being logged-and-skipped (M1 — the old
+        # behavior silently served unauthenticated when a security middleware
+        # failed to import). Route-scoped middleware is resolved once per
+        # RouteEntry (keyed by object identity — entries live for the lifetime of
+        # the route table) and cached so repeated requests don't re-import.
+        self._middlewares: list[MiddlewareCallable] = [
+            self._load_or_fail(dotted_path) for dotted_path in config.middleware
+        ]
+        self._route_middleware_cache: dict[int, list[MiddlewareCallable]] = {
+            id(entry): [self._load_or_fail(dotted_path, entry) for dotted_path in entry.middleware]
+            for entry in route_table.entries()
+        }
 
         # Cached OpenAPI spec (built lazily)
         self._openapi_spec: dict[str, Any] | None = None
 
-    def _route_middlewares(self, entry: RouteEntry) -> list[MiddlewareCallable]:
-        """Resolve and cache *entry*'s own ``middleware:`` dotted paths."""
-        cached = self._route_middleware_cache.get(id(entry))
-        if cached is not None:
-            return cached
-        resolved: list[MiddlewareCallable] = []
-        for dotted_path in entry.middleware:
-            try:
-                resolved.append(load_middleware(dotted_path))
-            except Exception:
-                logger.exception(
+    @staticmethod
+    def _load_or_fail(dotted_path: str, entry: RouteEntry | None = None) -> MiddlewareCallable:
+        """Import a middleware or raise ``ConfigurationError`` (fatal at startup)."""
+        try:
+            return load_middleware(dotted_path)
+        except Exception as exc:
+            if entry is not None:
+                logger.error(
                     "Failed to load route middleware %r for %s %s",
                     dotted_path,
                     entry.method,
                     entry.path_pattern,
                 )
-        self._route_middleware_cache[id(entry)] = resolved
-        return resolved
+            else:
+                logger.error("Failed to load middleware %r", dotted_path)
+            raise ConfigurationError(
+                f"Failed to load gateway middleware {dotted_path!r}; refusing to start "
+                "(a security middleware must never be silently skipped)"
+            ) from exc
+
+    def _route_middlewares(self, entry: RouteEntry) -> list[MiddlewareCallable]:
+        """Return *entry*'s middleware, resolved eagerly at construction."""
+        return self._route_middleware_cache.get(id(entry), [])
 
     async def __call__(self, scope: _Scope, receive: _Receive, send: _Send) -> None:
         if scope["type"] == "lifespan":
@@ -300,6 +324,7 @@ class GatewayASGI:
             body=body,
             client_ip=client_ip,
             gateway=self._gateway,
+            client_cert=_client_cert_from_scope(scope),
         )
 
         # Build and run middleware chain: global middleware, then this route's

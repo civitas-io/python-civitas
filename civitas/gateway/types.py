@@ -22,6 +22,12 @@ class GatewayRequest:
     body: dict[str, Any] = field(default_factory=dict)
     client_ip: str = ""
     gateway: HTTPGateway | None = None
+    # mTLS leaf, set by the ASGI edge only when the client presents one:
+    # ``{"dn": <full subject DN>, "leaf_pem": <PEM>}``, else None.
+    client_cert: dict[str, Any] | None = None
+    # Verified identity from auth middleware (authN feeding authZ); never merged
+    # into the dispatched payload to avoid reserved-key collisions.
+    auth: dict[str, Any] | None = None
 
 
 @dataclass

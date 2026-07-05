@@ -4,16 +4,35 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import ssl
 from dataclasses import dataclass, field
 from typing import Any
 
+from civitas.config import settings
 from civitas.errors import ConfigurationError
 from civitas.gateway.dispatch import GatewayDispatcher, StreamSink
+from civitas.gateway.jwt_auth import _JWT_MIDDLEWARE_PATH, JwtVerifier
+from civitas.gateway.mtls import _MTLS_MIDDLEWARE_PATH
 from civitas.gateway.router import RouteTable
 from civitas.messages import Message, _new_span_id
 from civitas.process import _STREAM_CHUNK, _STREAM_END, _STREAM_ERROR, AgentProcess
 
 logger = logging.getLogger(__name__)
+
+_CLIENT_CERT_MODES = frozenset({"none", "optional", "required"})
+_CERT_REQS = {
+    "none": ssl.CERT_NONE,
+    "optional": ssl.CERT_OPTIONAL,
+    "required": ssl.CERT_REQUIRED,
+}
+# Auth middleware whose presence flips the docs default to off (M4).
+_AUTH_MIDDLEWARE_PATHS = frozenset(
+    {
+        "civitas.gateway.auth.require_api_key",
+        _JWT_MIDDLEWARE_PATH,
+        _MTLS_MIDDLEWARE_PATH,
+    }
+)
 
 
 @dataclass
@@ -29,6 +48,8 @@ class GatewayConfig:
     port_quic: int | None = None
     tls_cert: str | None = None
     tls_key: str | None = None
+    tls_ca_cert: str | None = None
+    client_cert_mode: str = "none"
     request_timeout: float = 30.0
     enable_http3: bool = False
     grpc_enabled: bool = False
@@ -36,7 +57,8 @@ class GatewayConfig:
     grpc_reflection: bool = True
     routes: list[dict[str, Any]] = field(default_factory=list)
     middleware: list[str] = field(default_factory=list)
-    docs_enabled: bool = True
+    # Tri-state: None = auto (on unless gateway auth is configured), True/False = explicit.
+    docs_enabled: bool | None = None
     docs_path: str = "/docs"
     ws_routes: list[dict[str, Any]] = field(default_factory=list)
     stream_queue_maxsize: int = 256
@@ -50,6 +72,34 @@ class GatewayConfig:
             raise ValueError("enable_http3 requires port_quic")
         if self.grpc_enabled and self.grpc_port is None:
             raise ValueError("grpc_enabled requires grpc_port")
+
+        if self.client_cert_mode not in _CLIENT_CERT_MODES:
+            raise ConfigurationError(
+                f"client_cert_mode={self.client_cert_mode!r} is invalid; "
+                f"choose from {sorted(_CLIENT_CERT_MODES)}"
+            )
+        if self.client_cert_mode != "none":
+            if not (self.tls_ca_cert and self.tls_cert and self.tls_key):
+                raise ConfigurationError(
+                    "client_cert_mode requires tls_ca_cert, tls_cert, and tls_key"
+                )
+            # aioquic hardcodes client certs off, so mTLS over HTTP/3 would silently
+            # bypass — refuse the combination rather than serve an unenforced route.
+            if self.enable_http3:
+                raise ConfigurationError(
+                    "client_cert_mode is incompatible with enable_http3 "
+                    "(HTTP/3 / aioquic cannot enforce client certificates)"
+                )
+
+        # Once any gateway auth is configured, default docs off unless the operator
+        # explicitly opted in — don't expose the API surface behind auth (M4).
+        if self.docs_enabled is None:
+            self.docs_enabled = not self._auth_configured()
+
+    def _auth_configured(self) -> bool:
+        if self.client_cert_mode != "none":
+            return True
+        return any(mw in _AUTH_MIDDLEWARE_PATHS for mw in self.middleware)
 
 
 class HTTPGateway(AgentProcess):
@@ -84,6 +134,7 @@ class HTTPGateway(AgentProcess):
         self._h3_server: Any = None
         self._grpc_server: Any = None
         self._stream_sinks: dict[str, StreamSink] = {}
+        self._jwt_verifier: JwtVerifier | None = None
 
     async def on_start(self) -> None:
         try:
@@ -104,12 +155,19 @@ class HTTPGateway(AgentProcess):
             stream_max_duration=self._gw_config.max_stream_duration,
         )
 
+        # Constructing the ASGI app resolves the middleware chain eagerly; a bad
+        # (e.g. security) middleware raises here and crashes startup (M1).
         asgi_app = GatewayASGI(
             gateway=self,
             route_table=self._route_table,
             config=self._gw_config,
             dispatcher=dispatcher,
         )
+
+        # Build the JWT verifier once, eagerly, when require_jwt is in the chain, so
+        # a misconfig or missing PyJWT fails startup instead of the first request.
+        if _JWT_MIDDLEWARE_PATH in self._configured_middleware_paths():
+            self._jwt_verifier = JwtVerifier.from_settings(settings)
 
         uv_config = uvicorn.Config(
             app=asgi_app,
@@ -118,6 +176,8 @@ class HTTPGateway(AgentProcess):
             log_level="warning",
             ssl_certfile=self._gw_config.tls_cert,
             ssl_keyfile=self._gw_config.tls_key,
+            ssl_ca_certs=self._gw_config.tls_ca_cert,
+            ssl_cert_reqs=_CERT_REQS[self._gw_config.client_cert_mode],
         )
         self._uvicorn_server = uvicorn.Server(uv_config)
         self._server_task = asyncio.create_task(
@@ -188,6 +248,13 @@ class HTTPGateway(AgentProcess):
                 self._gw_config.host,
                 self._gw_config.grpc_port,
             )
+
+    def _configured_middleware_paths(self) -> list[str]:
+        """All middleware dotted paths in effect (global + every route)."""
+        paths = list(self._gw_config.middleware)
+        for entry in self._route_table.entries():
+            paths.extend(entry.middleware)
+        return paths
 
     async def on_stop(self) -> None:
         if self._grpc_server is not None:

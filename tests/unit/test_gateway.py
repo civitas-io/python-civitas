@@ -12,7 +12,7 @@ import httpx
 import pytest
 
 from civitas import AgentProcess, Runtime, Supervisor
-from civitas.errors import MessageRoutingError
+from civitas.errors import ConfigurationError, MessageRoutingError
 from civitas.gateway import (
     GatewayConfig,
     GatewayRequest,
@@ -1263,14 +1263,15 @@ class TestDispatchErrors:
 
 
 class TestMiddlewareLoadFailure:
-    def test_bad_middleware_path_logged_not_raised(self) -> None:
+    def test_bad_middleware_path_is_fatal(self) -> None:
+        # M1: a security middleware that can't load must crash startup, never be
+        # silently skipped (the old behavior served unauthenticated).
         gateway = MagicMock(spec=HTTPGateway)
         gateway.name = "api"
         config = GatewayConfig(middleware=["nonexistent.module.Middleware"])
         route_table = RouteTable.from_config([])
-        # Should not raise — bad middleware is logged and skipped
-        asgi = GatewayASGI(gateway=gateway, route_table=route_table, config=config)
-        assert asgi._middlewares == []
+        with pytest.raises(ConfigurationError):
+            GatewayASGI(gateway=gateway, route_table=route_table, config=config)
 
 
 # ---------------------------------------------------------------------------
@@ -1399,9 +1400,11 @@ class TestRouteScopedMiddleware:
         assert status == 200
         assert body == {"ok": True}
 
-    @pytest.mark.asyncio
-    async def test_bad_route_middleware_path_logged_not_raised(self) -> None:
-        asgi, gateway = _make_asgi(
+    def test_bad_route_middleware_path_is_fatal(self) -> None:
+        # M1: a bad route middleware is fatal at startup too, not skipped.
+        gateway = MagicMock(spec=HTTPGateway)
+        gateway.name = "api"
+        config = GatewayConfig(
             routes=[
                 {
                     "method": "POST",
@@ -1411,18 +1414,13 @@ class TestRouteScopedMiddleware:
                 }
             ]
         )
-        reply = MagicMock(spec=Message)
-        reply.payload = {}
-        gateway.ask = AsyncMock(return_value=reply)
-
-        # Should not raise — bad route middleware is logged and skipped,
-        # same behavior as an unresolvable global middleware path.
-        status, _ = await _http_request(asgi, method="POST", path="/v1/chat")
-        assert status == 200
+        route_table = RouteTable.from_config(config.routes)
+        with pytest.raises(ConfigurationError):
+            GatewayASGI(gateway=gateway, route_table=route_table, config=config)
 
     @pytest.mark.asyncio
-    async def test_route_middleware_resolved_once_and_cached(self) -> None:
-        asgi, gateway = _make_asgi(
+    async def test_route_middleware_resolved_once_at_construction(self) -> None:
+        config = GatewayConfig(
             routes=[
                 {
                     "method": "POST",
@@ -1432,13 +1430,17 @@ class TestRouteScopedMiddleware:
                 }
             ]
         )
+        route_table = RouteTable.from_config(config.routes)
+        gateway = MagicMock(spec=HTTPGateway)
+        gateway.name = "api"
         reply = MagicMock(spec=Message)
         reply.payload = {}
         gateway.ask = AsyncMock(return_value=reply)
 
-        with patch(
-            "civitas.gateway.asgi.load_middleware", wraps=load_middleware
-        ) as spy_load:
+        with patch("civitas.gateway.asgi.load_middleware", wraps=load_middleware) as spy_load:
+            # Eager resolution (M1): imported once at construction, cached for every
+            # subsequent request rather than re-imported per call.
+            asgi = GatewayASGI(gateway=gateway, route_table=route_table, config=config)
             await _http_request(asgi, method="POST", path="/v1/chat")
             await _http_request(asgi, method="POST", path="/v1/chat")
             assert spy_load.call_count == 1

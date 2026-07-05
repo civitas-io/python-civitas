@@ -86,6 +86,28 @@ class NatsTlsConfig:
 
 
 @dataclass
+class GatewayAuthConfig:
+    """HTTP gateway auth config parsed from the topology gateway ``auth:`` block.
+
+    JWT secrets and URLs come from ``CIVITAS_JWT_*`` env vars (see
+    :mod:`civitas.config`); the mTLS DN allowlist comes from
+    ``CIVITAS_GATEWAY_MTLS_ALLOWED_DNS``. This block carries the non-secret mTLS
+    trust settings that are applied to :class:`~civitas.gateway.core.GatewayConfig`.
+    """
+
+    tls_ca_cert: str | None = None
+    client_cert_mode: str = "none"
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> GatewayAuthConfig:
+        mtls_data = data.get("mtls", {})
+        return cls(
+            tls_ca_cert=mtls_data.get("ca_cert") or mtls_data.get("tls_ca_cert"),
+            client_cert_mode=mtls_data.get("client_cert_mode", "none"),
+        )
+
+
+@dataclass
 class TransportSecurityConfig:
     """Per-transport security configuration (ZMQ CURVE + NATS TLS/nkeys)."""
 

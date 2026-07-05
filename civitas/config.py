@@ -79,5 +79,23 @@ class Settings:
         self.fiddler_api_key = SecretStr(_env.get("FIDDLER_API_KEY"))
         self.gateway_api_key = SecretStr(_env.get("CIVITAS_GATEWAY_API_KEY"))
 
+        # Gateway JWT bearer auth (civitas[jwt]) — consumed by JwtVerifier.
+        self.jwt_jwks_url: str | None = _env.get("CIVITAS_JWT_JWKS_URL")
+        self.jwt_audience: str | None = _env.get("CIVITAS_JWT_AUDIENCE")
+        self.jwt_issuer: str | None = _env.get("CIVITAS_JWT_ISSUER")
+        raw_algorithms = _env.get("CIVITAS_JWT_ALGORITHMS", "")
+        self.jwt_algorithms: tuple[str, ...] = tuple(
+            a.strip() for a in raw_algorithms.split(",") if a.strip()
+        )
+        self.jwt_public_key = SecretStr(_env.get("CIVITAS_JWT_PUBLIC_KEY"))
+        self.jwt_secret = SecretStr(_env.get("CIVITAS_JWT_SECRET"))
+
+        # Gateway mTLS: exact-match allowlist of full client-cert subject DNs.
+        # Semicolon-separated (a DN itself contains commas, e.g. "CN=svc,O=Acme").
+        raw_dns = _env.get("CIVITAS_GATEWAY_MTLS_ALLOWED_DNS", "")
+        self.gateway_mtls_allowed_dns: frozenset[str] = frozenset(
+            d.strip() for d in raw_dns.split(";") if d.strip()
+        )
+
 
 settings = Settings()
