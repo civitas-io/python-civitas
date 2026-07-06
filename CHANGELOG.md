@@ -11,6 +11,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+### Security
+
+- **Gateway auth now covers the WebSocket and gRPC surfaces** (#17) — JWT (`require_jwt`) and mTLS
+  (`client_cert_mode`) auth configured on `HTTPGateway` is now **auto-inherited** by the WS and gRPC
+  surfaces, closing a silent gap where those surfaces stayed unauthenticated regardless of the HTTP
+  auth config. **This changes runtime behavior for existing deployments** that configure `require_jwt`
+  / `client_cert_mode` *and* expose `ws_routes` or `grpc_enabled=True`: those surfaces go from
+  silently-open to enforced.
+  - **WebSocket (JWT only).** The bearer token is read from a pinned `civitas.bearer.<jwt>`
+    `Sec-WebSocket-Protocol` subprotocol and verified **before** `websocket.accept`; a missing/invalid
+    token closes the handshake with WS close code `4401`, and the negotiated subprotocol is echoed on a
+    successful accept. WS mTLS remains a non-goal pending
+    [#25](https://github.com/civitas-io/python-civitas/issues/25).
+  - **gRPC (JWT + mTLS).** A `grpc.aio` server interceptor enforces the `authorization: Bearer`
+    metadata JWT and, when `client_cert_mode="required"`, transport-level `require_client_auth=True`
+    plus the existing `CIVITAS_GATEWAY_MTLS_ALLOWED_DNS` DN allowlist. The `Health` and
+    `ServerReflection` services are exempt so probes and reflection clients keep working. Failures map
+    to `UNAUTHENTICATED` (bad/missing JWT), `PERMISSION_DENIED` (unlisted DN), and `INTERNAL` (empty
+    allowlist misconfig).
+  - **New startup validations.** `client_cert_mode="optional"` is rejected when `grpc_enabled=True`
+    (grpc.aio has no `CERT_OPTIONAL` equivalent — `ConfigurationError`); enforcing JWT over a plaintext
+    (non-TLS) gRPC port is refused (`ConfigurationError`, since the token would travel in cleartext);
+    and an mTLS-only gateway with `ws_routes` logs a startup warning that its WS routes are
+    unauthenticated.
+  See [`docs/design/gateway-ws-grpc-auth.md`](docs/design/gateway-ws-grpc-auth.md).
+
 ## [0.7.1] — 2026-07-05
 
 ### Added

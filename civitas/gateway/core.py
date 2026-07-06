@@ -91,6 +91,13 @@ class GatewayConfig:
                     "(HTTP/3 / aioquic cannot enforce client certificates)"
                 )
 
+        if self.client_cert_mode == "optional" and self.grpc_enabled:
+            raise ConfigurationError(
+                "client_cert_mode='optional' is incompatible with grpc_enabled "
+                "(Python's grpc.aio has no CERT_OPTIONAL equivalent — require_client_auth is binary); "
+                "use 'required' or 'none' for a gateway with grpc_enabled=True"
+            )
+
         # Once any gateway auth is configured, default docs off unless the operator
         # explicitly opted in — don't expose the API surface behind auth (M4).
         if self.docs_enabled is None:
@@ -169,6 +176,28 @@ class HTTPGateway(AgentProcess):
         if _JWT_MIDDLEWARE_PATH in self._configured_middleware_paths():
             self._jwt_verifier = JwtVerifier.from_settings(settings)
 
+        # D10: JWT auto-inherits onto gRPC (D6), but a bearer token over an insecure
+        # (plaintext) gRPC port ships the credential in the clear — refuse to start.
+        if self._gw_config.grpc_enabled and self._jwt_verifier is not None:
+            if not (self._gw_config.tls_cert and self._gw_config.tls_key):
+                raise ConfigurationError(
+                    "JWT auth cannot be enforced over an insecure (plaintext) gRPC port — the bearer "
+                    "token would be sent in cleartext metadata; configure tls_cert/tls_key for the "
+                    "gRPC surface, or disable JWT for this gateway."
+                )
+        # D11: mTLS-only auth doesn't extend to WS (WS mTLS pending #25); make the
+        # resulting silently-open WS surface loud instead of silent.
+        if (
+            self._gw_config.client_cert_mode != "none"
+            and self._jwt_verifier is None
+            and self._gw_config.ws_routes
+        ):
+            logger.warning(
+                "client_cert_mode is set but no JWT verifier is configured; WS routes %r will be "
+                "served with NO authentication (WS mTLS is not yet supported — see #25/#17)",
+                [r["path"] for r in self._gw_config.ws_routes],
+            )
+
         uv_config = uvicorn.Config(
             app=asgi_app,
             host=self._gw_config.host,
@@ -240,6 +269,9 @@ class HTTPGateway(AgentProcess):
                 reflection_enabled=self._gw_config.grpc_reflection,
                 tls_cert=self._gw_config.tls_cert,
                 tls_key=self._gw_config.tls_key,
+                tls_ca_cert=self._gw_config.tls_ca_cert,
+                client_cert_mode=self._gw_config.client_cert_mode,
+                jwt_verifier=self._jwt_verifier,
             )
             await self._grpc_server.start()
             logger.info(
