@@ -204,6 +204,17 @@ To short-circuit the chain (e.g. for auth failures), return a `GatewayResponse` 
 
 ---
 
+## WebSocket & gRPC auth
+
+When JWT (`require_jwt`) and/or mTLS (`client_cert_mode`) auth is configured for the HTTP surface, that protection is **automatically inherited** by the WebSocket and gRPC surfaces — no extra config keys. This closes the gap where an operator who configured `require_jwt` got HTTP-only protection while WS and gRPC stayed open.
+
+- **WebSocket (JWT only).** The bearer token rides the `Sec-WebSocket-Protocol` handshake header as a single pinned subprotocol, `civitas.bearer.<jwt>`. It is verified **before** the socket is accepted; a missing or invalid token closes the handshake (WS close code `4401`) and the negotiated subprotocol is echoed on success. WS mTLS is not yet supported (see #25) — a gateway configured with `client_cert_mode` but no JWT logs a startup warning that its WS routes are unauthenticated.
+- **gRPC (JWT + mTLS).** A server interceptor verifies the `authorization: Bearer <jwt>` metadata entry and, when `client_cert_mode="required"`, enforces transport-level mTLS (`require_client_auth`) plus the same DN allowlist HTTP uses (`CIVITAS_GATEWAY_MTLS_ALLOWED_DNS`). The `Health` and `ServerReflection` services are exempt so load-balancer probes and reflection clients keep working. `client_cert_mode="optional"` is rejected at startup for gRPC (grpc.aio has no `CERT_OPTIONAL` equivalent), and enforcing JWT over a plaintext (non-TLS) gRPC port is refused (the token would travel in cleartext).
+
+See [design/gateway-ws-grpc-auth.md](design/gateway-ws-grpc-auth.md) for the full rationale (decisions D1–D11).
+
+---
+
 ## OpenAPI and Swagger UI
 
 The gateway generates an OpenAPI spec from the declared routes and any `@contract` decorators. Documentation is enabled by default:
