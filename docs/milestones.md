@@ -876,7 +876,7 @@ scope — G2/G3 use gateway-mediated streaming; the first-class version is track
 
 **Released 2026-07-05.** R1 (non-blocking spawn, #14), R2 (`spawn_into`, #16), R3 (JWT+mTLS auth + fail-open fix, #18), R4 (encrypted StateStore, #19), R5 (per-agent spawn quotas, #21), R6 (cross-process spawn, #20) all shipped. R7 (bus-native streaming, #15) deferred as a stretch item.
 
-**Status: ⏳ Proposed** — scoped from the actionable [Deferred Backlog](#deferred-backlog) items; not yet started.
+**Status: ✅ Released** — R1–R6 shipped in v0.7.0 (2026-07-05); R7 shipped in v0.7.1.
 
 Theme: *finish what v0.6.0 deferred.* The largest coherent cluster is **dynamic-spawn maturation**
 (the #8 / #9 / #10 follow-ups + quotas + cross-process), plus completing **gateway auth** and one
@@ -886,11 +886,11 @@ capability, which builds on supervision + dynamic spawn + telemetry (under inves
 | # | Deliverable | Priority | Source |
 |---|-------------|----------|--------|
 | R1 | ✅ **Done (PR #14)** — **Non-blocking dynamic spawn**: `spawn(wait=False)` / `spawn_nowait()`; `on_start()` runs in-task; failures via `on_child_terminated`. Design: [`non-blocking-spawn.md`](design/non-blocking-spawn.md) (Oracle + Momus reviewed). | 🔴 High | GH #9 (from #8) |
-| R2 | **`spawn_into(supervisor_name, …)`** — public cross-tree spawn helper (no hand-built internal messages) | 🟡 Medium | GH #10 |
-| R3 | **First-party JWT auth** (opt-in `civitas[jwt]`) + **mTLS** client-cert auth | 🟡 Medium | v0.6.0 §G5 |
-| R4 | **Encrypted `StateStore` at rest** | 🟡 Medium | design/security-hardening.md |
-| R5 | **Per-agent spawn quotas** (beyond the global `max_children`) | 🟢 Low | design/dynamic-spawning.md Non-Goals |
-| R6 | **Cross-process dynamic spawning** (ZMQ / NATS) | 🟡 Medium | design/dynamic-spawning.md Non-Goals |
+| R2 | ✅ **Done (PR #16)** — **`spawn_into(supervisor_name, …)`** public cross-tree spawn helper | 🟡 Medium | GH #10 |
+| R3 | ✅ **Done (PR #18)** — **First-party JWT auth** (opt-in `civitas[jwt]`) + **mTLS** client-cert auth + middleware fail-open fix | 🟡 Medium | v0.6.0 §G5 |
+| R4 | ✅ **Done (PR #19)** — **Encrypted `StateStore` at rest** (`civitas[encryption]`) | 🟡 Medium | design/security-hardening.md |
+| R5 | ✅ **Done (PR #21)** — **Per-agent spawn quotas** (beyond the global `max_children`) | 🟢 Low | design/dynamic-spawning.md Non-Goals |
+| R6 | ✅ **Done (PR #20)** — **Cross-process dynamic spawning** (ZMQ / NATS) | 🟡 Medium | design/dynamic-spawning.md Non-Goals |
 | R7 | **Bus-native streaming primitive** (`AgentProcess.stream()`, agent-to-agent, no transport change) | ✅ Done (v0.7.1) | [#22](https://github.com/civitas-io/python-civitas/pull/22) · [bus-native-streaming.md](design/bus-native-streaming.md) |
 
 **Suggested cut line:** R1–R2 (spawn follow-ups) are the headline; R3 (auth) + R4 (encrypted store)
@@ -910,11 +910,11 @@ nothing is lost. Owner column: `core` = python-civitas, else the target repo.
 |------|-------|--------|---------------|
 | [Visual Topology Editor](#m41-visual-topology-editor) (drag-drop UI) | core | ⏸️ low priority | §M4.1 |
 | Textual dashboard rebuild (on `TopologyServer` endpoints) | core | ⏸️ follow-on | design/dynamic-spawning.md |
-| Cross-process dynamic spawning (ZMQ / NATS) | core | ⏸️ v0.x | design/dynamic-spawning.md Non-Goals |
-| Per-agent spawn quotas (only global `max_children` today) | core | ⏸️ | design/dynamic-spawning.md Non-Goals |
+| Cross-process dynamic spawning (ZMQ / NATS) | core | ✅ v0.7.0 (#20) | design/cross-process-spawn.md |
+| Per-agent spawn quotas (beyond global `max_children`) | core | ✅ v0.7.0 (#21) | design/dynamic-spawning.md Non-Goals |
 | External security audit before v1.0 (fix all HIGH+; publish summary) | core | ⏳ pre-v1.0 | §M4.3 |
 | Continuous security posture (CVE watch, CVSS advisories) | core | ⏳ ongoing | §M4.3 |
-| Encrypted `StateStore` at rest | core | ⏸️ (could be v0.x) | design/security-hardening.md |
+| Encrypted `StateStore` at rest | core | ✅ v0.7.0 (#19) | design/encrypted-statestore.md |
 | Fine-grained ACL DSL (overlaps M4.4 capabilities) | core | ⏸️ | design/security-hardening.md |
 | HSM / TPM-backed signing keys | core | ⏸️ post-v1.0 | design/security-hardening.md |
 | PKI / CA integration (cert issuance) | core | ⏸️ deployment-layer | design/security-hardening.md |
@@ -925,8 +925,8 @@ nothing is lost. Owner column: `core` = python-civitas, else the target repo.
 | Postgres: PgBouncer deployment guide | core | ⏸️ docs pass | §Postgres StateStore |
 | **Medicus self-healing hero demo** (P0+P1: detect → diagnose → verified PR) — flagship example; supersedes the Telegram personal assistant (which drops to a minor gateway+skills sample) | core | 💡 idea | design/medicus-demo.md |
 | Bus-native streaming primitive (`AgentProcess.stream()`, agent-to-agent across in-proc/ZMQ/NATS) | core | ✅ v0.7.1 | [#22](https://github.com/civitas-io/python-civitas/pull/22) · [bus-native-streaming.md](design/bus-native-streaming.md) |
-| First-party JWT gateway auth (opt-in `civitas[jwt]`) + mTLS client-cert auth — G5 shipped API-key only (no new core dep) | core | ⏸️ v0.x | §v0.6.0 G5 |
-| Dynamic spawn: non-blocking spawn (#9) ✅ done (PR #14); `spawn_into()` cross-tree helper (#10) in progress | core | 🔄 v0.7.0 | GH #9, #10 |
+| First-party JWT gateway auth (opt-in `civitas[jwt]`) + mTLS client-cert auth | core | ✅ v0.7.0 (#18) — WS/gRPC surfaces pending (#17) | §v0.6.0 G5 |
+| Dynamic spawn: non-blocking spawn (#9, PR #14) + `spawn_into()` cross-tree helper (#10, PR #16) + bus-native streaming (#15, PR #22) | core | ✅ v0.7.0–v0.7.1 | GH #9, #10, #15 |
 | **Self-healing / autonomous remediation agent** — monitor (metrics/audit/OTEL/crash) → diagnose (LLM) → sandbox-verify → canary-deploy → auto-rollback, under staged autonomy + safety gates | core (+ contrib tools) | 💡 idea | design/self-healing.md |
 | Worker-level **restart-with-new-code** (blue-green drain) — the deploy primitive enabling self-healing & near-zero-downtime code updates (Python has no safe in-place reload) | core | ⏸️ v0.x | design/self-healing.md |
 
