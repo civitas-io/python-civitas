@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1140 840" font-family="'Segoe UI',Helvetica,Arial,sans-serif">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fbfdff"/>
+      <stop offset="1" stop-color="#eef3f8"/>
+    </linearGradient>
+    <linearGradient id="consumerHead" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#1e40af"/>
+    </linearGradient>
+    <linearGradient id="busHead" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#64748b"/>
+      <stop offset="1" stop-color="#475569"/>
+    </linearGradient>
+    <linearGradient id="producerHead" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#059669"/>
+      <stop offset="1" stop-color="#047857"/>
+    </linearGradient>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#334155"/>
+    </marker>
+    <marker id="arrowChunk" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#059669"/>
+    </marker>
+    <marker id="arrowCancel" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#b45309"/>
+    </marker>
+  </defs>
+
+  <rect width="1140" height="840" fill="url(#bgGrad)"/>
+  <text x="570" y="38" text-anchor="middle" font-size="24" font-weight="700" fill="#0f172a">Bus-Native Streaming (R7) — agent-to-agent stream() over any transport</text>
+  <text x="570" y="62" text-anchor="middle" font-size="14" fill="#64748b">Producer half already ships (stream_reply/emit). R7 adds the consumer-side demux — keyed by correlation_id, no transport change.</text>
+
+  <!-- Lifelines -->
+  <g stroke="#cbd5e1" stroke-width="2" stroke-dasharray="4 5">
+    <line x1="215" y1="120" x2="215" y2="700"/>
+    <line x1="570" y1="120" x2="570" y2="700"/>
+    <line x1="925" y1="120" x2="925" y2="700"/>
+  </g>
+
+  <!-- Headers -->
+  <g>
+    <rect x="95" y="82" width="240" height="42" rx="8" fill="url(#consumerHead)"/>
+    <text x="215" y="103" text-anchor="middle" font-size="15" font-weight="700" fill="#fff">Consumer agent  A</text>
+    <text x="215" y="118" text-anchor="middle" font-size="11" fill="#dbeafe">calls self.stream("B", …)</text>
+
+    <rect x="450" y="82" width="240" height="42" rx="8" fill="url(#busHead)"/>
+    <text x="570" y="103" text-anchor="middle" font-size="15" font-weight="700" fill="#fff">MessageBus / Transport</text>
+    <text x="570" y="118" text-anchor="middle" font-size="11" fill="#e2e8f0">in-proc · ZMQ · NATS (unchanged)</text>
+
+    <rect x="805" y="82" width="240" height="42" rx="8" fill="url(#producerHead)"/>
+    <text x="925" y="103" text-anchor="middle" font-size="15" font-weight="700" fill="#fff">Producer agent  B</text>
+    <text x="925" y="118" text-anchor="middle" font-size="11" fill="#d1fae5">handle() → stream_reply()</text>
+  </g>
+
+  <!-- Activation bars -->
+  <rect x="207" y="150" width="16" height="470" rx="3" fill="#bfdbfe" stroke="#3b82f6"/>
+  <rect x="917" y="238" width="16" height="300" rx="3" fill="#a7f3d0" stroke="#10b981"/>
+
+  <!-- Step 1: open sink (self) -->
+  <path d="M223,168 h60 v22 h-60" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="290" y="165" font-size="12.5" fill="#1e3a8a" font-weight="600">1  _open_stream(cid) → StreamSink; register _pending_streams[cid]</text>
+
+  <!-- Step 2: request A -> B -->
+  <line x1="223" y1="214" x2="917" y2="214" stroke="#334155" stroke-width="2.2" marker-end="url(#arrow)"/>
+  <text x="300" y="207" font-size="12.5" fill="#0f172a" font-weight="600">2  request  Message(type, reply_to=A, correlation_id=cid)</text>
+
+  <!-- Step 3: producer opens stream_reply -->
+  <path d="M933,250 h58 v20 h-58" fill="none" stroke="#059669" stroke-width="2" marker-end="url(#arrowChunk)"/>
+  <text x="720" y="247" font-size="12.5" fill="#065f46" font-weight="600" text-anchor="end">3  async with stream_reply() as s</text>
+
+  <!-- Step 4: chunk 1 B -> A -->
+  <line x1="917" y1="300" x2="223" y2="300" stroke="#059669" stroke-width="2.2" stroke-dasharray="7 4" marker-end="url(#arrowChunk)"/>
+  <text x="905" y="293" font-size="12.5" fill="#065f46" font-weight="600" text-anchor="end">4  chunk  civitas.stream.chunk (cid, seq=0)</text>
+
+  <!-- interception note -->
+  <rect x="60" y="315" width="300" height="46" rx="7" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.3"/>
+    <text x="72" y="333" font-size="11.5" fill="#1e40af" font-weight="700">receive-path demux (separate task):</text>
+    <text x="72" y="350" font-size="11" fill="#1e3a8a">cid ∈ _pending_streams → sink.push() → async-for yields</text>
+
+  <!-- Step 5: chunk 2 -->
+  <line x1="917" y1="392" x2="223" y2="392" stroke="#059669" stroke-width="2.2" stroke-dasharray="7 4" marker-end="url(#arrowChunk)"/>
+  <text x="905" y="385" font-size="12.5" fill="#065f46" font-weight="600" text-anchor="end">5  chunk  (cid, seq=1)   … N chunks …</text>
+
+  <!-- Step 6: end terminator -->
+  <line x1="917" y1="452" x2="223" y2="452" stroke="#047857" stroke-width="2.6" marker-end="url(#arrowChunk)"/>
+  <text x="905" y="445" font-size="12.5" fill="#065f46" font-weight="700" text-anchor="end">6  end  civitas.stream.end (cid)   ⟵ auto on block exit</text>
+
+  <!-- Step 7: close -->
+  <path d="M223,486 h60 v22 h-60" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="290" y="483" font-size="12.5" fill="#1e3a8a" font-weight="600">7  sink.end() → async-for completes → _close_stream(cid)</text>
+
+  <text x="290" y="520" font-size="11.5" fill="#475569" font-style="italic">Graceful degradation: a plain reply() to a stream() request → one item, then end.</text>
+
+  <!-- Edge-case callouts -->
+  <text x="60" y="576" font-size="14" font-weight="700" fill="#0f172a">Edge cases (design decisions)</text>
+
+  <rect x="60" y="590" width="330" height="96" rx="9" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.4"/>
+  <text x="76" y="612" font-size="13" font-weight="700" fill="#b45309">D5 · Cancellation + producer cap</text>
+  <text x="76" y="632" font-size="11.5" fill="#92400e">Consumer breaks out of async-for → aclose()</text>
+  <text x="76" y="649" font-size="11.5" fill="#92400e">→ emits civitas.stream.cancel (cid) to B.</text>
+  <text x="76" y="666" font-size="11.5" fill="#92400e">Cooperative check + max_frames/duration cap.</text>
+  <line x1="250" y1="676" x2="360" y2="676" stroke="#b45309" stroke-width="1.6" stroke-dasharray="5 3" marker-end="url(#arrowCancel)"/>
+
+  <rect x="405" y="590" width="330" height="96" rx="9" fill="#fef2f2" stroke="#ef4444" stroke-width="1.4"/>
+  <text x="421" y="612" font-size="13" font-weight="700" fill="#b91c1c">D6 · Producer crash / partition</text>
+  <text x="421" y="632" font-size="11.5" fill="#991b1b">teardown_agent fails only its OWN local streams</text>
+  <text x="421" y="649" font-size="11.5" fill="#991b1b">(no producer→remote-sink index in v1).</text>
+  <text x="421" y="666" font-size="11.5" fill="#991b1b">Remote consumer bound by idle_timeout → StreamTimeout.</text>
+
+  <rect x="750" y="590" width="330" height="96" rx="9" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="1.4"/>
+  <text x="766" y="612" font-size="13" font-weight="700" fill="#6d28d9">D4 · Backpressure (fail-fast v1)</text>
+  <text x="766" y="632" font-size="11.5" fill="#5b21b6">Bounded sink; &gt; maxsize unconsumed chunks</text>
+  <text x="766" y="649" font-size="11.5" fill="#5b21b6">→ slow_consumer error (pub/sub has no</text>
+  <text x="766" y="666" font-size="11.5" fill="#5b21b6">end-to-end flow control). Credit mode = future.</text>
+
+  <!-- Legend -->
+  <g transform="translate(60,712)">
+    <text x="0" y="0" font-size="12.5" font-weight="700" fill="#0f172a">Legend</text>
+    <line x1="70" y1="-4" x2="120" y2="-4" stroke="#334155" stroke-width="2.2" marker-end="url(#arrow)"/>
+    <text x="128" y="0" font-size="11.5" fill="#334155">request / control (single message)</text>
+    <line x1="360" y1="-4" x2="410" y2="-4" stroke="#059669" stroke-width="2.2" stroke-dasharray="7 4" marker-end="url(#arrowChunk)"/>
+    <text x="418" y="0" font-size="11.5" fill="#334155">stream chunk (many, keyed by cid)</text>
+    <rect x="690" y="-12" width="16" height="14" rx="2" fill="#bfdbfe" stroke="#3b82f6"/>
+    <text x="714" y="0" font-size="11.5" fill="#334155">activation (agent busy)</text>
+  </g>
+  <text x="60" y="758" font-size="11" fill="#94a3b8">Producer API (stream_reply / emit / end_stream) is unchanged from G2/G3. R7 = consumer-side demux + AgentProcess.stream() + errors + cancel.</text>
+</svg>

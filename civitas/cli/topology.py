@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
+from urllib.error import URLError
+from urllib.request import urlopen
 
 import typer
 import yaml
@@ -128,6 +131,17 @@ def _validate_topology(config: dict[str, Any]) -> _ValidationResult:
             name = node.get("name")
             if not name:
                 result.fail("Naming", f"{path}: {node['type']} missing 'name'")
+            if name:
+                agent_names.append(name)
+        elif node.get("type") in (
+            "dynamic_supervisor",
+            "topology_server",
+            "eval_agent",
+            "http_gateway",
+        ) or ("type" in node and "name" in node):
+            name = node.get("name")
+            if not name:
+                result.fail("Naming", f"{path}: {node.get('type', 'node')} missing 'name'")
             if name:
                 agent_names.append(name)
         else:
@@ -277,6 +291,25 @@ def _build_rich_tree(config: dict[str, Any]) -> Tree:
                 cls_path = f"{child['module']}.{child['class']}"
                 label = f"[green]{name}[/green]  [dim]{cls_path}[/dim]"
                 parent.add(label)
+            elif child.get("type") == "dynamic_supervisor":
+                name = child.get("name", "?")
+                max_ch = child.get("max_children", "∞")
+                label = (
+                    f"[bold magenta]{name}[/bold magenta] "
+                    f"[magenta]dynamic[/magenta]  "
+                    f"[dim]max_children: {max_ch}[/dim]  [dim italic][dyn][/dim italic]"
+                )
+                parent.add(label)
+            elif child.get("type") == "topology_server":
+                name = child.get("name", "?")
+                cfg = child.get("config", {})
+                host = cfg.get("host", "127.0.0.1")
+                port = cfg.get("port", 6789)
+                label = (
+                    f"[bold blue]{name}[/bold blue]  "
+                    f"[dim]http://{host}:{port}[/dim]  [dim italic][topo][/dim italic]"
+                )
+                parent.add(label)
 
     _add_children(tree, sup.get("children", []))
     return tree
@@ -361,6 +394,100 @@ def _count_supervisors(node: dict[str, Any]) -> int:
         if "supervisor" in child:
             count += _count_supervisors(child["supervisor"])
     return count
+
+
+# ---------------------------------------------------------------------------
+# Live topology helpers
+# ---------------------------------------------------------------------------
+
+
+def _find_topology_server(config: dict[str, Any]) -> tuple[str, int] | None:
+    """Scan YAML for a topology_server node; return (host, port) or None."""
+    sup = config.get("supervision", config.get("supervisor", {}))
+
+    def _scan(node: dict[str, Any]) -> tuple[str, int] | None:
+        if node.get("type") == "topology_server":
+            cfg = node.get("config", {})
+            return cfg.get("host", "127.0.0.1"), cfg.get("port", 6789)
+        if "supervisor" in node:
+            for child in node["supervisor"].get("children", []):
+                hit = _scan(child)
+                if hit:
+                    return hit
+        return None
+
+    for child in sup.get("children", []):
+        hit = _scan(child)
+        if hit:
+            return hit
+    return None
+
+
+def _try_live_topology(host: str, port: int) -> dict[str, Any] | None:
+    """GET /topology from a running TopologyServer; return parsed JSON or None."""
+    try:
+        with urlopen(f"http://{host}:{port}/topology", timeout=1.0) as resp:  # noqa: S310
+            data: dict[str, Any] = json.loads(resp.read())
+            return data
+    except (URLError, OSError, ValueError):
+        return None
+
+
+def _build_rich_tree_from_live(data: dict[str, Any]) -> Tree:
+    """Render a live topology JSON dict (from TopologyServer) as a Rich Tree."""
+    node_type = data.get("type", "agent")
+    name = data.get("name", "?")
+
+    if node_type == "supervisor":
+        strategy = data.get("strategy", "ONE_FOR_ONE")
+        root_label = f"[bold cyan]{name}[/bold cyan] [cyan]{strategy}[/cyan]"
+        tree = Tree(root_label)
+        for child in data.get("children", []):
+            _add_live_node(tree, child)
+        return tree
+    if node_type == "dynamic_supervisor":
+        live_count = data.get("live_count", 0)
+        max_ch = data.get("max_children", "∞")
+        status = data.get("status", "")
+        label = (
+            f"[bold magenta]{name}[/bold magenta] [magenta]dynamic[/magenta]  "
+            f"[dim]live: {live_count}/{max_ch}  status: {status}[/dim]  [dim italic][dyn][/dim italic]"
+        )
+        tree = Tree(label)
+        for child in data.get("children", []):
+            _add_live_node(tree, child)
+        return tree
+    status = data.get("status", "")
+    color = "green" if status == "RUNNING" else "yellow"
+    return Tree(f"[{color}]{name}[/{color}]  [dim]{status}[/dim]")
+
+
+def _add_live_node(parent: Tree, data: dict[str, Any]) -> None:
+    """Recursively add a live JSON node as a Rich Tree branch."""
+    node_type = data.get("type", "agent")
+    name = data.get("name", "?")
+    status = data.get("status", "")
+    status_color = "green" if status == "RUNNING" else "yellow"
+
+    if node_type == "supervisor":
+        strategy = data.get("strategy", "ONE_FOR_ONE")
+        label = f"[bold cyan]{name}[/bold cyan] [cyan]{strategy}[/cyan]"
+        branch = parent.add(label)
+        for child in data.get("children", []):
+            _add_live_node(branch, child)
+    elif node_type == "dynamic_supervisor":
+        live_count = data.get("live_count", 0)
+        max_ch = data.get("max_children", "∞")
+        label = (
+            f"[bold magenta]{name}[/bold magenta] [magenta]dynamic[/magenta]  "
+            f"[dim]live: {live_count}/{max_ch}  status: {status}[/dim]  [dim italic][dyn][/dim italic]"
+        )
+        branch = parent.add(label)
+        for child in data.get("children", []):
+            _add_live_node(branch, child)
+    else:
+        label = f"[{status_color}]{name}[/{status_color}]  [dim]{status}[/dim]"
+        parent.add(label)
 
 
 # ---------------------------------------------------------------------------
@@ -472,7 +599,7 @@ def topology_validate(
 def topology_show(
     path: str = typer.Argument(help="Path to topology YAML file"),
 ) -> None:
-    """Visualize a topology as a Rich tree."""
+    """Visualize a topology as a Rich tree (live data when runtime is running)."""
     topology_path = Path(path)
     if not topology_path.exists():
         err_console.print(f"[red]Error:[/red] File '{path}' not found.")
@@ -480,8 +607,22 @@ def topology_show(
 
     config = yaml.safe_load(topology_path.read_text())
 
-    console.print(f"\n  [bold]Civitas Topology:[/bold] [cyan]{path}[/cyan]\n")
-    tree = _build_rich_tree(config)
+    topo_server = _find_topology_server(config)
+    live_data: dict[str, Any] | None = None
+    if topo_server:
+        live_data = _try_live_topology(*topo_server)
+
+    if live_data:
+        console.print(
+            f"\n  [bold]Civitas Topology:[/bold] [cyan]{path}[/cyan]  "
+            f"[dim green](live)[/dim green]\n"
+        )
+        tree = _build_rich_tree_from_live(live_data)
+    else:
+        suffix = "  [dim](runtime not running)[/dim]" if topo_server else ""
+        console.print(f"\n  [bold]Civitas Topology:[/bold] [cyan]{path}[/cyan]{suffix}\n")
+        tree = _build_rich_tree(config)
+
     console.print(tree)
     console.print()
     console.print(Rule(style="dim"))

@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 320" width="600" height="320"
+     font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#9CA3AF"/>
+    </marker>
+    <marker id="arr-ret" markerWidth="8" markerHeight="6" refX="1" refY="3" orient="auto">
+      <polygon points="8 0, 0 3, 8 6" fill="#9CA3AF"/>
+    </marker>
+  </defs>
+
+  <!-- Participants -->
+  <rect x="20" y="10" width="110" height="32" rx="5" fill="#1e3a5f"/>
+  <text x="75" y="31" text-anchor="middle" font-size="9.5" font-weight="700" fill="white">Worker.start()</text>
+
+  <rect x="160" y="10" width="120" height="32" rx="5" fill="#6b4c11"/>
+  <text x="220" y="31" text-anchor="middle" font-size="9.5" font-weight="700" fill="white">ComponentSet</text>
+
+  <rect x="310" y="10" width="100" height="32" rx="5" fill="#6b4c11"/>
+  <text x="360" y="31" text-anchor="middle" font-size="9.5" font-weight="700" fill="white">Transport</text>
+
+  <rect x="435" y="10" width="145" height="32" rx="5" fill="#4a1942"/>
+  <text x="507" y="26" text-anchor="middle" font-size="9.5" font-weight="700" fill="white">_agency topics</text>
+  <text x="507" y="38" text-anchor="middle" font-size="8" fill="#E9D5FF">(register / deregister)</text>
+
+  <!-- Lifelines -->
+  <line x1="75"  y1="42" x2="75"  y2="305" stroke="#D1D5DB" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="220" y1="42" x2="220" y2="305" stroke="#D1D5DB" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="360" y1="42" x2="360" y2="305" stroke="#D1D5DB" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="507" y1="42" x2="507" y2="305" stroke="#D1D5DB" stroke-width="1" stroke-dasharray="4,3"/>
+
+  <!-- Step 1: build ComponentSet -->
+  <line x1="75" y1="70" x2="214" y2="70" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="145" y="64" text-anchor="middle" font-size="8.5" fill="#374151">build_component_set()</text>
+  <line x1="220" y1="88" x2="81" y2="88" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr-ret)"/>
+  <text x="145" y="83" text-anchor="middle" font-size="8" fill="#6B7280">ComponentSet</text>
+
+  <!-- Step 2: inject agents (self-loop) -->
+  <path d="M75,110 Q55,110 55,122 Q55,134 75,134" fill="none" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="5" y="122" font-size="8" fill="#374151">inject</text>
+  <text x="5" y="132" font-size="8" fill="#374151">agents</text>
+
+  <!-- Step 3: transport.start() -->
+  <line x1="75" y1="158" x2="354" y2="158" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="215" y="152" text-anchor="middle" font-size="8.5" fill="#374151">transport.start()</text>
+
+  <!-- Step 4: subscribe each agent -->
+  <line x1="75" y1="182" x2="354" y2="182" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="215" y="176" text-anchor="middle" font-size="8.5" fill="#374151">subscribe(agent.name, handler) × N</text>
+
+  <!-- Step 5: publish _agency.register -->
+  <line x1="75" y1="210" x2="501" y2="210" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="290" y="204" text-anchor="middle" font-size="8.5" fill="#374151">publish _agency.register {name: agent.name}</text>
+
+  <!-- Note box -->
+  <rect x="390" y="220" width="200" height="28" rx="4" fill="#F0FDF4" stroke="#BBF7D0" stroke-width="1"/>
+  <text x="490" y="231" text-anchor="middle" font-size="8" fill="#15803D">Runtime receives →</text>
+  <text x="490" y="243" text-anchor="middle" font-size="8" fill="#15803D">registry.register_remote(name)</text>
+
+  <!-- Step 6: wait for shutdown (activation box) -->
+  <rect x="69" y="255" width="12" height="22" rx="2" fill="#BFDBFE" stroke="#93C5FD" stroke-width="1"/>
+  <text x="115" y="269" font-size="8" fill="#6B7280">... await shutdown ...</text>
+
+  <!-- Step 7: deregister -->
+  <line x1="75" y1="285" x2="501" y2="285" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="290" y="279" text-anchor="middle" font-size="8.5" fill="#374151">publish _agency.deregister</text>
+
+</svg>

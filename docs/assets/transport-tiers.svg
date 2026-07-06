@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 120" width="700" height="120">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#9CA3AF"/>
+    </marker>
+  </defs>
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  </style>
+
+  <!-- Level 1 InProcessTransport -->
+  <rect x="10" y="12" width="200" height="80" rx="8" fill="#1e3a5f"/>
+  <text x="110" y="33" text-anchor="middle" font-size="12" fill="white" font-weight="600">InProcessTransport</text>
+  <text x="110" y="50" text-anchor="middle" font-size="10" fill="white">asyncio queues</text>
+  <text x="110" y="65" text-anchor="middle" font-size="10" fill="white">single process</text>
+  <text x="110" y="80" text-anchor="middle" font-size="9" fill="#93c5fd">pip install civitas</text>
+
+  <!-- Arrow L1 → L2 -->
+  <line x1="210" y1="52" x2="244" y2="52" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="227" y="46" text-anchor="middle" font-size="8" fill="#6B7280">topology</text>
+  <text x="227" y="57" text-anchor="middle" font-size="8" fill="#6B7280">.yaml</text>
+
+  <!-- Level 2 ZMQTransport -->
+  <rect x="245" y="12" width="200" height="80" rx="8" fill="#2d6a4f"/>
+  <text x="345" y="33" text-anchor="middle" font-size="12" fill="white" font-weight="600">ZMQTransport</text>
+  <text x="345" y="50" text-anchor="middle" font-size="10" fill="white">ZeroMQ XSUB·XPUB</text>
+  <text x="345" y="65" text-anchor="middle" font-size="10" fill="white">multi-process · same machine</text>
+  <text x="345" y="80" text-anchor="middle" font-size="9" fill="#86efac">pip install civitas[zmq]</text>
+
+  <!-- Arrow L2 → L3 -->
+  <line x1="445" y1="52" x2="479" y2="52" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="462" y="46" text-anchor="middle" font-size="8" fill="#6B7280">topology</text>
+  <text x="462" y="57" text-anchor="middle" font-size="8" fill="#6B7280">.yaml</text>
+
+  <!-- Level 3 NATSTransport -->
+  <rect x="480" y="12" width="210" height="80" rx="8" fill="#4a1942"/>
+  <text x="585" y="33" text-anchor="middle" font-size="12" fill="white" font-weight="600">NATSTransport</text>
+  <text x="585" y="50" text-anchor="middle" font-size="10" fill="white">NATS server</text>
+  <text x="585" y="65" text-anchor="middle" font-size="10" fill="white">distributed · multi-machine</text>
+  <text x="585" y="80" text-anchor="middle" font-size="9" fill="#d8b4fe">pip install civitas[nats]</text>
+
+  <!-- Note below -->
+  <text x="350" y="108" text-anchor="middle" font-size="10" fill="#374151">No agent code changes required — topology.yaml only.</text>
+</svg>

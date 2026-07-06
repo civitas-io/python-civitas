@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 380" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#9CA3AF"/>
+    </marker>
+  </defs>
+
+  <text x="410" y="24" text-anchor="middle" font-size="11" font-weight="700" fill="#6B7280" letter-spacing="0.5">STAGED AUTONOMY — the healer earns trust; the human sets the dial</text>
+
+  <!-- Stage 0: Observe -->
+  <rect x="30" y="248" width="185" height="74" rx="6" fill="#2d6a4f"/>
+  <text x="122" y="270" text-anchor="middle" font-size="11" font-weight="600" fill="white">0 · Observe</text>
+  <text x="122" y="288" text-anchor="middle" font-size="8" fill="#a7f3d0">detect + diagnose + report</text>
+  <text x="122" y="304" text-anchor="middle" font-size="8" fill="#a7f3d0">human: reads findings</text>
+
+  <!-- Stage 1: Suggest (default) -->
+  <rect x="225" y="192" width="185" height="74" rx="6" fill="#1e3a5f"/>
+  <text x="317" y="214" text-anchor="middle" font-size="11" font-weight="600" fill="white">1 · Suggest (default)</text>
+  <text x="317" y="232" text-anchor="middle" font-size="8" fill="#93c5fd">+ open sandbox-verified fix PR</text>
+  <text x="317" y="248" text-anchor="middle" font-size="8" fill="#93c5fd">human: reviews / merges every fix</text>
+
+  <!-- Stage 2: Supervised -->
+  <rect x="420" y="136" width="185" height="74" rx="6" fill="#6b4c11"/>
+  <text x="512" y="158" text-anchor="middle" font-size="11" font-weight="600" fill="white">2 · Supervised</text>
+  <text x="512" y="176" text-anchor="middle" font-size="8" fill="#fde68a">auto-apply low-risk reversible (canary)</text>
+  <text x="512" y="192" text-anchor="middle" font-size="8" fill="#fde68a">human: approves the exceptions</text>
+
+  <!-- Stage 3: Autonomous -->
+  <rect x="615" y="80" width="185" height="74" rx="6" fill="#334155"/>
+  <text x="707" y="102" text-anchor="middle" font-size="11" font-weight="600" fill="white">3 · Autonomous</text>
+  <text x="707" y="120" text-anchor="middle" font-size="8" fill="#cbd5e1">full loop, proven bounded classes</text>
+  <text x="707" y="136" text-anchor="middle" font-size="8" fill="#cbd5e1">human: monitors + kill switch</text>
+
+  <!-- promote connectors -->
+  <line x1="215" y1="256" x2="223" y2="252" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="410" y1="200" x2="418" y2="196" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="605" y1="144" x2="613" y2="140" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- axis + caption -->
+  <text x="120" y="352" text-anchor="middle" font-size="8" fill="#6B7280">lower risk · more human control</text>
+  <text x="707" y="352" text-anchor="middle" font-size="8" fill="#6B7280">higher autonomy · higher safety bar</text>
+  <text x="410" y="370" text-anchor="middle" font-size="8" fill="#9CA3AF">Promotion is per failure-class &amp; per component — gated on measured reliability + audit, never a global flip. Kill switch at every stage.</text>
+</svg>

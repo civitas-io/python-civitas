@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 300" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#9CA3AF"/>
+    </marker>
+  </defs>
+
+  <!-- Start: bus.route(message) -->
+  <rect x="155" y="16" width="170" height="36" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="240" y="38" text-anchor="middle" font-size="11" font-weight="600" fill="#374151">bus.route(message)</text>
+
+  <!-- Arrow down -->
+  <line x1="240" y1="52" x2="240" y2="75" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Diamond 1: Registry lookup -->
+  <polygon points="240,76 340,111 240,146 140,111" fill="#F9FAFB" stroke="#D1D5DB" stroke-width="1.5"/>
+  <text x="240" y="106" text-anchor="middle" font-size="9" font-weight="600" fill="#374151">Registry lookup</text>
+  <text x="240" y="120" text-anchor="middle" font-size="9" fill="#374151">by recipient name</text>
+
+  <!-- Found branch (right) -->
+  <line x1="340" y1="111" x2="410" y2="111" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="375" y="104" text-anchor="middle" font-size="9" fill="#374151">found</text>
+  <rect x="410" y="91" width="60" height="40" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="440" y="107" text-anchor="middle" font-size="8" fill="#374151">Publish to</text>
+  <text x="440" y="120" text-anchor="middle" font-size="8" fill="#374151">RoutingEntry</text>
+  <text x="440" y="133" text-anchor="middle" font-size="8" fill="#374151">.address</text>
+
+  <!-- Not found branch (down) -->
+  <line x1="240" y1="146" x2="240" y2="170" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="255" y="163" font-size="9" fill="#374151">not found</text>
+
+  <!-- Diamond 2: ephemeral reply address? -->
+  <polygon points="240,171 360,206 240,241 120,206" fill="#F9FAFB" stroke="#D1D5DB" stroke-width="1.5"/>
+  <text x="240" y="200" text-anchor="middle" font-size="9" font-weight="600" fill="#374151">Is recipient an</text>
+  <text x="240" y="214" text-anchor="middle" font-size="9" fill="#374151">ephemeral reply address?</text>
+
+  <!-- Yes branch (right): _reply.* -->
+  <line x1="360" y1="206" x2="410" y2="206" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="385" y="199" text-anchor="middle" font-size="9" fill="#374151">yes</text>
+  <rect x="410" y="188" width="60" height="36" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="440" y="202" text-anchor="middle" font-size="8" fill="#374151">Publish to</text>
+  <text x="440" y="214" text-anchor="middle" font-size="8" fill="#374151">ephemeral</text>
+  <text x="440" y="226" text-anchor="middle" font-size="8" fill="#374151">(_reply.*)</text>
+
+  <!-- No branch (down): error -->
+  <line x1="240" y1="241" x2="240" y2="264" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="255" y="257" font-size="9" fill="#374151">no</text>
+  <rect x="155" y="264" width="170" height="30" rx="6" fill="#7f1d1d"/>
+  <text x="240" y="276" text-anchor="middle" font-size="10" font-weight="600" fill="white">Raise</text>
+  <text x="240" y="290" text-anchor="middle" font-size="10" fill="white">MessageRoutingError</text>
+</svg>

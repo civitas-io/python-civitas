@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 370" width="640" height="370"
+     font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#9CA3AF"/>
+    </marker>
+    <marker id="arr-ret" markerWidth="8" markerHeight="6" refX="1" refY="3" orient="auto">
+      <polygon points="8 0, 0 3, 8 6" fill="#9CA3AF"/>
+    </marker>
+    <marker id="arr-red" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#EF4444"/>
+    </marker>
+  </defs>
+
+  <!-- Participants -->
+  <rect x="20"  y="10" width="110" height="32" rx="5" fill="#1e3a5f"/>
+  <text x="75"  y="31" text-anchor="middle" font-size="9.5" font-weight="700" fill="white">Supervisor</text>
+
+  <rect x="170" y="10" width="110" height="32" rx="5" fill="#6b4c11"/>
+  <text x="225" y="31" text-anchor="middle" font-size="9.5" font-weight="700" fill="white">MessageBus</text>
+
+  <rect x="330" y="10" width="110" height="32" rx="5" fill="#6b4c11"/>
+  <text x="385" y="31" text-anchor="middle" font-size="9.5" font-weight="700" fill="white">Worker Process</text>
+
+  <rect x="490" y="10" width="130" height="32" rx="5" fill="#2d6a4f"/>
+  <text x="555" y="31" text-anchor="middle" font-size="9.5" font-weight="700" fill="white">Remote Agent</text>
+
+  <!-- Lifelines -->
+  <line x1="75"  y1="42" x2="75"  y2="360" stroke="#D1D5DB" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="225" y1="42" x2="225" y2="360" stroke="#D1D5DB" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="385" y1="42" x2="385" y2="360" stroke="#D1D5DB" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="555" y1="42" x2="555" y2="360" stroke="#D1D5DB" stroke-width="1" stroke-dasharray="4,3"/>
+
+  <!-- Loop box -->
+  <rect x="20" y="55" width="600" height="185" rx="4" fill="none" stroke="#D1D5DB" stroke-width="1.5" stroke-dasharray="6,3"/>
+  <text x="28" y="68" font-size="8" font-weight="700" fill="#6B7280">loop   every heartbeat_interval</text>
+
+  <!-- Heartbeat ping -->
+  <line x1="75" y1="85" x2="219" y2="85" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="148" y="79" text-anchor="middle" font-size="8" fill="#374151">_agency.heartbeat → agent-name</text>
+
+  <line x1="225" y1="105" x2="379" y2="105" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="303" y="99" text-anchor="middle" font-size="8" fill="#374151">route</text>
+
+  <line x1="385" y1="122" x2="549" y2="122" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="468" y="116" text-anchor="middle" font-size="8" fill="#374151">deliver</text>
+
+  <!-- Ack path -->
+  <line x1="549" y1="142" x2="231" y2="142" stroke="#9CA3AF" stroke-width="1.5" stroke-dasharray="5,2" marker-end="url(#arr-ret)"/>
+  <text x="390" y="137" text-anchor="middle" font-size="8" fill="#6B7280">_agency.heartbeat_ack</text>
+
+  <line x1="219" y1="160" x2="81" y2="160" stroke="#9CA3AF" stroke-width="1.5" stroke-dasharray="5,2" marker-end="url(#arr-ret)"/>
+  <text x="148" y="155" text-anchor="middle" font-size="8" fill="#6B7280">ack received</text>
+
+  <!-- Alt box (timeout path) -->
+  <rect x="30" y="175" width="580" height="58" rx="3" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="1" stroke-dasharray="5,2"/>
+  <text x="38" y="187" font-size="8" font-weight="700" fill="#B91C1C">alt   ack not received within heartbeat_timeout</text>
+
+  <path d="M75,198 Q55,198 55,207 Q55,216 75,216" fill="none" stroke="#EF4444" stroke-width="1.5" marker-end="url(#arr-red)"/>
+  <text x="168" y="205" font-size="8" fill="#B91C1C">missed_heartbeats[agent] += 1</text>
+  <text x="168" y="218" font-size="8" fill="#B91C1C">if missed ≥ threshold:</text>
+  <text x="168" y="228" font-size="8" fill="#B91C1C">  → _agency.restart sent to Worker</text>
+
+  <!-- Restart path -->
+  <line x1="75" y1="255" x2="379" y2="255" stroke="#EF4444" stroke-width="1.5" marker-end="url(#arr-red)"/>
+  <text x="227" y="249" text-anchor="middle" font-size="8" fill="#B91C1C">_agency.restart → worker</text>
+
+  <line x1="385" y1="272" x2="549" y2="272" stroke="#22C55E" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="468" y="266" text-anchor="middle" font-size="8" fill="#15803D">restart agent</text>
+
+  <line x1="549" y1="292" x2="231" y2="292" stroke="#9CA3AF" stroke-width="1.5" stroke-dasharray="5,2" marker-end="url(#arr-ret)"/>
+  <text x="390" y="287" text-anchor="middle" font-size="8" fill="#6B7280">_agency.register (re-announce)</text>
+
+  <line x1="219" y1="312" x2="81" y2="312" stroke="#9CA3AF" stroke-width="1.5" stroke-dasharray="5,2" marker-end="url(#arr-ret)"/>
+  <text x="148" y="307" text-anchor="middle" font-size="8" fill="#6B7280">registry refreshed</text>
+
+  <!-- Bottom labels -->
+  <text x="75"  y="345" text-anchor="middle" font-size="8" fill="#9CA3AF">Supervisor</text>
+  <text x="225" y="345" text-anchor="middle" font-size="8" fill="#9CA3AF">MessageBus</text>
+  <text x="385" y="345" text-anchor="middle" font-size="8" fill="#9CA3AF">Worker</text>
+  <text x="555" y="345" text-anchor="middle" font-size="8" fill="#9CA3AF">Agent</text>
+
+</svg>

@@ -10,7 +10,7 @@ Civitas uses [`uv`](https://docs.astral.sh/uv/) for dependency management.
 
 ```bash
 # Clone and enter the repo
-git clone https://github.com/jerynmathew/python-civitas
+git clone https://github.com/civitas-io/python-civitas
 cd python-civitas
 
 # Install all dev dependencies (includes test, lint, type-check tooling)

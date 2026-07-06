@@ -28,18 +28,7 @@ Zero configuration required. Run any Civitas program and these spans are emitted
 
 Civitas selects the output mode automatically based on what is installed and what environment variables are set:
 
-```mermaid
-flowchart TD
-    A["Civitas starts"] --> B{"opentelemetry-sdk\ninstalled?"}
-    B -->|"No"| C["Built-in console output\nvia Python logging"]
-    B -->|"Yes"| D{"OTEL_EXPORTER_OTLP_ENDPOINT\nset?"}
-    D -->|"No"| E["OTEL ConsoleSpanExporter\nJSON to stdout"]
-    D -->|"Yes"| F["OTLP gRPC exporter\nJaeger / Grafana / etc."]
-
-    style C fill:#1e3a5f,color:#fff
-    style E fill:#2d6a4f,color:#fff
-    style F fill:#4a1942,color:#fff
-```
+![Observability Setup](assets/observability-setup.svg)
 
 ---
 
@@ -151,22 +140,7 @@ Any backend accepting OTLP gRPC works: Datadog (`http://localhost:4317`), Honeyc
 
 Trace context flows automatically through every message. You never set `trace_id` or `span_id` manually.
 
-```mermaid
-graph TD
-    A["runtime.ask(orchestrator)\nnew trace_id=abc\nspan_id=001"]
-    B["orchestrator.handle()\ntrace_id=abc\nspan_id=002\nparent=001"]
-    C["self.ask(researcher)\ntrace_id=abc\nspan_id=003\nparent=002"]
-    D["researcher.handle()\ntrace_id=abc\nspan_id=004\nparent=003"]
-    E["llm_span(claude)\ntrace_id=abc\nspan_id=005\nparent=004"]
-    F["tool_span(web_search)\ntrace_id=abc\nspan_id=006\nparent=004"]
-    G["self.ask(summarizer)\ntrace_id=abc\nspan_id=007\nparent=004"]
-    H["summarizer.handle()\ntrace_id=abc\nspan_id=008\nparent=007"]
-
-    A --> B --> C --> D
-    D --> E
-    D --> F
-    D --> G --> H
-```
+![Distributed Tracing](assets/distributed-tracing.svg)
 
 The `trace_id` is the same for every span in a causal chain. The parent-child relationships (`parent_span_id`) form the tree structure that OTEL backends render as a waterfall trace. This propagates across process and machine boundaries — spans from a Worker process appear in the same trace as spans from the supervisor process.
 

@@ -6,22 +6,7 @@ Civitas uses a four-level deployment ladder. Every level runs the same agent cod
 
 ## The deployment ladder
 
-```mermaid
-graph LR
-    L1["Level 1\nSingle process\nInProcessTransport\nDevelopment default"]
-    L2["Level 2\nMulti-process\nZMQTransport\nSame machine"]
-    L3["Level 3\nDistributed\nNATSTransport\nMultiple machines"]
-    L4["Level 4\nContainerized\nDocker Compose\nProduction"]
-
-    L1 -->|"change transport"| L2
-    L2 -->|"change transport"| L3
-    L3 -->|"civitas deploy"| L4
-
-    style L1 fill:#1e3a5f,color:#fff
-    style L2 fill:#2d6a4f,color:#fff
-    style L3 fill:#4a1942,color:#fff
-    style L4 fill:#7a3a00,color:#fff
-```
+![Deployment Levels](assets/transport-tiers.svg)
 
 ---
 
@@ -29,16 +14,7 @@ graph LR
 
 **Default. No extra dependencies. For development and simple single-machine deployments.**
 
-```mermaid
-graph TD
-    subgraph "One Python process"
-        S["Supervisor"]
-        A1["Agent A"]
-        A2["Agent B"]
-        A3["Agent C"]
-        S --> A1 & A2 & A3
-    end
-```
+![Single Process Deployment](assets/transport-inprocess.svg)
 
 All agents run as asyncio tasks inside one Python process. The `InProcessTransport` delivers messages via asyncio queues — fast (~2–5 µs per message), zero network overhead.
 
@@ -94,26 +70,7 @@ civitas run --topology topology.yaml
 
 **Scale beyond the GIL. Isolate agent processes on a single machine.**
 
-```mermaid
-graph TD
-    subgraph "Process A — supervisor"
-        S["Supervisor"]
-        A1["Orchestrator"]
-        A2["Summarizer"]
-    end
-
-    subgraph "ZMQ Proxy"
-        P["XSUB/XPUB\ntcp://127.0.0.1:5559-60"]
-    end
-
-    subgraph "Process B — worker"
-        A3["WebResearcher"]
-    end
-
-    A1 <-->|"PUB/SUB"| P
-    A2 <-->|"PUB/SUB"| P
-    A3 <-->|"PUB/SUB"| P
-```
+![Multi-Process ZMQ Deployment](assets/transport-zmq.svg)
 
 Agents marked `process: worker` in the topology run in a separate OS process. The supervisor process starts a ZMQ XSUB/XPUB proxy; all other processes connect to it.
 
@@ -177,28 +134,7 @@ Multiple agents can share the same `process:` name — they all run in one worke
 
 **Run agents on multiple machines. Production scale.**
 
-```mermaid
-graph TD
-    subgraph "Machine A"
-        A["Orchestrator\nSummarizer"]
-    end
-
-    subgraph "NATS Server"
-        N["NATS Broker\nagency.agent.*"]
-    end
-
-    subgraph "Machine B"
-        B["WebResearcher"]
-    end
-
-    subgraph "Machine C"
-        C["AnotherWorker"]
-    end
-
-    A <-->|"nats://host:4222"| N
-    B <-->|"nats://host:4222"| N
-    C <-->|"nats://host:4222"| N
-```
+![Distributed NATS Deployment](assets/transport-nats.svg)
 
 NATS replaces the ZMQ proxy with a cloud-native message broker. Every agent subscribes to its own NATS subject (`civitas.agent.<name>`). The topology, supervision tree, and agent code are unchanged from Level 2.
 

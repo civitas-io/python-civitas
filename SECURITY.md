@@ -4,8 +4,8 @@
 
 | Version | Supported |
 |---------|-----------|
-| 0.3.x (latest) | ✅ Security fixes |
-| < 0.3.0 | ❌ No longer supported |
+| 0.5.x (latest) | ✅ Security fixes |
+| < 0.5.0 | ❌ No longer supported |
 
 Civitas is pre-1.0. Minor releases may include security fixes alongside new features. We strongly recommend staying on the latest release.
 
@@ -58,7 +58,7 @@ We credit reporters in the security advisory unless anonymity is requested.
 
 ## Security advisories
 
-Published at: **[GitHub Security Advisories](https://github.com/jerynmathew/python-civitas/security/advisories)**
+Published at: **[GitHub Security Advisories](https://github.com/civitas-io/python-civitas/security/advisories)**
 
 Each advisory includes:
 - CVE identifier (requested from MITRE via GitHub)

@@ -47,15 +47,7 @@ Supervisor("root", children=[MyAgent("agent")])
 
 When a child crashes, restart **only that child**. All other children continue running unaffected.
 
-```mermaid
-graph TD
-    S["Supervisor\nONE_FOR_ONE"]
-    S --> A["agent-a\n✓ running"]
-    S --> B["agent-b\n✗ crashed → ↻ restarting"]
-    S --> C["agent-c\n✓ running"]
-
-    style B fill:#7f1d1d,color:#fff
-```
+![ONE_FOR_ONE Supervision](assets/supervision-one-for-one.svg)
 
 **Use when:** Children are independent — a crash in one does not invalidate the state of others.
 
@@ -82,17 +74,7 @@ Supervisor(
 
 When any child crashes, **stop and restart all children**.
 
-```mermaid
-graph TD
-    S["Supervisor\nONE_FOR_ALL"]
-    S --> A["agent-a\n↻ restarting"]
-    S --> B["agent-b\n✗ crashed → ↻ restarting"]
-    S --> C["agent-c\n↻ restarting"]
-
-    style A fill:#6b4c11,color:#fff
-    style B fill:#7f1d1d,color:#fff
-    style C fill:#6b4c11,color:#fff
-```
+![ONE_FOR_ALL Supervision](assets/supervision-one-for-all.svg)
 
 **Use when:** Children share mutable state or maintain synchronized positions. If one crashes, the others' state is no longer valid and they must start fresh.
 
@@ -118,16 +100,7 @@ Supervisor(
 
 When a child crashes, restart that child **and all children that were started after it** (younger siblings). Children started earlier are unaffected.
 
-```mermaid
-graph TD
-    S["Supervisor\nREST_FOR_ONE"]
-    S --> A["stage-1\n✓ unaffected\n(started first)"]
-    S --> B["stage-2\n✗ crashed → ↻\n(restarting)"]
-    S --> C["stage-3\n↻ restarting\n(younger sibling)"]
-
-    style B fill:#7f1d1d,color:#fff
-    style C fill:#6b4c11,color:#fff
-```
+![REST_FOR_ONE Supervision](assets/supervision-rest-for-one.svg)
 
 **Use when:** You have a pipeline where later stages depend on earlier ones. If stage-2 crashes, stage-3 is receiving invalid input and must also restart.
 
@@ -219,25 +192,7 @@ The window slides continuously — it's not a fixed interval that resets.
 
 When a supervisor exhausts its restart budget, it escalates to its own parent supervisor. The parent treats the child supervisor as if it were a crashed agent and applies its own restart strategy.
 
-```mermaid
-graph TD
-    Root["root supervisor\nONE_FOR_ONE\nmax_restarts=2"]
-    Child["research_sup\nONE_FOR_ONE\nmax_restarts=3"]
-    Agent["web_researcher"]
-
-    Root -->|monitors| Child
-    Child -->|monitors| Agent
-
-    Agent -->|"crash #1 → restart"| Child
-    Agent -->|"crash #2 → restart"| Child
-    Agent -->|"crash #3 → restart"| Child
-    Agent -->|"crash #4 → max_restarts exceeded"| Child
-    Child -->|"escalate: treats self as crashed"| Root
-    Root -->|"restart research_sup + all its children"| Child
-
-    style Agent fill:#7f1d1d,color:#fff
-    style Child fill:#6b4c11,color:#fff
-```
+![Supervision Escalation](assets/supervision-escalation.svg)
 
 If the root supervisor also exhausts its budget, the process stops permanently and an error is logged. There is no escalation above the root.
 
@@ -320,29 +275,7 @@ supervision:
 
 When agents run in separate OS processes (ZMQ or NATS transport), the supervisor cannot monitor them via asyncio task callbacks — the tasks are in a different process. Instead, it uses periodic heartbeats.
 
-```mermaid
-sequenceDiagram
-    participant Sup as Supervisor
-    participant Bus as MessageBus
-    participant Worker as Worker Process
-    participant Agent as Remote Agent
-
-    loop every heartbeat_interval
-        Sup->>Bus: _agency.heartbeat → agent-name
-        Bus->>Worker: route
-        Worker->>Agent: deliver
-        Agent-->>Bus: _agency.heartbeat_ack
-        Bus-->>Sup: ack received
-
-        alt ack not received within heartbeat_timeout
-            Sup->>Sup: missed_heartbeats[agent] += 1
-            alt missed >= threshold
-                Sup->>Bus: _agency.restart → worker
-                Worker->>Agent: restart
-            end
-        end
-    end
-```
+![Heartbeat Monitoring Sequence](assets/heartbeat-sequence.svg)
 
 Heartbeat monitoring is configured per remote child via `add_remote_child()`, or automatically when loading a topology YAML with `process: worker` entries:
 
@@ -466,3 +399,156 @@ Supervisor("root", strategy="ONE_FOR_ONE", backoff="EXPONENTIAL", backoff_base=3
 ```
 
 After 2 failures in 30 seconds, `db_sup` escalates to `root`, which waits ~30s (exponential base) before restarting the subsystem.
+
+---
+
+## Dynamic supervision
+
+Static supervision — the `Supervisor` class — covers processes whose identity is known at deploy time. Dynamic supervision covers processes that are created and destroyed at runtime, such as per-request workers, user sessions, or spawned research agents.
+
+### DynamicSupervisor
+
+`DynamicSupervisor` is a separate class from `Supervisor`. It follows Erlang's design: the two are deliberately distinct because `ONE_FOR_ALL` and `REST_FOR_ONE` strategies depend on a fixed, ordered child list and lose coherence when children arrive and leave dynamically. `DynamicSupervisor` is always `ONE_FOR_ONE`.
+
+```python
+from civitas import DynamicSupervisor, Supervisor, Runtime
+
+dyn = DynamicSupervisor(
+    name="workers",
+    max_children=20,           # hard capacity limit; spawn raises SpawnError when reached
+    max_total_spawns=1000,     # optional lifetime cap across all spawns
+)
+
+runtime = Runtime(supervisor=Supervisor("root", children=[orchestrator, dyn]))
+```
+
+Or in YAML:
+
+```yaml
+supervision:
+  name: root
+  strategy: ONE_FOR_ONE
+  children:
+    - type: dynamic_supervisor
+      name: workers
+      config:
+        max_children: 20
+        max_total_spawns: 1000
+    - type: agent
+      name: orchestrator
+      module: myapp.agents
+      class: OrchestratorAgent
+```
+
+`DynamicSupervisor` starts empty. Children are added at runtime via `self.spawn()`.
+
+### Spawning agents
+
+Any agent that has a `DynamicSupervisor` as a sibling or ancestor can spawn children using `self.spawn()`. The runtime resolves the **nearest ancestor `DynamicSupervisor`** automatically — you don't name the target.
+
+```python
+class OrchestratorAgent(AgentProcess):
+    async def on_start(self) -> None:
+        # Finds the nearest DynamicSupervisor ("workers") automatically
+        name = await self.spawn(ResearchAgent, name="researcher-1")
+```
+
+`spawn()` sends a `civitas.dynamic.spawn` message to the `DynamicSupervisor` by name and awaits confirmation. It returns the agent name on success and raises `SpawnError` on failure (capacity reached, duplicate name, governance veto).
+
+#### Despawn and stop
+
+```python
+# Hard stop — cancels the task immediately; on_stop() still fires
+await self.despawn("researcher-1")
+
+# Soft stop — drain current message, then stop
+await self.stop("researcher-1", drain="current", timeout=10.0)
+
+# Soft stop — drain entire queue, then stop
+await self.stop("researcher-1", drain="all", timeout=30.0)
+```
+
+`stop()` is awaitable and returns when the agent is fully stopped. If the agent does not stop within `timeout` seconds, it is force-cancelled.
+
+### Restart modes
+
+Dynamic children have a `restart_mode` that controls what happens when they exit:
+
+| Mode | Behaviour |
+|---|---|
+| `TRANSIENT` (default) | Restarted only on abnormal exit (exception). Clean exit is not restarted. |
+| `PERMANENT` | Always restarted, regardless of how it exited. |
+| `NEVER` | Never restarted. When it exits for any reason, the slot is freed and the spawning agent is notified. |
+
+Pass `restart_mode` when spawning:
+
+```python
+from civitas.supervisor import RestartMode
+
+await self.spawn(WorkerAgent, name="worker-1", restart_mode=RestartMode.NEVER)
+```
+
+Unlike `Supervisor`, `DynamicSupervisor` does **not** escalate to its parent when a child exhausts its restart budget. Instead, it calls `on_child_terminated()` on the spawning agent.
+
+### Governance
+
+Override `on_spawn_requested()` on a `DynamicSupervisor` subclass to implement policy checks before a spawn is committed:
+
+```python
+class GovernedPool(DynamicSupervisor):
+    async def on_spawn_requested(self, agent_class, name: str, config: dict) -> bool:
+        if name in self._blocklist:
+            return False           # deny
+        return True                # approve
+```
+
+Returning `False` causes `self.spawn()` at the call site to raise `SpawnError("spawn denied by governance hook")`.
+
+### Termination notifications
+
+When a dynamic child exits (for any reason, including `despawn` or restart exhaustion), the spawning agent's `on_child_terminated()` hook is called:
+
+```python
+class OrchestratorAgent(AgentProcess):
+    async def on_child_terminated(self, name: str, reason: str) -> None:
+        # name  — the agent that exited
+        # reason — "clean_exit" | "exception" | "despawned" | "exhausted"
+        logger.warning("child %s terminated: %s", name, reason)
+```
+
+The default implementation just logs a warning.
+
+### External API
+
+`Runtime` exposes `spawn`, `despawn`, and `stop_agent` for external control — useful for tests or admin scripts:
+
+```python
+await runtime.spawn("workers", ResearchAgent, name="researcher-1")
+await runtime.despawn("workers", "researcher-1")
+await runtime.stop_agent("workers", "researcher-1", drain="current", timeout=5.0)
+```
+
+### TopologyServer
+
+`TopologyServer` is a supervised HTTP endpoint that exposes live topology state. Declare it in YAML as a sibling of other children:
+
+```yaml
+- type: topology_server
+  name: topo_server
+  config:
+    host: 127.0.0.1   # default
+    port: 6789        # default
+```
+
+Endpoints (all read-only, JSON):
+
+| Endpoint | Response |
+|---|---|
+| `GET /health` | `{"status": "ok"}` |
+| `GET /topology` | Full supervision tree with live dynamic children and their statuses |
+| `GET /agents` | Flat list of all agents including dynamically spawned ones |
+| `GET /agents/{name}` | Single agent status or `{"error": "..."}` with 404 |
+
+`civitas topology show` automatically pings `/topology` if a `topology_server` node is present in the YAML. If the server is unreachable (runtime not running), it falls back to rendering the static YAML tree with a `(runtime not running)` annotation.
+
+See [examples/dynamic_spawning.py](../examples/dynamic_spawning.py) for a complete working example.

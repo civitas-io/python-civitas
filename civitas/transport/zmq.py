@@ -22,12 +22,16 @@ import asyncio
 import logging
 import threading
 from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING
 
 import zmq
 import zmq.asyncio
 
 from civitas.messages import _uuid7
 from civitas.serializer import Serializer
+
+if TYPE_CHECKING:
+    from civitas.security.config import ZmqCurveConfig
 
 logger = logging.getLogger(__name__)
 
@@ -47,9 +51,11 @@ class ZMQProxy:
         self,
         frontend: str = "tcp://127.0.0.1:5559",
         backend: str = "tcp://127.0.0.1:5560",
+        curve_config: ZmqCurveConfig | None = None,
     ) -> None:
         self._frontend_addr = frontend
         self._backend_addr = backend
+        self._curve_config = curve_config
         self._ctx: zmq.Context[bytes] | None = None
         self._thread: threading.Thread | None = None
         self._ready = threading.Event()
@@ -70,8 +76,16 @@ class ZMQProxy:
         if self._ctx is None:
             raise RuntimeError("ZMQ context not initialized")
         xsub = self._ctx.socket(zmq.XSUB)
-        xsub.bind(self._frontend_addr)
         xpub = self._ctx.socket(zmq.XPUB)
+        if self._curve_config is not None and self._curve_config.enabled:
+            cfg = self._curve_config
+            xsub.curve_server = True
+            xsub.curve_secretkey = cfg.server_secret_key.encode()
+            xsub.curve_publickey = cfg.server_public_key.encode()
+            xpub.curve_server = True
+            xpub.curve_secretkey = cfg.server_secret_key.encode()
+            xpub.curve_publickey = cfg.server_public_key.encode()
+        xsub.bind(self._frontend_addr)
         xpub.bind(self._backend_addr)
         self._ready.set()
         try:
@@ -112,11 +126,13 @@ class ZMQTransport:
         pub_addr: str = "tcp://127.0.0.1:5559",
         sub_addr: str = "tcp://127.0.0.1:5560",
         start_proxy: bool = False,
+        curve_config: ZmqCurveConfig | None = None,
     ) -> None:
         self._serializer = serializer
         self._pub_addr = pub_addr
         self._sub_addr = sub_addr
         self._start_proxy = start_proxy
+        self._curve_config = curve_config
 
         self._context: zmq.asyncio.Context | None = None
         self._pub: zmq.asyncio.Socket | None = None
@@ -134,7 +150,11 @@ class ZMQTransport:
             return
 
         if self._start_proxy:
-            self._proxy = ZMQProxy(frontend=self._pub_addr, backend=self._sub_addr)
+            self._proxy = ZMQProxy(
+                frontend=self._pub_addr,
+                backend=self._sub_addr,
+                curve_config=self._curve_config,
+            )
             # Run blocking proxy start in a thread executor to avoid blocking
             # the event loop during the ready-wait.
             loop = asyncio.get_running_loop()
@@ -144,10 +164,17 @@ class ZMQTransport:
 
         # PUB connects to proxy XSUB frontend
         self._pub = self._context.socket(zmq.PUB)
-        self._pub.connect(self._pub_addr)
-
         # SUB connects to proxy XPUB backend
         self._sub = self._context.socket(zmq.SUB)
+
+        if self._curve_config is not None and self._curve_config.enabled:
+            cfg = self._curve_config
+            for sock in (self._pub, self._sub):
+                sock.curve_serverkey = cfg.server_public_key.encode()
+                sock.curve_secretkey = cfg.client_secret_key.encode()
+                sock.curve_publickey = cfg.client_public_key.encode()
+
+        self._pub.connect(self._pub_addr)
         self._sub.connect(self._sub_addr)
 
         # Start background receiver
@@ -194,6 +221,15 @@ class ZMQTransport:
             raise RuntimeError("ZMQTransport not started")
         self._handlers[address] = handler
         self._sub.subscribe(address.encode() + _TOPIC_SEP)
+
+    async def unsubscribe(self, address: str) -> None:
+        """Remove a handler and best-effort unsubscribe the SUB socket."""
+        self._handlers.pop(address, None)
+        if self._sub is not None:
+            try:
+                self._sub.unsubscribe(address.encode() + _TOPIC_SEP)
+            except zmq.ZMQError as exc:
+                logger.warning("[ZMQTransport] unsubscribe(%r) failed: %s", address, exc)
 
     async def publish(self, address: str, data: bytes) -> None:
         """Send a message to an address via PUB/SUB through the proxy.

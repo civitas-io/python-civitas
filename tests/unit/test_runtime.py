@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import textwrap
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -150,6 +150,86 @@ class TestGetAgent:
 
 
 # ---------------------------------------------------------------------------
+# Runtime.on_crash / set_metrics (FD-01/FD-03)
+# ---------------------------------------------------------------------------
+
+
+class TestOnCrash:
+    def test_delegates_to_root_supervisor(self):
+        sup = Supervisor("root", children=[NullAgent("a")])
+        rt = Runtime(supervisor=sup)
+        received = []
+
+        async def callback(name: str, exc: Exception) -> None:
+            received.append(name)
+
+        rt.on_crash(callback)
+        assert sup._crash_callbacks == [callback]
+
+    def test_noop_with_no_supervisor(self):
+        rt = Runtime()
+
+        async def callback(name: str, exc: Exception) -> None:
+            pass
+
+        rt.on_crash(callback)  # must not raise
+
+
+class TestSetMetrics:
+    @pytest.mark.asyncio
+    async def test_metrics_injected_into_agents(self):
+        agent = NullAgent("a")
+        rt = Runtime(supervisor=Supervisor("root", children=[agent]))
+        sink = object()
+        rt.set_metrics(sink)
+        await rt.start()
+        try:
+            assert agent._metrics is sink
+        finally:
+            await rt.stop()
+
+
+class TestExportersWiring:
+    """Runtime(exporters=[...]) drains real spans through OTELAgent (FD-07/FD-09)."""
+
+    @pytest.mark.asyncio
+    async def test_exporter_receives_spans_end_to_end(self):
+        from civitas.observability.span_queue import SpanData
+
+        received: list[SpanData] = []
+
+        class RecordingBackend:
+            async def export(self, spans: list[SpanData]) -> None:
+                received.extend(spans)
+
+            async def shutdown(self) -> None:
+                pass
+
+        agent = NullAgent("a")
+        rt = Runtime(
+            supervisor=Supervisor("root", children=[agent]),
+            exporters=[RecordingBackend()],
+        )
+        await rt.start()
+        assert rt._otel_agent_task is not None
+        await rt.send("a", {})
+        await rt.stop()  # drains any spans still queued before returning
+
+        assert rt._otel_agent_task is None
+        assert len(received) > 0
+
+    @pytest.mark.asyncio
+    async def test_no_exporters_no_otel_agent_task(self):
+        agent = NullAgent("a")
+        rt = Runtime(supervisor=Supervisor("root", children=[agent]))
+        await rt.start()
+        try:
+            assert rt._otel_agent_task is None
+        finally:
+            await rt.stop()
+
+
+# ---------------------------------------------------------------------------
 # Runtime.start / stop lifecycle guards
 # ---------------------------------------------------------------------------
 
@@ -266,6 +346,61 @@ class TestFromConfig:
         assert agents[0].name == "worker"
         assert isinstance(agents[0], NullAgent)
 
+    def test_presidium_key_accepted(self, tmp_path: Path):
+        yaml_file = tmp_path / "presidium.yaml"
+        yaml_file.write_text(
+            textwrap.dedent("""\
+            presidium:
+              registry:
+                trust_domain: acme.com
+            supervision:
+              name: root
+        """)
+        )
+        rt = Runtime.from_config(yaml_file)
+        assert rt._root_supervisor is not None
+
+
+class TestFromConfigDict:
+    def test_produces_identical_runtime(self, tmp_path: Path):
+        yaml_file = tmp_path / "test.yaml"
+        yaml_file.write_text(
+            textwrap.dedent("""\
+            supervision:
+              name: root
+              children:
+                - type: "NullAgent"
+                  name: "worker"
+        """)
+        )
+        rt_file = Runtime.from_config(yaml_file, agent_classes={"NullAgent": NullAgent})
+        config = {
+            "supervision": {"name": "root", "children": [{"type": "NullAgent", "name": "worker"}]}
+        }
+        rt_dict = Runtime.from_config_dict(config, agent_classes={"NullAgent": NullAgent})
+        assert rt_file._root_supervisor.name == rt_dict._root_supervisor.name
+        assert len(rt_file._root_supervisor.all_agents()) == len(
+            rt_dict._root_supervisor.all_agents()
+        )
+
+    def test_rejects_unknown_keys(self):
+        config = {"bogus": True, "supervision": {"name": "root"}}
+        with pytest.raises(AgencyConfigError, match="bogus"):
+            Runtime.from_config_dict(config)
+
+    def test_accepts_presidium_key(self):
+        config = {
+            "presidium": {"registry": {"trust_domain": "acme.com"}},
+            "supervision": {"name": "root"},
+        }
+        rt = Runtime.from_config_dict(config)
+        assert rt._root_supervisor is not None
+
+    def test_minimal_config(self):
+        config = {"supervision": {"name": "root"}}
+        rt = Runtime.from_config_dict(config)
+        assert rt._root_supervisor.name == "root"
+
 
 # ---------------------------------------------------------------------------
 # F12-9 — Example YAML topology files are valid against the config schema
@@ -307,7 +442,7 @@ def test_example_topology_parses(example_file: str) -> None:
 
 def test_example_production_yaml_supervision_structure() -> None:
     """production.yaml supervision tree parses; plugin loading is mocked (F12-9)."""
-    mock_loaded = {"model_providers": [], "state_store": None}
+    mock_loaded = {"model_providers": [], "state_store": None, "exporters": []}
     path = _EXAMPLES_DIR / "production.yaml"
     with patch("civitas.plugins.loader.load_plugins_from_config", return_value=mock_loaded):
         rt = Runtime.from_config(path, agent_classes=_ANY)
@@ -358,7 +493,7 @@ def test_from_config_loads_single_model_provider(tmp_path: Path) -> None:
     )
 
     fake_provider = MagicMock()
-    mock_loaded = {"model_providers": [fake_provider], "state_store": None}
+    mock_loaded = {"model_providers": [fake_provider], "state_store": None, "exporters": []}
 
     with patch("civitas.runtime.load_plugins_from_config", return_value=mock_loaded):
         rt = Runtime.from_config(yaml_file, agent_classes=_ANY)
@@ -383,7 +518,7 @@ def test_from_config_multiple_providers_warns(
     )
 
     p1, p2 = MagicMock(), MagicMock()
-    mock_loaded = {"model_providers": [p1, p2], "state_store": None}
+    mock_loaded = {"model_providers": [p1, p2], "state_store": None, "exporters": []}
 
     with patch("civitas.runtime.load_plugins_from_config", return_value=mock_loaded):
         with caplog.at_level(logging.WARNING, logger="civitas.runtime"):
@@ -407,7 +542,7 @@ def test_from_config_loads_state_store(tmp_path: Path) -> None:
     )
 
     fake_store = MagicMock()
-    mock_loaded = {"model_providers": [], "state_store": fake_store}
+    mock_loaded = {"model_providers": [], "state_store": fake_store, "exporters": []}
 
     with patch("civitas.runtime.load_plugins_from_config", return_value=mock_loaded):
         rt = Runtime.from_config(yaml_file, agent_classes=_ANY)
@@ -559,3 +694,377 @@ def test_build_component_set_json_serializer_from_settings() -> None:
         mock_settings.serializer = "json"
         cs = build_component_set()
     assert isinstance(cs.serializer, JsonSerializer)
+
+
+# ---------------------------------------------------------------------------
+# _extract_agent_credentials — flat node format (lines 55-57)
+# ---------------------------------------------------------------------------
+
+
+class TestExtractAgentCredentialsFlatNode:
+    def test_flat_node_with_credentials_and_name(self):
+        from civitas.runtime import _extract_agent_credentials
+
+        config = {
+            "supervision": {
+                "children": [
+                    {
+                        "name": "flat_agent",
+                        "credentials": {"anthropic": "sk-ant-test"},
+                    }
+                ]
+            }
+        }
+        result = _extract_agent_credentials(config)
+        assert result == {"flat_agent": {"anthropic": "sk-ant-test"}}
+
+    def test_flat_node_without_credentials_excluded(self):
+        from civitas.runtime import _extract_agent_credentials
+
+        config = {"supervision": {"children": [{"name": "no_creds"}]}}
+        result = _extract_agent_credentials(config)
+        assert result == {}
+
+
+# ---------------------------------------------------------------------------
+# _extract_public_keys — flat node format (lines 78-79)
+# ---------------------------------------------------------------------------
+
+
+class TestExtractPublicKeysFlatNode:
+    def test_flat_node_with_public_key(self):
+        from civitas.runtime import _extract_public_keys
+
+        config = {"supervision": {"children": [{"name": "remote_agent", "public_key": "abc123=="}]}}
+        result = _extract_public_keys(config)
+        assert result == {"remote_agent": "abc123=="}
+
+    def test_flat_node_without_public_key_excluded(self):
+        from civitas.runtime import _extract_public_keys
+
+        config = {"supervision": {"children": [{"name": "no_key"}]}}
+        result = _extract_public_keys(config)
+        assert result == {}
+
+
+# ---------------------------------------------------------------------------
+# from_config — module.class flat node format (lines 302-304)
+# ---------------------------------------------------------------------------
+
+
+def test_from_config_module_class_node_format(tmp_path: Path) -> None:
+    yaml_file = tmp_path / "t.yaml"
+    yaml_file.write_text(
+        textwrap.dedent("""\
+        supervision:
+          name: root
+          children:
+            - type: gen_server
+              module: tests.unit.test_runtime
+              class: NullAgent
+              name: my_agent
+        """)
+    )
+    rt = Runtime.from_config(yaml_file)
+    agents = rt.all_agents()
+    assert any(a.name == "my_agent" for a in agents)
+
+
+# ---------------------------------------------------------------------------
+# from_config — ZMQ transport kwargs (lines 334-339)
+# ---------------------------------------------------------------------------
+
+
+def test_from_config_zmq_transport_kwargs(tmp_path: Path) -> None:
+    yaml_file = tmp_path / "t.yaml"
+    yaml_file.write_text(
+        textwrap.dedent("""\
+        transport:
+          type: zmq
+          pub_addr: tcp://0.0.0.0:5570
+          sub_addr: tcp://0.0.0.0:5571
+          start_proxy: false
+        supervision:
+          name: root
+          children:
+            - agent:
+                name: a
+                type: tests.unit.test_runtime.NullAgent
+        """)
+    )
+    rt = Runtime.from_config(yaml_file, agent_classes={"NullAgent": NullAgent})
+    assert rt._transport_type == "zmq"
+    assert rt._zmq_pub_addr == "tcp://0.0.0.0:5570"
+    assert rt._zmq_sub_addr == "tcp://0.0.0.0:5571"
+    assert rt._zmq_start_proxy is False
+
+
+# ---------------------------------------------------------------------------
+# stop() — state_store.close() and tracer.flush() (lines 617-628)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_stop_closes_state_store() -> None:
+    mock_store = AsyncMock()
+    rt = Runtime(
+        supervisor=Supervisor("root", children=[NullAgent("a")]),
+        state_store=mock_store,
+    )
+    await rt.start()
+    await rt.stop()
+    mock_store.close.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_stop_flushes_tracer() -> None:
+    rt = Runtime(supervisor=Supervisor("root", children=[NullAgent("a")]))
+    await rt.start()
+    tracer = rt._tracer
+    with patch.object(tracer, "flush") as mock_flush:
+        await rt.stop()
+    mock_flush.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Agent credentials wired during start() (line 513)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_agent_credentials_wired_from_topology(tmp_path: Path) -> None:
+    import os
+
+    os.environ["TEST_CRED_KEY"] = "sk-test-value"
+    try:
+        yaml_file = tmp_path / "t.yaml"
+        yaml_file.write_text(
+            textwrap.dedent("""\
+            supervision:
+              name: root
+              children:
+                - agent:
+                    name: credagent
+                    type: tests.unit.test_runtime.NullAgent
+                    credentials:
+                      anthropic: ${TEST_CRED_KEY}
+            """)
+        )
+        rt = Runtime.from_config(yaml_file, agent_classes={"NullAgent": NullAgent})
+        await rt.start()
+        try:
+            agent = rt.get_agent("credagent")
+            assert agent is not None
+            assert agent._credentials == {"anthropic": "sk-test-value"}
+        finally:
+            await rt.stop()
+    finally:
+        del os.environ["TEST_CRED_KEY"]
+
+
+# ---------------------------------------------------------------------------
+# despawn / stop_agent failure → SpawnError (lines 735, 752)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_despawn_failure_raises_spawn_error() -> None:
+    from civitas.errors import SpawnError
+
+    rt = Runtime(supervisor=Supervisor("root", children=[NullAgent("a")]))
+    await rt.start()
+    try:
+        error_reply = MagicMock()
+        error_reply.payload = {"status": "error", "reason": "not found"}
+        with patch.object(rt, "ask", return_value=error_reply):
+            with pytest.raises(SpawnError, match="not found"):
+                await rt.despawn("root", "missing")
+    finally:
+        await rt.stop()
+
+
+@pytest.mark.asyncio
+async def test_stop_agent_failure_raises_spawn_error() -> None:
+    from civitas.errors import SpawnError
+
+    rt = Runtime(supervisor=Supervisor("root", children=[NullAgent("a")]))
+    await rt.start()
+    try:
+        error_reply = MagicMock()
+        error_reply.payload = {"status": "error", "reason": "no such agent"}
+        with patch.object(rt, "ask", return_value=error_reply):
+            with pytest.raises(SpawnError, match="no such agent"):
+                await rt.stop_agent("root", "missing")
+    finally:
+        await rt.stop()
+
+
+# ---------------------------------------------------------------------------
+# MCP connection error during start() is logged, not raised (lines 589-594)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_mcp_connection_error_logged_not_raised() -> None:
+    from civitas.mcp.types import MCPServerConfig
+
+    rt = Runtime(supervisor=Supervisor("root", children=[NullAgent("a")]))
+    rt._mcp_configs = [
+        MCPServerConfig(name="bad", transport="stdio", command="/nonexistent/server")
+    ]
+    # Should start without raising even though MCP connect fails
+    await rt.start()
+    await rt.stop()
+
+
+# ---------------------------------------------------------------------------
+# print_tree() — covers labels for DynamicSupervisor, TopologyServer,
+# EvalAgent, HTTPGateway, GenServer (lines 413-421)
+# ---------------------------------------------------------------------------
+
+
+def test_print_tree_various_node_labels() -> None:
+    from civitas.evalloop import EvalAgent
+    from civitas.gateway import GatewayConfig, HTTPGateway
+    from civitas.genserver import GenServer
+    from civitas.supervisor import DynamicSupervisor
+    from civitas.topology_server import TopologyServer
+
+    class MyServer(GenServer):
+        async def handle_call(self, msg):  # type: ignore[override]
+            return None
+
+    children = [
+        DynamicSupervisor("dyn"),
+        TopologyServer("topo"),
+        EvalAgent("eval_a"),
+        HTTPGateway("http_gw", GatewayConfig()),
+        MyServer("srv"),
+    ]
+    rt = Runtime(supervisor=Supervisor("root", children=children))
+    tree = rt.print_tree()
+    assert "[dyn]" in tree
+    assert "[topo]" in tree
+    assert "[eval]" in tree
+    assert "[http]" in tree
+    assert "[srv]" in tree
+
+
+# ---------------------------------------------------------------------------
+# from_config — MCP sandbox block parsed (line 369)
+# ---------------------------------------------------------------------------
+
+
+def test_from_config_mcp_sandbox_parsed(tmp_path: Path) -> None:
+    from civitas.sandbox.config import SandboxConfig
+
+    yaml_file = tmp_path / "t.yaml"
+    yaml_file.write_text(
+        textwrap.dedent("""\
+        supervision:
+          name: root
+          children:
+            - agent:
+                name: a
+                type: tests.unit.test_runtime.NullAgent
+        mcp:
+          servers:
+            - name: shell
+              transport: stdio
+              command: /bin/sh
+              sandbox:
+                enabled: true
+                network: deny
+                filesystem:
+                  - /workspace:rw
+        """)
+    )
+    rt = Runtime.from_config(yaml_file, agent_classes={"NullAgent": NullAgent})
+    assert len(rt._mcp_configs) == 1
+    sb = rt._mcp_configs[0].sandbox
+    assert sb is not None
+    assert isinstance(sb, SandboxConfig)
+    assert sb.enabled is True
+
+
+# ---------------------------------------------------------------------------
+# from_config — fiddler exporter parsed (lines 228-236)
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# from_config — topology_server node (lines 256-262)
+# ---------------------------------------------------------------------------
+
+
+def test_from_config_topology_server_node(tmp_path: Path) -> None:
+    from civitas.topology_server import TopologyServer
+
+    yaml_file = tmp_path / "t.yaml"
+    yaml_file.write_text(
+        textwrap.dedent("""\
+        supervision:
+          name: root
+          children:
+            - type: topology_server
+              name: topo
+              config:
+                host: 127.0.0.1
+                port: 7000
+        """)
+    )
+    rt = Runtime.from_config(yaml_file)
+    agents = rt.all_agents()
+    topo_nodes = [a for a in agents if isinstance(a, TopologyServer)]
+    assert len(topo_nodes) == 1
+
+
+# ---------------------------------------------------------------------------
+# from_config — zmq transport without optional kwargs (branches 334->336 etc.)
+# ---------------------------------------------------------------------------
+
+
+def test_from_config_zmq_transport_no_optional_kwargs(tmp_path: Path) -> None:
+    yaml_file = tmp_path / "t.yaml"
+    yaml_file.write_text(
+        textwrap.dedent("""\
+        transport:
+          type: zmq
+        supervision:
+          name: root
+          children:
+            - agent:
+                name: a
+                type: tests.unit.test_runtime.NullAgent
+        """)
+    )
+    rt = Runtime.from_config(yaml_file, agent_classes={"NullAgent": NullAgent})
+    assert rt._transport_type == "zmq"
+    # No optional pub/sub/proxy keys in YAML — branches 334->336, 336->338, 338->349 taken
+
+
+# ---------------------------------------------------------------------------
+# from_config — nats transport with jetstream + stream_name (branch 341->343)
+# ---------------------------------------------------------------------------
+
+
+def test_from_config_nats_transport_with_jetstream_v2(tmp_path: Path) -> None:
+    yaml_file = tmp_path / "t.yaml"
+    yaml_file.write_text(
+        textwrap.dedent("""\
+        transport:
+          type: nats
+          servers:
+            - nats://localhost:4222
+          jetstream: true
+          stream_name: civitas
+        supervision:
+          name: root
+          children:
+            - agent:
+                name: a
+                type: tests.unit.test_runtime.NullAgent
+        """)
+    )
+    rt = Runtime.from_config(yaml_file, agent_classes={"NullAgent": NullAgent})
+    assert rt._transport_type == "nats"

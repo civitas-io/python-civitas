@@ -19,43 +19,7 @@ Civitas brings these patterns to Python using asyncio, without requiring Erlang,
 
 ## System overview
 
-```mermaid
-graph TD
-    Runtime["Runtime\n(wires all components)"]
-
-    Runtime --> Supervisor
-    Runtime --> MessageBus
-    Runtime --> Registry
-    Runtime --> Transport
-    Runtime --> Plugins
-
-    Supervisor -->|"starts and monitors"| A1["AgentProcess\n(greeter)"]
-    Supervisor -->|"starts and monitors"| A2["AgentProcess\n(researcher)"]
-    Supervisor -->|"starts and monitors"| ChildSup["Supervisor\n(child)"]
-    ChildSup -->|"starts and monitors"| A3["AgentProcess\n(worker)"]
-
-    A1 <-->|"send / ask"| MessageBus
-    A2 <-->|"send / ask"| MessageBus
-    A3 <-->|"send / ask"| MessageBus
-
-    MessageBus --> Registry
-    MessageBus --> Transport
-
-    Plugins --> A1
-    Plugins --> A2
-    Plugins --> A3
-
-    style Runtime fill:#1e3a5f,color:#fff
-    style Supervisor fill:#1e3a5f,color:#fff
-    style ChildSup fill:#1e3a5f,color:#fff
-    style MessageBus fill:#6b4c11,color:#fff
-    style Registry fill:#6b4c11,color:#fff
-    style Transport fill:#6b4c11,color:#fff
-    style Plugins fill:#4a1942,color:#fff
-    style A1 fill:#2d6a4f,color:#fff
-    style A2 fill:#2d6a4f,color:#fff
-    style A3 fill:#2d6a4f,color:#fff
-```
+![Civitas Runtime](assets/runtime-overview.svg)
 
 Each component has a single responsibility. `Runtime` assembles them; it doesn't own business logic.
 
@@ -73,18 +37,7 @@ Each instance has:
 
 ### Lifecycle
 
-```mermaid
-stateDiagram-v2
-    direction LR
-    [*] --> INITIALIZING : start()
-    INITIALIZING --> RUNNING : on_start() completes
-    RUNNING --> RUNNING : handle(message)
-    RUNNING --> STOPPING : shutdown signal
-    RUNNING --> CRASHED : unhandled exception
-    STOPPING --> STOPPED : on_stop() completes
-    CRASHED --> STOPPED : on_stop() completes
-    STOPPED --> [*]
-```
+![Agent State Machine](assets/agent-state-machine.svg)
 
 Four hooks to override:
 
@@ -178,14 +131,7 @@ Supervisor(
 
 **ONE_FOR_ONE** — restart only the crashed child. Other children are unaffected.
 
-```mermaid
-graph LR
-    S[Supervisor]
-    S --> A["agent-a ✓"]
-    S --> B["agent-b ✗ → ↻ restarting"]
-    S --> C["agent-c ✓"]
-    style B fill:#7f1d1d,color:#fff
-```
+![ONE_FOR_ONE — only the crashed child restarts](assets/supervision-one-for-one.svg)
 
 Use when children are independent of each other.
 
@@ -193,16 +139,7 @@ Use when children are independent of each other.
 
 **ONE_FOR_ALL** — restart all children when any one crashes.
 
-```mermaid
-graph LR
-    S[Supervisor]
-    S --> A["agent-a ↻"]
-    S --> B["agent-b ✗ → ↻"]
-    S --> C["agent-c ↻"]
-    style A fill:#6b4c11,color:#fff
-    style B fill:#7f1d1d,color:#fff
-    style C fill:#6b4c11,color:#fff
-```
+![ONE_FOR_ALL — all children restart](assets/supervision-one-for-all.svg)
 
 Use when children share state or must be synchronized — a crash in one means the others' state is no longer valid.
 
@@ -210,15 +147,7 @@ Use when children share state or must be synchronized — a crash in one means t
 
 **REST_FOR_ONE** — restart the crashed child and all children started after it (younger siblings). Children started before are unaffected.
 
-```mermaid
-graph LR
-    S[Supervisor]
-    S --> A["agent-a ✓\n(started first)"]
-    S --> B["agent-b ✗ → ↻\n(crashed)"]
-    S --> C["agent-c ↻\n(younger sibling)"]
-    style B fill:#7f1d1d,color:#fff
-    style C fill:#6b4c11,color:#fff
-```
+![REST_FOR_ONE — crashed child and younger siblings restart](assets/supervision-rest-for-one.svg)
 
 Use for pipeline-style systems where later stages depend on earlier ones — restart the broken stage and everything downstream.
 
@@ -228,21 +157,7 @@ Use for pipeline-style systems where later stages depend on earlier ones — res
 
 When a supervisor exceeds `max_restarts` within `restart_window`, it gives up and escalates to its own parent supervisor:
 
-```mermaid
-graph TD
-    Root["root supervisor"]
-    Child["child supervisor\n(max_restarts exceeded)"]
-    A["agent ✗✗✗"]
-
-    Root -->|monitors| Child
-    Child -->|monitors| A
-    A -->|crashes repeatedly| Child
-    Child -->|"escalates after max_restarts"| Root
-    Root -->|"restarts child supervisor"| Child
-
-    style A fill:#7f1d1d,color:#fff
-    style Child fill:#6b4c11,color:#fff
-```
+![Supervision Escalation](assets/supervision-escalation.svg)
 
 This is the tree structure working as designed: local problems are handled locally; only persistent failures propagate upward.
 
@@ -306,20 +221,7 @@ Message types prefixed with `_agency.` are reserved for runtime internals (heart
 
 The `MessageBus` routes messages between agents. The `Registry` maps agent names to their delivery addresses.
 
-```mermaid
-sequenceDiagram
-    participant A as AgentProcess (sender)
-    participant Bus as MessageBus
-    participant Reg as Registry
-    participant T as Transport
-    participant B as AgentProcess (recipient)
-
-    A->>Bus: route(message)
-    Bus->>Reg: lookup("recipient-name")
-    Reg-->>Bus: address
-    Bus->>T: publish(address, bytes)
-    T->>B: deliver to mailbox
-```
+![Message Routing](assets/message-routing.svg)
 
 From the agent's perspective: you call `self.send("other-agent", {...})` and the message arrives in `other-agent`'s `handle()`. The routing layer is invisible.
 
@@ -341,19 +243,7 @@ async def request(address: str, data: bytes, timeout: float) -> bytes
 
 Three implementations are provided:
 
-```mermaid
-graph LR
-    L1["InProcessTransport\nasyncio queues\nsingle process\nno extra deps"]
-    L2["ZMQTransport\nZeroMQ XSUB/XPUB\nmulti-process\nsame machine"]
-    L3["NATSTransport\nNATS server\ndistributed\nmulti-machine"]
-
-    L1 -->|"scale up: change topology.yaml"| L2
-    L2 -->|"scale out: change topology.yaml"| L3
-
-    style L1 fill:#1e3a5f,color:#fff
-    style L2 fill:#2d6a4f,color:#fff
-    style L3 fill:#4a1942,color:#fff
-```
+![Transport Tiers](assets/transport-tiers.svg)
 
 Agent code never references the transport directly. The runtime injects it. Switching from `InProcessTransport` to `NATSTransport` requires changing one line in your topology YAML.
 
@@ -365,34 +255,7 @@ Messages are serialized to msgpack bytes before being handed to the transport, r
 
 Everything outside the core runtime — LLM providers, tools, state stores, observability exporters — is a plugin. Plugins are Python protocols (structural typing, not inheritance):
 
-```mermaid
-graph TD
-    subgraph Protocols["Plugin Protocols"]
-        MP["ModelProvider\nasync chat(model, messages, tools)"]
-        TP["ToolProvider\nname, schema, async execute(**kwargs)"]
-        SS["StateStore\nasync get/set/delete(agent_name)"]
-    end
-
-    subgraph Implementations["Bundled Implementations"]
-        AP["AnthropicProvider\npython-civitas[anthropic]"]
-        LP["LiteLLMProvider\npython-civitas[litellm]\n100+ models"]
-        IS["InMemoryStateStore\ndefault, volatile"]
-        SQ["SQLiteStateStore\nfile-based persistence"]
-    end
-
-    MP --> AP
-    MP --> LP
-    SS --> IS
-    SS --> SQ
-
-    style MP fill:#1e3a5f,color:#fff
-    style TP fill:#1e3a5f,color:#fff
-    style SS fill:#1e3a5f,color:#fff
-    style AP fill:#2d6a4f,color:#fff
-    style LP fill:#2d6a4f,color:#fff
-    style IS fill:#2d6a4f,color:#fff
-    style SQ fill:#2d6a4f,color:#fff
-```
+![Plugin Protocols](assets/plugin-protocols.svg)
 
 Any class that satisfies the protocol can be used — you don't subclass anything. To write a custom model provider:
 
@@ -416,22 +279,7 @@ See [Plugins](plugins.md) for the full protocol definitions and all bundled impl
 
 `Runtime` assembles all the components and manages the system lifecycle.
 
-```mermaid
-flowchart LR
-    Config["Config / YAML"] --> RT
-
-    subgraph RT["Runtime.start()"]
-        direction TB
-        S1["Serializer"] --> S2["Tracer"] --> S3["Transport"] --> S4["Registry"] --> S5["MessageBus"]
-        S5 --> S6["Plugins"] --> S7["Wire agents"] --> S8["Register agents"]
-        S8 --> S9["Start transport"] --> S10["Start supervision tree"]
-    end
-
-    RT --> Ready["System ready\nagents accepting messages"]
-
-    style RT fill:#1e3a5f,color:#fff
-    style Ready fill:#2d6a4f,color:#fff
-```
+![Runtime Startup Sequence](assets/runtime-startup.svg)
 
 The startup sequence is deterministic: infrastructure first (serializer, tracer, transport, registry, bus), then plugins, then agents. Agents are never started before the bus is ready.
 
@@ -465,36 +313,7 @@ See [Topology YAML](topology.md) for the full schema.
 
 A complete system, traced through one message:
 
-```mermaid
-sequenceDiagram
-    participant Caller
-    participant RT as Runtime
-    participant Bus as MessageBus
-    participant Reg as Registry
-    participant T as Transport
-    participant Sup as Supervisor
-    participant Agent
-
-    RT->>Sup: start()
-    Sup->>Agent: start() → on_start()
-    Agent-->>Sup: RUNNING
-
-    Caller->>RT: ask("my-agent", {"key": "value"})
-    RT->>Bus: route(message)
-    Bus->>Reg: lookup("my-agent")
-    Bus->>T: publish(address, bytes)
-    T->>Agent: mailbox.put(message)
-
-    Agent->>Agent: handle(message)
-    Note over Agent: self.llm.chat()<br/>self.tools.get("x").execute()<br/>self.ask("other-agent", ...)
-    Agent-->>T: reply message
-    T-->>Caller: reply
-
-    Agent->>Agent: crash!
-    Sup->>Sup: detect crash
-    Sup->>Agent: restart (with backoff)
-    Agent-->>Sup: RUNNING again
-```
+![Runtime Sequence — Startup, Message Routing, Crash Recovery](assets/runtime-sequence.svg)
 
 The caller never sees the crash. The supervisor handles it between messages.
 

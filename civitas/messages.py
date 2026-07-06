@@ -75,7 +75,8 @@ class Message:
     parent_span_id: str | None = None
     attempt: int = 0
     priority: int = 0
-    # ttl: planned — discard expired messages at Mailbox.get()
+    ttl: float | None = None
+    seq: int | None = None
 
     def __post_init__(self) -> None:
         try:
@@ -106,6 +107,8 @@ class Message:
             "parent_span_id": self.parent_span_id,
             "attempt": self.attempt,
             "priority": self.priority,
+            "ttl": self.ttl,
+            "seq": self.seq,
         }
 
     @classmethod
@@ -128,5 +131,18 @@ SYSTEM_MESSAGE_TYPES: frozenset[str] = frozenset(
         "_agency.restart",
         "_agency.register",
         "_agency.deregister",
+        "_agency.suspend",
+        "_agency.resume",
+    }
+)
+
+
+STREAM_MESSAGE_TYPES: frozenset[str] = frozenset(
+    {
+        "civitas.stream.chunk",
+        "civitas.stream.end",
+        "civitas.stream.error",
+        "civitas.stream.cancel",
+        "civitas.stream.credit",
     }
 )
