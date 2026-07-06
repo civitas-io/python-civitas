@@ -11,6 +11,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+## [0.7.2] — 2026-07-06
+
 ### Security
 
 - **Gateway auth now covers the WebSocket and gRPC surfaces** (#17) — JWT (`require_jwt`) and mTLS

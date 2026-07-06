@@ -46,7 +46,7 @@ Everything in this part is done.
 | — | [v0.4.0 Release Fixes](#v040-release-fixes) | Jul 2026 |
 | — | [v0.5.0 — Released](#v050--released) | Jul 2026 |
 | — | [v0.6.0 — Gateway Completion](#v060--gateway-completion-released) | Jul 2026 |
-| — | [v0.7.0 / v0.7.1 — Spawn Maturation, Gateway Auth & Bus-Native Streaming](#v070--spawn-maturation--gateway-auth-released) | Jul 2026 |
+| — | [v0.7.0 / v0.7.1 / v0.7.2 — Spawn Maturation, Gateway Auth & Bus-Native Streaming](#v070--spawn-maturation--gateway-auth-released) | Jul 2026 |
 
 ---
 
@@ -876,7 +876,8 @@ as R7 (see [`bus-native-streaming.md`](design/bus-native-streaming.md), [#22](ht
 
 **Released 2026-07-05.** R1 (non-blocking spawn, #14), R2 (`spawn_into`, #16), R3 (JWT+mTLS auth + fail-open fix, #18), R4 (encrypted StateStore, #19), R5 (per-agent spawn quotas, #21), R6 (cross-process spawn, #20) all shipped. R7 (bus-native streaming, #15) deferred as a stretch item.
 
-**Status: ✅ Released** — R1–R6 shipped in v0.7.0 (2026-07-05); R7 shipped in v0.7.1.
+**Status: ✅ Released** — R1–R6 shipped in v0.7.0 (2026-07-05); R7 shipped in v0.7.1; R8 shipped in
+v0.7.2.
 
 Theme: *finish what v0.6.0 deferred.* The largest coherent cluster is **dynamic-spawn maturation**
 (the #8 / #9 / #10 follow-ups + quotas + cross-process), plus completing **gateway auth** and one
@@ -892,9 +893,10 @@ capability, which builds on supervision + dynamic spawn + telemetry (under inves
 | R5 | ✅ **Done (PR #21)** — **Per-agent spawn quotas** (beyond the global `max_children`) | 🟢 Low | design/dynamic-spawning.md Non-Goals |
 | R6 | ✅ **Done (PR #20)** — **Cross-process dynamic spawning** (ZMQ / NATS) | 🟡 Medium | design/dynamic-spawning.md Non-Goals |
 | R7 | **Bus-native streaming primitive** (`AgentProcess.stream()`, agent-to-agent, no transport change) | ✅ Done (v0.7.1) | [#22](https://github.com/civitas-io/python-civitas/pull/22) · [bus-native-streaming.md](design/bus-native-streaming.md) |
+| R8 | **WS/gRPC gateway auth** — JWT (`Sec-WebSocket-Protocol` subprotocol) and gRPC (`ServerInterceptor` + mTLS transport wiring, Health/Reflection carve-out) auto-inherit from the existing HTTP JWT/mTLS config; fail-closed startup validations for the new insecure-config combinations. | ✅ Done (v0.7.2) | [#17](https://github.com/civitas-io/python-civitas/issues/17) · [gateway-ws-grpc-auth.md](design/gateway-ws-grpc-auth.md) |
 
 **Suggested cut line:** R1–R2 (spawn follow-ups) are the headline; R3 (auth) + R4 (encrypted store)
-are strong companions; R5–R7 are opportunistic and can slip to a later patch.
+are strong companions; R5–R8 are opportunistic and can slip to a later patch.
 
 ---
 
@@ -908,7 +910,7 @@ Owner column: `core` = python-civitas, else the target repo.
 
 | Item | Priority | Status | Issue | Where tracked |
 |------|----------|--------|-------|----------------|
-| **WS/gRPC gateway auth surfaces** — JWT/mTLS auth (R3, v0.7.0) covers HTTP only; WebSocket, gRPC, and `/docs` are unauthenticated by design today | 🔴 High | 🔄 Starting now | [#17](https://github.com/civitas-io/python-civitas/issues/17) | §v0.6.0 G5, §v0.7.0 R3 |
+| **HTTP mTLS non-functional on uvicorn** — `require_client_cert` always 401s a valid client cert because uvicorn never populates the ASGI TLS extension; fails closed, but zero working clients | 🔴 High | 📝 needs design | [#25](https://github.com/civitas-io/python-civitas/issues/25) | §v0.7.0 R3, design/gateway-ws-grpc-auth.md §8 |
 
 ### Active backlog (python-civitas, no issue yet)
 
@@ -953,7 +955,7 @@ Owner column: `core` = python-civitas, else the target repo.
 **Recently shipped** (moved out of this backlog; see [Part 1](#part-1--shipped) for detail):
 cross-process dynamic spawning (#20), per-agent spawn quotas (#21), encrypted `StateStore` at rest
 (#19), first-party JWT + mTLS gateway auth for HTTP (#18), non-blocking dynamic spawn +
-`spawn_into()` (#14, #16), bus-native streaming (#22).
+`spawn_into()` (#14, #16), bus-native streaming (#22), WS/gRPC gateway auth (#17).
 
 ---
 
