@@ -11,6 +11,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+## [0.7.3] — 2026-07-06
+
 ### Fixed
 
 - **HTTP mTLS is now functional via a reverse proxy** ([#25](https://github.com/civitas-io/python-civitas/issues/25)) — `require_client_cert` always rejected requests on the uvicorn HTTP path with `401`, even with a valid client certificate, because uvicorn never exposes the certificate from its TLS handshake to the ASGI app, so the DN needed for authorization never arrived. A new opt-in `GatewayConfig.mtls_source="proxy_header"` instead trusts a TLS-terminating reverse proxy's IETF [RFC 9440](https://www.rfc-editor.org/rfc/rfc9440.html) `Client-Cert` header (a base64-DER leaf certificate), decoding it and feeding the subject DN into the **unchanged** `CIVITAS_GATEWAY_MTLS_ALLOWED_DNS` allowlist authorization.
