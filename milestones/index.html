@@ -4485,7 +4485,7 @@ scope — G2/G3 use gateway-mediated streaming; the first-class version is track
 <hr />
 <h2 id="v070-spawn-maturation-gateway-auth-released">v0.7.0 — Spawn Maturation &amp; Gateway Auth (Released)<a class="headerlink" href="#v070-spawn-maturation-gateway-auth-released" title="Permanent link">&para;</a></h2>
 <p><strong>Released 2026-07-05.</strong> R1 (non-blocking spawn, #14), R2 (<code>spawn_into</code>, #16), R3 (JWT+mTLS auth + fail-open fix, #18), R4 (encrypted StateStore, #19), R5 (per-agent spawn quotas, #21), R6 (cross-process spawn, #20) all shipped. R7 (bus-native streaming, #15) deferred as a stretch item.</p>
-<p><strong>Status: ⏳ Proposed</strong> — scoped from the actionable <a href="#deferred-backlog">Deferred Backlog</a> items; not yet started.</p>
+<p><strong>Status: ✅ Released</strong> — R1–R6 shipped in v0.7.0 (2026-07-05); R7 shipped in v0.7.1.</p>
 <p>Theme: <em>finish what v0.6.0 deferred.</em> The largest coherent cluster is <strong>dynamic-spawn maturation</strong>
 (the #8 / #9 / #10 follow-ups + quotas + cross-process), plus completing <strong>gateway auth</strong> and one
 <strong>data-at-rest</strong> security item. This also lays groundwork for a possible future <strong>self-healing</strong>
@@ -4508,31 +4508,31 @@ capability, which builds on supervision + dynamic spawn + telemetry (under inves
 </tr>
 <tr>
 <td>R2</td>
-<td><strong><code>spawn_into(supervisor_name, …)</code></strong> — public cross-tree spawn helper (no hand-built internal messages)</td>
+<td>✅ <strong>Done (PR #16)</strong> — <strong><code>spawn_into(supervisor_name, …)</code></strong> public cross-tree spawn helper</td>
 <td>🟡 Medium</td>
 <td>GH #10</td>
 </tr>
 <tr>
 <td>R3</td>
-<td><strong>First-party JWT auth</strong> (opt-in <code>civitas[jwt]</code>) + <strong>mTLS</strong> client-cert auth</td>
+<td>✅ <strong>Done (PR #18)</strong> — <strong>First-party JWT auth</strong> (opt-in <code>civitas[jwt]</code>) + <strong>mTLS</strong> client-cert auth + middleware fail-open fix</td>
 <td>🟡 Medium</td>
 <td>v0.6.0 §G5</td>
 </tr>
 <tr>
 <td>R4</td>
-<td><strong>Encrypted <code>StateStore</code> at rest</strong></td>
+<td>✅ <strong>Done (PR #19)</strong> — <strong>Encrypted <code>StateStore</code> at rest</strong> (<code>civitas[encryption]</code>)</td>
 <td>🟡 Medium</td>
 <td>design/security-hardening.md</td>
 </tr>
 <tr>
 <td>R5</td>
-<td><strong>Per-agent spawn quotas</strong> (beyond the global <code>max_children</code>)</td>
+<td>✅ <strong>Done (PR #21)</strong> — <strong>Per-agent spawn quotas</strong> (beyond the global <code>max_children</code>)</td>
 <td>🟢 Low</td>
 <td>design/dynamic-spawning.md Non-Goals</td>
 </tr>
 <tr>
 <td>R6</td>
-<td><strong>Cross-process dynamic spawning</strong> (ZMQ / NATS)</td>
+<td>✅ <strong>Done (PR #20)</strong> — <strong>Cross-process dynamic spawning</strong> (ZMQ / NATS)</td>
 <td>🟡 Medium</td>
 <td>design/dynamic-spawning.md Non-Goals</td>
 </tr>
@@ -4577,13 +4577,13 @@ nothing is lost. Owner column: <code>core</code> = python-civitas, else the targ
 <tr>
 <td>Cross-process dynamic spawning (ZMQ / NATS)</td>
 <td>core</td>
-<td>⏸️ v0.x</td>
-<td>design/dynamic-spawning.md Non-Goals</td>
+<td>✅ v0.7.0 (#20)</td>
+<td>design/cross-process-spawn.md</td>
 </tr>
 <tr>
-<td>Per-agent spawn quotas (only global <code>max_children</code> today)</td>
+<td>Per-agent spawn quotas (beyond global <code>max_children</code>)</td>
 <td>core</td>
-<td>⏸️</td>
+<td>✅ v0.7.0 (#21)</td>
 <td>design/dynamic-spawning.md Non-Goals</td>
 </tr>
 <tr>
@@ -4601,8 +4601,8 @@ nothing is lost. Owner column: <code>core</code> = python-civitas, else the targ
 <tr>
 <td>Encrypted <code>StateStore</code> at rest</td>
 <td>core</td>
-<td>⏸️ (could be v0.x)</td>
-<td>design/security-hardening.md</td>
+<td>✅ v0.7.0 (#19)</td>
+<td>design/encrypted-statestore.md</td>
 </tr>
 <tr>
 <td>Fine-grained ACL DSL (overlaps M4.4 capabilities)</td>
@@ -4665,16 +4665,16 @@ nothing is lost. Owner column: <code>core</code> = python-civitas, else the targ
 <td><a href="https://github.com/civitas-io/python-civitas/pull/22">#22</a> · <a href="../design/bus-native-streaming/">bus-native-streaming.md</a></td>
 </tr>
 <tr>
-<td>First-party JWT gateway auth (opt-in <code>civitas[jwt]</code>) + mTLS client-cert auth — G5 shipped API-key only (no new core dep)</td>
+<td>First-party JWT gateway auth (opt-in <code>civitas[jwt]</code>) + mTLS client-cert auth</td>
 <td>core</td>
-<td>⏸️ v0.x</td>
+<td>✅ v0.7.0 (#18) — WS/gRPC surfaces pending (#17)</td>
 <td>§v0.6.0 G5</td>
 </tr>
 <tr>
-<td>Dynamic spawn: non-blocking spawn (#9) ✅ done (PR #14); <code>spawn_into()</code> cross-tree helper (#10) in progress</td>
+<td>Dynamic spawn: non-blocking spawn (#9, PR #14) + <code>spawn_into()</code> cross-tree helper (#10, PR #16) + bus-native streaming (#15, PR #22)</td>
 <td>core</td>
-<td>🔄 v0.7.0</td>
-<td>GH #9, #10</td>
+<td>✅ v0.7.0–v0.7.1</td>
+<td>GH #9, #10, #15</td>
 </tr>
 <tr>
 <td><strong>Self-healing / autonomous remediation agent</strong> — monitor (metrics/audit/OTEL/crash) → diagnose (LLM) → sandbox-verify → canary-deploy → auto-rollback, under staged autonomy + safety gates</td>
