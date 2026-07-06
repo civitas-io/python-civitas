@@ -1,6 +1,6 @@
 # Design: MCP Integration (M3.4)
 
-**Status:** Planned — v0.3
+**Status:** Implemented — v0.3
 **Author:** Jeryn Mathew Varghese
 **Last updated:** 2026-04
 

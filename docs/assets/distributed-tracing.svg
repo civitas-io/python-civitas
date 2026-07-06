@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 320" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#9CA3AF"/>
+    </marker>
+  </defs>
+
+  <!-- Note banner -->
+  <rect x="14" y="10" width="652" height="22" rx="4" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="340" y="25" text-anchor="middle" font-size="9" fill="#6B7280">One trace_id propagated across all agents and calls</text>
+
+  <!-- Box 1: runtime.ask(orchestrator) -->
+  <rect x="180" y="44" width="200" height="38" rx="6" fill="#1e3a5f"/>
+  <text x="280" y="60" text-anchor="middle" font-size="11" font-weight="600" fill="white">runtime.ask(orchestrator)</text>
+  <text x="280" y="75" text-anchor="middle" font-size="9" fill="#93c5fd">trace_id=abc / span_id=001</text>
+
+  <line x1="280" y1="82" x2="280" y2="100" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Box 2: orchestrator.handle() -->
+  <rect x="180" y="101" width="200" height="38" rx="6" fill="#1e3a5f"/>
+  <text x="280" y="117" text-anchor="middle" font-size="11" font-weight="600" fill="white">orchestrator.handle()</text>
+  <text x="280" y="132" text-anchor="middle" font-size="9" fill="#93c5fd">trace_id=abc / span_id=002 / parent=001</text>
+
+  <line x1="280" y1="139" x2="280" y2="157" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Box 3: self.ask(researcher) -->
+  <rect x="180" y="158" width="200" height="38" rx="6" fill="#2d6a4f"/>
+  <text x="280" y="174" text-anchor="middle" font-size="11" font-weight="600" fill="white">self.ask(researcher)</text>
+  <text x="280" y="189" text-anchor="middle" font-size="9" fill="#a7f3d0">trace_id=abc / span_id=003 / parent=002</text>
+
+  <line x1="280" y1="196" x2="280" y2="214" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Box 4: researcher.handle() -->
+  <rect x="180" y="215" width="200" height="38" rx="6" fill="#2d6a4f"/>
+  <text x="280" y="231" text-anchor="middle" font-size="11" font-weight="600" fill="white">researcher.handle()</text>
+  <text x="280" y="246" text-anchor="middle" font-size="9" fill="#a7f3d0">trace_id=abc / span_id=004 / parent=003</text>
+
+  <!-- Branch lines from researcher -->
+  <!-- Left branch to llm_span -->
+  <line x1="200" y1="253" x2="80" y2="270" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <!-- Center branch to tool_span -->
+  <line x1="280" y1="253" x2="280" y2="270" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <!-- Right branch to summarizer chain -->
+  <line x1="360" y1="253" x2="480" y2="270" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- llm_span(claude) -->
+  <rect x="14" y="271" width="135" height="38" rx="6" fill="#6b4c11"/>
+  <text x="82" y="287" text-anchor="middle" font-size="11" font-weight="600" fill="white">llm_span(claude)</text>
+  <text x="82" y="302" text-anchor="middle" font-size="9" fill="#fde68a">span_id=005 / parent=004</text>
+
+  <!-- tool_span(web_search) -->
+  <rect x="200" y="271" width="160" height="38" rx="6" fill="#6b4c11"/>
+  <text x="280" y="287" text-anchor="middle" font-size="11" font-weight="600" fill="white">tool_span(web_search)</text>
+  <text x="280" y="302" text-anchor="middle" font-size="9" fill="#fde68a">span_id=006 / parent=004</text>
+
+  <!-- self.ask(summarizer) -->
+  <rect x="376" y="271" width="140" height="38" rx="6" fill="#4a1942"/>
+  <text x="446" y="287" text-anchor="middle" font-size="11" font-weight="600" fill="white">self.ask(summarizer)</text>
+  <text x="446" y="302" text-anchor="middle" font-size="9" fill="#d8b4fe">span_id=007 / parent=004</text>
+
+  <!-- summarizer.handle() -->
+  <line x1="516" y1="271" x2="580" y2="271" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <rect x="520" y="253" width="145" height="38" rx="6" fill="#4a1942"/>
+  <text x="592" y="269" text-anchor="middle" font-size="11" font-weight="600" fill="white">summarizer.handle()</text>
+  <text x="592" y="284" text-anchor="middle" font-size="9" fill="#d8b4fe">span_id=008 / parent=007</text>
+</svg>

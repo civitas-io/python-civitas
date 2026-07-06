@@ -10,6 +10,11 @@ import msgpack
 from civitas.errors import DeserializationError
 from civitas.messages import Message
 
+try:
+    import orjson
+except ImportError:  # pragma: no cover - orjson ships in the civitas[fast] extra
+    orjson = None  # type: ignore[assignment]
+
 
 class Serializer(Protocol):
     """Protocol for message serialization/deserialization."""
@@ -50,11 +55,19 @@ class MsgpackSerializer:
 
 
 class JsonSerializer:
-    """Debug/dev serializer using JSON — human-readable but slower."""
+    """Human-readable JSON serializer.
+
+    Uses orjson (Rust-backed, from ``civitas[fast]``) when installed for a large
+    speedup, transparently falling back to the standard library ``json`` module.
+    Output is plain JSON either way, so the two backends interoperate on the wire.
+    """
 
     def serialize(self, message: Message) -> bytes:
         """Encode a Message to JSON bytes."""
-        return json.dumps(message.to_dict()).encode("utf-8")
+        data = message.to_dict()
+        if orjson is not None:
+            return orjson.dumps(data)
+        return json.dumps(data).encode("utf-8")
 
     def deserialize(self, data: bytes) -> Message:
         """Decode JSON bytes into a Message.
@@ -63,7 +76,7 @@ class JsonSerializer:
             DeserializationError: on corrupt, malformed, or non-UTF-8 bytes.
         """
         try:
-            raw: dict[str, Any] = json.loads(data.decode("utf-8"))
+            raw = orjson.loads(data) if orjson is not None else json.loads(data.decode("utf-8"))
             return Message.from_dict(raw)
         except Exception as exc:
             raise DeserializationError(f"Failed to deserialize JSON data: {exc}") from exc

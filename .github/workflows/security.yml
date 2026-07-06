@@ -95,7 +95,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync --extra dev --extra otel --extra anthropic --extra mcp
+        run: uv sync --extra dev --extra otel
 
       - name: pip-audit
         # --strict: fail on any vulnerability with a fix available
@@ -106,14 +106,15 @@ jobs:
             --strict \
             --desc \
             --format columns \
-            -r <(uv export --format requirements-txt --no-dev 2>/dev/null)
+            -r <(uv export --format requirements-txt --no-dev --no-emit-project 2>/dev/null)
 
   # ---------------------------------------------------------------------------
-  # Secret scanning — gitleaks on full commit history
+  # Secret scanning — TruffleHog on full commit history
   # Catches secrets committed at any point, not just the current tree.
+  # 700+ detectors with active API verification (confirms secrets are live).
   # ---------------------------------------------------------------------------
   secret-scan:
-    name: Secret scan (gitleaks)
+    name: Secret scan (TruffleHog)
     runs-on: ubuntu-latest
 
     steps:
@@ -121,9 +122,7 @@ jobs:
         with:
           fetch-depth: 0   # full history required for historical secret scan
 
-      - name: gitleaks — scan full history
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # GITLEAKS_LICENSE is optional — set in repo secrets for org license
-          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+      - name: TruffleHog — scan full history
+        uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --results=verified

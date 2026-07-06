@@ -32,12 +32,14 @@ from civitas.cli.app import app
 from civitas.cli.deploy import deploy_app
 
 # Register subcommand groups
+from civitas.cli.security import security_app
 from civitas.cli.state import state_app
 from civitas.cli.topology import topology_app
 
 app.add_typer(state_app, name="state")
 app.add_typer(topology_app, name="topology")
 app.add_typer(deploy_app, name="deploy")
+app.add_typer(security_app, name="security")
 
 
 def main() -> None:

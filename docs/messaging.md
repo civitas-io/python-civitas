@@ -67,26 +67,7 @@ except TimeoutError:
 
 ### How request-reply works under the hood
 
-```mermaid
-sequenceDiagram
-    participant Caller as Caller agent
-    participant Bus as MessageBus
-    participant T as Transport
-    participant Recipient as Recipient agent
-
-    Caller->>Bus: ask("recipient", payload)
-    Note over Bus: Generates correlation_id (UUID7)<br/>Transport creates reply address: _reply.{uuid}
-    Bus->>T: request(address, bytes, timeout)
-    T->>Recipient: deliver to mailbox (reply_to = "_reply.{uuid}")
-
-    Recipient->>Recipient: handle(message)
-    Recipient->>Bus: route(reply message)
-    Note over Bus: reply.recipient = message.reply_to = "_reply.{uuid}"
-    Bus->>T: publish("_reply.{uuid}", bytes)
-    T-->>Caller: reply_queue.get() unblocks
-
-    Caller->>Caller: continues with reply Message
-```
+![Request–Reply Flow](assets/message-request-reply.svg)
 
 Key points:
 - The transport creates a UUID-keyed ephemeral reply address per request (`_reply.{uuid7}`)
@@ -208,19 +189,7 @@ The constraint exists because all messages are serialized to msgpack before tran
 
 Every message carries distributed trace context — `trace_id`, `span_id`, and `parent_span_id`. These are set automatically by `send()`, `ask()`, and `reply()` based on the current message being handled. You never set them manually.
 
-```mermaid
-graph TD
-    A["orchestrator.handle(msg)\ntrace_id=abc\nspan_id=111"]
-    B["send to researcher\ntrace_id=abc\nspan_id=222\nparent=111"]
-    C["researcher.handle(msg)\ntrace_id=abc\nspan_id=333"]
-    D["ask summarizer\ntrace_id=abc\nspan_id=444\nparent=333"]
-    E["summarizer.handle(msg)\ntrace_id=abc\nspan_id=555"]
-
-    A -->|"self.ask(researcher)"| B
-    B --> C
-    C -->|"self.ask(summarizer)"| D
-    D --> E
-```
+![Distributed Tracing](assets/distributed-tracing.svg)
 
 The `trace_id` is the same across all spans in a causal chain. When exported to Jaeger or any OTEL backend, the entire chain — across agents and process boundaries — appears as a single distributed trace.
 
@@ -232,17 +201,7 @@ The `trace_id` is the same across all spans in a causal chain. When exported to 
 
 Every agent has a bounded mailbox (default: 1000 messages). When the mailbox is full, any `send()` or `ask()` targeting that agent **blocks the caller** until space is available. This is backpressure — it naturally slows producers when consumers can't keep up.
 
-```mermaid
-graph LR
-    P["Producer agent\nsend() blocks here"]
-    M["Mailbox\n[████████████]\n1000/1000 full"]
-    C["Consumer agent\nprocessing slowly"]
-
-    P -->|"await mailbox.put()\n⏸ blocked"| M
-    M -->|"mailbox.get()"| C
-    C -->|"processes message\nspace freed"| M
-    M -->|"unblocks producer"| P
-```
+![Backpressure](assets/backpressure.svg)
 
 Backpressure flows through the system naturally:
 
@@ -292,16 +251,7 @@ System messages use `priority > 0`, which causes them to jump ahead of normal me
 
 When `self.send("recipient", payload)` is called, the bus resolves where to deliver it in three steps:
 
-```mermaid
-flowchart TD
-    A["bus.route(message)"] --> B{"Registry lookup\nby recipient name"}
-    B -->|"found"| C["Publish to\nRoutingEntry.address"]
-    B -->|"not found"| D{"Is recipient an\nephemeral reply address?"}
-    D -->|"yes (_reply.*)"| E["Publish to\nephemeral address"]
-    D -->|"no"| F["Raise\nMessageRoutingError"]
-
-    style F fill:#7f1d1d,color:#fff
-```
+![Message Routing](assets/message-routing.svg)
 
 If an agent is not registered — either because it hasn't started yet or because its name is misspelled — you get a `MessageRoutingError` with the unknown name. This fails fast rather than silently dropping messages.
 

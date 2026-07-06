@@ -1,11 +1,7 @@
-"""civitas.mcp — MCP protocol integration (M3.4).
+"""civitas.mcp — MCP configuration types.
 
-Install with: pip install civitas[mcp]
-
-Client usage:
-    from civitas.mcp.types import MCPServerConfig
-    from civitas.mcp.client import MCPClient
-
-Server usage:
-    from civitas.mcp.server import CivitasMCPServer
+The MCP client implementation has moved to fabrica:
+    pip install fabrica[mcp]
+    from fabrica.mcp.client import MCPClient
+    from fabrica.mcp.types import MCPServerConfig
 """

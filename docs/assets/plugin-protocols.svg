@@ -1,0 +1,76 @@
+<svg viewBox="0 0 620 340" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#9CA3AF"/>
+    </marker>
+  </defs>
+
+  <!-- Left column header -->
+  <rect x="15" y="10" width="270" height="32" rx="6" fill="#1e3a5f"/>
+  <text x="150" y="31" font-size="12" font-weight="bold" fill="white" text-anchor="middle">Plugin Protocols</text>
+
+  <!-- Right column header -->
+  <rect x="335" y="10" width="270" height="32" rx="6" fill="#2d6a4f"/>
+  <text x="470" y="31" font-size="12" font-weight="bold" fill="white" text-anchor="middle">Bundled Implementations</text>
+
+  <!-- ModelProvider -->
+  <rect x="15" y="58" width="270" height="52" rx="6" fill="#1e3a5f"/>
+  <text x="150" y="78" font-size="11" font-weight="bold" fill="white" text-anchor="middle">ModelProvider</text>
+  <text x="150" y="96" font-size="9" fill="white" text-anchor="middle">chat(model, messages, tools)</text>
+
+  <!-- ToolProvider -->
+  <rect x="15" y="126" width="270" height="52" rx="6" fill="#1e3a5f"/>
+  <text x="150" y="146" font-size="11" font-weight="bold" fill="white" text-anchor="middle">ToolProvider</text>
+  <text x="150" y="163" font-size="9" fill="white" text-anchor="middle">name · schema · execute(**kwargs)</text>
+
+  <!-- StateStore -->
+  <rect x="15" y="194" width="270" height="52" rx="6" fill="#1e3a5f"/>
+  <text x="150" y="214" font-size="11" font-weight="bold" fill="white" text-anchor="middle">StateStore</text>
+  <text x="150" y="232" font-size="9" fill="white" text-anchor="middle">get / set / delete(agent_name)</text>
+
+  <!-- ExportBackend -->
+  <rect x="15" y="262" width="270" height="52" rx="6" fill="#1e3a5f"/>
+  <text x="150" y="282" font-size="11" font-weight="bold" fill="white" text-anchor="middle">ExportBackend</text>
+  <text x="150" y="300" font-size="9" fill="white" text-anchor="middle">export(spans) · shutdown()</text>
+
+  <!-- AnthropicProvider -->
+  <rect x="335" y="58" width="270" height="52" rx="6" fill="#2d6a4f"/>
+  <text x="470" y="78" font-size="11" font-weight="bold" fill="white" text-anchor="middle">AnthropicProvider</text>
+  <text x="470" y="96" font-size="9" fill="white" text-anchor="middle">[anthropic]</text>
+
+  <!-- LiteLLMProvider -->
+  <rect x="335" y="126" width="270" height="52" rx="6" fill="#2d6a4f"/>
+  <text x="470" y="146" font-size="11" font-weight="bold" fill="white" text-anchor="middle">LiteLLMProvider</text>
+  <text x="470" y="163" font-size="9" fill="white" text-anchor="middle">[litellm] — 100+ models</text>
+
+  <!-- InMemoryStateStore -->
+  <rect x="335" y="194" width="270" height="52" rx="6" fill="#2d6a4f"/>
+  <text x="470" y="214" font-size="11" font-weight="bold" fill="white" text-anchor="middle">InMemoryStateStore</text>
+  <text x="470" y="232" font-size="9" fill="white" text-anchor="middle">(default)</text>
+
+  <!-- SQLiteStateStore -->
+  <rect x="335" y="262" width="130" height="52" rx="6" fill="#2d6a4f"/>
+  <text x="400" y="282" font-size="11" font-weight="bold" fill="white" text-anchor="middle">SQLiteStateStore</text>
+  <text x="400" y="300" font-size="9" fill="white" text-anchor="middle">(built-in)</text>
+
+  <!-- ConsoleBackend -->
+  <rect x="475" y="262" width="130" height="52" rx="6" fill="#2d6a4f"/>
+  <text x="540" y="282" font-size="11" font-weight="bold" fill="white" text-anchor="middle">ConsoleBackend</text>
+  <text x="540" y="300" font-size="9" fill="white" text-anchor="middle">(built-in)</text>
+
+  <!-- Arrows: ModelProvider → AnthropicProvider -->
+  <line x1="287" y1="72" x2="333" y2="72" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <!-- ModelProvider → LiteLLMProvider -->
+  <path d="M 287 90 L 310 90 L 310 152 L 333 152" stroke="#9CA3AF" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+
+  <!-- Divider line -->
+  <line x1="310" y1="42" x2="310" y2="326" stroke="#D1D5DB" stroke-width="1.5" stroke-dasharray="6,4"/>
+
+  <!-- StateStore → InMemoryStateStore -->
+  <line x1="287" y1="220" x2="333" y2="220" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <!-- StateStore → SQLiteStateStore -->
+  <path d="M 287 234 L 310 234 L 310 288 L 333 288" stroke="#9CA3AF" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+
+  <!-- ExportBackend → ConsoleBackend -->
+  <path d="M 287 288 L 310 288 L 310 310 L 473 310" stroke="#9CA3AF" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+</svg>

@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 400" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#9CA3AF"/>
+    </marker>
+  </defs>
+
+  <!-- Column headers -->
+  <text x="85" y="20" text-anchor="middle" font-size="10" font-weight="700" fill="#6B7280" letter-spacing="0.5">CLIENT</text>
+  <text x="344" y="20" text-anchor="middle" font-size="10" font-weight="700" fill="#6B7280" letter-spacing="0.5">EDGE — HTTPGateway</text>
+  <text x="586" y="20" text-anchor="middle" font-size="10" font-weight="700" fill="#6B7280" letter-spacing="0.5">CIVITAS BUS</text>
+  <text x="736" y="20" text-anchor="middle" font-size="10" font-weight="700" fill="#6B7280" letter-spacing="0.5">AGENT</text>
+
+  <!-- Client connections -->
+  <text x="85" y="140" text-anchor="middle" font-size="9" fill="#6B7280">4  drain → chunk →</text>
+  <rect x="20" y="150" width="130" height="34" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="85" y="171" text-anchor="middle" font-size="10" fill="#374151">WebSocket</text>
+  <rect x="20" y="196" width="130" height="34" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="85" y="217" text-anchor="middle" font-size="10" fill="#374151">SSE</text>
+  <rect x="20" y="242" width="130" height="34" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="85" y="263" text-anchor="middle" font-size="10" fill="#374151">gRPC Stream</text>
+
+  <!-- Gateway container -->
+  <rect x="200" y="40" width="288" height="332" rx="8" fill="#1e3a5f"/>
+  <text x="344" y="60" text-anchor="middle" font-size="12" font-weight="600" fill="white">HTTPGateway</text>
+  <text x="344" y="75" text-anchor="middle" font-size="9" fill="#93c5fd">shared streaming core</text>
+
+  <!-- handle() demux -->
+  <rect x="220" y="90" width="248" height="42" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="344" y="108" text-anchor="middle" font-size="10" font-weight="600" fill="#374151">handle() demux</text>
+  <text x="344" y="123" text-anchor="middle" font-size="8" fill="#6B7280">classify by correlation_id</text>
+
+  <!-- Stream sink -->
+  <rect x="220" y="176" width="248" height="44" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="344" y="194" text-anchor="middle" font-size="10" font-weight="600" fill="#374151">Stream sink</text>
+  <text x="344" y="209" text-anchor="middle" font-size="8" fill="#6B7280">bounded queue, keyed by correlation_id</text>
+
+  <!-- surface pump -->
+  <rect x="220" y="266" width="248" height="44" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="344" y="284" text-anchor="middle" font-size="10" font-weight="600" fill="#374151">surface pump</text>
+  <text x="344" y="299" text-anchor="middle" font-size="8" fill="#6B7280">per surface: WS / SSE / gRPC</text>
+
+  <!-- internal arrows -->
+  <line x1="344" y1="132" x2="344" y2="174" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="344" y="150" text-anchor="middle" font-size="7" fill="#93c5fd">route by correlation_id</text>
+  <line x1="344" y1="220" x2="344" y2="264" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="344" y="338" text-anchor="middle" font-size="8" fill="#93c5fd">bounded queue = backpressure (D6)</text>
+
+  <!-- pump → clients (drain, dashed) -->
+  <line x1="218" y1="288" x2="152" y2="171" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <line x1="218" y1="288" x2="152" y2="215" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <line x1="218" y1="288" x2="152" y2="261" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+
+  <!-- Bus -->
+  <rect x="536" y="188" width="100" height="46" rx="6" fill="#6b4c11"/>
+  <text x="586" y="208" text-anchor="middle" font-size="11" font-weight="600" fill="white">MessageBus</text>
+  <text x="586" y="223" text-anchor="middle" font-size="8" fill="#fde68a">routes messages</text>
+
+  <!-- Agent -->
+  <rect x="672" y="188" width="128" height="46" rx="6" fill="#2d6a4f"/>
+  <text x="736" y="208" text-anchor="middle" font-size="11" font-weight="600" fill="white">Agent</text>
+  <text x="736" y="223" text-anchor="middle" font-size="8" fill="#a7f3d0">emit chunk ×N + terminator</text>
+
+  <!-- dispatch (solid) gateway → bus → agent -->
+  <text x="586" y="182" text-anchor="middle" font-size="9" fill="#374151">1  dispatch(mode=stream)</text>
+  <line x1="488" y1="204" x2="534" y2="204" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="636" y1="204" x2="670" y2="204" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- return (dashed) agent → bus → gateway -->
+  <line x1="670" y1="220" x2="638" y2="220" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="5,3" marker-end="url(#arr)"/>
+  <line x1="534" y1="220" x2="490" y2="220" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="5,3" marker-end="url(#arr)"/>
+
+  <!-- flow captions -->
+  <text x="586" y="258" text-anchor="middle" font-size="8" fill="#9CA3AF">reply_to = gateway · correlation_id · stream marker</text>
+  <text x="586" y="274" text-anchor="middle" font-size="9" fill="#374151">2  emit chunk (×N)   ·   3  terminator</text>
+  <text x="586" y="288" text-anchor="middle" font-size="8" fill="#9CA3AF">same correlation_id (many-to-one)</text>
+</svg>

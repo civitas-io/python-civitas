@@ -36,8 +36,10 @@ from typing import Any
 from civitas.components import ComponentSet, build_component_set
 from civitas.errors import ConfigurationError
 from civitas.messages import Message
-from civitas.process import AgentProcess, ProcessStatus
+from civitas.observability.otel_agent import run_otel_agent
+from civitas.process import DYNAMIC_SUPERVISOR_CAPABILITY, AgentProcess, ProcessStatus
 from civitas.serializer import Serializer
+from civitas.supervisor import DynamicSupervisor
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +68,7 @@ class Worker:
         model_provider: Any = None,
         tool_registry: Any = None,
         state_store: Any = None,
+        exporters: list[Any] | None = None,
         max_restarts: int = 3,
         components: ComponentSet | None = None,
     ) -> None:
@@ -78,8 +81,10 @@ class Worker:
         self._model_provider = model_provider
         self._tool_registry = tool_registry
         self._state_store = state_store
+        self._exporters = exporters or []
         self._max_restarts = max_restarts
         self._components = components
+        self._otel_agent_task: asyncio.Task[None] | None = None
 
         # O(1) agent lookup by name (F02-8)
         self._agents: dict[str, AgentProcess] = {a.name: a for a in agents}
@@ -92,6 +97,18 @@ class Worker:
         self._bus: Any = None
         self._started = False
         self._stop_event = asyncio.Event()
+
+    @staticmethod
+    def _agent_capabilities(agent: AgentProcess) -> list[str] | None:
+        """Capabilities to register/announce, including the DynamicSupervisor marker.
+
+        A worker-hosted DynamicSupervisor must advertise its reserved marker so
+        peers can target it with cross-process ``spawn_into`` (R6 · D1).
+        """
+        caps = list(agent.capabilities)
+        if isinstance(agent, DynamicSupervisor) and DYNAMIC_SUPERVISOR_CAPABILITY not in caps:
+            caps.append(DYNAMIC_SUPERVISOR_CAPABILITY)
+        return caps or None
 
     async def start(self) -> None:
         """Start the worker: connect to proxy, wire agents, start loops."""
@@ -111,6 +128,7 @@ class Worker:
                 model_provider=self._model_provider,
                 tool_registry=self._tool_registry,
                 state_store=self._state_store,
+                exporters=self._exporters,
                 zmq_pub_addr=self._zmq_pub_addr,
                 zmq_sub_addr=self._zmq_sub_addr,
                 zmq_start_proxy=False,  # Workers connect to an existing proxy
@@ -124,6 +142,12 @@ class Worker:
         self._registry = cs.registry
         self._bus = cs.bus
 
+        # Drain span_queue via OTELAgent when exporters are configured (FD-07/FD-09)
+        if cs.span_queue is not None and cs.export_backend is not None:
+            self._otel_agent_task = asyncio.create_task(
+                run_otel_agent(cs.span_queue, cs.export_backend)
+            )
+
         # Start transport first — must be running before setup_agent (F02-16)
         await self._transport.start()
 
@@ -136,7 +160,7 @@ class Worker:
         # Wire and subscribe agents
         for agent in self._agents.values():
             cs.inject(agent)
-            self._registry.register(agent.name)
+            self._registry.register(agent.name, capabilities=self._agent_capabilities(agent))
             await self._bus.setup_agent(agent)
 
         # Subscribe to restart commands and register in registry so bus.route() can find it (F03-2)
@@ -153,11 +177,14 @@ class Worker:
         # time to process the announcements before worker.start() returns.
         announce_names = list(self._agents) + ["_agency.worker.restart"]
         for name in announce_names:
+            maybe_agent: AgentProcess | None = self._agents.get(name)
+            payload: dict[str, Any] = {"name": name}
+            if maybe_agent is not None:
+                payload["capabilities"] = self._agent_capabilities(maybe_agent) or []
+                payload["capability_metadata"] = dict(maybe_agent.capability_metadata)
             await self._transport.publish(
                 "_agency.register",
-                self._serializer.serialize(
-                    Message(type="_agency.register", payload={"name": name})
-                ),
+                self._serializer.serialize(Message(type="_agency.register", payload=payload)),
             )
         await asyncio.sleep(0.1)
 
@@ -226,6 +253,11 @@ class Worker:
 
         if self._transport is not None:
             await self._transport.stop()
+
+        if self._otel_agent_task is not None:
+            self._otel_agent_task.cancel()
+            await asyncio.gather(self._otel_agent_task, return_exceptions=True)
+            self._otel_agent_task = None
 
         self._started = False
         self._stop_event.set()

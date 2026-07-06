@@ -6,39 +6,7 @@ Civitas's plugin system covers everything outside the core runtime: LLM provider
 
 ## Plugin overview
 
-```mermaid
-graph TD
-    subgraph Protocols
-        MP["ModelProvider\nchat(model, messages, tools)"]
-        TP["ToolProvider\nname · schema · execute(**kwargs)"]
-        SS["StateStore\nget / set / delete(agent_name)"]
-        EB["ExportBackend\nexport(spans) · shutdown()"]
-    end
-
-    subgraph Bundled
-        AP["AnthropicProvider\n[anthropic]"]
-        LP["LiteLLMProvider\n[litellm]"]
-        IM["InMemoryStateStore\n(default)"]
-        SQ["SQLiteStateStore\n(built-in)"]
-        CB["ConsoleBackend\n(built-in)"]
-    end
-
-    MP --> AP
-    MP --> LP
-    SS --> IM
-    SS --> SQ
-    EB --> CB
-
-    style MP fill:#1e3a5f,color:#fff
-    style TP fill:#1e3a5f,color:#fff
-    style SS fill:#1e3a5f,color:#fff
-    style EB fill:#1e3a5f,color:#fff
-    style AP fill:#2d6a4f,color:#fff
-    style LP fill:#2d6a4f,color:#fff
-    style IM fill:#2d6a4f,color:#fff
-    style SQ fill:#2d6a4f,color:#fff
-    style CB fill:#2d6a4f,color:#fff
-```
+![Plugin Protocols](assets/plugin-protocols.svg)
 
 Plugins are injected by `Runtime` at startup. Agents access them via `self.llm`, `self.tools`, and `self.store`. You configure them once in `Runtime(...)` or topology YAML — agent code never constructs or imports plugins directly.
 

@@ -12,3 +12,8 @@ build/
 .ruff_cache/
 *.tmp
 site/
+
+# SQLite test artifacts
+*.db
+*.sqlite
+*.sqlite3

@@ -150,6 +150,117 @@ Strategies and backoff values are case-insensitive in YAML (`one_for_one` and `O
 | `type` | string | Yes | Dotted Python class path: `myapp.agents.MyAgent` |
 | `process` | string | No | Worker process name — assigns agent to a `Worker` |
 
+### `http_gateway`
+
+Exposes the Civitas bus as a REST API. Requires `pip install civitas[http]`.
+
+```yaml
+- name: api
+  type: http_gateway
+  config:
+    host: "0.0.0.0"
+    port: 8080
+    request_timeout: 30.0
+    routes:
+      - path: /v1/chat
+        agent: assistant
+        method: POST
+        mode: call           # call (sync reply) or cast (fire-and-forget)
+      - path: /v1/users/{id}
+        agent: user_agent
+        method: GET
+        mode: call
+    middleware:
+      - myapp.middleware.require_api_key
+    docs:
+      enabled: true          # default: true
+      path: /docs            # default: /docs
+```
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `host` | string | `0.0.0.0` | Bind address |
+| `port` | int | `8080` | HTTP/1.1 + HTTP/2 port |
+| `port_quic` | int | — | QUIC/HTTP/3 UDP port (required when `enable_http3: true`) |
+| `tls_cert` | string | — | Path to TLS certificate file |
+| `tls_key` | string | — | Path to TLS key file |
+| `request_timeout` | float | `30.0` | Seconds before upstream timeout (504) |
+| `enable_http3` | bool | `false` | Start QUIC server alongside uvicorn (requires `civitas[http3]`) |
+| `routes` | list | `[]` | Custom route list (see below); falls back to default routes if empty |
+| `middleware` | list | `[]` | Dotted import paths to global middleware callables |
+| `docs.enabled` | bool | `true` | Serve Swagger UI at `docs.path` and `/openapi.json` |
+| `docs.path` | string | `/docs` | Path for Swagger UI |
+
+**Route fields:**
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `path` | string | required | URL path, `{param}` segments extracted into payload |
+| `agent` | string | required | Target agent name |
+| `method` | string | required | HTTP method (`GET`, `POST`, etc.) |
+| `mode` | string | `call` | `call` (sync, 200 reply) or `cast` (async, 202 accepted) |
+
+**Default routes** (when no `routes:` block is defined):
+
+| HTTP | Agent | Mode |
+|---|---|---|
+| `POST /agents/{name}` | `{name}` | call |
+| `POST /agents/{name}/cast` | `{name}` | cast |
+| `GET /agents/{name}/state` | `{name}` | call `{"__op__": "state"}` |
+
+See [HTTP Gateway](gateway.md) for the full guide.
+
+### `dynamic_supervisor`
+
+A `DynamicSupervisor` node. Starts empty — children are spawned at runtime via `self.spawn()`. Always uses `ONE_FOR_ONE`.
+
+```yaml
+- type: dynamic_supervisor
+  name: workers
+  config:
+    max_children: 20        # hard limit; SpawnError when reached (default: unlimited)
+    max_total_spawns: 1000  # optional lifetime cap across all spawns (default: unlimited)
+```
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `max_children` | int | unlimited | Maximum live children at any one time |
+| `max_total_spawns` | int | unlimited | Total spawns allowed over the lifetime of the supervisor |
+
+See [Dynamic supervision](supervision.md#dynamic-supervision) for the full guide.
+
+### `topology_server`
+
+A supervised JSON HTTP management endpoint. Use it alongside a `DynamicSupervisor` to expose live topology state.
+
+```yaml
+- type: topology_server
+  name: topo_server
+  config:
+    host: 127.0.0.1   # default
+    port: 6789        # default
+```
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `host` | string | `127.0.0.1` | Bind address — use `0.0.0.0` to expose externally |
+| `port` | int | `6789` | Port for the HTTP server |
+
+Endpoints: `GET /health`, `GET /topology`, `GET /agents`, `GET /agents/{name}`. See [Dynamic supervision — TopologyServer](supervision.md#topologyserver) for details.
+
+### `eval_agent`
+
+Corrective observability loop that monitors agent behavior.
+
+```yaml
+- name: monitor
+  type: eval_agent
+  max_corrections_per_window: 10    # default: 10
+  window_seconds: 60.0              # default: 60.0
+```
+
+See [EvalLoop](evalloop.md) for the full guide.
+
 ### `supervisor` (nested)
 
 Same fields as the root `supervision` block, plus `children`.

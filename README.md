@@ -81,31 +81,7 @@ The supervisor detects every crash, applies exponential backoff, and restarts th
 
 ## Core concepts
 
-```mermaid
-graph TD
-    R[Runtime] --> S[Supervisor]
-    S -->|ONE_FOR_ONE| A1[AgentProcess]
-    S -->|ONE_FOR_ONE| A2[AgentProcess]
-    S --> CS[Child Supervisor]
-    CS -->|ONE_FOR_ALL| A3[AgentProcess]
-    CS -->|ONE_FOR_ALL| A4[AgentProcess]
-
-    A1 <-->|MessageBus| A2
-    A2 <-->|MessageBus| A3
-    A3 <-->|MessageBus| A4
-
-    A1 --- LLM[ModelProvider]
-    A2 --- Tools[ToolRegistry]
-    A1 --- OTEL[OTEL Tracer]
-
-    style R fill:#1e3a5f,color:#fff
-    style S fill:#1e3a5f,color:#fff
-    style CS fill:#1e3a5f,color:#fff
-    style A1 fill:#2d6a4f,color:#fff
-    style A2 fill:#2d6a4f,color:#fff
-    style A3 fill:#2d6a4f,color:#fff
-    style A4 fill:#2d6a4f,color:#fff
-```
+![Runtime Overview](docs/assets/runtime-overview.svg)
 
 **`AgentProcess`** — the unit of computation. Subclass it, override `handle()`. Each process has its own mailbox, state, lifecycle hooks, and error boundary.
 
@@ -162,22 +138,7 @@ runtime = Runtime(
 
 The same agent code runs at every level. The only thing that changes is the topology configuration:
 
-```mermaid
-graph LR
-    L1["Level 1\nSingle process\nInProcessTransport\npip install civitas"]
-    L2["Level 2\nMulti-process\nZMQTransport\npip install civitas[zmq]"]
-    L3["Level 3\nDistributed\nNATSTransport\npip install civitas[nats]"]
-    L4["Level 4\nContainerized\ncivitas deploy --target docker-compose"]
-
-    L1 -->|"change transport in topology.yaml"| L2
-    L2 -->|"change transport in topology.yaml"| L3
-    L3 -->|"civitas deploy"| L4
-
-    style L1 fill:#1e3a5f,color:#fff
-    style L2 fill:#2d6a4f,color:#fff
-    style L3 fill:#6b4c11,color:#fff
-    style L4 fill:#4a1942,color:#fff
-```
+![Scaling Ladder](docs/assets/transport-tiers.svg)
 
 ```yaml
 # topology.yaml — switch from in-process to distributed by changing one block
@@ -204,29 +165,11 @@ civitas run --topology topology.yaml
 
 When a child crashes, the supervisor applies one of three strategies:
 
-```mermaid
-graph TD
-    subgraph ONE_FOR_ONE["ONE_FOR_ONE — restart only the crashed child"]
-        direction LR
-        S1[Supervisor] --> A["Agent A ✓"]
-        S1 --> B["Agent B ✗ → ↻"]
-        S1 --> C["Agent C ✓"]
-    end
+![ONE_FOR_ONE](docs/assets/supervision-one-for-one.svg)
 
-    subgraph ONE_FOR_ALL["ONE_FOR_ALL — restart all children"]
-        direction LR
-        S2[Supervisor] --> D["Agent D ↻"]
-        S2 --> E["Agent E ✗ → ↻"]
-        S2 --> F["Agent F ↻"]
-    end
+![ONE_FOR_ALL](docs/assets/supervision-one-for-all.svg)
 
-    subgraph REST_FOR_ONE["REST_FOR_ONE — restart crashed + all younger siblings"]
-        direction LR
-        S3[Supervisor] --> G["Agent G ✓"]
-        S3 --> H["Agent H ✗ → ↻"]
-        S3 --> I["Agent I ↻"]
-    end
-```
+![REST_FOR_ONE](docs/assets/supervision-rest-for-one.svg)
 
 Supervisors nest. If a supervisor exhausts its restart budget, it escalates to its parent. Backoff policies — `CONSTANT`, `LINEAR`, `EXPONENTIAL` — are configured per supervisor.
 
@@ -315,8 +258,8 @@ Civitas is a **runtime**, not a framework. LangGraph, CrewAI, and the OpenAI Age
 │  CONTEXT LAYER                               │
 │  Prompts, memory, RAG, AGENTS.md             │
 ├──────────────────────────────────────────────┤
-│  CONTROL LAYER                               │
-│  Guardrails, HITL gates, cost limits         │
+│  CONTROL LAYER  ◄── Presidium lives here      │
+│  Policy (CEL/OPA), HITL gates, cost limits   │
 ├──────────────────────────────────────────────┤
 │  RUNTIME LAYER  ◄── Civitas lives here        │
 │  Process lifecycle, fault tolerance,         │
@@ -454,24 +397,24 @@ docker compose up --scale worker-worker=3
 
 ## Documentation
 
-Full documentation is available at **[jerynmathew.github.io/python-civitas](https://jerynmathew.github.io/python-civitas/)**.
+Full documentation is available at **[civitas-io.github.io/python-civitas](https://civitas-io.github.io/python-civitas/)**.
 
 | | |
 |---|---|
-| [Getting Started](https://jerynmathew.github.io/python-civitas/getting-started/) | Install, hello agent, first supervised system |
-| [Core Concepts](https://jerynmathew.github.io/python-civitas/concepts/) | AgentProcess, Supervisor, MessageBus, Transport |
-| [Supervision](https://jerynmathew.github.io/python-civitas/supervision/) | Strategies, backoff, escalation, heartbeats |
-| [Messaging](https://jerynmathew.github.io/python-civitas/messaging/) | send, ask, broadcast, backpressure, trace propagation |
-| [Transports](https://jerynmathew.github.io/python-civitas/transports/) | InProcess → ZMQ → NATS, switching levels |
-| [Observability](https://jerynmathew.github.io/python-civitas/observability/) | OTEL spans, console exporter, Jaeger setup |
-| [Plugins](https://jerynmathew.github.io/python-civitas/plugins/) | ModelProvider, ToolProvider, StateStore, custom plugins |
-| [Topology YAML](https://jerynmathew.github.io/python-civitas/topology/) | Schema reference, CLI commands |
-| [CLI Reference](https://jerynmathew.github.io/python-civitas/cli/) | All commands, options, and examples |
-| [Deployment](https://jerynmathew.github.io/python-civitas/deployment/) | Level 1–4 deployment ladder |
-| [Framework Adapters](https://jerynmathew.github.io/python-civitas/adapters/) | LangGraph, OpenAI SDK integration |
-| [Architecture](https://jerynmathew.github.io/python-civitas/architecture/) | Runtime internals, component wiring |
-| [FAQ](https://jerynmathew.github.io/python-civitas/faq/) | Why not Temporal? Why not LangGraph? GIL concerns |
-| [Contributing](https://jerynmathew.github.io/python-civitas/contributing/) | Dev setup, test strategy, plugin authoring |
+| [Getting Started](https://civitas-io.github.io/python-civitas/getting-started/) | Install, hello agent, first supervised system |
+| [Core Concepts](https://civitas-io.github.io/python-civitas/concepts/) | AgentProcess, Supervisor, MessageBus, Transport |
+| [Supervision](https://civitas-io.github.io/python-civitas/supervision/) | Strategies, backoff, escalation, heartbeats |
+| [Messaging](https://civitas-io.github.io/python-civitas/messaging/) | send, ask, broadcast, backpressure, trace propagation |
+| [Transports](https://civitas-io.github.io/python-civitas/transports/) | InProcess → ZMQ → NATS, switching levels |
+| [Observability](https://civitas-io.github.io/python-civitas/observability/) | OTEL spans, console exporter, Jaeger setup |
+| [Plugins](https://civitas-io.github.io/python-civitas/plugins/) | ModelProvider, ToolProvider, StateStore, custom plugins |
+| [Topology YAML](https://civitas-io.github.io/python-civitas/topology/) | Schema reference, CLI commands |
+| [CLI Reference](https://civitas-io.github.io/python-civitas/cli/) | All commands, options, and examples |
+| [Deployment](https://civitas-io.github.io/python-civitas/deployment/) | Level 1–4 deployment ladder |
+| [Framework Adapters](https://civitas-io.github.io/python-civitas/adapters/) | LangGraph, OpenAI SDK integration |
+| [Architecture](https://civitas-io.github.io/python-civitas/architecture/) | Runtime internals, component wiring |
+| [FAQ](https://civitas-io.github.io/python-civitas/faq/) | Why not Temporal? Why not LangGraph? GIL concerns |
+| [Contributing](https://civitas-io.github.io/python-civitas/contributing/) | Dev setup, test strategy, plugin authoring |
 
 ---
 

@@ -1,8 +1,8 @@
 site_name: civitas
 site_description: The production runtime for Python agents
-site_url: https://jerynmathew.github.io/python-civitas
-repo_url: https://github.com/jerynmathew/python-civitas
-repo_name: jerynmathew/python-civitas
+site_url: https://civitas-io.github.io/python-civitas
+repo_url: https://github.com/civitas-io/python-civitas
+repo_name: civitas-io/python-civitas
 copyright: Apache 2.0 License
 
 theme:
@@ -86,7 +86,7 @@ extra_javascript:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/jerynmathew/python-civitas
+      link: https://github.com/civitas-io/python-civitas
   analytics:
     provider: google
     property: !ENV [GOOGLE_ANALYTICS_ID, ""]

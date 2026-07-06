@@ -41,6 +41,16 @@ class ConfigurationError(CivitasError):
     """Invalid or missing runtime configuration."""
 
 
+class StateDecryptionError(CivitasError):
+    """Raised when persisted agent state cannot be decrypted.
+
+    Covers tampered ciphertext (AEAD ``InvalidTag``), an unknown envelope
+    ``key_id``, an unsupported envelope version, and unencrypted (legacy)
+    state read in strict mode. The message references the agent name and
+    ``key_id`` only — never the plaintext or the key.
+    """
+
+
 class DeserializationError(CivitasError):
     """Raised when incoming bytes cannot be decoded into a Message.
 
@@ -64,3 +74,35 @@ class PluginError(CivitasError):
             f"Failed to load {plugin_type} plugin '{name}': {reason}\n"
             f"  Hint: pip install civitas[{name}]"
         )
+
+
+class SpawnError(CivitasError):
+    """Raised when a dynamic agent spawn, despawn, or stop operation fails."""
+
+
+class SignatureError(CivitasError):
+    """Raised when a message signature is missing, invalid, or replayed."""
+
+
+class CapabilityNotFoundError(CivitasError):
+    """Raised when no registered agent declares the requested capability."""
+
+    def __init__(self, capability: str) -> None:
+        self.capability = capability
+        super().__init__(f"No agent registered with capability '{capability}'")
+
+
+class StreamError(CivitasError):
+    """Base error for bus-native streaming failures (R7)."""
+
+
+class SlowConsumerError(StreamError):
+    """Raised when a stream consumer falls behind and the bounded sink overflows."""
+
+
+class StreamInterrupted(StreamError):
+    """Raised when an in-flight stream is torn down (e.g. the consuming agent stops)."""
+
+
+class StreamTimeout(StreamError):
+    """Raised when a stream exceeds its idle timeout or maximum duration."""

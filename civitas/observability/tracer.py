@@ -131,7 +131,14 @@ class Tracer:
         self._use_otel = False
         self._otel_tracer: Any = None
         self._provider: Any = None  # F08-1/F08-5: instance-scoped provider
-        self._console_fallback = True
+        self._console_fallback = span_queue is None
+
+        if span_queue is not None:
+            # Path B (SpanQueue -> OTELAgent -> ExportBackend) is authoritative
+            # when a queue is supplied — the caller owns starting the OTELAgent
+            # that drains it. Building a direct TracerProvider here too would
+            # export every span twice with no coordination between them (FD-09).
+            return
 
         if _HAS_OTEL:
             provider = TracerProvider()

@@ -1,6 +1,6 @@
 # Design: HTTPGateway
 
-**Status:** Planned — v0.4
+**Status:** Implemented — v0.4
 **Author:** Jeryn Mathew Varghese
 **Last updated:** 2026-04
 
@@ -31,47 +31,7 @@ All four share the same routing and message-translation layer. Only the network 
 
 ## Architecture
 
-```mermaid
-graph TD
-    subgraph "External"
-        C1["HTTP/1.1 client"]
-        C2["HTTP/2 client"]
-        C3["HTTP/3 / QUIC client"]
-        C4["gRPC client"]
-    end
-
-    subgraph "Edge — supervised process"
-        GW["HTTPGateway\n(AgentProcess)"]
-        H1["HTTP/1.1 + HTTP/2\n(uvicorn ASGI)"]
-        H3["HTTP/3 / QUIC\n(aioquic)"]
-        GR["gRPC server\n(grpclib / grpcio)"]
-    end
-
-    subgraph "Civitas bus"
-        BUS["MessageBus"]
-        A1["GenServer / AgentProcess"]
-        A2["AgentProcess"]
-    end
-
-    C1 -->|TCP| H1
-    C2 -->|TCP + TLS| H1
-    C3 -->|QUIC/UDP| H3
-    C4 -->|HTTP/2 + protobuf| GR
-
-    H1 --> GW
-    H3 --> GW
-    GR --> GW
-
-    GW -->|call / cast| BUS
-    BUS --> A1
-    BUS --> A2
-    A1 -->|reply| BUS
-    BUS -->|reply| GW
-    GW -->|HTTP response| C1
-    GW -->|HTTP response| C2
-    GW -->|HTTP/3 response| C3
-    GW -->|gRPC response| C4
-```
+![HTTP Gateway Architecture](../assets/http-gateway-arch.svg)
 
 `HTTPGateway` is started as a child of any `Supervisor`. It owns the three server coroutines internally and manages their lifecycle within its `on_start` / `on_stop` hooks.
 
@@ -184,7 +144,7 @@ The `Alt-Svc: h3=":8443"` header is automatically injected into HTTP/1.1 and HTT
 
 ### Why aioquic (and what's next)
 
-aioquic is the established Python QUIC library and adequate for most deployments. The QUIC ecosystem is maturing fast — [quiche](https://github.com/cloudflare/quiche) (Cloudflare's QUIC implementation in Rust) exposes Python bindings via [quiche-python](https://github.com/cloudflare/quiche/tree/master/quiche/examples). When those bindings stabilise for production use, `civitas[http3]` will transparently upgrade to the Rust backend for near-native QUIC performance. No API changes to `HTTPGateway` are needed — only the underlying driver swaps.
+aioquic is the established pure-Python QUIC library, is adequate for most deployments, and is the backend today. A Rust-backed QUIC stack (e.g. Cloudflare's [quiche](https://github.com/cloudflare/quiche)) would offer near-native performance, but quiche ships **no official, production-ready Python binding** — the code under its repo is example/demo material, not a published package. A Rust QUIC swap therefore remains a *future evaluation* (roadmap G9), not a committed upgrade path. Because `HTTPGateway` isolates the transport behind its own driver, such a swap would require no public API change if a viable binding later emerges.
 
 ---
 
@@ -313,13 +273,13 @@ supervision:
 
 ## Implementation plan
 
-### Phase 1 — HTTP/1.1 + HTTP/2 (ship with GenServer, v0.4)
+### Phase 1 — HTTP/1.1 + HTTP/2 (v0.4)
 
 1. `civitas/gateway/__init__.py` — `HTTPGateway(AgentProcess)`
 2. `civitas/gateway/asgi.py` — ASGI app, request translation, response mapping
 3. `civitas/gateway/router.py` — route table (path → agent name, mode)
 4. uvicorn runner inside `on_start()` / `on_stop()` with uvloop install (Linux/macOS only)
-5. TLS config from `settings` or topology YAML
+5. TLS config from topology YAML / env vars
 6. `civitas[http]` extra: `uvicorn[standard]>=0.30` (pulls in uvloop + httptools)
 
 ### Phase 2 — HTTP/3 / QUIC (v0.4)
@@ -364,7 +324,7 @@ supervision:
 | Extra | Installs | Enables | Backend |
 |-------|----------|---------|---------|
 | `civitas[http]` | `uvicorn[standard]>=0.30` | HTTP/1.1 + HTTP/2 | C (uvloop + httptools) |
-| `civitas[http3]` | `aioquic>=1.0` | HTTP/3 / QUIC | Pure Python (Rust upgrade path via quiche) |
+| `civitas[http3]` | `aioquic>=1.0` | HTTP/3 / QUIC | Pure Python (aioquic; Rust QUIC swap under evaluation — G9) |
 | `civitas[grpc]` | `grpclib>=0.4`, `protobuf>=4` | gRPC | Pure Python async |
 | `civitas[grpc-fast]` | `grpcio>=1.62`, `protobuf>=4` | gRPC (high throughput) | C core (Google) |
 

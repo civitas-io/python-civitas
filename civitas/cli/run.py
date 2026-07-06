@@ -11,15 +11,15 @@ import typer
 import yaml
 from rich.tree import Tree
 
-from civitas import Runtime
+from civitas import AgentProcess, DynamicSupervisor, Runtime
 from civitas.cli.app import app, console, err_console, register_shutdown, success
 from civitas.plugins.loader import load_plugins_from_config
 from civitas.worker import Worker
 
 
-def _find_process_agents(config: dict[str, Any], process_name: str) -> list[dict[str, str]]:
-    """Find agents assigned to a given process in the topology."""
-    agents: list[dict[str, str]] = []
+def _find_process_agents(config: dict[str, Any], process_name: str) -> list[dict[str, Any]]:
+    """Find agents (and worker-hosted dynamic supervisors) assigned to a process."""
+    agents: list[dict[str, Any]] = []
     sup_cfg = config.get("supervision", config.get("supervisor", {}))
 
     def _walk(node: dict[str, Any]) -> None:
@@ -30,11 +30,30 @@ def _find_process_agents(config: dict[str, Any], process_name: str) -> list[dict
             acfg = node["agent"]
             if acfg.get("process") == process_name:
                 agents.append(acfg)
+        elif node.get("type") == "dynamic_supervisor" and node.get("process") == process_name:
+            # A DynamicSupervisor can be hosted in a Worker so it spawns children
+            # cross-process (R6 · D1); it is a typed node, not an `agent:` wrapper.
+            agents.append(node)
 
     for child in sup_cfg.get("children", []):
         _walk(child)
 
     return agents
+
+
+def _build_worker_agent(acfg: dict[str, Any]) -> AgentProcess:
+    """Instantiate one worker-hosted node from its topology config."""
+    if acfg.get("type") == "dynamic_supervisor":
+        return DynamicSupervisor(
+            name=acfg["name"],
+            max_children=acfg.get("max_children"),
+            max_total_spawns=acfg.get("max_total_spawns"),
+            restart=acfg.get("restart", "transient"),
+            max_restarts=acfg.get("max_restarts", 3),
+            restart_window=acfg.get("restart_window", 60.0),
+        )
+    cls = _resolve_agent_class(acfg["type"])
+    return cast(AgentProcess, cls(name=acfg["name"]))
 
 
 def _resolve_agent_class(type_str: str) -> type:
@@ -113,10 +132,7 @@ async def _run_worker(config: dict[str, Any], process_name: str) -> None:
         err_console.print(f"[red]Error:[/red] No agents found for process '{process_name}'.")
         raise typer.Exit(1)
 
-    agents = []
-    for acfg in agents_cfg:
-        cls = _resolve_agent_class(acfg["type"])
-        agents.append(cls(name=acfg["name"]))
+    agents = [_build_worker_agent(acfg) for acfg in agents_cfg]
 
     transport_cfg = config.get("transport", {})
     transport_type = transport_cfg.get("type", "zmq")
@@ -139,6 +155,8 @@ async def _run_worker(config: dict[str, Any], process_name: str) -> None:
             kwargs["model_provider"] = loaded["model_providers"][0]
         if loaded["state_store"] is not None:
             kwargs["state_store"] = loaded["state_store"]
+        if loaded["exporters"]:
+            kwargs["exporters"] = loaded["exporters"]
 
     worker = Worker(**kwargs)
     console.print(f"  [blue]Worker '{process_name}':[/blue] hosting {[a.name for a in agents]}")

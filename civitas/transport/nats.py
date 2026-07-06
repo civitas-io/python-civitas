@@ -22,7 +22,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import nats
 from nats.aio.client import Client as NATSClient
@@ -30,6 +30,9 @@ from nats.aio.msg import Msg
 
 from civitas.messages import _uuid7
 from civitas.serializer import Serializer
+
+if TYPE_CHECKING:
+    from civitas.security.config import NatsTlsConfig
 
 logger = logging.getLogger(__name__)
 
@@ -58,12 +61,14 @@ class NATSTransport:
         jetstream: bool = False,
         stream_name: str = "AGENCY",
         create_stream_if_missing: bool = True,
+        tls_config: NatsTlsConfig | None = None,
     ) -> None:
         self._serializer = serializer
         self._servers = servers if isinstance(servers, list) else [servers]
         self._use_jetstream = jetstream
         self._stream_name = stream_name
         self._create_stream_if_missing = create_stream_if_missing
+        self._tls_config = tls_config
 
         self._nc: NATSClient | None = None
         self._js: nats.js.JetStreamContext | None = None
@@ -90,12 +95,27 @@ class NATSTransport:
         async def _on_error(exc: Exception) -> None:
             logger.error("[NATSTransport] error: %s", exc)
 
-        self._nc = await nats.connect(
-            servers=self._servers,
-            disconnected_cb=_on_disconnected,
-            reconnected_cb=_on_reconnected,
-            error_cb=_on_error,
-        )
+        connect_kwargs: dict[str, Any] = {
+            "servers": self._servers,
+            "disconnected_cb": _on_disconnected,
+            "reconnected_cb": _on_reconnected,
+            "error_cb": _on_error,
+        }
+
+        if self._tls_config is not None and self._tls_config.enabled:
+            connect_kwargs["tls"] = self._tls_config.build_ssl_context()
+
+        if self._tls_config is not None and self._tls_config.nkey_seed:
+            try:
+                import nkeys
+            except ImportError as exc:
+                raise ImportError(
+                    "NATS nkeys auth requires 'nkeys'. "
+                    "Install it with: pip install 'civitas[nkeys]'"
+                ) from exc
+            connect_kwargs["nkeys_seed"] = nkeys.from_seed(self._tls_config.nkey_seed.encode())
+
+        self._nc = await nats.connect(**connect_kwargs)
 
         if self._use_jetstream:
             self._js = self._nc.jetstream()
@@ -167,6 +187,16 @@ class NATSTransport:
             sub = await self._nc.subscribe(subject, cb=_on_msg)
 
         self._subscriptions[address] = sub
+
+    async def unsubscribe(self, address: str) -> None:
+        """Remove a handler and best-effort unsubscribe the NATS subscription."""
+        self._handlers.pop(address, None)
+        sub = self._subscriptions.pop(address, None)
+        if sub is not None:
+            try:
+                await sub.unsubscribe()
+            except Exception as exc:  # noqa: BLE001 — best-effort cleanup
+                logger.warning("[NATSTransport] unsubscribe(%r) failed: %s", address, exc)
 
     async def publish(self, address: str, data: bytes) -> None:
         """Publish a message to an address (fire-and-forget).
