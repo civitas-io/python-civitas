@@ -130,6 +130,8 @@ class GatewayAuthConfig:
 
     tls_ca_cert: str | None = None
     client_cert_mode: str = "none"
+    mtls_source: str = "direct"
+    trusted_proxy_cidrs: frozenset[str] = field(default_factory=frozenset)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> GatewayAuthConfig:
@@ -137,6 +139,8 @@ class GatewayAuthConfig:
         return cls(
             tls_ca_cert=mtls_data.get("ca_cert") or mtls_data.get("tls_ca_cert"),
             client_cert_mode=mtls_data.get("client_cert_mode", "none"),
+            mtls_source=mtls_data.get("mtls_source", "direct"),
+            trusted_proxy_cidrs=frozenset(mtls_data.get("trusted_proxy_cidrs", [])),
         )
 
 

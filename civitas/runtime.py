@@ -380,6 +380,8 @@ class Runtime:
                     tls_key=cfg_dict.get("tls_key"),
                     tls_ca_cert=auth_cfg.tls_ca_cert,
                     client_cert_mode=auth_cfg.client_cert_mode,
+                    mtls_source=auth_cfg.mtls_source,
+                    trusted_proxy_cidrs=auth_cfg.trusted_proxy_cidrs,
                     request_timeout=cfg_dict.get("request_timeout", 30.0),
                     enable_http3=cfg_dict.get("enable_http3", False),
                     routes=cfg_dict.get("routes", []),

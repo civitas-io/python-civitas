@@ -22,6 +22,7 @@ from civitas.gateway.dispatch import (
 )
 from civitas.gateway.jwt_auth import _InvalidToken
 from civitas.gateway.middleware import build_chain, load_middleware
+from civitas.gateway.mtls import _client_cert_from_headers
 from civitas.gateway.openapi import build_spec, swagger_html
 from civitas.gateway.types import GatewayRequest, GatewayResponse, MiddlewareCallable
 from civitas.messages import _uuid7
@@ -350,6 +351,14 @@ class GatewayASGI:
         matched = self._route_table.match(method, path)
         route_middlewares = self._route_middlewares(matched[0]) if matched is not None else []
 
+        # proxy_header mode reads the RFC 9440 Client-Cert header behind a trusted
+        # proxy (D5); direct mode reads uvicorn's (never-populated) ASGI TLS extension
+        # (#25). Both return the same {"dn": ...} shape into the unchanged authorizer.
+        if self._config.mtls_source == "proxy_header":
+            client_cert = _client_cert_from_headers(scope, self._config.trusted_proxy_cidrs)
+        else:
+            client_cert = _client_cert_from_scope(scope)
+
         request = GatewayRequest(
             method=method,
             path=path,
@@ -359,7 +368,7 @@ class GatewayASGI:
             body=body,
             client_ip=client_ip,
             gateway=self._gateway,
-            client_cert=_client_cert_from_scope(scope),
+            client_cert=client_cert,
         )
 
         # Build and run middleware chain: global middleware, then this route's

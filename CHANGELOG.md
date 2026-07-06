@@ -11,6 +11,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+
+- **HTTP mTLS is now functional via a reverse proxy** ([#25](https://github.com/civitas-io/python-civitas/issues/25)) — `require_client_cert` always rejected requests on the uvicorn HTTP path with `401`, even with a valid client certificate, because uvicorn never exposes the certificate from its TLS handshake to the ASGI app, so the DN needed for authorization never arrived. A new opt-in `GatewayConfig.mtls_source="proxy_header"` instead trusts a TLS-terminating reverse proxy's IETF [RFC 9440](https://www.rfc-editor.org/rfc/rfc9440.html) `Client-Cert` header (a base64-DER leaf certificate), decoding it and feeding the subject DN into the **unchanged** `CIVITAS_GATEWAY_MTLS_ALLOWED_DNS` allowlist authorization.
+  - **Trust check.** A new required `GatewayConfig.trusted_proxy_cidrs` gates which peer IPs may supply the header; the peer IP is checked before any header parsing, and civitas forces uvicorn's `proxy_headers=False` in this mode so a client-supplied `X-Forwarded-For` cannot spoof it. As a documented trade-off, `GatewayRequest.client_ip` (rate limiting, access logs) becomes the proxy's IP in this mode.
+  - **Fail-closed guards.** `proxy_header` mode requires `client_cert_mode="none"`, a non-empty `trusted_proxy_cidrs`, `cryptography` installed, and `require_client_cert` present in `middleware` — each is a loud `ConfigurationError` at config or startup time, never a silently open gateway.
+  - **`direct` mode is unchanged** — it remains the default and remains non-functional against uvicorn (a known limitation of that mode, not a regression); existing deployments are unaffected unless they opt into `proxy_header`.
+  - Wired through topology YAML as `gateway.auth.mtls.mtls_source` / `trusted_proxy_cidrs`. See [`docs/gateway.md`](docs/gateway.md) for full nginx/Envoy/Traefik proxy examples and [`docs/design/gateway-http-mtls-proxy.md`](docs/design/gateway-http-mtls-proxy.md) for the rationale.
+
 ## [0.7.2] — 2026-07-06
 
 ### Security

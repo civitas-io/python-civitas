@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import logging
 import ssl
 from dataclasses import dataclass, field
@@ -12,7 +13,7 @@ from civitas.config import settings
 from civitas.errors import ConfigurationError
 from civitas.gateway.dispatch import GatewayDispatcher, StreamSink
 from civitas.gateway.jwt_auth import _JWT_MIDDLEWARE_PATH, JwtVerifier
-from civitas.gateway.mtls import _MTLS_MIDDLEWARE_PATH
+from civitas.gateway.mtls import _MTLS_MIDDLEWARE_PATH, _load_x509
 from civitas.gateway.router import RouteTable
 from civitas.messages import Message, _new_span_id
 from civitas.process import _STREAM_CHUNK, _STREAM_END, _STREAM_ERROR, AgentProcess
@@ -20,6 +21,7 @@ from civitas.process import _STREAM_CHUNK, _STREAM_END, _STREAM_ERROR, AgentProc
 logger = logging.getLogger(__name__)
 
 _CLIENT_CERT_MODES = frozenset({"none", "optional", "required"})
+_MTLS_SOURCES = frozenset({"direct", "proxy_header"})
 _CERT_REQS = {
     "none": ssl.CERT_NONE,
     "optional": ssl.CERT_OPTIONAL,
@@ -50,6 +52,8 @@ class GatewayConfig:
     tls_key: str | None = None
     tls_ca_cert: str | None = None
     client_cert_mode: str = "none"
+    mtls_source: str = "direct"
+    trusted_proxy_cidrs: frozenset[str] = field(default_factory=frozenset)
     request_timeout: float = 30.0
     enable_http3: bool = False
     grpc_enabled: bool = False
@@ -97,6 +101,31 @@ class GatewayConfig:
                 "(Python's grpc.aio has no CERT_OPTIONAL equivalent — require_client_auth is binary); "
                 "use 'required' or 'none' for a gateway with grpc_enabled=True"
             )
+
+        if self.mtls_source not in _MTLS_SOURCES:
+            raise ConfigurationError(
+                f"mtls_source={self.mtls_source!r} is invalid; choose from {sorted(_MTLS_SOURCES)}"
+            )
+        if self.mtls_source == "proxy_header":
+            if not self.trusted_proxy_cidrs:
+                raise ConfigurationError(
+                    "mtls_source='proxy_header' requires a non-empty trusted_proxy_cidrs"
+                )
+            for cidr in self.trusted_proxy_cidrs:
+                try:
+                    ipaddress.ip_network(cidr, strict=False)
+                except ValueError as exc:
+                    raise ConfigurationError(
+                        f"trusted_proxy_cidrs entry {cidr!r} is invalid"
+                    ) from exc
+            if self.client_cert_mode != "none":
+                raise ConfigurationError(
+                    "client_cert_mode must be 'none' when mtls_source='proxy_header' (HTTP would "
+                    "otherwise demand a direct-TLS client cert AND trust a proxy-forwarded one "
+                    "simultaneously — contradictory). If this gateway also needs grpc_enabled with "
+                    "direct required mTLS, run gRPC on a separate HTTPGateway instance with "
+                    "client_cert_mode='required' and mtls_source left at its default."
+                )
 
         # Once any gateway auth is configured, default docs off unless the operator
         # explicitly opted in — don't expose the API surface behind auth (M4).
@@ -176,6 +205,22 @@ class HTTPGateway(AgentProcess):
         if _JWT_MIDDLEWARE_PATH in self._configured_middleware_paths():
             self._jwt_verifier = JwtVerifier.from_settings(settings)
 
+        if self._gw_config.mtls_source == "proxy_header":
+            # D8: cryptography backs the DER->DN extractor; a missing dependency must
+            # fail startup loudly (like the eager JwtVerifier build above), never be
+            # masked as a per-request 401 by the extractor's catch-and-return-None.
+            _load_x509()
+            # D9: proxy_header mode extracts a client cert every request, but only
+            # require_client_cert authorizes on it — omitting that middleware yields a
+            # fully open gateway with no signal (the R3-M1 failure shape). Refuse.
+            if _MTLS_MIDDLEWARE_PATH not in self._configured_middleware_paths():
+                raise ConfigurationError(
+                    "mtls_source='proxy_header' is configured but "
+                    "civitas.gateway.mtls.require_client_cert is not in middleware — the "
+                    "extracted certificate would never be authorized; add it to middleware "
+                    "or remove mtls_source"
+                )
+
         # D10: JWT auto-inherits onto gRPC (D6), but a bearer token over an insecure
         # (plaintext) gRPC port ships the credential in the clear — refuse to start.
         if self._gw_config.grpc_enabled and self._jwt_verifier is not None:
@@ -198,16 +243,24 @@ class HTTPGateway(AgentProcess):
                 [r["path"] for r in self._gw_config.ws_routes],
             )
 
-        uv_config = uvicorn.Config(
-            app=asgi_app,
-            host=self._gw_config.host,
-            port=self._gw_config.port,
-            log_level="warning",
-            ssl_certfile=self._gw_config.tls_cert,
-            ssl_keyfile=self._gw_config.tls_key,
-            ssl_ca_certs=self._gw_config.tls_ca_cert,
-            ssl_cert_reqs=_CERT_REQS[self._gw_config.client_cert_mode],
-        )
+        uv_kwargs: dict[str, Any] = {
+            "app": asgi_app,
+            "host": self._gw_config.host,
+            "port": self._gw_config.port,
+            "log_level": "warning",
+            "ssl_certfile": self._gw_config.tls_cert,
+            "ssl_keyfile": self._gw_config.tls_key,
+            "ssl_ca_certs": self._gw_config.tls_ca_cert,
+            "ssl_cert_reqs": _CERT_REQS[self._gw_config.client_cert_mode],
+        }
+        if self._gw_config.mtls_source == "proxy_header":
+            # B1 (design D2): civitas owns proxy_headers so uvicorn's
+            # ProxyHeadersMiddleware can't rewrite scope["client"] from a
+            # client-supplied X-Forwarded-For — the trusted_proxy_cidrs peer-IP check
+            # in _client_cert_from_headers must key on the true TCP peer, not a
+            # spoofable forwarded value. direct mode is left untouched (uvicorn default).
+            uv_kwargs["proxy_headers"] = False
+        uv_config = uvicorn.Config(**uv_kwargs)
         self._uvicorn_server = uvicorn.Server(uv_config)
         self._server_task = asyncio.create_task(
             self._uvicorn_server.serve(), name=f"gateway-{self.name}"
