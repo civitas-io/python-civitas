@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 
+@runtime_checkable
 class StateStore(Protocol):
     """Protocol for agent state persistence."""
 
@@ -18,6 +19,14 @@ class StateStore(Protocol):
 
     async def delete(self, agent_name: str) -> None:
         """Remove persisted state for an agent."""
+        ...
+
+    async def list_agents(self) -> list[str]:
+        """Return all agent names with persisted state."""
+        ...
+
+    async def close(self) -> None:
+        """Release resources held by the store (connections, file handles)."""
         ...
 
 
@@ -42,3 +51,10 @@ class InMemoryStateStore:
     async def delete(self, agent_name: str) -> None:
         """Remove state for an agent from memory."""
         self._data.pop(agent_name, None)
+
+    async def list_agents(self) -> list[str]:
+        """Return all agent names with persisted state, sorted."""
+        return sorted(self._data.keys())
+
+    async def close(self) -> None:
+        """No-op — in-memory store holds no external resources."""

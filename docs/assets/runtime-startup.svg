@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 680" width="560" height="680"
+     font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+      <polygon points="0 0, 7 2.5, 0 5" fill="#9CA3AF"/>
+    </marker>
+  </defs>
+
+  <text x="280" y="18" text-anchor="middle" font-size="11" font-weight="700" fill="#1F2937" letter-spacing="0.5">Runtime.start() — Initialization Sequence</text>
+
+  <!-- Group labels -->
+  <rect x="10" y="28" width="540" height="175" rx="6" fill="#EFF6FF" stroke="#BFDBFE" stroke-width="1"/>
+  <text x="20" y="43" font-size="8.5" font-weight="700" fill="#1D4ED8" letter-spacing="0.8">SETUP</text>
+
+  <rect x="10" y="215" width="540" height="100" rx="6" fill="#F0FDF4" stroke="#BBF7D0" stroke-width="1"/>
+  <text x="20" y="230" font-size="8.5" font-weight="700" fill="#15803D" letter-spacing="0.8">PLUGINS &amp; WIRING</text>
+
+  <rect x="10" y="328" width="540" height="165" rx="6" fill="#FFFBEB" stroke="#FDE68A" stroke-width="1"/>
+  <text x="20" y="343" font-size="8.5" font-weight="700" fill="#92400E" letter-spacing="0.8">TRANSPORT START</text>
+
+  <rect x="10" y="506" width="540" height="155" rx="6" fill="#F5F3FF" stroke="#DDD6FE" stroke-width="1"/>
+  <text x="20" y="521" font-size="8.5" font-weight="700" fill="#5B21B6" letter-spacing="0.8">SUPERVISION</text>
+
+  <!-- Step boxes, center x=280 -->
+
+  <!-- S1 -->
+  <rect x="80" y="50" width="400" height="30" rx="5" fill="white" stroke="#BFDBFE" stroke-width="1.5"/>
+  <text x="100" y="67" font-size="9.5" font-weight="600" fill="#1e3a5f">1.</text>
+  <text x="118" y="67" font-size="9.5" fill="#1e3a5f">Read configuration (YAML or constructor args)</text>
+
+  <!-- S2 -->
+  <rect x="80" y="90" width="400" height="30" rx="5" fill="white" stroke="#BFDBFE" stroke-width="1.5"/>
+  <text x="100" y="107" font-size="9.5" font-weight="600" fill="#1e3a5f">2.</text>
+  <text x="118" y="107" font-size="9.5" fill="#1e3a5f">Create Serializer (Msgpack default, JSON optional)</text>
+
+  <!-- S3 -->
+  <rect x="80" y="130" width="400" height="30" rx="5" fill="white" stroke="#BFDBFE" stroke-width="1.5"/>
+  <text x="100" y="147" font-size="9.5" font-weight="600" fill="#1e3a5f">3.</text>
+  <text x="118" y="147" font-size="9.5" fill="#1e3a5f">Create Tracer (SpanQueue + export backend)</text>
+
+  <!-- S4 -->
+  <rect x="80" y="170" width="400" height="30" rx="5" fill="white" stroke="#BFDBFE" stroke-width="1.5"/>
+  <text x="100" y="187" font-size="9.5" font-weight="600" fill="#1e3a5f">4–6.</text>
+  <text x="123" y="187" font-size="9.5" fill="#1e3a5f">Create Transport · Registry · MessageBus (wire together)</text>
+
+  <!-- Arrows in SETUP group -->
+  <line x1="280" y1="80" x2="280" y2="90" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="280" y1="120" x2="280" y2="130" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="280" y1="160" x2="280" y2="170" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- S7 -->
+  <rect x="80" y="236" width="400" height="30" rx="5" fill="white" stroke="#BBF7D0" stroke-width="1.5"/>
+  <text x="100" y="253" font-size="9.5" font-weight="600" fill="#15803D">7.</text>
+  <text x="118" y="253" font-size="9.5" fill="#15803D">Create plugin instances (ModelProvider, ToolRegistry, StateStore)</text>
+
+  <!-- S8 -->
+  <rect x="80" y="276" width="400" height="30" rx="5" fill="white" stroke="#BBF7D0" stroke-width="1.5"/>
+  <text x="100" y="293" font-size="9.5" font-weight="600" fill="#15803D">8–9.</text>
+  <text x="123" y="293" font-size="9.5" fill="#15803D">Inject dependencies · Register all agents in Registry</text>
+
+  <line x1="280" y1="266" x2="280" y2="276" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- S10 group -->
+  <rect x="80" y="350" width="400" height="30" rx="5" fill="white" stroke="#FDE68A" stroke-width="1.5"/>
+  <text x="100" y="367" font-size="9.5" font-weight="600" fill="#92400E">10.</text>
+  <text x="121" y="367" font-size="9.5" fill="#92400E">Start Transport (bind sockets / connect to NATS)</text>
+
+  <rect x="80" y="390" width="400" height="24" rx="5" fill="#FFFBEB" stroke="#FDE68A" stroke-width="1"/>
+  <text x="100" y="406" font-size="9" fill="#92400E">10a. Subscribe each agent to its transport address</text>
+
+  <rect x="80" y="422" width="400" height="24" rx="5" fill="#FFFBEB" stroke="#FDE68A" stroke-width="1"/>
+  <text x="100" y="438" font-size="9" fill="#92400E">10b. Subscribe to _agency.register and _agency.deregister</text>
+
+  <rect x="80" y="454" width="400" height="24" rx="5" fill="#FFFBEB" stroke="#FDE68A" stroke-width="1"/>
+  <text x="100" y="470" font-size="9" fill="#92400E">10c. wait_ready() — ZMQ slow-joiner mitigation</text>
+
+  <line x1="280" y1="380" x2="280" y2="390" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="280" y1="414" x2="280" y2="422" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="280" y1="446" x2="280" y2="454" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- SETUP → plugins arrow -->
+  <line x1="280" y1="200" x2="280" y2="215" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <!-- plugins → transport arrow -->
+  <line x1="280" y1="306" x2="280" y2="328" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- S11 -->
+  <rect x="80" y="526" width="400" height="30" rx="5" fill="white" stroke="#DDD6FE" stroke-width="1.5"/>
+  <text x="100" y="543" font-size="9.5" font-weight="600" fill="#5B21B6">11.</text>
+  <text x="121" y="543" font-size="9.5" fill="#5B21B6">Start supervision tree (bottom-up, supervisors first)</text>
+
+  <!-- S12 -->
+  <rect x="80" y="566" width="400" height="30" rx="5" fill="white" stroke="#DDD6FE" stroke-width="1.5"/>
+  <text x="100" y="583" font-size="9.5" font-weight="600" fill="#5B21B6">12.</text>
+  <text x="121" y="583" font-size="9.5" fill="#5B21B6">Start all supervisors (heartbeat monitors)</text>
+
+  <!-- S13 READY -->
+  <rect x="140" y="612" width="280" height="36" rx="18" fill="#2d6a4f" stroke="#2d6a4f" stroke-width="2"/>
+  <text x="280" y="635" text-anchor="middle" font-size="12" font-weight="700" fill="white">✓ Runtime is READY</text>
+
+  <!-- transport → supervision arrow -->
+  <line x1="280" y1="478" x2="280" y2="506" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="280" y1="556" x2="280" y2="566" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="280" y1="596" x2="280" y2="612" stroke="#9CA3AF" stroke-width="2" marker-end="url(#arr)"/>
+
+</svg>

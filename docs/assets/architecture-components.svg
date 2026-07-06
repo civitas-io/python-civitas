@@ -1,0 +1,104 @@
+<svg viewBox="0 0 680 380" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#9CA3AF"/>
+    </marker>
+    <marker id="arr-dashed" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#9CA3AF"/>
+    </marker>
+  </defs>
+
+  <!-- Runtime section label -->
+  <rect x="10" y="10" width="660" height="110" rx="8" fill="#1e3a5f" opacity="0.12"/>
+  <text x="22" y="28" font-size="11" font-weight="bold" fill="#1e3a5f">Runtime</text>
+
+  <!-- Runtime box -->
+  <rect x="30" y="35" width="180" height="50" rx="6" fill="#1e3a5f"/>
+  <text x="120" y="56" font-size="11" font-weight="bold" fill="white" text-anchor="middle">Runtime</text>
+  <text x="120" y="72" font-size="9" fill="white" text-anchor="middle">Lifecycle orchestrator</text>
+
+  <!-- ComponentSet box -->
+  <rect x="250" y="35" width="180" height="50" rx="6" fill="#1e3a5f"/>
+  <text x="340" y="56" font-size="11" font-weight="bold" fill="white" text-anchor="middle">ComponentSet</text>
+  <text x="340" y="72" font-size="9" fill="white" text-anchor="middle">Shared wiring</text>
+
+  <!-- Supervisor box -->
+  <rect x="470" y="35" width="180" height="50" rx="6" fill="#1e3a5f"/>
+  <text x="560" y="56" font-size="11" font-weight="bold" fill="white" text-anchor="middle">Supervisor</text>
+  <text x="560" y="72" font-size="9" fill="white" text-anchor="middle">Fault tolerance tree</text>
+
+  <!-- Runtime → ComponentSet -->
+  <line x1="210" y1="60" x2="248" y2="60" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <!-- Runtime → Supervisor -->
+  <path d="M 120 85 L 120 100 L 560 100 L 560 87" stroke="#9CA3AF" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+
+  <!-- Infrastructure section label -->
+  <rect x="10" y="130" width="660" height="140" rx="8" fill="#6b4c11" opacity="0.10"/>
+  <text x="22" y="148" font-size="11" font-weight="bold" fill="#6b4c11">Infrastructure</text>
+
+  <!-- Transport -->
+  <rect x="30" y="155" width="140" height="45" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="100" y="174" font-size="11" font-weight="bold" fill="#374151" text-anchor="middle">Transport</text>
+  <text x="100" y="190" font-size="9" fill="#374151" text-anchor="middle">InProcess / ZMQ / NATS</text>
+
+  <!-- Registry -->
+  <rect x="200" y="155" width="140" height="45" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="270" y="174" font-size="11" font-weight="bold" fill="#374151" text-anchor="middle">Registry</text>
+  <text x="270" y="190" font-size="9" fill="#374151" text-anchor="middle">Name → address map</text>
+
+  <!-- Serializer -->
+  <rect x="370" y="155" width="140" height="45" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="440" y="174" font-size="11" font-weight="bold" fill="#374151" text-anchor="middle">Serializer</text>
+  <text x="440" y="190" font-size="9" fill="#374151" text-anchor="middle">Msgpack / JSON</text>
+
+  <!-- Tracer -->
+  <rect x="30" y="215" width="140" height="45" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="100" y="234" font-size="11" font-weight="bold" fill="#374151" text-anchor="middle">Tracer</text>
+  <text x="100" y="250" font-size="9" fill="#374151" text-anchor="middle">Span emitter + queue</text>
+
+  <!-- MessageBus -->
+  <rect x="200" y="215" width="140" height="45" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="270" y="234" font-size="11" font-weight="bold" fill="#374151" text-anchor="middle">MessageBus</text>
+  <text x="270" y="250" font-size="9" fill="#374151" text-anchor="middle">Routing + serialization</text>
+
+  <!-- StateStore -->
+  <rect x="370" y="215" width="140" height="45" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="440" y="234" font-size="11" font-weight="bold" fill="#374151" text-anchor="middle">StateStore</text>
+  <text x="440" y="250" font-size="9" fill="#374151" text-anchor="middle">Checkpoint persistence</text>
+
+  <!-- ComponentSet → Transport, Registry, Serializer, Tracer, StateStore, MessageBus -->
+  <line x1="340" y1="85" x2="100" y2="153" stroke="#9CA3AF" stroke-width="1.2" marker-end="url(#arr)"/>
+  <line x1="340" y1="85" x2="270" y2="153" stroke="#9CA3AF" stroke-width="1.2" marker-end="url(#arr)"/>
+  <line x1="340" y1="85" x2="440" y2="153" stroke="#9CA3AF" stroke-width="1.2" marker-end="url(#arr)"/>
+  <line x1="340" y1="85" x2="100" y2="213" stroke="#9CA3AF" stroke-width="1.2" marker-end="url(#arr)"/>
+  <line x1="340" y1="85" x2="270" y2="213" stroke="#9CA3AF" stroke-width="1.2" marker-end="url(#arr)"/>
+  <line x1="340" y1="85" x2="440" y2="213" stroke="#9CA3AF" stroke-width="1.2" marker-end="url(#arr)"/>
+
+  <!-- MessageBus → Transport, Registry, Serializer, Tracer -->
+  <line x1="200" y1="237" x2="142" y2="185" stroke="#9CA3AF" stroke-width="1.2" marker-end="url(#arr)" stroke-dasharray="4,3"/>
+  <line x1="260" y1="215" x2="265" y2="202" stroke="#9CA3AF" stroke-width="1.2" marker-end="url(#arr)" stroke-dasharray="4,3"/>
+  <line x1="320" y1="237" x2="368" y2="195" stroke="#9CA3AF" stroke-width="1.2" marker-end="url(#arr)" stroke-dasharray="4,3"/>
+  <line x1="240" y1="237" x2="142" y2="245" stroke="#9CA3AF" stroke-width="1.2" marker-end="url(#arr)" stroke-dasharray="4,3"/>
+
+  <!-- Agents section label -->
+  <rect x="10" y="282" width="660" height="88" rx="8" fill="#2d6a4f" opacity="0.12"/>
+  <text x="22" y="300" font-size="11" font-weight="bold" fill="#2d6a4f">Agents</text>
+
+  <!-- AgentProcess 1 -->
+  <rect x="160" y="308" width="160" height="50" rx="6" fill="#2d6a4f"/>
+  <text x="240" y="329" font-size="11" font-weight="bold" fill="white" text-anchor="middle">AgentProcess</text>
+  <text x="240" y="346" font-size="9" fill="white" text-anchor="middle">mailbox + event loop</text>
+
+  <!-- AgentProcess 2 -->
+  <rect x="360" y="308" width="160" height="50" rx="6" fill="#2d6a4f"/>
+  <text x="440" y="329" font-size="11" font-weight="bold" fill="white" text-anchor="middle">AgentProcess</text>
+  <text x="440" y="346" font-size="9" fill="white" text-anchor="middle">mailbox + event loop</text>
+
+  <!-- Supervisor → AgentProcess 1 and 2 -->
+  <path d="M 560 87 L 560 295 L 242 295 L 242 306" stroke="#9CA3AF" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M 560 87 L 560 295 L 440 295 L 440 306" stroke="#9CA3AF" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+
+  <!-- ComponentSet → AgentProcess inject (dashed) -->
+  <path d="M 340 85 L 340 290 L 300 290 L 300 306" stroke="#9CA3AF" stroke-width="1.2" fill="none" stroke-dasharray="5,3" marker-end="url(#arr)"/>
+  <text x="305" y="287" font-size="8" fill="#9CA3AF">inject</text>
+</svg>

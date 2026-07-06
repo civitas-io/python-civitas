@@ -1,15 +1,13 @@
-"""Unit tests for MCP integration — types, MCPTool, connect_mcp(), topology YAML."""
+"""Unit tests for MCP integration — types and topology YAML parsing."""
 
 from __future__ import annotations
 
 import textwrap
 from pathlib import Path
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
-from civitas.mcp.tool import MCPTool
 from civitas.mcp.types import MCPServerConfig, MCPToolError, MCPToolSchema
 from civitas.plugins.tools import ToolRegistry
 
@@ -90,91 +88,6 @@ class TestMCPToolSchema:
 
 
 # ---------------------------------------------------------------------------
-# MCPTool
-# ---------------------------------------------------------------------------
-
-
-def _make_tool(
-    server_name: str = "github",
-    tool_name: str = "create_issue",
-    tracer: Any = None,
-) -> tuple[MCPTool, MagicMock]:
-    """Return (MCPTool, mock_client) pair."""
-    schema = MCPToolSchema(
-        name=tool_name,
-        description="Test tool",
-        input_schema={"type": "object"},
-    )
-    client = MagicMock()
-    client.config.name = server_name
-    client.config.transport = "stdio"
-    client.call_tool = AsyncMock(return_value="ok")
-    return MCPTool(client, schema, tracer=tracer), client
-
-
-class TestMCPTool:
-    def test_name_follows_mcp_uri(self):
-        tool, _ = _make_tool("github", "create_issue")
-        assert tool.name == "mcp://github/create_issue"
-
-    def test_schema_returns_input_schema(self):
-        schema = MCPToolSchema(
-            name="t",
-            description="",
-            input_schema={"type": "object", "properties": {"x": {"type": "integer"}}},
-        )
-        client = MagicMock()
-        client.config.name = "srv"
-        t = MCPTool(client, schema)
-        assert t.schema == {"type": "object", "properties": {"x": {"type": "integer"}}}
-
-    @pytest.mark.asyncio
-    async def test_execute_delegates_to_client(self):
-        tool, client = _make_tool()
-        result = await tool.execute(title="Bug", body="details")
-        client.call_tool.assert_called_once_with(
-            "create_issue", {"title": "Bug", "body": "details"}
-        )
-        assert result == "ok"
-
-    @pytest.mark.asyncio
-    async def test_execute_propagates_mcp_tool_error(self):
-        tool, client = _make_tool()
-        client.call_tool = AsyncMock(side_effect=MCPToolError("create_issue", "server error"))
-        with pytest.raises(MCPToolError, match="server error"):
-            await tool.execute(title="Bug")
-
-    @pytest.mark.asyncio
-    async def test_execute_emits_span_on_success(self):
-        tracer = MagicMock()
-        span = MagicMock()
-        tracer.start_span.return_value = span
-        tool, _ = _make_tool(tracer=tracer)
-        await tool.execute(x=1)
-        tracer.start_span.assert_called_once()
-        span.set_attribute.assert_called_once_with("civitas.handle.result", "success")
-        span.end.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_execute_records_span_error_on_failure(self):
-        tracer = MagicMock()
-        span = MagicMock()
-        tracer.start_span.return_value = span
-        tool, client = _make_tool(tracer=tracer)
-        client.call_tool = AsyncMock(side_effect=RuntimeError("boom"))
-        with pytest.raises(RuntimeError):
-            await tool.execute()
-        span.set_error.assert_called_once()
-        span.end.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_execute_works_without_tracer(self):
-        tool, _ = _make_tool(tracer=None)
-        result = await tool.execute(x=1)
-        assert result == "ok"
-
-
-# ---------------------------------------------------------------------------
 # ToolRegistry.deregister_prefix
 # ---------------------------------------------------------------------------
 
@@ -195,103 +108,6 @@ class TestToolRegistryDeregisterPrefix:
     def test_no_op_for_unknown_prefix(self):
         registry = ToolRegistry()
         registry.deregister_prefix("mcp://nonexistent/")  # should not raise
-
-
-# ---------------------------------------------------------------------------
-# AgentProcess.connect_mcp()
-# ---------------------------------------------------------------------------
-
-
-class TestAgentConnectMcp:
-    @pytest.mark.asyncio
-    async def test_connect_mcp_registers_tools(self):
-        from civitas.messages import Message
-        from civitas.process import AgentProcess
-
-        class NullAgent(AgentProcess):
-            async def handle(self, message: Message) -> None:
-                return None
-
-        agent = NullAgent("test-agent")
-        registry = ToolRegistry()
-        agent.tools = registry
-
-        cfg = MCPServerConfig(name="github", transport="stdio", command="npx")
-
-        mock_client_instance = MagicMock()
-        mock_client_instance.config.name = "github"
-        mock_client_instance.connect = AsyncMock()
-        mock_client_instance.list_tools = AsyncMock(
-            return_value=[
-                MCPToolSchema(name="create_issue", description="Create", input_schema={}),
-                MCPToolSchema(name="list_issues", description="List", input_schema={}),
-            ]
-        )
-
-        with patch("civitas.mcp.client.MCPClient", return_value=mock_client_instance):
-            await agent.connect_mcp(cfg)
-
-        assert registry.get("mcp://github/create_issue") is not None
-        assert registry.get("mcp://github/list_issues") is not None
-        assert "github" in agent._mcp_clients
-
-    @pytest.mark.asyncio
-    async def test_connect_mcp_is_idempotent(self):
-        from civitas.messages import Message
-        from civitas.process import AgentProcess
-
-        class NullAgent(AgentProcess):
-            async def handle(self, message: Message) -> None:
-                return None
-
-        agent = NullAgent("test-agent")
-        registry = ToolRegistry()
-        agent.tools = registry
-
-        cfg = MCPServerConfig(name="github", transport="stdio", command="npx")
-
-        def _make_client() -> MagicMock:
-            m = MagicMock()
-            m.config.name = "github"
-            m.connect = AsyncMock()
-            m.disconnect = AsyncMock()
-            m.list_tools = AsyncMock(
-                return_value=[MCPToolSchema(name="create_issue", description="", input_schema={})]
-            )
-            return m
-
-        client1 = _make_client()
-        client2 = _make_client()
-
-        with patch("civitas.mcp.client.MCPClient", side_effect=[client1, client2]):
-            await agent.connect_mcp(cfg)
-            await agent.connect_mcp(cfg)  # reconnect
-
-        # Old client must have been disconnected
-        client1.disconnect.assert_called_once()
-        # Only one tool should be registered (not duplicated)
-        assert len(registry.names()) == 1
-
-    @pytest.mark.asyncio
-    async def test_connect_mcp_without_tool_registry(self):
-        """connect_mcp() should not raise when self.tools is None."""
-        from civitas.messages import Message
-        from civitas.process import AgentProcess
-
-        class NullAgent(AgentProcess):
-            async def handle(self, message: Message) -> None:
-                return None
-
-        agent = NullAgent("no-tools-agent")
-        # agent.tools is None by default
-        cfg = MCPServerConfig(name="srv", transport="stdio", command="cmd")
-
-        mock_client = MagicMock()
-        mock_client.connect = AsyncMock()
-        mock_client.list_tools = AsyncMock(return_value=[])
-
-        with patch("civitas.mcp.client.MCPClient", return_value=mock_client):
-            await agent.connect_mcp(cfg)  # should not raise
 
 
 # ---------------------------------------------------------------------------

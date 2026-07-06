@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 220" width="400" height="220">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#9CA3AF"/>
+    </marker>
+  </defs>
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  </style>
+
+  <!-- Title -->
+  <text x="200" y="18" text-anchor="middle" font-size="11" fill="#374151" font-weight="600">ONE_FOR_ONE — only the crashed child restarts</text>
+
+  <!-- Supervisor box -->
+  <rect x="130" y="30" width="140" height="48" rx="8" fill="#1e3a5f"/>
+  <text x="200" y="51" text-anchor="middle" font-size="12" fill="white" font-weight="600">Supervisor</text>
+  <text x="200" y="67" text-anchor="middle" font-size="10" fill="white">ONE_FOR_ONE</text>
+
+  <!-- Lines from supervisor to agents -->
+  <line x1="80" y1="78" x2="80" y2="130" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="200" y1="78" x2="200" y2="130" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="320" y1="78" x2="320" y2="130" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Connector line from supervisor bottom to three points -->
+  <line x1="200" y1="78" x2="80" y2="100" stroke="#9CA3AF" stroke-width="1.5"/>
+  <line x1="200" y1="78" x2="200" y2="100" stroke="#9CA3AF" stroke-width="1.5"/>
+  <line x1="200" y1="78" x2="320" y2="100" stroke="#9CA3AF" stroke-width="1.5"/>
+
+  <!-- Agent A box (running) -->
+  <rect x="20" y="130" width="120" height="52" rx="8" fill="#2d6a4f"/>
+  <text x="80" y="152" text-anchor="middle" font-size="12" fill="white" font-weight="600">agent-a</text>
+  <text x="80" y="168" text-anchor="middle" font-size="10" fill="white">✓ running</text>
+
+  <!-- Agent B box (crashed) -->
+  <rect x="140" y="130" width="120" height="52" rx="8" fill="#7f1d1d"/>
+  <text x="200" y="149" text-anchor="middle" font-size="12" fill="white" font-weight="600">agent-b</text>
+  <text x="200" y="163" text-anchor="middle" font-size="10" fill="white">✗ crashed</text>
+  <text x="200" y="176" text-anchor="middle" font-size="10" fill="white">↻ restarting</text>
+
+  <!-- Agent C box (running) -->
+  <rect x="260" y="130" width="120" height="52" rx="8" fill="#2d6a4f"/>
+  <text x="320" y="152" text-anchor="middle" font-size="12" fill="white" font-weight="600">agent-c</text>
+  <text x="320" y="168" text-anchor="middle" font-size="10" fill="white">✓ running</text>
+</svg>

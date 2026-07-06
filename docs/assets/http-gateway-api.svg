@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 360" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#9CA3AF"/>
+    </marker>
+    <marker id="arr-dash" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#9CA3AF"/>
+    </marker>
+  </defs>
+
+  <!-- Column headers -->
+  <text x="175" y="16" text-anchor="middle" font-size="10" font-weight="700" fill="#6B7280" letter-spacing="0.5">HTTP BOUNDARY</text>
+  <text x="555" y="16" text-anchor="middle" font-size="10" font-weight="700" fill="#6B7280" letter-spacing="0.5">CIVITAS BUS</text>
+
+  <!-- Left column: HTTP boundary -->
+  <!-- Incoming request -->
+  <rect x="70" y="26" width="210" height="32" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="175" y="46" text-anchor="middle" font-size="11" font-weight="600" fill="#374151">Incoming request</text>
+
+  <line x1="175" y1="58" x2="175" y2="74" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Middleware chain -->
+  <rect x="70" y="75" width="210" height="40" rx="6" fill="#1e3a5f"/>
+  <text x="175" y="91" text-anchor="middle" font-size="11" font-weight="600" fill="white">Middleware chain</text>
+  <text x="175" y="107" text-anchor="middle" font-size="9" fill="#93c5fd">auth · logging · rate-limit</text>
+
+  <line x1="175" y1="115" x2="175" y2="131" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Request validation -->
+  <rect x="70" y="132" width="210" height="40" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="175" y="148" text-anchor="middle" font-size="11" font-weight="600" fill="#374151">Request validation</text>
+  <text x="175" y="164" text-anchor="middle" font-size="9" fill="#6B7280">Pydantic schema</text>
+
+  <line x1="175" y1="172" x2="175" y2="188" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- HTTPGateway -->
+  <rect x="70" y="189" width="210" height="40" rx="6" fill="#1e3a5f"/>
+  <text x="175" y="205" text-anchor="middle" font-size="11" font-weight="600" fill="white">HTTPGateway</text>
+  <text x="175" y="221" text-anchor="middle" font-size="9" fill="#93c5fd">route table</text>
+
+  <line x1="175" y1="229" x2="175" y2="245" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Response validation -->
+  <rect x="70" y="246" width="210" height="40" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="175" y="262" text-anchor="middle" font-size="11" font-weight="600" fill="#374151">Response validation</text>
+  <text x="175" y="278" text-anchor="middle" font-size="9" fill="#6B7280">Pydantic schema</text>
+
+  <line x1="175" y1="286" x2="175" y2="302" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- HTTP response -->
+  <rect x="70" y="303" width="210" height="32" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="175" y="323" text-anchor="middle" font-size="11" font-weight="600" fill="#374151">HTTP response</text>
+
+  <!-- Right column: Civitas bus -->
+  <!-- MessageBus -->
+  <rect x="450" y="75" width="210" height="40" rx="6" fill="#6b4c11"/>
+  <text x="555" y="91" text-anchor="middle" font-size="11" font-weight="600" fill="white">MessageBus</text>
+  <text x="555" y="107" text-anchor="middle" font-size="9" fill="#fde68a">routes all messages</text>
+
+  <line x1="555" y1="115" x2="555" y2="131" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- GenServer / AgentProcess -->
+  <rect x="450" y="132" width="210" height="40" rx="6" fill="#2d6a4f"/>
+  <text x="555" y="148" text-anchor="middle" font-size="11" font-weight="600" fill="white">GenServer / AgentProcess</text>
+  <text x="555" y="164" text-anchor="middle" font-size="9" fill="#a7f3d0">handles message</text>
+
+  <!-- Horizontal: HTTPGateway → MessageBus -->
+  <line x1="280" y1="209" x2="448" y2="115" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="370" y="148" text-anchor="middle" font-size="9" fill="#374151">call() / cast()</text>
+
+  <!-- Reply path: GenServer → Bus → Validation -->
+  <line x1="450" y1="152" x2="310" y2="200" stroke="#9CA3AF" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <text x="370" y="193" text-anchor="middle" font-size="8" fill="#9CA3AF">reply</text>
+
+  <!-- Side arrows: Middleware → Response (rejection) -->
+  <line x1="68" y1="95" x2="50" y2="95" stroke="#9CA3AF" stroke-width="1" marker-end="url(#arr)"/>
+  <path d="M 50 95 Q 30 95 30 319" stroke="#9CA3AF" stroke-width="1" fill="none" stroke-dasharray="3,3"/>
+  <line x1="30" y1="319" x2="68" y2="319" stroke="#9CA3AF" stroke-width="1" marker-end="url(#arr)"/>
+  <text x="14" y="210" text-anchor="middle" font-size="8" fill="#DC2626" transform="rotate(-90 14 210)">401/403 on rejection</text>
+
+  <!-- Side arrows: Validation → Response (schema error) -->
+  <line x1="68" y1="152" x2="42" y2="152" stroke="#9CA3AF" stroke-width="1" marker-end="url(#arr)"/>
+  <!-- (shares the left rail above) -->
+  <text x="54" y="148" text-anchor="middle" font-size="7" fill="#DC2626">422</text>
+
+  <!-- DOCS box (bottom right) -->
+  <rect x="450" y="290" width="210" height="40" rx="6" fill="#F9FAFB" stroke="#D1D5DB" stroke-dasharray="5,3"/>
+  <text x="555" y="306" text-anchor="middle" font-size="10" font-weight="600" fill="#374151">GET /docs</text>
+  <text x="555" y="320" text-anchor="middle" font-size="10" fill="#374151">GET /openapi.json</text>
+  <line x1="450" y1="310" x2="286" y2="215" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <text x="390" y="280" text-anchor="middle" font-size="8" fill="#9CA3AF">introspects route table</text>
+</svg>

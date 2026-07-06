@@ -393,3 +393,61 @@ def test_tracer_new_span_id_returns_hex_string() -> None:
     sid = tracer.new_span_id()
     assert isinstance(sid, str)
     assert len(sid) > 0
+
+
+# ---------------------------------------------------------------------------
+# Tracer — span_queue makes Path A/Path B mutually exclusive (FD-09)
+# ---------------------------------------------------------------------------
+
+
+def test_tracer_with_span_queue_skips_direct_provider() -> None:
+    """Providing span_queue skips the direct TracerProvider path entirely."""
+    queue = SpanQueue()
+    tracer = Tracer(span_queue=queue)
+    assert tracer._use_otel is False
+    assert tracer._provider is None
+    assert tracer._otel_tracer is None
+    assert tracer._console_fallback is False
+
+
+def test_tracer_without_span_queue_unchanged() -> None:
+    """Providing no span_queue behaves exactly as before (default path)."""
+    tracer = Tracer()
+    assert tracer._span_queue is None
+    # _console_fallback / _use_otel depend on whether opentelemetry-sdk is
+    # installed in this environment — just confirm the queue path was skipped.
+    assert tracer._use_otel or tracer._console_fallback
+
+
+def test_tracer_with_span_queue_pushes_completed_spans() -> None:
+    """Spans still flow to the queue when the direct provider path is skipped."""
+    queue = SpanQueue()
+    tracer = Tracer(span_queue=queue)
+    span = tracer.start_span("civitas.test", trace_id="t1")
+    span.end()
+    assert queue.qsize() == 1
+
+
+# ---------------------------------------------------------------------------
+# Tracer — console fallback log output
+# ---------------------------------------------------------------------------
+
+
+def test_end_llm_span_console_fallback_logs(caplog: pytest.LogCaptureFixture) -> None:
+    """end_llm_span() emits a debug log line when _console_fallback is True."""
+    tracer = Tracer()
+    tracer._console_fallback = True
+    span = tracer.start_llm_span("gpt-4", trace_id="trace-llm")
+    with caplog.at_level(logging.DEBUG, logger="civitas.observability.tracer"):
+        tracer.end_llm_span(span, tokens_in=10, tokens_out=20, cost_usd=0.001)
+    assert any("[llm]" in r.message for r in caplog.records)
+
+
+def test_end_tool_span_console_fallback_logs(caplog: pytest.LogCaptureFixture) -> None:
+    """end_tool_span() emits a debug log line when _console_fallback is True."""
+    tracer = Tracer()
+    tracer._console_fallback = True
+    span = tracer.start_tool_span("calculator", trace_id="trace-tool")
+    with caplog.at_level(logging.DEBUG, logger="civitas.observability.tracer"):
+        tracer.end_tool_span(span, status="ok")
+    assert any("[tool]" in r.message for r in caplog.records)

@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 380" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#9CA3AF"/>
+    </marker>
+  </defs>
+
+  <text x="430" y="22" text-anchor="middle" font-size="11" font-weight="700" fill="#6B7280" letter-spacing="0.5">MEDICUS HERO DEMO — supervision keeps it alive, Medicus proposes the fix (P0+P1)</text>
+
+  <!-- Participants -->
+  <rect x="30" y="34" width="100" height="36" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="80" y="52" text-anchor="middle" font-size="11" font-weight="600" fill="#374151">Client</text>
+  <text x="80" y="65" text-anchor="middle" font-size="8" fill="#6B7280">via gateway</text>
+
+  <rect x="195" y="34" width="110" height="36" rx="6" fill="#2d6a4f"/>
+  <text x="250" y="52" text-anchor="middle" font-size="11" font-weight="600" fill="white">pricing</text>
+  <text x="250" y="65" text-anchor="middle" font-size="8" fill="#a7f3d0">buggy agent</text>
+
+  <rect x="375" y="34" width="110" height="36" rx="6" fill="#6b4c11"/>
+  <text x="430" y="52" text-anchor="middle" font-size="11" font-weight="600" fill="white">Supervisor</text>
+  <text x="430" y="65" text-anchor="middle" font-size="8" fill="#fde68a">ONE_FOR_ONE</text>
+
+  <rect x="555" y="34" width="110" height="36" rx="6" fill="#1e3a5f"/>
+  <text x="610" y="52" text-anchor="middle" font-size="11" font-weight="600" fill="white">Medicus</text>
+  <text x="610" y="65" text-anchor="middle" font-size="8" fill="#93c5fd">healer (static)</text>
+
+  <rect x="735" y="34" width="100" height="36" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="785" y="52" text-anchor="middle" font-size="11" font-weight="600" fill="#374151">Human</text>
+  <text x="785" y="65" text-anchor="middle" font-size="8" fill="#6B7280">reviews PR</text>
+
+  <!-- Lifelines -->
+  <line x1="80" y1="70" x2="80" y2="362" stroke="#D1D5DB" stroke-width="1" stroke-dasharray="4,4"/>
+  <line x1="250" y1="70" x2="250" y2="362" stroke="#D1D5DB" stroke-width="1" stroke-dasharray="4,4"/>
+  <line x1="430" y1="70" x2="430" y2="362" stroke="#D1D5DB" stroke-width="1" stroke-dasharray="4,4"/>
+  <line x1="610" y1="70" x2="610" y2="362" stroke="#D1D5DB" stroke-width="1" stroke-dasharray="4,4"/>
+  <line x1="785" y1="70" x2="785" y2="362" stroke="#D1D5DB" stroke-width="1" stroke-dasharray="4,4"/>
+
+  <!-- 1 order -->
+  <line x1="80" y1="94" x2="244" y2="94" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="162" y="88" text-anchor="middle" font-size="9" fill="#374151">1 · order (100% discount)</text>
+
+  <!-- 2a crash -->
+  <line x1="250" y1="122" x2="424" y2="122" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="5,3" marker-end="url(#arr)"/>
+  <text x="340" y="116" text-anchor="middle" font-size="9" fill="#374151">2 · crash</text>
+  <!-- 2b restart -->
+  <line x1="430" y1="144" x2="256" y2="144" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="343" y="159" text-anchor="middle" font-size="8" fill="#9CA3AF">restart (backoff) — alive, but still buggy</text>
+
+  <!-- 3 recurs -->
+  <line x1="80" y1="186" x2="244" y2="186" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="5,3" marker-end="url(#arr)"/>
+  <text x="162" y="180" text-anchor="middle" font-size="9" fill="#374151">3 · same input → crashes again</text>
+
+  <!-- 4 medicus fires -->
+  <line x1="430" y1="216" x2="604" y2="216" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="5,3" marker-end="url(#arr)"/>
+  <text x="518" y="210" text-anchor="middle" font-size="9" fill="#374151">4 · on_crash + metric + failing span</text>
+
+  <!-- 5 diagnose + verify (self box on Medicus) -->
+  <rect x="512" y="236" width="196" height="46" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="610" y="255" text-anchor="middle" font-size="9" font-weight="600" fill="#374151">5 · diagnose + verify (sandbox)</text>
+  <text x="610" y="270" text-anchor="middle" font-size="8" fill="#6B7280">read code · LLM · test red → green + suite</text>
+
+  <!-- 6 open PR -->
+  <line x1="610" y1="306" x2="779" y2="306" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="697" y="300" text-anchor="middle" font-size="9" fill="#374151">6 · open PR (fix + trace evidence)</text>
+
+  <!-- 7 merge -> redeploy -->
+  <line x1="785" y1="340" x2="256" y2="340" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="520" y="334" text-anchor="middle" font-size="9" fill="#374151">7 · human merges → orchestrator redeploys → healthy</text>
+</svg>

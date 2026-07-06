@@ -6,19 +6,7 @@ The transport is the delivery layer underneath the MessageBus. Civitas provides 
 
 ## The scaling ladder
 
-```mermaid
-graph LR
-    L1["Level 1\nInProcessTransport\nOne Python process\nAsyncio queues"]
-    L2["Level 2\nZMQTransport\nMultiple OS processes\nSame machine"]
-    L3["Level 3\nNATSTransport\nMultiple machines\nDistributed"]
-
-    L1 -->|"change transport in topology.yaml"| L2
-    L2 -->|"change transport in topology.yaml"| L3
-
-    style L1 fill:#1e3a5f,color:#fff
-    style L2 fill:#2d6a4f,color:#fff
-    style L3 fill:#4a1942,color:#fff
-```
+![Transport Tiers](assets/transport-tiers.svg)
 
 The agent code is byte-for-byte identical at every level. The `MessageBus` and `Registry` interfaces stay the same. Only the `transport:` block in your topology YAML changes.
 
@@ -60,14 +48,7 @@ Any class implementing these methods can be used as a transport. See [writing a 
 
 **Default for development and single-process deployments.**
 
-```mermaid
-graph TD
-    subgraph "Single Python process"
-        A1["AgentProcess A"] <-->|"asyncio Queue"| Bus["MessageBus"]
-        A2["AgentProcess B"] <-->|"asyncio Queue"| Bus
-        A3["AgentProcess C"] <-->|"asyncio Queue"| Bus
-    end
-```
+![InProcess Transport](assets/transport-inprocess.svg)
 
 Messages are delivered by placing serialized bytes into the recipient's asyncio queue. Despite being in-process, messages are still serialized through msgpack — this ensures that swapping to ZMQ or NATS never requires changing agent code.
 
@@ -112,23 +93,7 @@ transport:
 
 **Multi-process on a single machine.**
 
-```mermaid
-graph TD
-    subgraph "Process A (supervisor + main agents)"
-        A["Orchestrator\nSynthesizer\nWriter"]
-    end
-
-    subgraph "Proxy (started by Process A)"
-        P["ZMQ XSUB/XPUB\nForwarder"]
-    end
-
-    subgraph "Process B (worker)"
-        B["WebResearcher"]
-    end
-
-    A <-->|"PUB/SUB via tcp://127.0.0.1:5559-60"| P
-    B <-->|"PUB/SUB via tcp://127.0.0.1:5559-60"| P
-```
+![ZMQ Transport](assets/transport-zmq.svg)
 
 ZMQ uses an XSUB/XPUB proxy to bridge PUB/SUB across OS processes. One process starts the proxy; all other processes connect to it. Request-reply uses ephemeral PUB/SUB topics — the same pattern as InProcess, but over TCP sockets.
 
@@ -202,28 +167,7 @@ The proxy runs in a background daemon thread. It can handle millions of messages
 
 **Distributed across multiple machines.**
 
-```mermaid
-graph TD
-    subgraph "Machine A"
-        A["Orchestrator\nSynthesizer\nWriter"]
-    end
-
-    subgraph "NATS Server"
-        N["NATS\nagency.agent.*"]
-    end
-
-    subgraph "Machine B"
-        B["WebResearcher"]
-    end
-
-    subgraph "Machine C"
-        C["Another Worker"]
-    end
-
-    A <-->|"nats://host:4222"| N
-    B <-->|"nats://host:4222"| N
-    C <-->|"nats://host:4222"| N
-```
+![NATS Transport](assets/transport-nats.svg)
 
 NATS maps each agent address to a subject under the `civitas.agent.` prefix. For example, an agent named `researcher` subscribes to `civitas.agent.researcher`. Request-reply uses the same ephemeral subscription pattern as the other transports.
 
@@ -384,6 +328,9 @@ The only other difference between levels is how you launch processes — via the
 | **At-least-once** | No | No | Yes (JetStream) |
 | **HA / clustering** | No | No | Yes (NATS cluster) |
 | **Production-ready** | Small workloads | Single-node | Multi-node |
+
+All three transports carry agent-to-agent [streaming](streaming.md) (`AgentProcess.stream()`) with no
+transport-specific code.
 
 ---
 
