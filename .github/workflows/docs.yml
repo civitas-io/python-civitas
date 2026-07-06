@@ -12,7 +12,7 @@ jobs:
       contents: write   # needed to push to gh-pages branch
 
     steps:
-      - uses: actions/checkout@v4.2.2
+      - uses: actions/checkout@v6.0.2
         with:
           fetch-depth: 0   # full history for git-revision-date plugin if used
 
