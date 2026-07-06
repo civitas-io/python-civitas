@@ -10,11 +10,35 @@ a fresh ``Settings(env={...})`` to inject overrides without touching os.environ.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import os
 
 from civitas.errors import ConfigurationError
 
 _VALID_SERIALIZERS = frozenset({"msgpack", "json"})
+_STATE_KEY_BYTES = 32
+
+
+def decode_state_key(value: str) -> bytes:
+    """Decode a base64 state key into raw bytes, validating its length.
+
+    Args:
+        value: Base64-encoded 32-byte key (e.g. from ``CIVITAS_STATE_KEY``).
+
+    Raises:
+        ConfigurationError: If the value is not valid base64 or does not decode
+            to exactly 32 bytes.
+    """
+    try:
+        raw = base64.b64decode(value, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise ConfigurationError("State encryption key is not valid base64.") from exc
+    if len(raw) != _STATE_KEY_BYTES:
+        raise ConfigurationError(
+            f"State encryption key must decode to {_STATE_KEY_BYTES} bytes, got {len(raw)}."
+        )
+    return raw
 
 
 class SecretStr:
@@ -51,6 +75,8 @@ class Settings:
         openai_api_key:     OpenAI API key (masked in logs).
         gemini_api_key:     Google Gemini API key (masked in logs).
         fiddler_api_key:    Fiddler API key (masked in logs).
+        gateway_api_key:    Shared secret the gateway's require_api_key middleware
+                            requires from clients in the X-API-Key header (masked).
         nats_url:           NATS server URL for distributed transport.
     """
 
@@ -75,6 +101,50 @@ class Settings:
         self.openai_api_key = SecretStr(_env.get("OPENAI_API_KEY"))
         self.gemini_api_key = SecretStr(_env.get("GEMINI_API_KEY"))
         self.fiddler_api_key = SecretStr(_env.get("FIDDLER_API_KEY"))
+        self.gateway_api_key = SecretStr(_env.get("CIVITAS_GATEWAY_API_KEY"))
+
+        # Gateway JWT bearer auth (civitas[jwt]) — consumed by JwtVerifier.
+        self.jwt_jwks_url: str | None = _env.get("CIVITAS_JWT_JWKS_URL")
+        self.jwt_audience: str | None = _env.get("CIVITAS_JWT_AUDIENCE")
+        self.jwt_issuer: str | None = _env.get("CIVITAS_JWT_ISSUER")
+        raw_algorithms = _env.get("CIVITAS_JWT_ALGORITHMS", "")
+        self.jwt_algorithms: tuple[str, ...] = tuple(
+            a.strip() for a in raw_algorithms.split(",") if a.strip()
+        )
+        self.jwt_public_key = SecretStr(_env.get("CIVITAS_JWT_PUBLIC_KEY"))
+        self.jwt_secret = SecretStr(_env.get("CIVITAS_JWT_SECRET"))
+
+        # Encrypted state store key (civitas[encryption]) — base64 32-byte key.
+        self.state_key = SecretStr(_env.get("CIVITAS_STATE_KEY"))
+
+        # Gateway mTLS: exact-match allowlist of full client-cert subject DNs.
+        # Semicolon-separated (a DN itself contains commas, e.g. "CN=svc,O=Acme").
+        raw_dns = _env.get("CIVITAS_GATEWAY_MTLS_ALLOWED_DNS", "")
+        self.gateway_mtls_allowed_dns: frozenset[str] = frozenset(
+            d.strip() for d in raw_dns.split(";") if d.strip()
+        )
 
 
 settings = Settings()
+
+
+def load_state_key(env_var: str = "CIVITAS_STATE_KEY") -> bytes:
+    """Load and decode a state encryption key from the environment.
+
+    Read at call time (not from the frozen ``settings`` snapshot) so multi-process
+    workers and rotation keys named by the operator resolve correctly. Env access
+    is confined to this config module.
+
+    Args:
+        env_var: Name of the environment variable holding the base64 key.
+
+    Raises:
+        ConfigurationError: If the variable is unset or not a base64 32-byte key.
+    """
+    raw = settings.state_key.get() if env_var == "CIVITAS_STATE_KEY" else os.environ.get(env_var)
+    if not raw:
+        raise ConfigurationError(
+            f"Encrypted state store requires the {env_var} environment variable "
+            "(base64-encoded 32-byte key)."
+        )
+    return decode_state_key(raw)

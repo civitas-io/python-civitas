@@ -40,6 +40,9 @@ class InProcessTransport:
     async def subscribe(self, address: str, handler: Callable[[bytes], Awaitable[None]]) -> None:
         self._handlers[address] = handler
 
+    async def unsubscribe(self, address: str) -> None:
+        self._handlers.pop(address, None)
+
     async def publish(self, address: str, data: bytes) -> None:
         # Check if this is a reply to a pending request
         if address in self._reply_queues:

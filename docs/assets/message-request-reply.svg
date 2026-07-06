@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 320" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#9CA3AF"/>
+    </marker>
+    <marker id="arr-dash" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#9CA3AF"/>
+    </marker>
+  </defs>
+
+  <!-- Participant boxes -->
+  <!-- Caller agent -->
+  <rect x="30" y="16" width="110" height="36" rx="6" fill="#2d6a4f"/>
+  <text x="85" y="30" text-anchor="middle" font-size="11" font-weight="600" fill="white">Caller agent</text>
+  <text x="85" y="46" text-anchor="middle" font-size="9" fill="#a7f3d0">(sender)</text>
+
+  <!-- MessageBus -->
+  <rect x="195" y="16" width="110" height="36" rx="6" fill="#6b4c11"/>
+  <text x="250" y="30" text-anchor="middle" font-size="11" font-weight="600" fill="white">MessageBus</text>
+  <text x="250" y="46" text-anchor="middle" font-size="9" fill="#fde68a">routes messages</text>
+
+  <!-- Transport -->
+  <rect x="365" y="16" width="110" height="36" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="420" y="30" text-anchor="middle" font-size="11" font-weight="600" fill="#374151">Transport</text>
+  <text x="420" y="46" text-anchor="middle" font-size="9" fill="#6B7280">in-proc / network</text>
+
+  <!-- Recipient agent -->
+  <rect x="535" y="16" width="130" height="36" rx="6" fill="#2d6a4f"/>
+  <text x="600" y="30" text-anchor="middle" font-size="11" font-weight="600" fill="white">Recipient agent</text>
+  <text x="600" y="46" text-anchor="middle" font-size="9" fill="#a7f3d0">(handler)</text>
+
+  <!-- Vertical dashed lifelines -->
+  <line x1="85" y1="52" x2="85" y2="300" stroke="#D1D5DB" stroke-width="1" stroke-dasharray="4,4"/>
+  <line x1="250" y1="52" x2="250" y2="300" stroke="#D1D5DB" stroke-width="1" stroke-dasharray="4,4"/>
+  <line x1="420" y1="52" x2="420" y2="300" stroke="#D1D5DB" stroke-width="1" stroke-dasharray="4,4"/>
+  <line x1="600" y1="52" x2="600" y2="300" stroke="#D1D5DB" stroke-width="1" stroke-dasharray="4,4"/>
+
+  <!-- Step labels (left margin) -->
+  <text x="10" y="90" font-size="9" font-weight="700" fill="#6B7280">1</text>
+  <text x="10" y="125" font-size="9" font-weight="700" fill="#6B7280">2</text>
+  <text x="10" y="160" font-size="9" font-weight="700" fill="#6B7280">3</text>
+  <text x="10" y="195" font-size="9" font-weight="700" fill="#6B7280">4</text>
+  <text x="10" y="235" font-size="9" font-weight="700" fill="#6B7280">5</text>
+  <text x="10" y="275" font-size="9" font-weight="700" fill="#6B7280">6</text>
+
+  <!-- Step 1: Caller → Bus -->
+  <line x1="85" y1="86" x2="242" y2="86" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="165" y="80" text-anchor="middle" font-size="9" fill="#374151">ask(recipient, payload)</text>
+  <text x="165" y="96" text-anchor="middle" font-size="8" fill="#9CA3AF">generates correlation_id</text>
+
+  <!-- Step 2: Bus → Transport -->
+  <line x1="250" y1="121" x2="412" y2="121" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="333" y="115" text-anchor="middle" font-size="9" fill="#374151">publish(address, bytes, timeout)</text>
+  <text x="333" y="131" text-anchor="middle" font-size="8" fill="#9CA3AF">reply addr: _reply.{uuid}</text>
+
+  <!-- Step 3: Transport → Recipient -->
+  <line x1="420" y1="156" x2="592" y2="156" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="508" y="150" text-anchor="middle" font-size="9" fill="#374151">deliver to mailbox</text>
+  <text x="508" y="166" text-anchor="middle" font-size="8" fill="#9CA3AF">reply_to = "_reply.{uuid}"</text>
+
+  <!-- Step 4: Recipient → Bus -->
+  <line x1="600" y1="191" x2="258" y2="191" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="430" y="185" text-anchor="middle" font-size="9" fill="#374151">route(reply message)</text>
+  <text x="430" y="201" text-anchor="middle" font-size="8" fill="#9CA3AF">self.reply(payload) called</text>
+
+  <!-- Step 5: Bus → Transport -->
+  <line x1="250" y1="231" x2="412" y2="231" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="333" y="225" text-anchor="middle" font-size="9" fill="#374151">publish _reply.{uuid}</text>
+  <text x="333" y="241" text-anchor="middle" font-size="8" fill="#9CA3AF">ephemeral address</text>
+
+  <!-- Step 6: Transport → Caller -->
+  <line x1="420" y1="271" x2="93" y2="271" stroke="#9CA3AF" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr)"/>
+  <text x="253" y="265" text-anchor="middle" font-size="9" fill="#374151">reply_queue.get() unblocks</text>
+  <text x="253" y="281" text-anchor="middle" font-size="8" fill="#9CA3AF">ask() returns reply Message</text>
+</svg>

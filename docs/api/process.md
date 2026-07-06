@@ -13,11 +13,15 @@ See [Core Concepts](../concepts.md) and [Getting Started](../getting-started.md)
         - handle
         - on_error
         - on_stop
+        - on_child_terminated
         - send
         - ask
         - broadcast
         - reply
         - checkpoint
+        - spawn
+        - despawn
+        - stop
       show_source: true
 
 ---

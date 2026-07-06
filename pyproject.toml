@@ -7,7 +7,7 @@ packages = ["civitas"]
 
 [project]
 name = "civitas"
-version = "0.3.0"
+version = "0.7.1"
 description = "The production runtime for Python agents"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -26,32 +26,47 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "msgpack>=1.1",
+    "msgpack>=1.2.1",
     "pyyaml>=6.0",
     "typer>=0.12",
     "rich>=13",
 ]
 
 [project.urls]
-Homepage = "https://jerynmathew.github.io/python-civitas/"
-Repository = "https://github.com/jerynmathew/python-civitas"
-Documentation = "https://jerynmathew.github.io/python-civitas/"
-"Bug Tracker" = "https://github.com/jerynmathew/python-civitas/issues"
+Homepage = "https://civitas-io.github.io/python-civitas/"
+Repository = "https://github.com/civitas-io/python-civitas"
+Documentation = "https://civitas-io.github.io/python-civitas/"
+"Bug Tracker" = "https://github.com/civitas-io/python-civitas/issues"
 
 [project.optional-dependencies]
+# Runtime transports
+zmq       = ["pyzmq>=25"]
+nats      = ["nats-py>=2.6"]
+nkeys     = ["nats-py>=2.6", "nkeys>=0.2"]
+# HTTP gateway
+http      = ["uvicorn[standard]>=0.30", "pydantic>=2.0"]
+http3     = ["uvicorn[standard]>=0.30", "pydantic>=2.0", "aioquic>=1.0"]
+# gRPC gateway
+grpc      = [
+    "grpcio>=1.78,<2",
+    "grpcio-reflection>=1.78,<2",
+    "grpcio-health-checking>=1.78,<2",
+]
+# Gateway JWT bearer auth (PyJWT extra is 'crypto', which pulls in cryptography for RS256)
+jwt       = ["pyjwt[crypto]>=2.13"]
+# Observability (OTEL exporter backend)
 otel      = [
     "opentelemetry-sdk>=1.20",
     "opentelemetry-exporter-otlp-proto-grpc>=1.20",
 ]
-anthropic = ["anthropic>=0.20"]
-mcp       = ["mcp>=1.0"]
-openai    = ["openai>=1.0"]
-gemini    = ["google-generativeai>=0.8"]
-mistral   = ["mistralai>=1.0"]
-litellm   = ["litellm>=1.40"]
-zmq       = ["pyzmq>=25"]
-nats      = ["nats-py>=2.6"]
-fiddler   = ["fiddler-client>=3.0"]
+# Transport-level message signing
+security  = ["pynacl"]
+# Encrypted state store at rest (ChaCha20-Poly1305 AEAD)
+encryption = ["cryptography>=41"]
+# Performance — drop-in Rust-backed JSON (accelerates JsonSerializer)
+fast      = ["orjson>=3.10"]
+# Model providers, state stores, eval exporters, MCP, and framework adapters
+# have moved to civitas-contrib:  pip install civitas-contrib[anthropic,openai,...]
 dev       = [
     "pytest>=8",
     "pytest-asyncio>=0.23",
@@ -60,10 +75,19 @@ dev       = [
     "ruff>=0.4",
     "mypy>=1.10",
     "pre-commit>=3.7",
-    "anthropic>=0.20",
     "opentelemetry-sdk>=1.20",
     "opentelemetry-exporter-otlp-proto-grpc>=1.20",
     "types-pyyaml>=6.0.12",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.0",
+    "httpx>=0.27",
+    "pyjwt[crypto]>=2.13",
+    "grpcio>=1.78,<2",
+    "grpcio-reflection>=1.78,<2",
+    "grpcio-health-checking>=1.78,<2",
+    "grpcio-tools>=1.78,<2",
+    "orjson>=3.10",
+    "cryptography>=41",
 ]
 docs      = [
     "mkdocs-material>=9.5",
@@ -73,6 +97,11 @@ docs      = [
 
 [project.scripts]
 civitas = "civitas.cli:main"
+
+[dependency-groups]
+dev = [
+    "pynacl>=1.6.2",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -92,7 +121,7 @@ omit = [
     "*/civitas/plugins/gemini.py",
     "*/civitas/plugins/mistral.py",
     "*/civitas/plugins/litellm.py",
-    # Fiddler integration is a planned stub with no callable implementation yet
+    # Fiddler plugin stub (implementation is in civitas/eval/exporters.py)
     "*/civitas/plugins/fiddler.py",
     # SQLite store and tools — deferred to a dedicated plugin testing sprint
     "*/civitas/plugins/sqlite_store.py",
@@ -109,6 +138,10 @@ omit = [
     "*/civitas/mcp/server.py",
     # Entry point shim
     "*/civitas/__main__.py",
+    # HTTP/3 — requires aioquic which is not installed in the dev environment
+    "*/civitas/gateway/h3.py",
+    # Generated protobuf/gRPC stubs — machine-generated, not our code
+    "*/civitas/gateway/proto/*",
 ]
 
 [tool.coverage.report]
@@ -125,6 +158,8 @@ exclude_lines = [
 [tool.ruff]
 target-version = "py312"
 line-length = 100
+# Generated protobuf/gRPC stubs are machine-authored; don't lint or format them.
+extend-exclude = ["civitas/gateway/proto/"]
 
 [tool.ruff.lint]
 select = [
@@ -140,6 +175,8 @@ ignore = [
     # ASYNC109: timeout as a named parameter is intentional public API for ask()/request().
     # Callers pass it as a kwarg; using asyncio.timeout() internally is already done.
     "ASYNC109",
+    # B008: typer.Option() in function defaults is idiomatic Typer usage.
+    "B008",
 ]
 
 [tool.ruff.lint.isort]
@@ -155,8 +192,29 @@ warn_return_any = true
 warn_unused_ignores = true
 
 [[tool.mypy.overrides]]
-module = ["msgpack.*", "zmq.*", "nats.*", "litellm.*", "openai.*", "google", "google.*", "mistralai.*", "mcp.*"]
+module = ["msgpack.*", "zmq.*", "nats.*", "nkeys", "nkeys.*", "litellm.*", "openai.*", "google", "google.*", "mistralai.*", "mcp.*", "aioquic", "aioquic.*", "uvicorn", "uvicorn.*", "nacl", "nacl.*", "asyncpg", "asyncpg.*", "grpc", "grpc.*", "grpc_health.*", "grpc_reflection.*"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Generated protobuf/gRPC stubs — machine-generated, not authored to strict standards
+module = ["civitas.gateway.proto.*"]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+# civitas-contrib and fabrica are optional sibling packages — not installed in the core dev env
+module = ["civitas_contrib", "civitas_contrib.*", "fabrica", "fabrica.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Eval exporter SDKs: optional installs, no stubs bundled with the packages
+module = ["langfuse", "langfuse.*", "braintrust", "braintrust.*", "langsmith", "langsmith.*", "fiddler", "fiddler.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# OtlpSink calls internal opentelemetry SDK APIs whose typing varies across patch versions.
+# type: ignore comments here may be needed on some versions and unused on others.
+module = ["civitas.audit.sinks"]
+warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
 module = ["agents", "agents.*"]

@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 340" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#9CA3AF"/>
+    </marker>
+  </defs>
+
+  <!-- Column headers -->
+  <text x="90" y="16" text-anchor="middle" font-size="10" font-weight="700" fill="#6B7280" letter-spacing="0.5">EXTERNAL</text>
+  <text x="340" y="16" text-anchor="middle" font-size="10" font-weight="700" fill="#6B7280" letter-spacing="0.5">EDGE — SUPERVISED PROCESS</text>
+  <text x="580" y="16" text-anchor="middle" font-size="10" font-weight="700" fill="#6B7280" letter-spacing="0.5">CIVITAS BUS</text>
+
+  <!-- External clients (left column) -->
+  <rect x="20" y="48" width="140" height="32" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="90" y="68" text-anchor="middle" font-size="10" fill="#374151">HTTP/1.1 client</text>
+
+  <rect x="20" y="96" width="140" height="32" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="90" y="116" text-anchor="middle" font-size="10" fill="#374151">HTTP/2 client</text>
+
+  <rect x="20" y="168" width="140" height="32" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="90" y="188" text-anchor="middle" font-size="10" fill="#374151">HTTP/3 / QUIC client</text>
+
+  <rect x="20" y="240" width="140" height="32" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="90" y="260" text-anchor="middle" font-size="10" fill="#374151">gRPC client</text>
+
+  <!-- Edge / Center column -->
+  <!-- HTTPGateway -->
+  <rect x="220" y="120" width="240" height="44" rx="6" fill="#1e3a5f"/>
+  <text x="340" y="138" text-anchor="middle" font-size="11" font-weight="600" fill="white">HTTPGateway</text>
+  <text x="340" y="155" text-anchor="middle" font-size="9" fill="#93c5fd">supervised AgentProcess</text>
+
+  <!-- HTTP/1.1 + HTTP/2 handler -->
+  <rect x="220" y="48" width="240" height="44" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="340" y="64" text-anchor="middle" font-size="10" font-weight="600" fill="#374151">HTTP/1.1 + HTTP/2</text>
+  <text x="340" y="80" text-anchor="middle" font-size="9" fill="#6B7280">uvicorn ASGI</text>
+
+  <!-- HTTP/3 handler -->
+  <rect x="220" y="168" width="240" height="44" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="340" y="184" text-anchor="middle" font-size="10" font-weight="600" fill="#374151">HTTP/3 / QUIC</text>
+  <text x="340" y="200" text-anchor="middle" font-size="9" fill="#6B7280">aioquic</text>
+
+  <!-- gRPC server -->
+  <rect x="220" y="240" width="240" height="44" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="340" y="256" text-anchor="middle" font-size="10" font-weight="600" fill="#374151">gRPC server</text>
+  <text x="340" y="272" text-anchor="middle" font-size="9" fill="#6B7280">grpclib</text>
+
+  <!-- Right column: Civitas bus -->
+  <!-- MessageBus -->
+  <rect x="500" y="100" width="160" height="40" rx="6" fill="#6b4c11"/>
+  <text x="580" y="116" text-anchor="middle" font-size="11" font-weight="600" fill="white">MessageBus</text>
+  <text x="580" y="132" text-anchor="middle" font-size="9" fill="#fde68a">routes messages</text>
+
+  <!-- AgentProcess A -->
+  <rect x="500" y="172" width="160" height="40" rx="6" fill="#2d6a4f"/>
+  <text x="580" y="188" text-anchor="middle" font-size="11" font-weight="600" fill="white">AgentProcess A</text>
+  <text x="580" y="204" text-anchor="middle" font-size="9" fill="#a7f3d0">GenServer</text>
+
+  <!-- AgentProcess B -->
+  <rect x="500" y="240" width="160" height="40" rx="6" fill="#2d6a4f"/>
+  <text x="580" y="256" text-anchor="middle" font-size="11" font-weight="600" fill="white">AgentProcess B</text>
+  <text x="580" y="272" text-anchor="middle" font-size="9" fill="#a7f3d0">AgentProcess</text>
+
+  <!-- Arrows: Clients → Handlers -->
+  <!-- HTTP/1.1 → handler -->
+  <line x1="160" y1="64" x2="218" y2="64" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="188" y="58" text-anchor="middle" font-size="7" fill="#6B7280">TCP</text>
+
+  <!-- HTTP/2 → handler -->
+  <line x1="160" y1="112" x2="218" y2="80" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="192" y="103" text-anchor="middle" font-size="7" fill="#6B7280">TCP + TLS</text>
+
+  <!-- HTTP/3 → handler -->
+  <line x1="160" y1="184" x2="218" y2="184" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="188" y="178" text-anchor="middle" font-size="7" fill="#6B7280">QUIC/UDP</text>
+
+  <!-- gRPC → handler -->
+  <line x1="160" y1="256" x2="218" y2="256" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="188" y="250" text-anchor="middle" font-size="7" fill="#6B7280">HTTP/2+protobuf</text>
+
+  <!-- Handlers → HTTPGateway -->
+  <line x1="340" y1="92" x2="340" y2="118" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="340" y1="212" x2="340" y2="166" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="340" y1="240" x2="340" y2="166" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- HTTPGateway → MessageBus -->
+  <line x1="460" y1="138" x2="498" y2="120" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="482" y="126" text-anchor="middle" font-size="8" fill="#374151">call / cast</text>
+
+  <!-- MessageBus → Agents -->
+  <line x1="580" y1="140" x2="580" y2="170" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="565" y1="140" x2="540" y2="238" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Reply arrows back -->
+  <line x1="498" y1="128" x2="461" y2="146" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <text x="475" y="153" text-anchor="middle" font-size="8" fill="#9CA3AF">reply</text>
+
+  <!-- Response labels -->
+  <text x="182" y="78" text-anchor="middle" font-size="7" fill="#6B7280">HTTP response →</text>
+</svg>

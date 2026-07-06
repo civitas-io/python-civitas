@@ -1,0 +1,64 @@
+<svg viewBox="0 0 480 280" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#9CA3AF"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="240" y="18" font-size="12" font-weight="bold" fill="#374151" text-anchor="middle">Observability Output Mode Selection</text>
+
+  <!-- "Civitas starts" -->
+  <rect x="165" y="26" width="150" height="38" rx="6" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="240" y="50" font-size="11" font-weight="bold" fill="#374151" text-anchor="middle">Civitas starts</text>
+
+  <!-- Arrow down -->
+  <line x1="240" y1="64" x2="240" y2="82" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Diamond: opentelemetry-sdk installed? -->
+  <polygon points="240,84 310,110 240,136 170,110" fill="#F9FAFB" stroke="#D1D5DB" stroke-width="1.5"/>
+  <text x="240" y="105" font-size="9" fill="#374151" text-anchor="middle">opentelemetry-sdk</text>
+  <text x="240" y="118" font-size="9" fill="#374151" text-anchor="middle">installed?</text>
+
+  <!-- No branch → left -->
+  <line x1="170" y1="110" x2="90" y2="110" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="130" y="104" font-size="8" fill="#9CA3AF" text-anchor="middle">No</text>
+  <line x1="50" y1="110" x2="50" y2="148" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Built-in console output box -->
+  <rect x="10" y="150" width="120" height="52" rx="6" fill="#1e3a5f"/>
+  <text x="70" y="170" font-size="10" font-weight="bold" fill="white" text-anchor="middle">Built-in console</text>
+  <text x="70" y="184" font-size="9" fill="white" text-anchor="middle">Python logging</text>
+  <text x="70" y="197" font-size="8" fill="#93c5fd" text-anchor="middle">Mode 1</text>
+
+  <!-- Yes branch → down -->
+  <line x1="240" y1="136" x2="240" y2="154" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="248" y="148" font-size="8" fill="#9CA3AF">Yes</text>
+
+  <!-- Diamond: OTEL_EXPORTER_OTLP_ENDPOINT set? -->
+  <polygon points="240,156 335,185 240,214 145,185" fill="#F9FAFB" stroke="#D1D5DB" stroke-width="1.5"/>
+  <text x="240" y="179" font-size="9" fill="#374151" text-anchor="middle">OTEL_EXPORTER_</text>
+  <text x="240" y="192" font-size="9" fill="#374151" text-anchor="middle">OTLP_ENDPOINT set?</text>
+
+  <!-- No branch (middle diamond) → left/down -->
+  <line x1="145" y1="185" x2="90" y2="185" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="118" y="179" font-size="8" fill="#9CA3AF" text-anchor="middle">No</text>
+  <line x1="50" y1="185" x2="50" y2="218" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- OTEL ConsoleSpanExporter box -->
+  <rect x="10" y="220" width="120" height="52" rx="6" fill="#2d6a4f"/>
+  <text x="70" y="238" font-size="10" font-weight="bold" fill="white" text-anchor="middle">OTEL Console</text>
+  <text x="70" y="252" font-size="9" fill="white" text-anchor="middle">JSON to stdout</text>
+  <text x="70" y="265" font-size="8" fill="#6ee7b7" text-anchor="middle">Mode 2</text>
+
+  <!-- Yes branch (middle diamond) → down-right -->
+  <line x1="335" y1="185" x2="390" y2="185" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="362" y="179" font-size="8" fill="#9CA3AF" text-anchor="middle">Yes</text>
+  <line x1="430" y1="185" x2="430" y2="218" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- OTLP gRPC exporter box -->
+  <rect x="348" y="220" width="122" height="52" rx="6" fill="#4a1942"/>
+  <text x="409" y="238" font-size="10" font-weight="bold" fill="white" text-anchor="middle">OTLP gRPC</text>
+  <text x="409" y="252" font-size="9" fill="white" text-anchor="middle">Jaeger · Grafana</text>
+  <text x="409" y="265" font-size="8" fill="#d8b4fe" text-anchor="middle">Mode 3</text>
+</svg>

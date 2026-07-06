@@ -1,26 +1,12 @@
 # Adapters
 
-Civitas provides adapters that wrap third-party agent frameworks as `AgentProcess` instances. A wrapped agent gains Civitas's supervision tree, transport-agnostic messaging, and automatic OTEL tracing — without rewriting the underlying framework code.
+Civitas provides adapters (via `civitas-contrib`) that wrap third-party agent frameworks as `AgentProcess` instances. A wrapped agent gains Civitas's supervision tree, transport-agnostic messaging, and automatic OTEL tracing — without rewriting the underlying framework code.
 
 ---
 
 ## What an adapter gives you
 
-```mermaid
-graph TD
-    subgraph "Without adapter"
-        FW["Framework agent\n(LangGraph, OpenAI SDK)"]
-        Note["No supervision\nNo transport\nNo tracing"]
-    end
-
-    subgraph "With Civitas adapter"
-        S["Supervisor"]
-        A["AgentProcess\n(adapter)"]
-        FW2["Framework agent\n(unchanged)"]
-        S -->|"restarts on crash"| A
-        A -->|"delegates to"| FW2
-    end
-```
+![Framework Adapter](assets/framework-adapter.svg)
 
 The adapter is a thin shell. The framework agent runs inside `handle()`. If it raises an unhandled exception, the supervisor restarts it exactly as it would any native `AgentProcess`.
 
@@ -33,7 +19,7 @@ Wraps a LangGraph `CompiledGraph` as an `AgentProcess`. The graph receives `mess
 **Install:**
 
 ```bash
-pip install civitas langgraph
+pip install civitas civitas-contrib[langgraph]
 ```
 
 **Basic usage:**
@@ -43,7 +29,7 @@ from langgraph.graph import StateGraph, END
 from typing import TypedDict
 
 from civitas import Runtime, Supervisor
-from civitas.adapters.langgraph import LangGraphAgent
+from civitas_contrib.adapters.langgraph import LangGraphAgent
 
 
 # Define your LangGraph graph as usual
@@ -112,7 +98,7 @@ The adapter's `on_error()` escalates by default. Override `_is_transient()` to r
 
 ```python
 import httpx
-from civitas.adapters.langgraph import LangGraphAgent
+from civitas_contrib.adapters.langgraph import LangGraphAgent
 
 class ResilientGraphAgent(LangGraphAgent):
     def _is_transient(self, error: Exception) -> bool:
@@ -135,7 +121,7 @@ Wraps an OpenAI Agents SDK `Agent` as an `AgentProcess`. Incoming messages must 
 **Install:**
 
 ```bash
-pip install civitas openai-agents
+pip install civitas civitas-contrib[openai]
 ```
 
 **Basic usage:**
@@ -143,7 +129,7 @@ pip install civitas openai-agents
 ```python
 from agents import Agent
 from civitas import Runtime, Supervisor
-from civitas.adapters.openai import OpenAIAgent
+from civitas_contrib.adapters.openai import OpenAIAgent
 
 # Define your OpenAI agent as usual
 assistant = Agent(
@@ -224,7 +210,7 @@ async def handle(self, message: Message) -> Message | None:
 
 ```python
 from openai import RateLimitError
-from civitas.adapters.openai import OpenAIAgent
+from civitas_contrib.adapters.openai import OpenAIAgent
 
 class ResilientOpenAIAgent(OpenAIAgent):
     def _is_transient(self, error: Exception) -> bool:
@@ -242,12 +228,12 @@ class ResilientOpenAIAgent(OpenAIAgent):
 ## CrewAIAgent
 
 !!! note "Coming soon"
-    `CrewAIAgent` is not yet implemented. The class exists as a placeholder and raises `NotImplementedError` on instantiation. Track progress or upvote the issue at [github.com/jerynmathew/python-civitas/issues](https://github.com/jerynmathew/python-civitas/issues).
+    `CrewAIAgent` is not yet implemented. The class exists as a placeholder and raises `NotImplementedError` on instantiation. Track progress or upvote the issue at [github.com/civitas-io/civitas-contrib/issues](https://github.com/civitas-io/civitas-contrib/issues).
 
 When available, it will wrap a CrewAI `Crew` as an `AgentProcess`, providing the same supervision, transport, and tracing benefits as `LangGraphAgent` and `OpenAIAgent`. The planned interface:
 
 ```python
-from civitas.adapters.crewai import CrewAIAgent
+from civitas_contrib.adapters.crewai import CrewAIAgent
 
 runtime = Runtime(
     supervisor=Supervisor(

@@ -18,6 +18,9 @@ See [Deployment](../deployment.md) and [Topology & CLI](../topology.md) for usag
         - get_agent
         - all_agents
         - print_tree
+        - spawn
+        - despawn
+        - stop_agent
       show_source: true
 
 ---

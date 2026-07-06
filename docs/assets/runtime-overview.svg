@@ -1,0 +1,98 @@
+<svg viewBox="0 0 680 400" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#9CA3AF"/>
+    </marker>
+    <marker id="arr-rev" markerWidth="8" markerHeight="8" refX="2" refY="3" orient="auto">
+      <polygon points="8 0, 0 3, 8 6" fill="#9CA3AF"/>
+    </marker>
+  </defs>
+
+  <!-- Runtime (top center) -->
+  <rect x="255" y="15" width="170" height="52" rx="8" fill="#1e3a5f"/>
+  <text x="340" y="37" font-size="13" font-weight="bold" fill="white" text-anchor="middle">Runtime</text>
+  <text x="340" y="55" font-size="9" fill="white" text-anchor="middle">Lifecycle orchestrator</text>
+
+  <!-- Runtime → Supervisor -->
+  <line x1="290" y1="67" x2="210" y2="108" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <!-- Runtime → MessageBus -->
+  <line x1="340" y1="67" x2="340" y2="108" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <!-- Runtime → Registry -->
+  <line x1="370" y1="67" x2="460" y2="108" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <!-- Runtime → Transport -->
+  <line x1="390" y1="67" x2="565" y2="108" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <!-- Runtime → Plugins -->
+  <line x1="270" y1="67" x2="80" y2="108" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Supervisor (left-center) -->
+  <rect x="120" y="110" width="160" height="48" rx="6" fill="#1e3a5f"/>
+  <text x="200" y="130" font-size="11" font-weight="bold" fill="white" text-anchor="middle">Supervisor</text>
+  <text x="200" y="147" font-size="9" fill="white" text-anchor="middle">root</text>
+
+  <!-- MessageBus (center) -->
+  <rect x="265" y="110" width="150" height="48" rx="6" fill="#6b4c11"/>
+  <text x="340" y="130" font-size="11" font-weight="bold" fill="white" text-anchor="middle">MessageBus</text>
+  <text x="340" y="147" font-size="9" fill="white" text-anchor="middle">Routing + serialization</text>
+
+  <!-- Registry -->
+  <rect x="430" y="110" width="100" height="48" rx="6" fill="#6b4c11"/>
+  <text x="480" y="134" font-size="11" font-weight="bold" fill="white" text-anchor="middle">Registry</text>
+
+  <!-- Transport -->
+  <rect x="545" y="110" width="100" height="48" rx="6" fill="#6b4c11"/>
+  <text x="595" y="134" font-size="11" font-weight="bold" fill="white" text-anchor="middle">Transport</text>
+
+  <!-- Plugins -->
+  <rect x="20" y="110" width="90" height="48" rx="6" fill="#4a1942"/>
+  <text x="65" y="134" font-size="11" font-weight="bold" fill="white" text-anchor="middle">Plugins</text>
+
+  <!-- MessageBus → Registry -->
+  <line x1="415" y1="134" x2="432" y2="134" stroke="#9CA3AF" stroke-width="1.2" marker-end="url(#arr)"/>
+  <!-- MessageBus → Transport -->
+  <line x1="415" y1="144" x2="543" y2="144" stroke="#9CA3AF" stroke-width="1.2" marker-end="url(#arr)"/>
+
+  <!-- Supervisor → AgentProcess greeter -->
+  <line x1="160" y1="158" x2="120" y2="230" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <!-- Supervisor → AgentProcess researcher -->
+  <line x1="200" y1="158" x2="235" y2="230" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+  <!-- Supervisor → child Supervisor -->
+  <line x1="240" y1="158" x2="370" y2="230" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- AgentProcess: greeter -->
+  <rect x="50" y="232" width="130" height="48" rx="6" fill="#2d6a4f"/>
+  <text x="115" y="252" font-size="11" font-weight="bold" fill="white" text-anchor="middle">AgentProcess</text>
+  <text x="115" y="268" font-size="9" fill="white" text-anchor="middle">greeter</text>
+
+  <!-- AgentProcess: researcher -->
+  <rect x="195" y="232" width="130" height="48" rx="6" fill="#2d6a4f"/>
+  <text x="260" y="252" font-size="11" font-weight="bold" fill="white" text-anchor="middle">AgentProcess</text>
+  <text x="260" y="268" font-size="9" fill="white" text-anchor="middle">researcher</text>
+
+  <!-- Child Supervisor -->
+  <rect x="340" y="232" width="130" height="48" rx="6" fill="#1e3a5f"/>
+  <text x="405" y="252" font-size="11" font-weight="bold" fill="white" text-anchor="middle">Supervisor</text>
+  <text x="405" y="268" font-size="9" fill="white" text-anchor="middle">child</text>
+
+  <!-- Child Supervisor → AgentProcess worker -->
+  <line x1="405" y1="280" x2="405" y2="325" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- AgentProcess: worker -->
+  <rect x="340" y="327" width="130" height="48" rx="6" fill="#2d6a4f"/>
+  <text x="405" y="347" font-size="11" font-weight="bold" fill="white" text-anchor="middle">AgentProcess</text>
+  <text x="405" y="363" font-size="9" fill="white" text-anchor="middle">worker</text>
+
+  <!-- MessageBus ↔ greeter (double-headed) -->
+  <line x1="295" y1="158" x2="115" y2="230" stroke="#9CA3AF" stroke-width="1.2" marker-start="url(#arr-rev)" marker-end="url(#arr)"/>
+  <!-- MessageBus ↔ researcher -->
+  <line x1="320" y1="158" x2="265" y2="230" stroke="#9CA3AF" stroke-width="1.2" marker-start="url(#arr-rev)" marker-end="url(#arr)"/>
+  <!-- MessageBus ↔ worker -->
+  <path d="M 390 158 L 390 215 L 500 215 L 500 351 L 472 351" stroke="#9CA3AF" stroke-width="1.2" fill="none" marker-start="url(#arr-rev)" marker-end="url(#arr)"/>
+
+  <!-- send/ask label -->
+  <text x="235" y="208" font-size="8" fill="#9CA3AF" text-anchor="middle">send / ask</text>
+
+  <!-- Plugins → AgentProcess boxes -->
+  <path d="M 65 158 L 65 320 L 48 320 L 48 280 L 48 256 L 48 256" stroke="#9CA3AF" stroke-width="1.2" fill="none" marker-end="url(#arr)" stroke-dasharray="5,3"/>
+  <path d="M 110 158 L 110 220 L 193 220 L 193 256" stroke="#9CA3AF" stroke-width="1.2" fill="none" marker-end="url(#arr)" stroke-dasharray="5,3"/>
+  <path d="M 110 158 L 110 220 L 338 220 L 338 351 L 338 351" stroke="#9CA3AF" stroke-width="1.2" fill="none" marker-end="url(#arr)" stroke-dasharray="5,3"/>
+</svg>

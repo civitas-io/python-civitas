@@ -1,6 +1,6 @@
 # Design: EvalLoop (M2.5 + M2.6)
 
-**Status:** M2.5 Planned — v0.3 | M2.6 Planned — v0.4
+**Status:** M2.5 Implemented — v0.3 | M2.6 Planned — v0.4
 **Author:** Jeryn Mathew Varghese
 **Last updated:** 2026-04
 

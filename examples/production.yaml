@@ -11,11 +11,6 @@ transport:
   servers: "nats://localhost:4222"
 
 plugins:
-  models:
-    - type: anthropic
-      config:
-        default_model: "claude-sonnet-4-20250514"
-
   exporters:
     - type: console
 
