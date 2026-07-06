@@ -1,6 +1,8 @@
 # Milestones
 
-Development progress across all phases of Civitas.
+Development progress across all phases of Civitas. Two parts: **[Part 1 — Shipped](#part-1--shipped)**
+(completed work, historical record — do not edit) and **[Part 2 — Backlog](#part-2--backlog)** (the
+active todo list — everything not yet done).
 
 ---
 
@@ -17,37 +19,34 @@ Development progress across all phases of Civitas.
 
 ---
 
-## Overview
+## Part 1 — Shipped
 
-| Phase | Milestone | Status | Completed |
-|-------|-----------|--------|-----------|
-| 1 | [Core Runtime](#phase-1-core-runtime) | ✅ Completed | Mar 2026 |
-| 2 | [Ecosystem — Transports](#m21-zmq-multi-process-transport) | ✅ Completed | Mar 2026 |
-| 2 | [Ecosystem — Observability](#m23-otel-observability) | ✅ Completed | Apr 2026 |
-| 2 | [Ecosystem — EvalLoop (local)](#m25-evalloop) | ✅ Completed | Apr 2026 |
-| 2 | [Ecosystem — Remote Eval Exporters](#m26-remote-eval-exporters) | ✅ Completed | Apr 2026 |
-| 3 | [Developer Experience — CLI & Dashboard](#phase-3-developer-experience) | ✅ Completed | Mar 2026 |
-| 3 | [Developer Experience — MCP Integration](#m34-mcp-integration) | ✅ Completed | Apr 2026 |
-| 3 | [Developer Experience — GenServer](#m35-genserver) | ✅ Completed | Apr 2026 |
-| — | [Infrastructure & Release](#infrastructure--release) | ✅ Completed | Apr 2026 |
-| 4 | [Dynamic Agent Spawning](#m41b-dynamic-agent-spawning) | ✅ Completed | Apr 2026 |
-| 4 | [Security Hardening](#m42-security-hardening) | ✅ Completed | May 2026 |
-| 4 | [Codebase Security & Enterprise Posture](#m43-codebase-security--enterprise-posture) | ✅ Completed | Apr 2026 |
-| 4 | [Capability-Aware Registry](#m44-capability-aware-registry) | ✅ Completed | May 2026 |
-| 4 | [HTTP Gateway](#http-gateway) | ✅ Completed | Apr 2026 |
-| 4 | [Gateway API Surface](#gateway-api-surface) | ✅ Completed | Apr 2026 |
-| 4 | [Postgres StateStore + Migration](#postgres-statestore--migration) | ✅ Completed | May 2026 |
-| — | [v0.4.0 Release Fixes](#v040-release-fixes) | ✅ Completed | Jul 2026 |
-| — | [v0.5.0 — Released](#v050--released) | ✅ Released | Jul 2026 |
-| — | [v0.6.0 — Gateway Completion](#v060--gateway-completion-released) | ✅ Released | Jul 2026 |
-| — | [v0.7.0 — Spawn Maturation & Gateway Auth](#v070--spawn-maturation--gateway-auth-released) | ✅ Released | Jul 2026 |
-| — | [Deferred Backlog](#deferred-backlog) | 🗂️ Tracked | — |
-| — | Self-Healing / Autonomous Remediation | 💡 Idea | design/self-healing.md (draft) |
-| 4 | [Visual Topology Editor](#m41-visual-topology-editor) | ⏸️ Deferred | — |
-| 5 | [Prompt Library & Playground (civitas-contrib)](#prompt-library--playground) | 💡 Idea | v0.5+, not this repo |
-| 5 | [LLM Gateway](#llm-gateway) | ⏸️ Moved to Presidium | — |
-| 5 | [Fabrica — Tools Gateway (civitas-forge)](#fabrica--tools-gateway) | 💡 Idea | v0.5+, not this repo |
-| 5 | [Skills Gateway (civitas-contrib)](#skills-gateway) | 💡 Idea | v0.5+, not this repo |
+Everything in this part is done.
+
+### Overview
+
+| Phase | Milestone | Completed |
+|-------|-----------|-----------|
+| 1 | [Core Runtime](#phase-1-core-runtime) | Mar 2026 |
+| 2 | [Ecosystem — Transports](#m21-zmq-multi-process-transport) | Mar 2026 |
+| 2 | [Ecosystem — Observability](#m23-otel-observability) | Apr 2026 |
+| 2 | [Ecosystem — EvalLoop (local)](#m25-evalloop) | Apr 2026 |
+| 2 | [Ecosystem — Remote Eval Exporters](#m26-remote-eval-exporters) | Apr 2026 |
+| 3 | [Developer Experience — CLI & Dashboard](#phase-3-developer-experience) | Mar 2026 |
+| 3 | [Developer Experience — MCP Integration](#m34-mcp-integration) | Apr 2026 |
+| 3 | [Developer Experience — GenServer](#m35-genserver) | Apr 2026 |
+| — | [Infrastructure & Release](#infrastructure--release) | Apr 2026 |
+| 4 | [Dynamic Agent Spawning](#m41b-dynamic-agent-spawning) | Apr 2026 |
+| 4 | [Security Hardening](#m42-security-hardening) | May 2026 |
+| 4 | [Codebase Security & Enterprise Posture](#m43-codebase-security--enterprise-posture) | Apr 2026 |
+| 4 | [Capability-Aware Registry](#m44-capability-aware-registry) | May 2026 |
+| 4 | [HTTP Gateway](#http-gateway) | Apr 2026 |
+| 4 | [Gateway API Surface](#gateway-api-surface) | Apr 2026 |
+| 4 | [Postgres StateStore + Migration](#postgres-statestore--migration) | May 2026 |
+| — | [v0.4.0 Release Fixes](#v040-release-fixes) | Jul 2026 |
+| — | [v0.5.0 — Released](#v050--released) | Jul 2026 |
+| — | [v0.6.0 — Gateway Completion](#v060--gateway-completion-released) | Jul 2026 |
+| — | [v0.7.0 / v0.7.1 — Spawn Maturation, Gateway Auth & Bus-Native Streaming](#v070--spawn-maturation--gateway-auth-released) | Jul 2026 |
 
 ---
 
@@ -64,7 +63,8 @@ Development progress across all phases of Civitas.
 | M1.5 | `InProcessTransport` + `MessageBus` routing; request-reply with ephemeral topics | 🔴 High | ✅ |
 | M1.6 | `StateStore` protocol; SQLite plugin; state persistence across restarts | 🟡 Medium | ✅ |
 | M1.7 | Plugin system; LLM providers (Anthropic, OpenAI, Gemini, Mistral, LiteLLM) | 🔴 High | ✅ |
-| M1.8 | **Medicus self-healing hero demo** (P0+P1) — flagship example; replaces the deferred Telegram assistant | 🟡 Medium | 💡 Idea |
+
+> M1.8 (Medicus self-healing hero demo) is not done — tracked in [Part 2 — Backlog](#part-2--backlog).
 
 ---
 
@@ -867,8 +867,8 @@ aioquic). v0.6.0 Gateway Completion is ready to release.
 **Non-goals for v0.6.0:** business logic in the gateway, load balancing, request queuing — the
 gateway stays a thin translate-and-route edge ([`http-gateway.md`](design/http-gateway.md) Non-Goals).
 A **bus-native streaming primitive** (agent-to-agent `stream()` across all transports) is also out of
-scope — G2/G3 use gateway-mediated streaming; the first-class version is tracked in the
-[Deferred Backlog](#deferred-backlog) (see [`gateway-streaming.md`](design/gateway-streaming.md) §D1, Option B).
+scope for v0.6.0 — G2/G3 use gateway-mediated streaming; the first-class version shipped in **v0.7.1**
+as R7 (see [`bus-native-streaming.md`](design/bus-native-streaming.md), [#22](https://github.com/civitas-io/python-civitas/pull/22)).
 
 ---
 
@@ -898,39 +898,46 @@ are strong companions; R5–R7 are opportunistic and can slip to a later patch.
 
 ---
 
-## Deferred Backlog
+## Part 2 — Backlog
 
-**Status: 🗂️ Tracked** — the single index of everything deferred and not in v0.6.0. Items with a
-dedicated section link there; items that currently live only in a design doc are captured here so
-nothing is lost. Owner column: `core` = python-civitas, else the target repo.
+**Status: 🗂️ Tracked** — the active todo list: everything not yet done. New work lands here first
+(a design doc if warranted), then moves into [Part 1 — Shipped](#part-1--shipped) once released.
+Owner column: `core` = python-civitas, else the target repo.
 
-### python-civitas — deferred (not in v0.6.0)
+### Now open — tracked issue (python-civitas)
 
-| Item | Owner | Target | Where tracked |
-|------|-------|--------|---------------|
-| [Visual Topology Editor](#m41-visual-topology-editor) (drag-drop UI) | core | ⏸️ low priority | §M4.1 |
-| Textual dashboard rebuild (on `TopologyServer` endpoints) | core | ⏸️ follow-on | design/dynamic-spawning.md |
-| Cross-process dynamic spawning (ZMQ / NATS) | core | ✅ v0.7.0 (#20) | design/cross-process-spawn.md |
-| Per-agent spawn quotas (beyond global `max_children`) | core | ✅ v0.7.0 (#21) | design/dynamic-spawning.md Non-Goals |
-| External security audit before v1.0 (fix all HIGH+; publish summary) | core | ⏳ pre-v1.0 | §M4.3 |
-| Continuous security posture (CVE watch, CVSS advisories) | core | ⏳ ongoing | §M4.3 |
-| Encrypted `StateStore` at rest | core | ✅ v0.7.0 (#19) | design/encrypted-statestore.md |
-| Fine-grained ACL DSL (overlaps M4.4 capabilities) | core | ⏸️ | design/security-hardening.md |
-| HSM / TPM-backed signing keys | core | ⏸️ post-v1.0 | design/security-hardening.md |
-| PKI / CA integration (cert issuance) | core | ⏸️ deployment-layer | design/security-hardening.md |
-| Durable suspension: fail-fast `ask()` into a suspended agent (times out today) | core | ⏸️ | design/durable-suspension.md Non-Goals |
-| Durable suspension: crash-while-suspended restart-budget exemption | core | ⏸️ v1 | supervisor.py (S8 finding #5) |
-| Fiddler eval exporter: two-way guardrail receive | core/contrib | ⏸️ | §M2.6 |
-| Postgres: zero-downtime dual-write migration | core | ⏸️ | §Postgres StateStore |
-| Postgres: PgBouncer deployment guide | core | ⏸️ docs pass | §Postgres StateStore |
-| **Medicus self-healing hero demo** (P0+P1: detect → diagnose → verified PR) — flagship example; supersedes the Telegram personal assistant (which drops to a minor gateway+skills sample) | core | 💡 idea | design/medicus-demo.md |
-| Bus-native streaming primitive (`AgentProcess.stream()`, agent-to-agent across in-proc/ZMQ/NATS) | core | ✅ v0.7.1 | [#22](https://github.com/civitas-io/python-civitas/pull/22) · [bus-native-streaming.md](design/bus-native-streaming.md) |
-| First-party JWT gateway auth (opt-in `civitas[jwt]`) + mTLS client-cert auth | core | ✅ v0.7.0 (#18) — WS/gRPC surfaces pending (#17) | §v0.6.0 G5 |
-| Dynamic spawn: non-blocking spawn (#9, PR #14) + `spawn_into()` cross-tree helper (#10, PR #16) + bus-native streaming (#15, PR #22) | core | ✅ v0.7.0–v0.7.1 | GH #9, #10, #15 |
-| **Self-healing / autonomous remediation agent** — monitor (metrics/audit/OTEL/crash) → diagnose (LLM) → sandbox-verify → canary-deploy → auto-rollback, under staged autonomy + safety gates | core (+ contrib tools) | 💡 idea | design/self-healing.md |
-| Worker-level **restart-with-new-code** (blue-green drain) — the deploy primitive enabling self-healing & near-zero-downtime code updates (Python has no safe in-place reload) | core | ⏸️ v0.x | design/self-healing.md |
+| Item | Priority | Status | Issue | Where tracked |
+|------|----------|--------|-------|----------------|
+| **WS/gRPC gateway auth surfaces** — JWT/mTLS auth (R3, v0.7.0) covers HTTP only; WebSocket, gRPC, and `/docs` are unauthenticated by design today | 🔴 High | 🔄 Starting now | [#17](https://github.com/civitas-io/python-civitas/issues/17) | §v0.6.0 G5, §v0.7.0 R3 |
 
-### Other repos (per [`boundary.md`](https://github.com/civitas-io/context))
+### Active backlog (python-civitas, no issue yet)
+
+| Item | Priority | Status | Where tracked |
+|------|----------|--------|----------------|
+| R7 follow-up: credit-based stream backpressure (namespace `civitas.stream.credit` reserved) | 🟢 Low | ⏸️ opportunistic | design/bus-native-streaming.md §8 Q5 |
+| R7 follow-up: immediate `StreamInterrupted` on producer loss (bidirectional producer→sink index; today bounded by `idle_timeout`) | 🟢 Low | ⏸️ opportunistic | design/bus-native-streaming.md D6 |
+| Textual dashboard rebuild (on `TopologyServer` endpoints) | 🟡 Medium | ⏸️ follow-on | design/dynamic-spawning.md |
+| [Visual Topology Editor](#m41-visual-topology-editor) (drag-drop UI) | 🟢 Low | ⏸️ low priority | §M4.1 |
+| Fine-grained ACL DSL (overlaps M4.4 capabilities) | 🟡 Medium | ⏸️ | design/security-hardening.md |
+| HSM / TPM-backed signing keys | 🟢 Low | ⏸️ post-v1.0 | design/security-hardening.md |
+| PKI / CA integration (cert issuance) | 🟢 Low | ⏸️ deployment-layer | design/security-hardening.md |
+| Durable suspension: fail-fast `ask()` into a suspended agent (times out today) | 🟡 Medium | ⏸️ | design/durable-suspension.md Non-Goals |
+| Durable suspension: crash-while-suspended restart-budget exemption | 🟡 Medium | ⏸️ v1 | supervisor.py (S8 finding #5) |
+| Fiddler eval exporter: two-way guardrail receive | 🟢 Low | ⏸️ | §M2.6 |
+| Postgres: zero-downtime dual-write migration | 🟢 Low | ⏸️ | §Postgres StateStore |
+| Postgres: PgBouncer deployment guide | 🟢 Low | ⏸️ docs pass | §Postgres StateStore |
+| External security audit before v1.0 (fix all HIGH+; publish summary) | 🟡 Medium | ⏳ pre-v1.0 | §M4.3 |
+| Continuous security posture (CVE watch, CVSS advisories) | 🟡 Medium | ⏳ ongoing | §M4.3 |
+
+### Ideas (not yet specced)
+
+| Item | Priority | Where tracked |
+|------|----------|----------------|
+| **Medicus self-healing hero demo** (P0+P1: detect → diagnose → verified PR) — flagship example; supersedes the Telegram personal assistant (which drops to a minor gateway+skills sample) | 🟡 Medium | design/medicus-demo.md |
+| **Self-healing / autonomous remediation agent** — monitor (metrics/audit/OTEL/crash) → diagnose (LLM) → sandbox-verify → canary-deploy → auto-rollback, under staged autonomy + safety gates | 🟡 Medium | design/self-healing.md |
+| Worker-level **restart-with-new-code** (blue-green drain) — the deploy primitive enabling self-healing & near-zero-downtime code updates (Python has no safe in-place reload) | 🟡 Medium | design/self-healing.md |
+
+### Other repos (tracked for visibility only — per [`boundary.md`](https://github.com/civitas-io/context))
 
 | Item | Owner | Status | Where tracked |
 |------|-------|--------|---------------|
@@ -942,6 +949,11 @@ nothing is lost. Owner column: `core` = python-civitas, else the target repo.
 | [Fabrica — Tools Gateway](#fabrica--tools-gateway) / `find_tools` (RFC 0001) | civitas-forge | 💡 idea (🔴 high), spec unwritten | §Phase 5, rfc/0001 |
 | [LLM Gateway](#llm-gateway) (governed: rate limits, budgets, grant routing) | presidium | ⏸️ moved | §Phase 5 |
 | Credential-propagation RFC (per-user OAuth for retrieved tools) | cross-repo | ⏸️ future RFC | rfc/0001 §out-of-scope |
+
+**Recently shipped** (moved out of this backlog; see [Part 1](#part-1--shipped) for detail):
+cross-process dynamic spawning (#20), per-agent spawn quotas (#21), encrypted `StateStore` at rest
+(#19), first-party JWT + mTLS gateway auth for HTTP (#18), non-blocking dynamic spawn +
+`spawn_into()` (#14, #16), bus-native streaming (#22).
 
 ---
 
