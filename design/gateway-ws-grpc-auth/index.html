@@ -1759,10 +1759,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#9-references" class="md-nav__link">
+  <a href="#9-resolved-decisions-maintainer-sign-off-2026-07-06" class="md-nav__link">
     <span class="md-ellipsis">
       
-        9. References
+        9. Resolved decisions (maintainer sign-off — 2026-07-06)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. References
       
     </span>
   </a>
@@ -1790,40 +1801,55 @@
 
 
 <h1 id="gateway-auth-websocket-grpc-surfaces-17">Gateway Auth — WebSocket &amp; gRPC Surfaces (#17)<a class="headerlink" href="#gateway-auth-websocket-grpc-surfaces-17" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> 📝 Draft v1 — Oracle-reviewed; <strong>fold-in to v2 NOT done yet</strong> (picking back up in a fresh
-session). Design-first (same gate as R1–R7).
+<p><strong>Status:</strong> ✅ Approved v2 — Oracle blockers + should-fix items folded in; maintainer signed off
+2026-07-06 on all six open calls (§9: Q1 refuse, Q2 hard error, Q3 exempt both, Q4 defer, Q5 add
+warning, Q6 regenerate diagram now). Plan → Momus → implementation next.
 <strong>Source:</strong> <a href="https://github.com/civitas-io/python-civitas/issues/17">GH #17</a>; <code>docs/design/gateway-auth.md</code> §3 Non-goals (R3, v0.7.0)
-<strong>Builds on:</strong> R3 gateway JWT + mTLS (<code>civitas/gateway/jwt_auth.py</code>, <code>civitas/gateway/mtls.py</code>)</p>
+<strong>Builds on:</strong> R3 gateway JWT + mTLS (<code>civitas/gateway/jwt_auth.py</code>, <code>civitas/gateway/mtls.py</code>)
+<strong>Blocked (partially) by:</strong> <a href="https://github.com/civitas-io/python-civitas/issues/25">GH #25</a> — HTTP mTLS is
+non-functional on uvicorn; WS-mTLS shared the identical broken mechanism and is dropped from this
+design's scope until #25 ships a fix.</p>
 <blockquote>
-<p><strong>Oracle review summary (not yet folded into the doc body below — v1 text still reflects the
-pre-review design):</strong>
-- 🔴 <strong>BLOCKER — confirmed empirically, filed separately as <a href="https://github.com/civitas-io/python-civitas/issues/25">#25</a>:</strong>
-  uvicorn never populates the ASGI TLS extension <code>scope["extensions"]["tls"]</code> — verified live
-  against a real uvicorn server with <code>--ssl-cert-reqs 2</code> (CERT_REQUIRED) and a valid client cert:
-  <code>{"extension_keys": [], "tls": null}</code>. <strong>HTTP <code>require_client_cert</code> (R3) has likely never worked
-  in production</strong>, and this design's D1 "WS reuses the same TLS-terminated ASGI scope as HTTP"
-  inherits the identical break. <strong>Action for v2: drop WS-mTLS-via-ASGI-scope from scope until #25
-  ships a fix</strong> (candidates: reverse-proxy header forwarding, custom uvicorn protocol subclass, or
-  hypercorn). gRPC mTLS is unaffected — it reads <code>context.auth_context()</code>, not the ASGI scope.
-- 🔴 <strong>BLOCKER — D6 doesn't generalize:</strong> auto-inherit must key on <code>self._jwt_verifier is not None</code>
-  / <code>client_cert_mode != "none"</code>, <strong>not</strong> the global-only middleware list — route-scoped JWT
-  (a supported pattern elsewhere in the code) would otherwise silently get unauthenticated WS/gRPC.
-- 🟡 <strong>Should-fix (v2 TODO):</strong> gRPC interceptor needs a Health/Reflection carve-out (F4);
-  <code>require_client_auth=True</code> is binary in Python's gRPC and contradicts D8's clean
-  <code>UNAUTHENTICATED</code> mapping for certless JWT-only clients (F5); D8 has no misconfig error code,
-  losing R3's "loud misconfig, never allow-all" invariant (F6); <code>tls_ca_cert</code> isn't plumbed into
-  <code>GrpcServer</code> and an insecure gRPC port would auto-enforce JWT over plaintext unless guarded (F7);
-  D4's <code>rfc4514_string()</code> DN format isn't guaranteed to match the (also-unverified) HTTP allowlist
-  format — derive both from the same leaf-PEM formatter (F2).
-- 🟢 <strong>Nice-to-have:</strong> <code>_AUTH_MIDDLEWARE_PATHS</code> string-match is fragile beyond exact dotted paths;
-  the interceptor needs to wrap the handler to reach <code>context.auth_context()</code>; WS subprotocol
-  token encoding needs pinning (e.g. <code>["civitas.bearer", "&lt;jwt&gt;"]</code>); accept must echo a sentinel
-  subprotocol per RFC 6455, never the token itself.
-- <strong>D7 (api-key out of scope) — keep the scope cut, but strengthen the mitigation:</strong> the
-  enforcement trigger must NOT reuse the full <code>_AUTH_MIDDLEWARE_PATHS</code> (which includes
-  <code>require_api_key</code>) — an api-key-only deploy would otherwise look "hardened" (docs auto-off) while
-  WS/gRPC stay wide open. Emit a startup WARNING when api-key-only auth is configured alongside
-  WS/gRPC being enabled.</p>
+<p><strong>v2 changelog (Oracle review, folded in):</strong>
+- 🔴→✅ <strong>WS-mTLS-via-ASGI-scope dropped from scope.</strong> Confirmed empirically (#25): uvicorn never
+  populates <code>scope["extensions"]["tls"]</code>, so the ASGI TLS extension WS-mTLS would have reused does
+  not exist on this stack. WS auth in this design is now <strong>JWT-only</strong> (D1/D2); WS-mTLS is a
+  <strong>non-goal pending #25</strong> (§8), not a silently dropped feature. gRPC mTLS is unaffected — it never
+  depended on the ASGI scope, and is now fully wired (D4).
+- 🔴→✅ <strong>D6 rewritten to not generalize incorrectly.</strong> Auto-inherit no longer keys on
+  <code>_AUTH_MIDDLEWARE_PATHS</code> (a dotted-path list that (a) only reflects the <em>global</em> HTTP middleware
+  chain and (b) conflates <code>require_api_key</code> with <code>require_jwt</code>/<code>require_client_cert</code>). It now keys
+  directly on <strong><code>self._jwt_verifier is not None</code></strong> and <strong><code>self._gw_config.client_cert_mode != "none"</code></strong>
+  — the same two signals <code>on_start</code> already uses to decide whether HTTP auth is real, computed from
+  <code>_configured_middleware_paths()</code> (global <strong>+</strong> route-scoped), so route-scoped-only JWT correctly
+  auto-inherits onto WS/gRPC instead of silently staying open.
+- 🟡→✅ <strong>F4 (gRPC Health/Reflection carve-out):</strong> the interceptor now exempts the
+  <code>grpc.health.v1.Health</code> and <code>grpc.reflection.v1alpha.ServerReflection</code> services by full service
+  name (D3) — health probes and reflection clients never carried the bearer/cert this design adds.
+- 🟡→✅ <strong>F5 (<code>require_client_auth</code> is binary vs. D8's clean <code>UNAUTHENTICATED</code>):</strong> resolved by making
+  <code>client_cert_mode="optional"</code> an explicit <strong><code>ConfigurationError</code> at startup when <code>grpc_enabled</code></strong>
+  (D9) — Python's <code>grpc.aio</code> has no CERT_OPTIONAL equivalent, so "optional" is an HTTP-only mode;
+  gRPC mTLS is <code>"none"</code> or <code>"required"</code> only, never a silent reinterpretation.
+- 🟡→✅ <strong>F6 (D8 missing misconfig code):</strong> added <code>INTERNAL</code> (gRPC) / close code <code>1011</code> (WS) for the
+  "enforcement auto-triggered but the DN allowlist is empty" misconfig case — mirrors HTTP's existing
+  500 and preserves R3's "loud misconfig, never allow-all" invariant on the new surfaces too (D8).
+- 🟡→✅ <strong>F7 (<code>tls_ca_cert</code> not plumbed; insecure port could auto-enforce JWT over plaintext):</strong>
+  <code>tls_ca_cert</code> + <code>client_cert_mode</code> now flow into <code>GrpcServer</code> (D4); a new startup guard (D10)
+  refuses to start if JWT auto-inherit would run over a plaintext (<code>add_insecure_port</code>) gRPC channel.
+- 🟡→✅ <strong>F2 (D4's DN format claim unverified):</strong> both transports' DN extraction now goes through one
+  shared <code>_dn_from_pem(pem: bytes) -&gt; str</code> helper (<code>cryptography</code>'s <code>rfc4514_string()</code>), so gRPC and
+  any future #25-unblocked HTTP/WS mTLS are guaranteed to agree on DN string format <strong>by
+  construction</strong>, not by assumption (D4/D5).
+- 🟢 <strong>Nice-to-haves folded into mechanics, not left as loose ends:</strong> D1/D2 now pin the exact
+  subprotocol values and the accept-echo behavior; D3 spells out that the interceptor must wrap the
+  handler (not just inspect <code>handler_call_details</code>) to reach <code>context.auth_context()</code>.
+- <strong>D7 residual note:</strong> the false-hardening risk Oracle flagged (an api-key-only deploy's
+  <code>_AUTH_MIDDLEWARE_PATHS</code> membership making WS/gRPC auto-inherit <em>look</em> triggered) is now
+  structurally impossible — D6's rewrite never consults <code>_AUTH_MIDDLEWARE_PATHS</code>. The startup-WARNING
+  enhancement Oracle also suggested for the api-key-only case is deferred (§9, Q4 — maintainer
+  agreed); the closely related <strong>mTLS-only + WS-routes-configured</strong> case gets a warning now (D11,
+  §9 Q5 — maintainer requested it, since it's the more likely real-world misconfig in v2).
+- <strong>Diagram regenerated</strong> (<code>docs/assets/gateway-ws-grpc-auth.svg</code>) to match v2's mechanism (§9, Q6).</p>
 </blockquote>
 <hr />
 <h2 id="1-problem">1. Problem<a class="headerlink" href="#1-problem" title="Permanent link">&para;</a></h2>
@@ -1836,37 +1862,55 @@ surfaces bypass that chain entirely and are unauthenticated regardless of HTTP c
 <p>This is a <strong>silent gap</strong>: an operator who configures <code>require_jwt</code> assuming it protects "the
 gateway" gets HTTP-only protection. Same failure <em>shape</em> as the R3 M1 fail-open bug — auth silently
 not applying — just at the surface level instead of the middleware-load level.</p>
+<p>A third, related gap surfaced <em>during this design's review</em> and is <strong>not</strong> fixed here: HTTP
+<code>require_client_cert</code> itself has likely never worked against a real uvicorn deployment (#25). WS was
+going to inherit that exact broken mechanism (D1 v1), so v2 scopes WS-mTLS out entirely rather than
+build on a foundation known not to work (see changelog above and §8).</p>
 <h2 id="2-current-behavior-ground-truth">2. Current behavior (ground truth)<a class="headerlink" href="#2-current-behavior-ground-truth" title="Permanent link">&para;</a></h2>
 <ul>
 <li><code>_handle_websocket</code> (<code>asgi.py:210-224</code>): <code>send({"type": "websocket.accept"})</code> runs before any
   auth check; no <code>GatewayRequest</code>/<code>build_chain</code> on this path at all.</li>
 <li><code>GrpcServer.start()</code> (<code>grpc_server.py:161-189</code>): bare <code>grpc.aio.server()</code>, no interceptors.
   <code>add_secure_port</code> (178-182) passes only <code>ssl_server_credentials([(key, cert)])</code> — no
-  <code>root_certificates</code>, no <code>require_client_auth=True</code>. Client certs aren't requested.</li>
+  <code>root_certificates</code>, no <code>require_client_auth=True</code>. Client certs aren't requested. <code>tls_ca_cert</code>
+  and <code>client_cert_mode</code> are not passed into <code>GrpcServer</code> at all today.</li>
 <li><code>JwtVerifier.verify(token: str) -&gt; dict[str, Any]</code> (<code>jwt_auth.py:121</code>) is <strong>already
   transport-agnostic</strong> — a pure function of a token string, no HTTP coupling. Directly reusable.</li>
 <li>The mTLS DN-allowlist check (<code>mtls.py:52-56</code>: <code>dn = request.client_cert.get("dn"); if dn not in
-  allowed: 403</code>) is correct logic but inlined inside an ASGI-shaped middleware function.</li>
-<li><code>HTTPGateway</code> already has a <strong>precedent for cross-cutting auth detection</strong>: <code>_AUTH_MIDDLEWARE_PATHS</code>
-  (<code>core.py</code>) is a frozenset of the three HTTP auth middleware dotted paths, checked today only to
-  flip the <code>/docs</code> default off when auth is configured. This is the exact mechanism §4 D6 reuses.</li>
+  allowed: 403</code>) is correct logic but inlined inside an ASGI-shaped middleware function, and — per
+  <code>_client_cert_from_scope</code> (<code>asgi.py:111-124</code>) — is fed by <code>scope["extensions"]["tls"]</code>, which #25
+  proved uvicorn <strong>never populates</strong>. The check itself (<code>dn not in allowed</code>) is fine; what's broken
+  is everything upstream of it on the HTTP/WS ASGI path.</li>
+<li><code>HTTPGateway</code> has <strong>two differently-scoped auth-detection helpers</strong>, and this is exactly the
+  BLOCKER-2 source: <code>_auth_configured()</code> (<code>core.py:99-102</code>) checks <code>client_cert_mode</code> plus <strong>only</strong>
+  <code>self._gw_config.middleware</code> (the global list) against <code>_AUTH_MIDDLEWARE_PATHS</code>; it exists solely to
+  flip the <code>/docs</code> default off. <code>_configured_middleware_paths()</code> (<code>core.py:252-257</code>) checks the global
+  list <strong>plus every route's own <code>entry.middleware</code></strong>, and is what <code>on_start</code> (<code>core.py:169</code>) already
+  uses to decide whether to build <code>self._jwt_verifier</code> at all. v1's D6 said "reuse
+  <code>_AUTH_MIDDLEWARE_PATHS</code>" without specifying <em>which</em> of these two check the reuse meant — v2 keys
+  WS/gRPC auto-inherit off the <strong>already-correctly-scoped</strong> signals (<code>self._jwt_verifier is not None</code>,
+  <code>self._gw_config.client_cert_mode != "none"</code>) instead of re-deriving from either middleware-path set.</li>
 </ul>
 <h2 id="3-design-approach">3. Design approach<a class="headerlink" href="#3-design-approach" title="Permanent link">&para;</a></h2>
 <p>Extract the two verifiers' core logic to be transport-agnostic (JWT already is; add a
-<code>_check_dn(dn, allowed)</code> helper next to the existing HTTP check), then add one enforcement point per
-surface:</p>
+<code>_check_dn(dn, allowed)</code> predicate and a <code>_dn_from_pem(pem)</code> extractor next to the existing HTTP
+check in <code>mtls.py</code>), then add one enforcement point per surface:</p>
 <ul>
-<li><strong>WebSocket</strong>: read the token from the <code>Sec-WebSocket-Protocol</code> upgrade header (or the peer cert
-  from the TLS-terminated ASGI scope, same as HTTP) and verify <strong>before</strong> <code>websocket.accept</code> — a
-  failure closes the socket without ever completing the upgrade.</li>
-<li><strong>gRPC</strong>: a <code>grpc.aio.ServerInterceptor</code> reading the <code>authorization</code> invocation-metadata entry
-  (JWT) and/or <code>require_client_auth=True</code> + <code>context.auth_context()</code> (mTLS), aborting
-  <code>UNAUTHENTICATED</code> before the servicer method runs.</li>
+<li><strong>WebSocket (JWT only, v2):</strong> read the bearer token from the <code>Sec-WebSocket-Protocol</code> upgrade
+  header and verify <strong>before</strong> <code>websocket.accept</code> — a failure closes the socket without ever
+  completing the upgrade. WS mTLS is a non-goal pending #25 (§8) — a gateway with mTLS-only auth
+  (no JWT) configured gets <strong>no WS protection</strong> in v2; see Q5 (§9) for whether that combination
+  should emit a startup warning.</li>
+<li><strong>gRPC (JWT + mTLS, v2 — both now fully wired):</strong> a <code>grpc.aio.ServerInterceptor</code> reading the
+  <code>authorization</code> invocation-metadata entry (JWT) and, when <code>client_cert_mode="required"</code>,
+  transport-level <code>require_client_auth=True</code> + <code>context.auth_context()</code> (mTLS DN check), aborting
+  before the servicer method runs — except for <code>Health</code>/<code>Reflection</code>, which are exempted (D3/F4).</li>
 </ul>
-<p><strong>Auto-inherit, not separate config</strong> (D6): reuse <code>_AUTH_MIDDLEWARE_PATHS</code> — if <code>require_jwt</code> (or
-<code>require_client_cert</code>) is present in the gateway's global HTTP middleware list, the corresponding
-check auto-applies to WS/gRPC too. No new YAML keys; closes the gap by default instead of requiring
-an operator to remember a second config surface (the R3 M1 lesson).</p>
+<p><strong>Auto-inherit, not separate config</strong> (D6, rewritten): if a JWT verifier was built (JWT is
+configured anywhere — global or route-scoped HTTP middleware) or <code>client_cert_mode != "none"</code>, the
+corresponding check auto-applies to WS/gRPC too. No new YAML keys; closes the gap by default instead
+of requiring an operator to remember a second config surface (the R3 M1 lesson) — and, unlike v1,
+does so off signals that are already correctly scoped rather than a dotted-path membership test.</p>
 <h2 id="4-decisions">4. Decisions<a class="headerlink" href="#4-decisions" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -1878,83 +1922,153 @@ an operator to remember a second config surface (the R3 M1 lesson).</p>
 </thead>
 <tbody>
 <tr>
-<td><strong>D1</strong></td>
-<td><strong>WS token transport = <code>Sec-WebSocket-Protocol</code> subprotocol header</strong>, not <code>?token=</code> query param.</td>
-<td>Query params leak into proxy/access logs and browser history; the subprotocol header is set by the WS handshake itself and isn't URL-visible. mTLS reuses the same TLS-terminated scope as HTTP — no new transport needed.</td>
+<td><strong>D1</strong> ⟳</td>
+<td><strong>WS token transport = <code>Sec-WebSocket-Protocol</code> subprotocol header</strong>, value <code>["civitas.bearer.&lt;jwt&gt;"]</code> (single pinned subprotocol string carrying the token as a suffix — no <code>?token=</code> query param, no second protocol-list entry). <strong>WS-mTLS-via-ASGI-scope is dropped from v2 scope</strong> (blocked on #25).</td>
+<td>Query params leak into proxy/access logs and browser history; the subprotocol header is set by the WS handshake itself and isn't URL-visible. A single pinned string (vs. a <code>["civitas.bearer", "&lt;jwt&gt;"]</code> two-element list) avoids ambiguity about which list element is the token when a client offers multiple subprotocols.</td>
 </tr>
 <tr>
-<td><strong>D2</strong> ⚠️</td>
-<td><strong>WS fails BEFORE accept.</strong> Invalid/missing token or cert → <code>send({"type": "websocket.close", "code": 4401})</code> — never send <code>websocket.accept</code>.</td>
-<td>No unauthenticated socket ever opens (vs. accept-then-kick, which briefly exposes an open channel). <code>4401</code> mirrors HTTP 401 and the existing <code>4404</code> (unknown route) convention already in <code>asgi.py:222</code>.</td>
+<td><strong>D2</strong> ⚠️⟳</td>
+<td><strong>WS fails BEFORE accept, JWT check only.</strong> Missing/invalid token → <code>send({"type": "websocket.close", "code": 4401})</code> — never send <code>websocket.accept</code>. On success, <code>websocket.accept</code> <strong>echoes the negotiated subprotocol</strong> (<code>civitas.bearer.&lt;jwt&gt;</code>) back per RFC 6455 — it must echo <em>a</em> subprotocol from the offered list, never omit <code>subprotocol</code> (which some clients treat as "none accepted") and never fabricate a different one.</td>
+<td>No unauthenticated socket ever opens. <code>4401</code> mirrors HTTP 401 and the existing <code>4404</code> (unknown route) convention already in <code>asgi.py:222</code>. Echoing the actual negotiated value (not a sentinel) is required by the WS handshake spec — the token stays out of response <em>headers</em> (it was only ever in the request), so echoing it back in the subprotocol ack is not a new leak.</td>
 </tr>
 <tr>
-<td><strong>D3</strong></td>
-<td><strong>gRPC = one <code>grpc.aio.ServerInterceptor</code></strong> reading <code>authorization</code> metadata, reusing <code>JwtVerifier.verify()</code> unchanged. Abort <code>UNAUTHENTICATED</code> pre-dispatch (never reaches <code>_AgentServicer</code>).</td>
-<td>Matches the issue's own proposal; <code>verify()</code> needs zero changes since it was already transport-agnostic.</td>
+<td><strong>D3</strong> ⟳</td>
+<td><strong>gRPC = one <code>grpc.aio.ServerInterceptor</code></strong>, <code>intercept_service(continuation, handler_call_details)</code>. Two mechanics fixes vs. v1: (1) <strong>Health/Reflection carve-out (F4)</strong> — if <code>handler_call_details.method.split("/")[1]</code> is <code>grpc.health.v1.Health</code> or <code>grpc.reflection.v1alpha.ServerReflection</code>, call <code>continuation(handler_call_details)</code> unmodified, no check. (2) <strong>Handler-wrapping for mTLS (nice-to-have → required mechanic):</strong> <code>handler_call_details</code> alone exposes only invocation metadata (enough for the JWT check); the peer certificate is only reachable via <code>context.auth_context()</code> <strong>inside</strong> the RPC handler. So when <code>client_cert_mode="required"</code>, the interceptor must call <code>continuation(...)</code> to get the real <code>RPCMethodHandler</code>, then wrap its handler function to check <code>context.auth_context()</code> before delegating — it cannot reject on <code>handler_call_details</code> alone for the mTLS case. JWT check still short-circuits on <code>handler_call_details.invocation_metadata</code> before even calling <code>continuation</code>.</td>
+<td>Matches the issue's own proposal; <code>verify()</code> needs zero changes since it was already transport-agnostic. The carve-out prevents load-balancer health probes and reflection clients — which never carry a bearer token or a client cert intended for this check — from being locked out by a feature they don't know exists.</td>
 </tr>
 <tr>
-<td><strong>D4</strong> ⚠️</td>
-<td><strong>gRPC mTLS needs transport-level wiring, not just detection.</strong> <code>add_secure_port</code> must gain <code>root_certificates=&lt;CA bytes&gt;, require_client_auth=True</code> (today: neither) before any peer cert exists to check. DN extraction: parse <code>context.auth_context()["x509_pem_cert"][0]</code> via <code>cryptography.x509.load_pem_x509_certificate(...).subject.rfc4514_string()</code> to match the allowlist's DN string format.</td>
-<td>Python's <code>grpc.aio</code> doesn't expose a ready-made "full subject DN" the way ASGI/uvicorn does — this is a genuinely awkward corner of the gRPC Python API. <strong>Flagging for Oracle</strong>: verify this is the right extraction path and that <code>rfc4514_string()</code> produces DN strings comparable to whatever <code>mtls.py</code>'s existing HTTP-side allowlist entries actually contain.</td>
+<td><strong>D4</strong> ⚠️⟳</td>
+<td><strong>gRPC mTLS is now fully wired, not just detected.</strong> <code>GrpcServer</code> gains <code>tls_ca_cert: str \| None</code> and <code>client_cert_mode: str</code> constructor params (passed from <code>GatewayConfig</code>, same fields HTTP already uses). In <code>start()</code>, when <code>client_cert_mode == "required"</code>: load the CA bytes and call <code>grpc.ssl_server_credentials([(key, cert)], root_certificates=ca_bytes, require_client_auth=True)</code>. DN extraction: <code>context.auth_context()["x509_pem_cert"][0]</code> → <strong><code>_dn_from_pem(pem)</code></strong> (new shared helper in <code>mtls.py</code>: <code>x509.load_pem_x509_certificate(pem).subject.rfc4514_string()</code>) — the <strong>same function</strong> any future #25-unblocked HTTP/WS mTLS path must also call, so DN string format is guaranteed identical across transports by construction (F2), not by an unverified claim that two independent extraction paths happen to agree. <code>client_cert_mode == "optional"</code> is refused for gRPC at config time (D9/F5) rather than approximated.</td>
+<td>Python's <code>grpc.aio</code> doesn't expose a ready-made "full subject DN" the way ASGI/uvicorn's spec <em>claims</em> to (but doesn't, per #25) — extracting via <code>cryptography</code> directly, through one shared function, removes the format-drift risk Oracle flagged instead of just asserting it away.</td>
 </tr>
 <tr>
-<td><strong>D5</strong></td>
-<td><strong>Shared predicate, not shared HTTP-shaped function.</strong> Extract <code>_check_dn(dn: str \| None, allowed: frozenset[str]) -&gt; None</code> (raises on failure) out of <code>mtls.py</code>; HTTP/WS/gRPC each build their own request-shaped call and share this one predicate + <code>JwtVerifier.verify()</code>.</td>
-<td>Avoids three copies of "is this DN in the allowlist" drifting apart; each transport keeps its own idiomatic error mapping (<code>GatewayResponse</code> / <code>websocket.close</code> / <code>context.abort</code>).</td>
+<td><strong>D5</strong> ⟳</td>
+<td><strong>Shared predicates, not shared HTTP-shaped functions.</strong> <code>mtls.py</code> now exports two transport-agnostic helpers: <code>_check_dn(dn: str \| None, allowed: frozenset[str]) -&gt; None</code> (raises on failure, unchanged from v1) and <strong><code>_dn_from_pem(pem: bytes) -&gt; str</code></strong> (new, F2). HTTP/gRPC each build their own request-shaped call around these two shared primitives + <code>JwtVerifier.verify()</code>; each transport keeps its own idiomatic error mapping (<code>GatewayResponse</code> / <code>websocket.close</code> / <code>context.abort</code>). WS does not use <code>_check_dn</code>/<code>_dn_from_pem</code> in v2 (mTLS out of scope for WS).</td>
+<td>Avoids copies of "is this DN in the allowlist" and "how do I turn a cert into a DN string" drifting apart across transports — now two shared functions instead of one, since v1 only extracted the predicate and left extraction implicit/per-transport.</td>
 </tr>
 <tr>
-<td><strong>D6</strong> ★</td>
-<td><strong>Auto-inherit from the global HTTP middleware list</strong> via <code>_AUTH_MIDDLEWARE_PATHS</code>, not a separate <code>ws_middleware:</code>/<code>grpc_interceptors:</code> YAML block.</td>
-<td>Repeats the R3 M1 lesson: auth silently not applying is a bug, not a feature; a second easy-to-forget config surface would recreate exactly this issue. Reusing existing detection code is also less new surface to review.</td>
+<td><strong>D6</strong> ★⟳</td>
+<td><strong>Auto-inherit keys directly on verifier/mode presence, not a middleware-path list.</strong> WS enforcement turns on iff <code>self._jwt_verifier is not None</code>. gRPC JWT enforcement turns on iff <code>self._jwt_verifier is not None</code>; gRPC mTLS enforcement turns on iff <code>self._gw_config.client_cert_mode != "none"</code>. <code>self._jwt_verifier</code> is already built (<code>core.py:169-170</code>) from <code>_JWT_MIDDLEWARE_PATH in self._configured_middleware_paths()</code> — global <strong>and</strong> route-scoped — so this fix is "read the field that's already scoped correctly," not new detection logic.</td>
+<td>Repeats the R3 M1 lesson: auth silently not applying is a bug, not a feature. v1's <code>_AUTH_MIDDLEWARE_PATHS</code> reuse was ambiguous about which of <code>core.py</code>'s two differently-scoped helper methods it meant, and either choice had a real bug (global-only misses route-scoped JWT; the frozenset also includes <code>require_api_key</code>, conflating an auth type WS/gRPC don't implement with the ones they do). Keying on the concrete objects (<code>_jwt_verifier</code>, <code>client_cert_mode</code>) sidesteps both problems and needs no new state.</td>
 </tr>
 <tr>
 <td><strong>D7</strong> ⚠️</td>
-<td><strong>Residual gap, documented not silently dropped: <code>require_api_key</code> is explicitly OUT of scope</strong> (matches the issue text — "reuse JwtVerifier and the DN allowlist"). An API-key-only deployment (no JWT/mTLS) still gets <strong>unauthenticated WS/gRPC</strong> after this change.</td>
+<td><strong>Residual gap, documented not silently dropped: <code>require_api_key</code> is explicitly OUT of scope</strong> for WS/gRPC (matches the issue text — "reuse <code>JwtVerifier</code> and the DN allowlist"). An API-key-only deployment (no JWT/mTLS) still gets <strong>unauthenticated WS/gRPC</strong> after this change. <strong>v2 note:</strong> D6's rewrite removes the false-hardening risk Oracle flagged (an api-key-only deploy's <code>_AUTH_MIDDLEWARE_PATHS</code> membership no longer has any bearing on WS/gRPC auto-inherit, since D6 no longer reads that frozenset at all) — the gap is now correctly detected as "unenforced" rather than silently miscategorized as "hardened." A startup WARNING for this specific combination remains a nice-to-have; see Q4 (§9).</td>
 <td>Honesty over false completeness. Tracked as an explicit fast-follow in §8, not hidden — the whole point of this issue is not leaving silent gaps.</td>
 </tr>
 <tr>
-<td><strong>D8</strong></td>
-<td>Failure mapping: WS → close code <code>4401</code>; gRPC → <code>UNAUTHENTICATED</code> (bad/missing token) or <code>PERMISSION_DENIED</code> (valid token, DN not in allowlist) — mirrors HTTP's 401 vs 403 split.</td>
-<td>Matches issue text; consistent with existing HTTP semantics.</td>
+<td><strong>D8</strong> ⚠️⟳</td>
+<td><strong>Failure mapping, extended with a misconfig tier (F6):</strong> WS → close <code>4401</code> (bad/missing token) or <strong>close <code>1011</code></strong> (RFC 6455 "Internal Error" — reserved for a WS-side misconfig; not reachable today since <code>JwtVerifier</code> construction already raises <code>ConfigurationError</code> at startup on any bad JWT config, so there is no runtime "enforcement on but broken" state for WS yet, but the code path exists for symmetry with gRPC's <code>INTERNAL</code> and for whatever WS-mTLS misconfig #25 eventually introduces). gRPC → <code>UNAUTHENTICATED</code> (bad/missing JWT metadata, checked in-process by the interceptor) or <code>PERMISSION_DENIED</code> (valid cert, DN not in allowlist) or <strong><code>INTERNAL</code></strong> (enforcement auto-triggered by <code>client_cert_mode != "none"</code> but <code>CIVITAS_GATEWAY_MTLS_ALLOWED_DNS</code> is empty — mirrors HTTP's existing 500 for the identical misconfig, <code>mtls.py:47-51</code>). <strong>Correction from v1:</strong> under <code>require_client_auth=True</code> (the only mode gRPC mTLS supports, D9), a client presenting <strong>no certificate never reaches the interceptor at all</strong> — the TLS handshake itself fails (connection reset / TLS alert), not a gRPC status code. Only "valid cert, wrong DN" reaches <code>PERMISSION_DENIED</code>; v1's test-plan wording ("<code>UNAUTHENTICATED</code> (or handshake failure...)") is resolved definitively to <em>always</em> handshake failure for the no-cert case.</td>
+<td>Matches issue text; consistent with existing HTTP semantics; closes the "loud misconfig, never allow-all" invariant gap Oracle flagged (F6) and removes the v1 ambiguity about which failure mode the missing-cert case actually produces.</td>
+</tr>
+<tr>
+<td><strong>D9</strong> ★ (NEW, F5)</td>
+<td><strong><code>client_cert_mode="optional"</code> is refused for gRPC at config/startup time</strong> (<code>ConfigurationError</code>, raised in <code>HTTPGateway.on_start</code> when <code>grpc_enabled and client_cert_mode == "optional"</code>): "gRPC does not support client_cert_mode='optional' (grpc.aio has no CERT_OPTIONAL equivalent — require_client_auth is a single bool for the whole port); use 'required' or 'none' for a gateway with grpc_enabled." Since <code>client_cert_mode</code> is one field shared by both surfaces, this means <code>"optional"</code> is simply incompatible with <code>grpc_enabled=True</code>, full stop — it remains valid for HTTP-only gateways.</td>
+<td>Python's <code>grpc.aio.ssl_server_credentials</code> <code>require_client_auth</code> is binary — there's no way to accept-but-not-require a client cert at the gRPC transport level the way uvicorn's <code>CERT_OPTIONAL</code> does for HTTP. Silently treating "optional" as "required" (stricter than configured) or as "none" (weaker than configured) are both surprising; refusing to start is the only option consistent with "loud misconfig, never guess."</td>
+</tr>
+<tr>
+<td><strong>D10</strong> ★ (NEW, F7)</td>
+<td><strong>Insecure-gRPC-port + JWT-auto-inherit guard.</strong> At <code>on_start</code>, if <code>grpc_enabled</code> and JWT auto-inherit would apply (<code>self._jwt_verifier is not None</code>) and the gRPC port has no TLS configured (<code>not (tls_cert and tls_key)</code>, i.e. <code>GrpcServer.start()</code> would call <code>add_insecure_port</code>), raise <code>ConfigurationError</code>: "JWT auth cannot be enforced over an insecure (plaintext) gRPC port — the bearer token would be sent in cleartext metadata; configure tls_cert/tls_key for the gRPC surface, or disable JWT for this gateway."</td>
+<td>A JWT bearer token sent as gRPC invocation metadata over <code>add_insecure_port</code> is trivially interceptable on the wire — enforcing "auth" that ships the credential in the clear is worse than no enforcement (false sense of security). Matches R3's existing philosophy of refusing silently-broken security configurations rather than starting anyway.</td>
+</tr>
+<tr>
+<td><strong>D11</strong> (NEW, maintainer sign-off Q5)</td>
+<td><strong>Startup WARNING: mTLS-only + WS routes configured.</strong> In <code>on_start</code>, if <code>self._gw_config.client_cert_mode != "none"</code> and <code>self._jwt_verifier is None</code> and <code>self._gw_config.ws_routes</code> is non-empty, <code>logger.warning(...)</code>: "client_cert_mode is set but no JWT verifier is configured; WS routes %r will be served with NO authentication (WS mTLS is not yet supported — see #25/#17)." Non-fatal — WS still serves, matching D1/D2's documented scope cut; this only makes the gap loud instead of silent.</td>
+<td>The maintainer flagged this as the most likely real-world way an operator ends up with silently-open WS in v2: they configured <em>some</em> gateway auth (mTLS) and reasonably assume it covers "the gateway," exactly the R3 M1 failure shape this whole issue exists to close for HTTP/gRPC — WS still has an uncovered corner until #25, so it gets a log line instead of nothing.</td>
 </tr>
 </tbody>
 </table>
-<p>★ pivotal · ⚠️ needs careful review</p>
+<p>★ pivotal · ⚠️ needs careful review · ⟳ revised from v1</p>
 <h2 id="5-threat-model">5. Threat model<a class="headerlink" href="#5-threat-model" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Downgrade risk</strong>: a client that can't/won't send the subprotocol header degrades to the <em>old</em>
-  unauthenticated behavior only if D6's detection is bypassed — mitigated by D2 (fail-closed on
+<li><strong>Downgrade risk (WS):</strong> a client that can't/won't send the subprotocol header degrades to the
+  <em>old</em> unauthenticated behavior only if D6's detection is bypassed — mitigated by D2 (fail-closed on
   missing token, same as HTTP's existing "no allowlist configured → 500, never allow-all" pattern).</li>
-<li><strong>mTLS trust anchor</strong>: same operator responsibility as R3 — <code>GatewayConfig.tls_ca_cert</code> must be a
+<li><strong>WS-mTLS gap (v2, explicit):</strong> a gateway configured with <code>client_cert_mode != "none"</code> and no JWT
+  gets <strong>zero WS enforcement</strong> — the mTLS check that HTTP/gRPC get does not extend to WS until #25
+  ships a working client-cert delivery mechanism. This is a known, documented gap (§8), not a silent
+  one; see Q5 (§9) for whether it warrants an additional startup warning.</li>
+<li><strong>gRPC health/reflection carve-out:</strong> intentionally unauthenticated by design (D3/F4) — this is a
+  small, well-known attack surface (service names and health status), not request routing to agent
+  logic. Operators who don't want reflection exposed at all already have <code>grpc_reflection=False</code>
+  (existing <code>GatewayConfig</code> field); the auth interceptor is not the right control point for that
+  decision, and adding one would be redundant with a knob that already exists.</li>
+<li><strong>mTLS trust anchor:</strong> same operator responsibility as R3 — <code>GatewayConfig.tls_ca_cert</code> must be a
   dedicated private CA (documented already in <code>mtls.py</code>'s module docstring); this design reuses that
-  same config for gRPC's <code>root_certificates</code>, not a new one.</li>
-<li><strong>D7 residual</strong>: explicitly called out above — API-key-only deployments remain unauthenticated on
-  WS/gRPC after this ships.</li>
+  same config for gRPC's <code>root_certificates</code> (D4), not a new one.</li>
+<li><strong>No-cert TLS-handshake failure (gRPC, D8 correction):</strong> under <code>require_client_auth=True</code>, a
+  certless client is rejected by the TLS layer, before any application code — including our
+  interceptor — runs. This is a stronger, not weaker, guarantee than an app-layer <code>UNAUTHENTICATED</code>
+  (the connection never completes at all), but means such failures won't appear in gRPC-level
+  status-code metrics; operators should watch TLS handshake failure counters separately.</li>
+<li><strong>D7 residual:</strong> explicitly called out above — API-key-only deployments remain unauthenticated on
+  WS/gRPC after this ships, and (v2) are now <em>correctly</em> detected as such rather than risking
+  misclassification as hardened.</li>
 </ul>
 <h2 id="6-config">6. Config<a class="headerlink" href="#6-config" title="Permanent link">&para;</a></h2>
 <p>No new YAML keys. <code>CIVITAS_JWT_*</code> and <code>CIVITAS_GATEWAY_MTLS_ALLOWED_DNS</code> (existing, R3) are read by
-the new WS/gRPC enforcement points exactly as they are by the HTTP middleware today; <code>_AUTH_MIDDLEWARE_PATHS</code>
-(existing) is the sole trigger for turning enforcement on.</p>
+the new WS/gRPC enforcement points exactly as they are by the HTTP middleware today.
+<code>GatewayConfig.tls_ca_cert</code> and <code>GatewayConfig.client_cert_mode</code> (existing fields, previously
+HTTP-only) now also flow into <code>GrpcServer</code> (D4). Two new startup-time <code>ConfigurationError</code>s are
+introduced (D9, D10) — both are refusals to start, never silent behavior changes, consistent with
+every other misconfig check in <code>GatewayConfig.__post_init__</code> / <code>HTTPGateway.on_start</code>.</p>
 <h2 id="7-test-plan-outline">7. Test plan (outline)<a class="headerlink" href="#7-test-plan-outline" title="Permanent link">&para;</a></h2>
 <ul>
-<li>WS: missing/invalid/valid token via subprotocol header → close(4401) / close(4401) / accept.</li>
-<li>WS: mTLS-configured gateway, no client cert / wrong DN / correct DN → close(4401)/close(4401)/accept.</li>
-<li>WS: no HTTP auth middleware configured → unchanged (still open), proving D6 doesn't regress the default.</li>
+<li>WS: missing/invalid/valid token via subprotocol header → close(4401) / close(4401) / accept
+  (echoing the negotiated subprotocol, not omitting it — D2).</li>
+<li>WS: no HTTP auth middleware configured (no JWT verifier) → unchanged (still open), proving D6
+  doesn't regress the default.</li>
+<li>WS: mTLS-only gateway (no JWT), WS route configured → WS stays open <strong>and</strong> <code>on_start</code> logs the
+  D11 warning (assert both: the documented gap and the loud-not-silent mitigation).</li>
 <li>gRPC: missing/invalid/valid JWT metadata → <code>UNAUTHENTICATED</code> / <code>UNAUTHENTICATED</code> / dispatched.</li>
-<li>gRPC: mTLS configured, no client cert / wrong DN / correct DN → <code>UNAUTHENTICATED</code> (or handshake
-  failure if <code>require_client_auth</code> rejects at TLS layer) / <code>PERMISSION_DENIED</code> / dispatched.</li>
-<li>gRPC: DN extraction round-trip test against a real cert fixture (validates D4's <code>rfc4514_string()</code> claim).</li>
+<li>gRPC: <code>client_cert_mode="required"</code>, no client cert → <strong>TLS handshake fails</strong> (connection-level,
+  not a gRPC status — assert the channel never completes, not that a specific status code is
+  returned) / wrong DN → <code>PERMISSION_DENIED</code> / correct DN → dispatched.</li>
+<li>gRPC: <code>client_cert_mode="required"</code>, <code>CIVITAS_GATEWAY_MTLS_ALLOWED_DNS</code> empty → <code>INTERNAL</code> (F6).</li>
+<li>gRPC: <code>client_cert_mode="optional"</code> + <code>grpc_enabled=True</code> → <code>ConfigurationError</code> at startup (D9).</li>
+<li>gRPC: JWT auto-inherit + no <code>tls_cert</code>/<code>tls_key</code> on the gRPC port → <code>ConfigurationError</code> at
+  startup (D10).</li>
+<li>gRPC: <code>Health.Check</code> and <code>ServerReflectionInfo</code> RPCs succeed with <strong>no</strong> token/cert even when JWT
+  and/or mTLS enforcement is active on <code>Agent</code> RPCs (D3/F4 carve-out).</li>
+<li>gRPC: DN extraction round-trip test — <code>_dn_from_pem</code> against a real cert fixture produces a string
+  that exact-matches an allowlist entry populated from the same cert's PEM via the identical helper
+  (validates D4/F2's "same function" guarantee directly, not just by inspection).</li>
+<li><code>_dn_from_pem</code> unit test: same PEM in, same DN string out, called from two call sites (simulating
+  gRPC + a stubbed future HTTP/WS caller) — byte-for-byte identical (F2 regression guard).</li>
 <li>Existing G2/G3 WS/gRPC suites stay green when no auth is configured (regression guard for D6).</li>
 </ul>
 <h2 id="8-non-goals-fast-follows">8. Non-goals / fast-follows<a class="headerlink" href="#8-non-goals-fast-follows" title="Permanent link">&para;</a></h2>
 <ul>
 <li><code>require_api_key</code> on WS/gRPC (D7) — tracked as a fast-follow, not silently dropped.</li>
+<li><strong>WS mTLS — non-goal pending <a href="https://github.com/civitas-io/python-civitas/issues/25">#25</a>.</strong> Once
+  #25 lands a working client-cert delivery mechanism (proxy header forwarding, a custom uvicorn
+  protocol subclass, or a hypercorn migration), WS mTLS should reuse this design's <code>_check_dn</code> +
+  <code>_dn_from_pem</code> (D5) rather than re-deriving DN extraction from whatever #25 ships.</li>
 <li>Per-route (as opposed to gateway-global) WS/gRPC auth — out of scope; HTTP's route-scoped
   middleware doesn't have a WS/gRPC equivalent concept to hang off of yet.</li>
+<li><code>_AUTH_MIDDLEWARE_PATHS</code> string-match fragility beyond exact dotted paths (v1 nice-to-have,
+  untouched by this design since D6 no longer depends on it for WS/gRPC — it still backs the
+  HTTP-only <code>/docs</code> auto-off default in <code>core.py:99-102</code>, unchanged).</li>
+<li>Startup WARNING for api-key-only + WS/gRPC enabled (D7) — deferred; see §9 Q4. (The mTLS-only +
+  WS-routes case is <strong>not</strong> deferred — see D11.)</li>
 </ul>
-<h2 id="9-references">9. References<a class="headerlink" href="#9-references" title="Permanent link">&para;</a></h2>
+<h2 id="9-resolved-decisions-maintainer-sign-off-2026-07-06">9. Resolved decisions (maintainer sign-off — 2026-07-06)<a class="headerlink" href="#9-resolved-decisions-maintainer-sign-off-2026-07-06" title="Permanent link">&para;</a></h2>
 <ul>
-<li>GH #17; <code>docs/design/gateway-auth.md</code> (R3); <code>civitas/gateway/{jwt_auth,mtls,asgi,grpc_server,core}.py</code>.</li>
+<li>✅ <strong>Q1 — D9 stands as specified:</strong> <code>client_cert_mode="optional"</code> + <code>grpc_enabled</code> refuses to start.</li>
+<li>✅ <strong>Q2 — D10 stands as specified:</strong> JWT auto-inherit over a plaintext gRPC port is a hard
+  <code>ConfigurationError</code>, not a warning.</li>
+<li>✅ <strong>Q3 — D3's carve-out exempts both <code>Health</code> and <code>Reflection</code>.</strong></li>
+<li>✅ <strong>Q4 — D7's api-key-only startup warning is deferred</strong> (separate fast-follow, not part of this
+  design's implementation scope).</li>
+<li>✅ <strong>Q5 — Added as D11:</strong> <code>on_start</code> emits a <code>logger.warning</code> when mTLS-only auth (no JWT) is
+  configured alongside non-empty <code>ws_routes</code>.</li>
+<li>✅ <strong>Q6 — Diagram regenerated</strong> (<code>docs/assets/gateway-ws-grpc-auth.svg</code>) to reflect v2's mechanism
+  (JWT-only WS, verifier/mode-keyed D6, Health/Reflection carve-out, D9/D10/D11 guards).</li>
+</ul>
+<h2 id="10-references">10. References<a class="headerlink" href="#10-references" title="Permanent link">&para;</a></h2>
+<ul>
+<li>GH #17; GH #25; <code>docs/design/gateway-auth.md</code> (R3);
+  <code>civitas/gateway/{jwt_auth,mtls,asgi,grpc_server,core}.py</code>.</li>
 </ul>
 
 

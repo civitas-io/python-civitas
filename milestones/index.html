@@ -2901,7 +2901,7 @@ active todo list — everything not yet done).</p>
 </tr>
 <tr>
 <td>—</td>
-<td><a href="#v070--spawn-maturation--gateway-auth-released">v0.7.0 / v0.7.1 — Spawn Maturation, Gateway Auth &amp; Bus-Native Streaming</a></td>
+<td><a href="#v070--spawn-maturation--gateway-auth-released">v0.7.0 / v0.7.1 / v0.7.2 — Spawn Maturation, Gateway Auth &amp; Bus-Native Streaming</a></td>
 <td>Jul 2026</td>
 </tr>
 </tbody>
@@ -4501,7 +4501,8 @@ as R7 (see <a href="../design/bus-native-streaming/"><code>bus-native-streaming.
 <hr />
 <h2 id="v070-spawn-maturation-gateway-auth-released">v0.7.0 — Spawn Maturation &amp; Gateway Auth (Released)<a class="headerlink" href="#v070-spawn-maturation-gateway-auth-released" title="Permanent link">&para;</a></h2>
 <p><strong>Released 2026-07-05.</strong> R1 (non-blocking spawn, #14), R2 (<code>spawn_into</code>, #16), R3 (JWT+mTLS auth + fail-open fix, #18), R4 (encrypted StateStore, #19), R5 (per-agent spawn quotas, #21), R6 (cross-process spawn, #20) all shipped. R7 (bus-native streaming, #15) deferred as a stretch item.</p>
-<p><strong>Status: ✅ Released</strong> — R1–R6 shipped in v0.7.0 (2026-07-05); R7 shipped in v0.7.1.</p>
+<p><strong>Status: ✅ Released</strong> — R1–R6 shipped in v0.7.0 (2026-07-05); R7 shipped in v0.7.1; R8 shipped in
+v0.7.2.</p>
 <p>Theme: <em>finish what v0.6.0 deferred.</em> The largest coherent cluster is <strong>dynamic-spawn maturation</strong>
 (the #8 / #9 / #10 follow-ups + quotas + cross-process), plus completing <strong>gateway auth</strong> and one
 <strong>data-at-rest</strong> security item. This also lays groundwork for a possible future <strong>self-healing</strong>
@@ -4558,10 +4559,16 @@ capability, which builds on supervision + dynamic spawn + telemetry (under inves
 <td>✅ Done (v0.7.1)</td>
 <td><a href="https://github.com/civitas-io/python-civitas/pull/22">#22</a> · <a href="../design/bus-native-streaming/">bus-native-streaming.md</a></td>
 </tr>
+<tr>
+<td>R8</td>
+<td><strong>WS/gRPC gateway auth</strong> — JWT (<code>Sec-WebSocket-Protocol</code> subprotocol) and gRPC (<code>ServerInterceptor</code> + mTLS transport wiring, Health/Reflection carve-out) auto-inherit from the existing HTTP JWT/mTLS config; fail-closed startup validations for the new insecure-config combinations.</td>
+<td>✅ Done (v0.7.2)</td>
+<td><a href="https://github.com/civitas-io/python-civitas/issues/17">#17</a> · <a href="../design/gateway-ws-grpc-auth/">gateway-ws-grpc-auth.md</a></td>
+</tr>
 </tbody>
 </table>
 <p><strong>Suggested cut line:</strong> R1–R2 (spawn follow-ups) are the headline; R3 (auth) + R4 (encrypted store)
-are strong companions; R5–R7 are opportunistic and can slip to a later patch.</p>
+are strong companions; R5–R8 are opportunistic and can slip to a later patch.</p>
 <hr />
 <h2 id="part-2-backlog">Part 2 — Backlog<a class="headerlink" href="#part-2-backlog" title="Permanent link">&para;</a></h2>
 <p><strong>Status: 🗂️ Tracked</strong> — the active todo list: everything not yet done. New work lands here first
@@ -4580,11 +4587,11 @@ Owner column: <code>core</code> = python-civitas, else the target repo.</p>
 </thead>
 <tbody>
 <tr>
-<td><strong>WS/gRPC gateway auth surfaces</strong> — JWT/mTLS auth (R3, v0.7.0) covers HTTP only; WebSocket, gRPC, and <code>/docs</code> are unauthenticated by design today</td>
+<td><strong>HTTP mTLS non-functional on uvicorn</strong> — <code>require_client_cert</code> always 401s a valid client cert because uvicorn never populates the ASGI TLS extension; fails closed, but zero working clients</td>
 <td>🔴 High</td>
-<td>🔄 Starting now</td>
-<td><a href="https://github.com/civitas-io/python-civitas/issues/17">#17</a></td>
-<td>§v0.6.0 G5, §v0.7.0 R3</td>
+<td>📝 needs design</td>
+<td><a href="https://github.com/civitas-io/python-civitas/issues/25">#25</a></td>
+<td>§v0.7.0 R3, design/gateway-ws-grpc-auth.md §8</td>
 </tr>
 </tbody>
 </table>
@@ -4776,7 +4783,7 @@ Owner column: <code>core</code> = python-civitas, else the target repo.</p>
 <p><strong>Recently shipped</strong> (moved out of this backlog; see <a href="#part-1--shipped">Part 1</a> for detail):
 cross-process dynamic spawning (#20), per-agent spawn quotas (#21), encrypted <code>StateStore</code> at rest
 (#19), first-party JWT + mTLS gateway auth for HTTP (#18), non-blocking dynamic spawn +
-<code>spawn_into()</code> (#14, #16), bus-native streaming (#22).</p>
+<code>spawn_into()</code> (#14, #16), bus-native streaming (#22), WS/gRPC gateway auth (#17).</p>
 <hr />
 <h3 id="m41-visual-topology-editor">M4.1 — Visual Topology Editor<a class="headerlink" href="#m41-visual-topology-editor" title="Permanent link">&para;</a></h3>
 <p><strong>Status: ⏸️ Deferred | Priority: 🟢 Low</strong></p>

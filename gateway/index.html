@@ -1765,6 +1765,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#websocket-grpc-auth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WebSocket &amp; gRPC auth
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#openapi-and-swagger-ui" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2187,6 +2198,14 @@
 </tr>
 </tbody>
 </table>
+<hr />
+<h2 id="websocket-grpc-auth">WebSocket &amp; gRPC auth<a class="headerlink" href="#websocket-grpc-auth" title="Permanent link">&para;</a></h2>
+<p>When JWT (<code>require_jwt</code>) and/or mTLS (<code>client_cert_mode</code>) auth is configured for the HTTP surface, that protection is <strong>automatically inherited</strong> by the WebSocket and gRPC surfaces — no extra config keys. This closes the gap where an operator who configured <code>require_jwt</code> got HTTP-only protection while WS and gRPC stayed open.</p>
+<ul>
+<li><strong>WebSocket (JWT only).</strong> The bearer token rides the <code>Sec-WebSocket-Protocol</code> handshake header as a single pinned subprotocol, <code>civitas.bearer.&lt;jwt&gt;</code>. It is verified <strong>before</strong> the socket is accepted; a missing or invalid token closes the handshake (WS close code <code>4401</code>) and the negotiated subprotocol is echoed on success. WS mTLS is not yet supported (see #25) — a gateway configured with <code>client_cert_mode</code> but no JWT logs a startup warning that its WS routes are unauthenticated.</li>
+<li><strong>gRPC (JWT + mTLS).</strong> A server interceptor verifies the <code>authorization: Bearer &lt;jwt&gt;</code> metadata entry and, when <code>client_cert_mode="required"</code>, enforces transport-level mTLS (<code>require_client_auth</code>) plus the same DN allowlist HTTP uses (<code>CIVITAS_GATEWAY_MTLS_ALLOWED_DNS</code>). The <code>Health</code> and <code>ServerReflection</code> services are exempt so load-balancer probes and reflection clients keep working. <code>client_cert_mode="optional"</code> is rejected at startup for gRPC (grpc.aio has no <code>CERT_OPTIONAL</code> equivalent), and enforcing JWT over a plaintext (non-TLS) gRPC port is refused (the token would travel in cleartext).</li>
+</ul>
+<p>See <a href="../design/gateway-ws-grpc-auth/">design/gateway-ws-grpc-auth.md</a> for the full rationale (decisions D1–D11).</p>
 <hr />
 <h2 id="openapi-and-swagger-ui">OpenAPI and Swagger UI<a class="headerlink" href="#openapi-and-swagger-ui" title="Permanent link">&para;</a></h2>
 <p>The gateway generates an OpenAPI spec from the declared routes and any <code>@contract</code> decorators. Documentation is enabled by default:</p>
