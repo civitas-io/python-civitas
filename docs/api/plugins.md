@@ -29,15 +29,9 @@ See [Plugins](../plugins.md) for a full authoring guide.
 
 ## Implementations
 
-::: civitas.plugins.anthropic.AnthropicProvider
-    options:
-      members:
-        - chat
-      show_source: true
-
----
-
-<!-- LiteLLMProvider: Phase 2 stub — autodoc reference removed until class is implemented -->
+Provider implementations (Anthropic, OpenAI, Gemini, Mistral, LiteLLM) live in
+[civitas-contrib](https://github.com/civitas-io/civitas-contrib).
+Install with e.g. `pip install civitas-contrib[anthropic]`.
 
 ---
 
@@ -74,14 +68,9 @@ See [Plugins](../plugins.md) for a full authoring guide.
 
 ---
 
-::: civitas.plugins.sqlite_store.SQLiteStateStore
-    options:
-      members:
-        - get
-        - set
-        - delete
-        - close
-      show_source: true
+SQLiteStateStore and PostgresStateStore live in
+[civitas-contrib](https://github.com/civitas-io/civitas-contrib).
+Install with `pip install civitas-contrib` or `pip install civitas-contrib[postgres]`.
 
 ---
 

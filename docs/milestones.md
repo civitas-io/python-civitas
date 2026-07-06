@@ -13,6 +13,7 @@ Development progress across all phases of Civitas.
 | ⏳ | Planned |
 | ⏸️ | Deferred |
 | 💡 | Idea — to be specced |
+| 🗂️ | Tracked backlog (index of deferred work) |
 
 ---
 
@@ -24,23 +25,29 @@ Development progress across all phases of Civitas.
 | 2 | [Ecosystem — Transports](#m21-zmq-multi-process-transport) | ✅ Completed | Mar 2026 |
 | 2 | [Ecosystem — Observability](#m23-otel-observability) | ✅ Completed | Apr 2026 |
 | 2 | [Ecosystem — EvalLoop (local)](#m25-evalloop) | ✅ Completed | Apr 2026 |
-| 2 | [Ecosystem — Remote Eval Exporters](#m26-remote-eval-exporters) | ⏳ Planned | v0.4 |
+| 2 | [Ecosystem — Remote Eval Exporters](#m26-remote-eval-exporters) | ✅ Completed | Apr 2026 |
 | 3 | [Developer Experience — CLI & Dashboard](#phase-3-developer-experience) | ✅ Completed | Mar 2026 |
 | 3 | [Developer Experience — MCP Integration](#m34-mcp-integration) | ✅ Completed | Apr 2026 |
 | 3 | [Developer Experience — GenServer](#m35-genserver) | ✅ Completed | Apr 2026 |
 | — | [Infrastructure & Release](#infrastructure--release) | ✅ Completed | Apr 2026 |
-| 4 | [Dynamic Agent Spawning](#m41b-dynamic-agent-spawning) | ⏳ Planned | v0.4 |
-| 4 | [Security Hardening](#m42-security-hardening) | ⏳ Planned | v0.4 |
+| 4 | [Dynamic Agent Spawning](#m41b-dynamic-agent-spawning) | ✅ Completed | Apr 2026 |
+| 4 | [Security Hardening](#m42-security-hardening) | ✅ Completed | May 2026 |
 | 4 | [Codebase Security & Enterprise Posture](#m43-codebase-security--enterprise-posture) | ✅ Completed | Apr 2026 |
-| 4 | [Capability-Aware Registry](#m44-capability-aware-registry) | ⏳ Planned | v0.5 |
-| 4 | [HTTP Gateway](#http-gateway) | ⏳ Planned | v0.4 |
-| 4 | [Gateway API Surface](#gateway-api-surface) | ⏳ Planned | v0.4 |
-| 4 | [Postgres StateStore + Migration](#postgres-statestore--migration) | 💡 Idea | v0.4 |
+| 4 | [Capability-Aware Registry](#m44-capability-aware-registry) | ✅ Completed | May 2026 |
+| 4 | [HTTP Gateway](#http-gateway) | ✅ Completed | Apr 2026 |
+| 4 | [Gateway API Surface](#gateway-api-surface) | ✅ Completed | Apr 2026 |
+| 4 | [Postgres StateStore + Migration](#postgres-statestore--migration) | ✅ Completed | May 2026 |
+| — | [v0.4.0 Release Fixes](#v040-release-fixes) | ✅ Completed | Jul 2026 |
+| — | [v0.5.0 — Released](#v050--released) | ✅ Released | Jul 2026 |
+| — | [v0.6.0 — Gateway Completion](#v060--gateway-completion-released) | ✅ Released | Jul 2026 |
+| — | [v0.7.0 — Spawn Maturation & Gateway Auth](#v070--spawn-maturation--gateway-auth-released) | ✅ Released | Jul 2026 |
+| — | [Deferred Backlog](#deferred-backlog) | 🗂️ Tracked | — |
+| — | Self-Healing / Autonomous Remediation | 💡 Idea | design/self-healing.md (draft) |
 | 4 | [Visual Topology Editor](#m41-visual-topology-editor) | ⏸️ Deferred | — |
-| 5 | [Prompt Library & Playground](#prompt-library--playground) | 💡 Idea | v0.5+ |
-| 5 | [LLM Gateway](#llm-gateway) | 💡 Idea | v0.5+ |
-| 5 | [Fabrica — Tools Gateway](#fabrica--tools-gateway) | 💡 Idea | v0.5+ |
-| 5 | [Skills Gateway](#skills-gateway) | 💡 Idea | v0.5+ |
+| 5 | [Prompt Library & Playground (civitas-contrib)](#prompt-library--playground) | 💡 Idea | v0.5+, not this repo |
+| 5 | [LLM Gateway](#llm-gateway) | ⏸️ Moved to Presidium | — |
+| 5 | [Fabrica — Tools Gateway (civitas-forge)](#fabrica--tools-gateway) | 💡 Idea | v0.5+, not this repo |
+| 5 | [Skills Gateway (civitas-contrib)](#skills-gateway) | 💡 Idea | v0.5+, not this repo |
 
 ---
 
@@ -57,7 +64,7 @@ Development progress across all phases of Civitas.
 | M1.5 | `InProcessTransport` + `MessageBus` routing; request-reply with ephemeral topics | 🔴 High | ✅ |
 | M1.6 | `StateStore` protocol; SQLite plugin; state persistence across restarts | 🟡 Medium | ✅ |
 | M1.7 | Plugin system; LLM providers (Anthropic, OpenAI, Gemini, Mistral, LiteLLM) | 🔴 High | ✅ |
-| M1.8 | Personal AI Assistant demo (Telegram gateway + skill agents) | 🟡 Medium | ⏸️ Deferred |
+| M1.8 | **Medicus self-healing hero demo** (P0+P1) — flagship example; replaces the deferred Telegram assistant | 🟡 Medium | 💡 Idea |
 
 ---
 
@@ -165,21 +172,21 @@ Corrective observability loop: a supervised `EvalAgent` process monitors agent b
 
 ### M2.6 — Remote Eval Exporters
 
-**Status: ⏳ Planned — v0.4 | Priority: 🔴 High**
+**Status: ✅ Completed — v0.4 | Priority: 🔴 High**
 
 Plugin adapters connecting Civitas's `EvalEvent` stream to external eval engines. All platforms consume the same `EvalEvent` schema; each exporter translates to the platform's expected format. OTEL GenAI Semantic Conventions are the alignment layer — `EvalEvent` fields map directly to standard OTEL attributes. See [design spec](design/evalloop.md).
 
 | Deliverable | Status |
 |-------------|--------|
-| `EvalExporter` protocol implementation + registration on `EvalAgent` | ⏳ |
-| `civitas[arize]` — Arize Phoenix exporter (OTEL GenAI spans via OTLP) | ⏳ |
-| `civitas[fiddler]` — Fiddler exporter (two-way: export + receive guardrail signals as `CorrectionSignal`) | ⏳ |
-| `civitas[langfuse]` — Langfuse exporter (open-source, self-hostable) | ⏳ |
-| `civitas[braintrust]` — Braintrust exporter | ⏳ |
-| `civitas[langsmith]` — LangSmith exporter | ⏳ |
-| `emit_eval()` forwards to all registered exporters in addition to local EvalAgent | ⏳ |
-| Topology YAML — declare exporters per eval_agent node | ⏳ |
-| ≥ 5 unit tests per exporter (mocked SDK calls) | ⏳ |
+| `EvalExporter` protocol implementation + registration on `EvalAgent` | ✅ |
+| `civitas[arize]` — Arize Phoenix exporter (OTEL GenAI spans via OTLP) | ✅ |
+| `civitas[fiddler]` — Fiddler exporter (export to Fiddler AI; two-way guardrail receive deferred to M4.2) | ✅ |
+| `civitas[langfuse]` — Langfuse exporter (open-source, self-hostable) | ✅ |
+| `civitas[braintrust]` — Braintrust exporter | ✅ |
+| `civitas[langsmith]` — LangSmith exporter | ✅ |
+| `emit_eval()` forwards to all registered exporters in addition to local EvalAgent | ✅ |
+| Topology YAML — declare exporters per eval_agent node | ✅ |
+| ≥ 5 unit tests per exporter (mocked SDK calls) | ✅ |
 
 ---
 
@@ -202,91 +209,39 @@ Plugin adapters connecting Civitas's `EvalEvent` stream to external eval engines
 
 ### M3.4 — MCP Integration
 
-**Status: ✅ Completed — April 2026**
+**Status: ✅ Completed — April 2026 | Corrected — July 2026**
 
-MCP protocol plumbing — the wire layer between Civitas agents and MCP tool servers. Agents call tools by direct address (`mcp://server/tool`); the runtime handles handshake, transport, schema negotiation, and tracing. Agents also expose themselves as MCP servers so external LLM clients can discover and call them.
+> **Correction (July 2026):** This section originally described `MCPClient` and `MCPTool` as
+> civitas-core deliverables. Per [`boundary.md`](https://github.com/civitas-io/context)'s
+> ownership split, the MCP tools gateway (Fabrica) is a civitas-contrib concern. The actual
+> implementation moved there; civitas core kept only the wire-layer types and the lazy-import
+> integration point. Table below reflects current reality, not the original plan.
 
-**Scope:** protocol wire layer only. Connection pooling, circuit breakers, unified tool namespacing, and semantic retrieval are **not** in scope — they belong to Fabrica. See [design spec](design/mcp-integration.md).
+MCP protocol plumbing — the wire layer between Civitas agents and MCP tool servers. Agents call tools by direct address (`mcp://server/tool`); civitas core owns the config types and the `AgentProcess.connect_mcp()` integration point; the actual client/transport implementation lives in Fabrica (civitas-contrib).
 
-**Dependency chain:** M3.4 → M4.4 (ToolStore) → Fabrica (pooling + retrieval)
+**Scope:** civitas core keeps config types (no `mcp` SDK dependency at import time) and the `connect_mcp()` lazy-import hook. Connection handling, tool wrapping, connection pooling, circuit breakers, unified tool namespacing, and semantic retrieval are **not** in core scope — they belong to Fabrica. See [design spec](design/mcp-integration.md) (describes the original plan; superseded on the client/tool split, see correction above).
 
-| Deliverable | Status |
-|-------------|--------|
-| `civitas[mcp]` optional extra — `mcp>=1.0` dependency | ✅ |
-| `MCPClient` — connect (stdio + SSE), `list_tools`, `call_tool`, persistent session via `AsyncExitStack` | ✅ |
-| `MCPTool(ToolProvider)` — `mcp://server_name/tool_name` name scheme | ✅ |
-| `AgentProcess.connect_mcp()` — connect + auto-register tools into `self.tools`; idempotent | ✅ |
-| `self.tools.get("mcp://server/tool")` resolves to the registered `MCPTool` | ✅ |
-| `MCPTool.execute()` emits `civitas.mcp.call` OTEL span | ✅ |
-| `CivitasMCPServer(GenServer)` — deferred to Fabrica (scope boundary decision) | ⏸️ |
-| Topology YAML `mcp.servers` block — auto-connect at agent startup | ✅ |
-| 23 unit tests | ✅ |
+**Dependency chain:** M3.4 (types + integration point) → Fabrica (`MCPClient`, `MCPTool`, pooling, retrieval)
 
-**Explicitly out of scope for M3.4:**
+| Deliverable | Status | Lives in |
+|-------------|--------|----------|
+| `civitas.mcp.types` — `MCPServerConfig`, `MCPToolSchema`, `MCPToolError` (no `mcp` SDK import) | ✅ | civitas core |
+| `AgentProcess.connect_mcp(config)` — lazily imports `fabrica.mcp.client.MCPClient`, registers tools into `self.tools`; idempotent | ✅ | civitas core |
+| `ToolRegistry.deregister_prefix(prefix)` | ✅ | civitas core |
+| Topology YAML `mcp.servers` block — parsed into `Runtime._mcp_configs`, auto-connect at agent startup | ✅ | civitas core |
+| `MCPClient` — connect (stdio + SSE), `list_tools`, `call_tool` | ✅ | **civitas-contrib (fabrica)** — not this repo |
+| `MCPTool(ToolProvider)` — `mcp://server_name/tool_name` name scheme, `civitas.mcp.call` OTEL span | ✅ | **civitas-contrib (fabrica)** — not this repo |
+| `civitas[mcp]` optional extra | ❌ removed | use `pip install fabrica[mcp]` instead |
+| `CivitasMCPServer(GenServer)` — expose an agent tree as an MCP server | ⏸️ | deferred to Fabrica (scope boundary decision), not started anywhere |
+| Unit tests (types + YAML parsing, core-side only) | ✅ | civitas core (`tests/unit/test_mcp.py`) |
+
+**Explicitly out of scope for civitas core:**
+- `MCPClient` / `MCPTool` implementation — Fabrica (civitas-contrib)
 - Connection pooling / persistent sessions — Fabrica (`MCPToolSource`)
 - Circuit breakers per server — Fabrica
 - Semantic or keyword tool retrieval (`find_tools`) — Fabrica
 - Unified cross-agent tool namespace — M4.4 ToolStore
 - Per-agent credential isolation — M4.2 Security Hardening
-
-#### Implementation checklist
-
-Ordered tasks — each step is independently mergeable.
-
-1. **Package setup**
-   - [ ] `civitas/mcp/__init__.py` — package stub
-   - [ ] `civitas/mcp/types.py` — `MCPServerConfig` (name, transport, command/args/env/url), `MCPToolSchema`
-   - [ ] `civitas[mcp]` extra in `pyproject.toml` — `mcp>=1.0`
-
-2. **MCP client**
-   - [ ] `civitas/mcp/client.py` — `MCPClient.__init__(config: MCPServerConfig)`
-   - [ ] `MCPClient.list_tools()` — stdio transport: open subprocess session, call `list_tools`, close
-   - [ ] `MCPClient.list_tools()` — SSE transport: open HTTP session, call `list_tools`, close
-   - [ ] `MCPClient.call_tool(name, arguments)` — stdio transport
-   - [ ] `MCPClient.call_tool(name, arguments)` — SSE transport
-
-3. **MCPTool**
-   - [ ] `civitas/mcp/tool.py` — `MCPTool(ToolProvider)` wrapping `MCPClient` + `MCPToolSchema`
-   - [ ] `MCPTool.name` returns `mcp://server_name/tool_name`
-   - [ ] `MCPTool.schema` returns the JSON Schema from the MCP tool definition
-   - [ ] `MCPTool.execute(**kwargs)` calls `client.call_tool()` and returns result
-   - [ ] `MCPTool.execute()` emits `civitas.mcp.call` OTEL span (attributes: server, tool, transport)
-
-4. **AgentProcess integration**
-   - [ ] `AgentProcess.connect_mcp(config)` — creates `MCPClient`, calls `list_tools`, registers each as `MCPTool` in `self.tools`
-   - [ ] `connect_mcp()` is idempotent: deregisters existing tools for the same server before re-registering
-   - [ ] `self.tools.get("mcp://github/create_issue")` resolves correctly via registered name
-
-5. **MCP server exposure**
-   - [ ] `civitas/mcp/server.py` — `CivitasMCPServer(GenServer)`
-   - [ ] `CivitasMCPServer.init()` — starts MCP stdio server in background task via `mcp.Server`
-   - [ ] `list_tools` handler — returns schemas from injected `ToolRegistry`
-   - [ ] `call_tool` handler — calls the matching `MCPTool.execute()` or raises `ToolNotFoundError`
-
-6. **Topology YAML support**
-   - [ ] Runtime loader reads `mcp.servers` block, creates `MCPServerConfig` instances
-   - [ ] Agents auto-connect configured servers during startup (before first message)
-   - [ ] `mcp.expose.enabled: true` starts `CivitasMCPServer` as a supervised child
-   - [ ] `civitas topology validate` accepts `mcp:` section without errors
-
-7. **Tests (≥ 10 unit, ≥ 2 integration)**
-   - [ ] `MCPServerConfig` validation (missing transport fields, unknown transport)
-   - [ ] `MCPTool.name` follows `mcp://` scheme
-   - [ ] `MCPTool.schema` returns correct JSON Schema
-   - [ ] `MCPTool.execute()` calls `client.call_tool()` with correct args
-   - [ ] `MCPTool.execute()` emits OTEL span
-   - [ ] `connect_mcp()` registers tools in `self.tools`
-   - [ ] `connect_mcp()` deregisters old tools on reconnect (idempotency)
-   - [ ] `self.tools.get("mcp://server/tool")` returns correct tool
-   - [ ] `CivitasMCPServer` `list_tools` returns all registered tools
-   - [ ] `CivitasMCPServer` `call_tool` routes to correct tool
-   - [ ] Integration: agent connects to real stdio MCP echo server, calls a tool
-   - [ ] Integration: `CivitasMCPServer` handles `list_tools` request from real MCP client
-
-8. **Release**
-   - [ ] `CHANGELOG.md` entry under `## [0.3.0]`
-   - [ ] Example: `examples/mcp_agent.py` — agent connecting to a stdio MCP server
-   - [ ] `mkdocs.yml` nav updated with MCP integration design doc
 
 ---
 
@@ -373,8 +328,7 @@ Ordered tasks — each step is independently mergeable.
 | PyPI publishing via OIDC trusted publishing | ✅ | Apr 2026 |
 | GitHub Pages documentation site | ✅ | Apr 2026 |
 | Test coverage raised from 85% → 90%+ | ✅ | Apr 2026 |
-| Framework adapters: LangGraph, OpenAI Agents SDK | ✅ | Mar 2026 |
-| Framework adapters: CrewAI | ⏳ | — |
+| Framework adapters: LangGraph, OpenAI Agents SDK, CrewAI (stub) | ✅ | Mar 2026 — **civitas-contrib**, not this repo; `civitas/adapters/` does not exist in python-civitas |
 
 ---
 
@@ -382,33 +336,114 @@ Ordered tasks — each step is independently mergeable.
 
 ### M4.1b — Dynamic Agent Spawning
 
-**Status: ⏳ Planned — v0.4 | Priority: 🔴 High**
+**Status: ✅ Completed — April 2026 | Priority: 🔴 High**
 
-Agents spawn and decommission other agents at runtime. Enables LLM-driven orchestrators that create specialist agents on demand.
+Agents spawn and decommission other agents at runtime. Enables LLM-driven orchestrators that create specialist agents on demand. See [design spec](design/dynamic-spawning.md).
+
+**Design decisions locked:**
+- `DynamicSupervisor` is a separate class from `Supervisor` (Erlang-faithful separation — ONE_FOR_ONE only, starts empty)
+- `DynamicSupervisor` is declared as a static child in topology YAML; its *children* are dynamic
+- `self.spawn()` targets the **nearest ancestor `DynamicSupervisor`** — no explicit target at the call site
+- `on_spawn_requested` is a governance veto hook on `DynamicSupervisor` (return `False` to deny)
+- `max_children` enforces blast radius per `DynamicSupervisor`
+
+**Open design questions (being resolved):**
+- ~~Q2 — Restart semantics~~ → transient default; no escalation on exhaustion; `on_child_terminated` hook
+- Q3 — `on_spawn_requested` placement (supervisor vs agent vs both)
+- ~~Q4 — Limit semantics~~ → both: `max_children` (concurrent) + `max_total_spawns` (lifetime budget)
+- ~~Q5 — Despawn semantics~~ → `despawn()` hard stop + `stop(drain, timeout)` soft stop (awaitable, timeout fallback to hard stop)
+- ~~Q6 — Cross-process spawning~~ → bus message protocol from day one; in-process v0.4; cross-process v0.5 (homogeneous deployments)
+- ~~Q7 — `topology show` live state~~ → `TopologyServer(GenServer)` JSON HTTP endpoint; CLI pings `/topology`; falls back to static YAML if unreachable
 
 | Deliverable | Status |
 |-------------|--------|
-| `self.spawn(agent_class, name, ...)` on `AgentProcess` | ⏳ |
-| Spawned agents registered with parent lineage in supervision tree | ⏳ |
-| `self.despawn(name)` — clean decommission with state cleanup | ⏳ |
-| `on_spawn_requested` governance hook | ⏳ |
-| `max_concurrent_children` blast radius limit | ⏳ |
-| Topology YAML round-trip (spawned agents reflected in `topology show`) | ⏳ |
+| `DynamicSupervisor` class — starts empty, ONE_FOR_ONE, `max_children` + `max_total_spawns` limits | ✅ |
+| `type: dynamic_supervisor` in topology YAML | ✅ |
+| `self.spawn(AgentClass, name, config)` — nearest ancestor routing | ✅ |
+| `self.despawn(name)` — hard stop; `self.stop(drain, timeout)` — soft stop | ✅ |
+| `on_spawn_requested` governance hook on `DynamicSupervisor` | ✅ |
+| `on_child_terminated` notification hook on spawning agent | ✅ |
+| `Runtime.spawn()` / `Runtime.despawn()` / `Runtime.stop_agent()` — external entry points | ✅ |
+| `SpawnError` added to error hierarchy | ✅ |
+| 38 unit + integration tests | ✅ |
+| `TopologyServer(GenServer)` — supervised JSON HTTP management endpoint | ✅ |
+| `topology show` pings `TopologyServer`; falls back to static YAML | ✅ |
+| `examples/dynamic_spawning.py` | ✅ |
 
 ---
 
 ### M4.2 — Security Hardening
 
-**Status: ⏳ Planned — v0.4 | Priority: 🔴 High**
+**Status: ✅ Completed — v0.4 | Priority: 🔴 High**
+
+Design approved. Splits into five independently shippable sub-milestones — see [`docs/design/security-hardening.md`](design/security-hardening.md) for full rationale, design decisions, and resolved questions.
+
+Recommended delivery order: **a → c → d → e → b**.
+
+#### M4.2a — Identity & Signing
+
+**Status: ✅ Complete**
 
 | Deliverable | Status |
 |-------------|--------|
-| mTLS for all inter-agent communication (ZMQ + NATS) | ⏳ |
-| Message signing with tamper detection | ⏳ |
-| Credential isolation (agents cannot access other agents' secrets) | ⏳ |
-| Secret injection via environment / mounted secrets (not YAML) | ⏳ |
-| Sandboxed tool execution with filesystem isolation | ⏳ |
-| Audit log: all events logged with agent identity | ⏳ |
+| `civitas/security/` package: `IdentityConfig`, `SigningConfig`, `SecurityConfig` | ✅ |
+| `AgentIdentity`: Ed25519 keypair generation, OpenSSH-style storage (`id_ed25519` / `id_ed25519.pub`) | ✅ |
+| `KeyRegistry`: public key lookup by agent name | ✅ |
+| `MessageSigner`: sign outgoing envelopes (v=2 wire format), verify incoming | ✅ |
+| `NonceCache`: bounded LRU replay protection (10k entries) | ✅ |
+| `SignatureError` — new `CivitasError` subclass | ✅ |
+| `SigningSerializer` wrapping `MsgpackSerializer` | ✅ |
+| Multi-node key distribution: public keys in topology YAML; spawn-message vouching for dynamic agents | ✅ |
+| `security:` YAML block parsing in `Runtime.from_config()` | ✅ |
+| InProcess transport: signing bypassed entirely (D9 performance rule) | ✅ |
+| `signing.allow_unsigned: true` escape hatch for rolling upgrades | ✅ |
+| Unit + integration tests ≥90% coverage on new code | ✅ |
+
+#### M4.2b — Transport mTLS
+
+**Status: ✅ Complete**
+
+| Deliverable | Status |
+|-------------|--------|
+| ZMQ CURVE: server keypair on proxy, client keypairs on Workers | ✅ |
+| NATS TLS + nkeys: Ed25519-based subject auth, TLS cert/key/CA config | ✅ |
+| `security.transport` YAML block plumbing into ZMQ and NATS transports | ✅ |
+| `civitas security init` CLI — scaffold keys and config for ZMQ/NATS deployments | ✅ |
+
+#### M4.2c — Credential Isolation
+
+**Status: ✅ Complete**
+
+| Deliverable | Status |
+|-------------|--------|
+| `${VAR_NAME}` env-var substitution in `Runtime.from_config()` | ✅ |
+| Unset variable raises `ConfigurationError` with clear message | ✅ |
+| `civitas.secrets.SecretsProvider` protocol + file/env/Vault implementations | ✅ |
+| Per-agent `credentials:` block in topology YAML | ✅ |
+| Plugin handles: `self.llm("anthropic")` resolves per-agent credential at call time | ✅ |
+
+#### M4.2d — Tool Sandbox
+
+**Status: ✅ Complete**
+
+| Deliverable | Status |
+|-------------|--------|
+| Bubblewrap wrapper for MCP subprocess execution on Linux | ✅ |
+| `sandbox:` YAML block per MCP server (network, filesystem allowlists) | ✅ |
+| Refuse-to-start when `sandbox.enabled: true` and `bwrap` unavailable | ✅ |
+| Clear error messages with per-distro install instructions | ✅ |
+
+#### M4.2e — Audit Log
+
+**Status: ✅ Complete**
+
+| Deliverable | Status |
+|-------------|--------|
+| `civitas.audit` module: `AuditEvent` TypedDict, `AuditSink` protocol | ✅ |
+| `JsonlFileSink`: batched fsync (100ms / 100 events), `sync_writes` option, SIGHUP rotation | ✅ |
+| `NullSink` for tests | ✅ |
+| Emission at chokepoints: `MessageBus.route()`, `MCPTool.execute()`, sandbox violations, secret access | ✅ |
+| `SyslogSink` and `OtlpSink` implementations | ✅ |
 
 ---
 
@@ -437,82 +472,476 @@ The deliverables are split across tooling (CI-enforced scanners), documentation 
 
 ### M4.4 — Capability-Aware Registry
 
-**Status: ⏳ Planned — v0.5 | Priority: 🟡 Medium**
+**Status: ✅ Completed — May 2026 | Priority: 🟡 Medium**
 
-Agents and LLMs discover capabilities at runtime — no pre-wiring needed.
+Agents declare capability tags at the class level; the registry supports filtered lookups; agents can route to any capable peer without knowing its name.
 
 | Deliverable | Status |
 |-------------|--------|
-| `AgentCardStore`: auto-generated from `@agent` decorator, queryable by skill / input type / tags | ⏳ |
-| `ToolStore`: unified registry replacing per-agent `ToolRegistry` | ⏳ |
-| `@agent(expose_as_tool=True)` — agent-as-tool | ⏳ |
-| `KeywordBackend` (default) and `LocalEmbedBackend` (`civitas[search]`) | ⏳ |
-| Schema versioning (semver) with forward compatibility | ⏳ |
-| 25+ test cases covering all registry operations | ⏳ |
+| `RoutingEntry.capabilities` + `RoutingEntry.capability_metadata` fields | ✅ |
+| `LocalRegistry.register()` / `register_remote()` accept capabilities | ✅ |
+| `find_by_capability(tag)` — all agents (local + remote) with that tag | ✅ |
+| `find_by_capabilities(tags, match="any"\|"all")` — multi-tag filtered lookups | ✅ |
+| `AgentProcess.capabilities` / `capability_metadata` class-level declarations | ✅ |
+| `AgentProcess.send_capable(capability, payload)` — fire-and-forget to any capable agent | ✅ |
+| `CapabilityNotFoundError` raised when no registered agent declares the tag | ✅ |
+| YAML `capabilities:` / `capability_metadata:` block overrides class-level defaults | ✅ |
+| Distributed propagation: Worker announcements carry capabilities; `_on_remote_register` populates remote entries | ✅ |
+| `RegistryListener` hook: async callbacks fired after every register/deregister (Presidium integration point) | ✅ |
+| `LocalRegistry.add_listener()` / `remove_listener()` — fire-and-forget tasks with error logging | ✅ |
+| Public exports: `RoutingEntry`, `RegistryListener`, `CapabilityNotFoundError` from `civitas` top-level | ✅ |
+| 29 unit tests covering all registry operations, listener lifecycle, and `send_capable` | ✅ |
+
+#### Design notes
+
+**Boundary with Presidium**: Civitas capability tags are operational routing data — plain strings by convention (e.g., `"text.summarize"`). Presidium owns the controlled vocabulary, human-readable descriptions, and governance metadata. Presidium plugs in via the `RegistryListener` hook — it receives every register/deregister event with full capability info and maintains its own authoritative Agent Registry.
+
+**Distributed topology**: Every node (Runtime and Worker) has a complete capability view of the deployment. Worker announcements include `capabilities` and `capability_metadata`; the Runtime's `_on_remote_register` handler populates `register_remote()` entries. `send_capable()` thus works transparently across process boundaries.
+
+**Tag format**: plain strings, dot-namespaced by convention (`"domain.action"`). No enum enforcement — Presidium owns the controlled vocabulary and Civitas treats tags as opaque routing keys.
 
 ---
 
 ### HTTP Gateway
 
-**Status: ⏳ Planned — v0.4 | Priority: 🔴 High**
+**Status: ✅ Completed — April 2026**
 
-Supervised edge process bridging external HTTP/gRPC traffic into the Civitas message bus. See [design spec](design/http-gateway.md).
+Supervised edge process bridging external HTTP traffic into the Civitas message bus. HTTP/1.1 + HTTP/2 (uvicorn) and HTTP/3 / QUIC (aioquic) in v0.4. gRPC deferred to v0.5. See [design spec](design/http-gateway.md).
 
 | Deliverable | Status |
 |-------------|--------|
-| `HTTPGateway(AgentProcess)` — ASGI app, request translation, route table | ⏳ |
-| HTTP/1.1 + HTTP/2 via uvicorn[standard] — uvloop + httptools (`civitas[http]`) | ⏳ |
-| HTTP/3 / QUIC via aioquic — `Alt-Svc` header, 0-RTT (`civitas[http3]`) | ⏳ |
-| gRPC via grpclib (`civitas[grpc]`) + grpcio C core (`civitas[grpc-fast]`) | ⏳ |
-| Custom `.proto` loading from `proto_dir` | ⏳ |
-| TLS config from `settings` / topology YAML / env vars | ⏳ |
-| Topology YAML support (`type: http_gateway`) | ⏳ |
-| Graceful drain on supervisor shutdown | ⏳ |
-| ≥ 20 unit tests + ≥ 5 integration tests | ⏳ |
-| Documentation + examples for all four protocols | ⏳ |
+| `HTTPGateway(AgentProcess)` — ASGI app, request translation, route table | ✅ |
+| HTTP/1.1 + HTTP/2 via uvicorn[standard] — uvloop + httptools (`civitas[http]`) | ✅ |
+| HTTP/3 / QUIC via aioquic — `Alt-Svc` header, 0-RTT (`civitas[http3]`) | ✅ |
+| TLS config from topology YAML / env vars | ✅ |
+| Topology YAML support (`type: http_gateway`) | ✅ |
+| Graceful drain on supervisor shutdown | ✅ |
+| ≥ 20 unit tests + ≥ 5 integration tests | ✅ |
+| `examples/http_gateway.py` | ✅ |
+| gRPC via grpclib / grpcio | ⏸️ v0.5 |
+| Custom `.proto` loading from `proto_dir` | ⏸️ v0.5 |
+
+#### Implementation checklist
+
+1. **Package setup**
+   - [x] `civitas/gateway/__init__.py` — package stub, re-export `HTTPGateway`
+   - [x] `civitas[http]` extra in `pyproject.toml` — `uvicorn[standard]>=0.30`
+   - [x] `civitas[http3]` extra — `aioquic>=1.0`
+
+2. **Core — `civitas/gateway/core.py`**
+   - [x] `GatewayConfig` dataclass — `host`, `port`, `port_quic`, `tls_cert`, `tls_key`, `request_timeout`, `enable_http3`
+   - [x] `HTTPGateway(AgentProcess)` — holds config, route table, uvicorn server reference
+   - [x] `on_start()` — install uvloop (Linux/macOS), start uvicorn server as background task
+   - [x] `on_stop()` — signal uvicorn to drain in-flight requests, cancel server task
+   - [x] `handle()` — handles internal messages (e.g., topology-triggered reconfiguration); no-op for now
+
+3. **ASGI app — `civitas/gateway/asgi.py`**
+   - [x] `GatewayASGI.__call__(scope, receive, send)` — ASGI callable
+   - [x] HTTP scope: parse method, path, headers, body
+   - [x] Route lookup: path + method → agent name, mode (`call` vs `cast`)
+   - [x] Default routes: `POST /agents/{name}` → `call`, `POST /agents/{name}/cast` → `cast`
+   - [x] HTTP → `Message` translation: body → `payload`, `X-Civitas-Type` → `type`, `traceparent` → trace context
+   - [x] `call()` mode: await reply, serialise `payload` as JSON response body
+   - [x] `cast()` mode: fire-and-forget, return HTTP 202
+   - [x] Timeout: `asyncio.wait_for` with `request_timeout`; return HTTP 504 on expiry
+   - [x] Error mapping: `payload.error` → 400, no route → 404, unhandled exception → 500
+
+4. **Router — `civitas/gateway/router.py`**
+   - [x] `RouteEntry` dataclass — `method`, `path_pattern`, `agent`, `mode`
+   - [x] `RouteTable` — ordered list of `RouteEntry`; `match(method, path)` returns `(RouteEntry, path_params)`
+   - [x] Path parameter extraction: `{name}` segments captured into dict
+   - [x] Default route fallback when no custom routes are configured
+   - [x] YAML route loading: `config.routes` list → `RouteEntry` instances
+
+5. **HTTP/3 — `civitas/gateway/h3.py`**
+   - [x] `H3Server` — wraps aioquic QUIC server; runs on `port_quic` (UDP)
+   - [x] HTTP/3 request → same `GatewayASGI` handler (reuse ASGI layer)
+   - [x] `Alt-Svc: h3=":port_quic"` header injected into all HTTP/1.1 and HTTP/2 responses
+   - [x] `H3Server` started / stopped alongside uvicorn in `on_start()` / `on_stop()`
+
+6. **Topology YAML support**
+   - [x] `type: http_gateway` in `Runtime.from_config()` `_build_node()`
+   - [x] `GatewayConfig` populated from YAML `config:` block; `!ENV` resolver for TLS cert/key paths
+   - [x] `civitas topology validate` accepts `type: http_gateway` nodes without errors
+   - [x] `civitas topology show` displays gateway node with `[http]` / `[http3]` label
+
+7. **Tests (≥ 20 unit, ≥ 5 integration)**
+   - [x] `RouteTable.match()` — exact path, path parameters, method mismatch, no route
+   - [x] Default route fallback: `POST /agents/foo` → `call("foo", body)`
+   - [x] `call` mode: reply payload returned as JSON 200
+   - [x] `cast` mode: 202 returned immediately
+   - [x] Timeout: `request_timeout=0.001` → 504
+   - [x] Error mapping: `payload.error` → 400; unhandled exception → 500
+   - [x] No route: 404
+   - [x] `traceparent` header propagated into `message.trace_id`
+   - [x] `GatewayConfig` validation: missing TLS cert when `enable_http3=True`
+   - [x] `on_start()` installs uvloop on Linux
+   - [x] `on_stop()` cancels server task cleanly
+   - [x] Integration: real HTTP client (`httpx.AsyncClient`) → gateway → `AgentProcess` → reply
+   - [x] Integration: concurrent requests all return correct replies
+   - [x] Integration: gateway node in topology YAML starts correctly via `Runtime.from_config()`
+
+8. **Example + release**
+   - [x] `examples/http_gateway.py` — minimal REST API with two agent endpoints
+   - [x] `CHANGELOG.md` entry under `## [Unreleased]`
 
 ---
 
 ### Gateway API Surface
 
-**Status: ⏳ Planned — v0.4 | Priority: 🔴 High**
+**Status: ✅ Completed — April 2026**
 
-Minimal integration surface on top of HTTPGateway: declarative routes, Pydantic request/response validation, middleware chain, and auto-generated OpenAPI docs. See [design spec](design/gateway-api-surface.md).
+Declarative routes, Pydantic request/response validation, middleware chain, and auto-generated OpenAPI 3.1 docs on top of `HTTPGateway`. See [design spec](design/gateway-api-surface.md).
 
 | Deliverable | Status |
 |-------------|--------|
-| `@route` decorator — maps GenServer method to HTTP method + path | ⏳ |
-| Path parameter extraction into `message.payload` | ⏳ |
-| `@contract` decorator — Pydantic request/response validation, 422 error shape | ⏳ |
-| `GatewayRequest` / `GatewayResponse` middleware types | ⏳ |
-| Global + route-scoped middleware chain | ⏳ |
-| Stateful GenServer middleware support | ⏳ |
-| Auto-generated OpenAPI 3.1 spec at `GET /openapi.json` | ⏳ |
-| Swagger UI at `GET /docs`, ReDoc at `GET /redoc` | ⏳ |
-| YAML-declared routes and schemas (no decorators required) | ⏳ |
-| ≥ 15 unit tests + ≥ 3 integration tests | ⏳ |
+| `@route` decorator — documents HTTP method + path on agent handler (YAML is authoritative for wiring) | ✅ |
+| Path parameter extraction into `message.payload` | ✅ |
+| `@contract` decorator — Pydantic request/response validation, 422 error shape | ✅ |
+| `GatewayRequest` / `GatewayResponse` / `NextMiddleware` types | ✅ |
+| Global + route-scoped middleware chain | ✅ |
+| Stateful GenServer middleware via `request.gateway.call()` | ✅ |
+| Auto-generated OpenAPI 3.1 spec at `GET /openapi.json` | ✅ |
+| Swagger UI at `GET /docs`, ReDoc at `GET /redoc` | ✅ |
+| YAML-declared routes and schemas (no decorators required) | ✅ |
+| `civitas topology validate` cross-checks YAML routes against `@route` decorators | ✅ |
+| ≥ 15 unit tests + ≥ 3 integration tests | ✅ |
+
+**Routing authority:** YAML is the single source of truth for gateway wiring. `@route` stores metadata on the method object only — it is never read by the gateway at runtime. Its value is (1) colocated documentation of intent and (2) a machine-checkable annotation that `civitas topology validate` cross-references against YAML to warn on drift.
+
+#### Implementation checklist
+
+1. **Types — `civitas/gateway/types.py`**
+   - [x] `GatewayRequest` dataclass — `method`, `path`, `path_params`, `query_params`, `headers`, `body`, `client_ip`, `gateway` (AgentProcess ref)
+   - [x] `GatewayResponse` dataclass — `status`, `body`, `headers`
+   - [x] `NextMiddleware` type alias — `Callable[[GatewayRequest], Awaitable[GatewayResponse]]`
+
+2. **Route decorator — `civitas/gateway/router.py`**
+   - [x] `@route(method, path, mode="call")` — stores `_civitas_route` metadata dict on the decorated function; no side effects, no global registry
+   - [x] `RouteTable.from_config(routes_config)` — sole runtime source; builds `RouteEntry` list from topology YAML `routes:` block
+   - [x] `RouteTable.from_class(cls)` — validation-only helper; scans class methods for `_civitas_route` metadata; used exclusively by `civitas topology validate`
+   - [x] `civitas topology validate`: when a gateway node references an agent, import the class and warn if a YAML route has no matching `@route` on the handler, or if a `@route` exists with no corresponding YAML entry
+
+3. **Contract decorator — `civitas/gateway/contracts.py`**
+   - [x] `@contract(request=Model, response=Model)` — stores `_civitas_contract` metadata on the function; `request` and `response` are optional Pydantic `BaseModel` subclasses
+   - [x] Request validation in ASGI dispatch: if route has a contract, `Model.model_validate(body)` before calling the bus; 422 on `ValidationError` with FastAPI-compatible error shape `{"detail": [...]}`
+   - [x] Response validation: `Model.model_validate(reply_payload)` after reply received; 500 on mismatch
+   - [x] No-op when `@contract` not applied — pass-through
+
+4. **Middleware — `civitas/gateway/middleware.py`**
+   - [x] `MiddlewareChain` — ordered list of async callables; builds `call_next` chain via closure
+   - [x] Global middleware loaded from `config.middleware` (dotted import path → callable)
+   - [x] Route-scoped middleware loaded from `route.middleware`
+   - [x] Execution order: global → route-scoped → contract validation → bus dispatch — parsing landed here, but wiring into the ASGI dispatch path had a gap; not actually wired until [GH #6](https://github.com/civitas-io/python-civitas/issues/6), fixed for the v0.4.0 release
+   - [x] Short-circuit: middleware returning `GatewayResponse` without calling `call_next` skips remainder
+
+5. **Wire into ASGI — `civitas/gateway/asgi.py` updates**
+   - [x] Replace direct bus dispatch with: build `GatewayRequest` → run middleware chain → contract validate → dispatch
+   - [x] `GatewayRequest.gateway` set to the `HTTPGateway` instance (for stateful GenServer middleware)
+   - [x] Contract metadata read from the agent class method via `@route` + `@contract` on the matched handler
+
+6. **OpenAPI — `civitas/gateway/openapi.py`**
+   - [x] `build_spec()` — reads `RouteTable` (from YAML) + loads agent class to read `@contract` metadata
+   - [x] Generates OpenAPI 3.1 `paths` from route entries
+   - [x] Request body schema from `@contract(request=Model)` via `Model.model_json_schema()`
+   - [x] Response schema from `@contract(response=Model)`
+   - [x] Tags from agent name
+   - [x] Auto-includes 422 response schema when request model is declared
+   - [x] `GET /openapi.json` — returns generated spec
+   - [x] `GET /docs` — Swagger UI (CDN-hosted, no static assets)
+   - [x] `docs.enabled: false` config disables all three endpoints
+
+7. **Tests (≥ 15 unit, ≥ 3 integration)**
+   - [x] `@route` stores metadata on the function, no global registry side-effect
+   - [x] `RouteTable.from_config()` builds routes correctly from config dict
+   - [x] `RouteTable.from_class()` reads `@route` metadata from class methods
+   - [x] Path parameters extracted correctly from URL
+   - [x] `@contract` request validation: valid body → dispatched; invalid → 422 with FastAPI error shape
+   - [x] `@contract` response validation: valid reply → 200; invalid → 500
+   - [x] Middleware chain: all middleware called in order
+   - [x] Middleware short-circuit: returning response without `call_next` skips rest of chain
+   - [x] Global middleware runs before route-scoped middleware — test added for the v0.4.0 release ([GH #6](https://github.com/civitas-io/python-civitas/issues/6)); no test had actually exercised route-scoped execution before this
+   - [x] `/openapi.json` returns valid OpenAPI 3.1 spec
+   - [x] `/docs` returns 200 with Swagger UI HTML
+   - [x] `docs.enabled: false` → `/docs` returns 404
+   - [x] Tags populated from agent name
+   - [x] Integration: end-to-end with real HTTP client
+
+8. **Example + release**
+   - [x] `examples/http_gateway.py` — minimal REST API with agent endpoints
+   - [x] `CHANGELOG.md` entry
 
 ---
 
 ### Postgres StateStore + Migration
 
-**Status: 💡 Idea — to be specced | Priority: 🔴 High**
+**Status: ✅ Completed — May 2026 | Priority: 🔴 High | Corrected — July 2026**
 
-SQLite works for single-process deployments (Level 1) but breaks under concurrent cross-process writes (ZMQ Level 2+, NATS Level 3). `PostgresStateStore` extends the existing `StateStore` protocol — switching backends is a topology YAML change with no agent code changes. `civitas state migrate` handles moving existing state between backends with a dry-run mode.
+> **Correction (July 2026):** This section originally described `PostgresStateStore` itself as a
+> civitas-core deliverable. Per [`boundary.md`](https://github.com/civitas-io/context), state
+> store *implementations* (SQLite, Postgres, Redis) are a civitas-contrib concern — only the
+> `StateStore` protocol, `InMemoryStateStore` (the trivial default), the plugin loader's lazy
+> resolution, and the `civitas state migrate` CLI are core's job. Table corrected below.
 
-The spec needs to resolve: connection pool sizing, schema compatibility guarantees between backends, whether migration supports live (dual-write) or maintenance-window-only mode, and PgBouncer integration for high-concurrency deployments.
+SQLite works for single-process deployments but breaks under concurrent cross-process writes (ZMQ Level 2+, NATS Level 3). `PostgresStateStore` extends the `StateStore` protocol — switching backends is a topology YAML change with no agent code changes, and no top-level `civitas` import ever references `asyncpg` directly.
 
-| Idea | Notes |
-|------|-------|
-| `PostgresStateStore` plugin — same `StateStore` protocol, asyncpg backend | `civitas[postgres]` extra |
-| Backend swap via topology YAML — no agent code changes | `backend: postgres`, `url: !ENV DATABASE_URL` |
-| Connection pool config — pool size, max overflow, timeout | Configurable in topology YAML |
-| `civitas state migrate --from sqlite:... --to postgres://...` | Dry-run by default; `--execute` to apply |
-| Schema compatibility — identical key-value layout across backends | Migration is a straight copy, no transformation |
-| Maintenance-window migration (stop → copy → restart) | Supported in v0.4 |
-| Zero-downtime migration (dual-write + drain) | Deferred — complex; only needed for critical state |
-| PgBouncer integration notes in deployment guide | Connection pooler config for high-concurrency deployments |
-| Spec | design/postgres-statestore.md — to be written |
+| Deliverable | Status | Lives in |
+|-------------|--------|----------|
+| `StateStore` protocol extended with `list_agents()` and `close()` | ✅ | civitas core |
+| `InMemoryStateStore.list_agents()` / `close()` | ✅ | civitas core |
+| Plugin loader entry `type: postgres` → lazy `civitas_contrib.plugins.postgres_store.PostgresStateStore` import | ✅ | civitas core (resolution only) |
+| `@runtime_checkable StateStore` — `isinstance()` checks work | ✅ | civitas core |
+| `civitas state migrate <src> <dst>` — dry-run by default, `--execute` to apply; lazy-imports `PostgresStateStore` from civitas-contrib | ✅ | civitas core |
+| `_parse_dsn()` — `sqlite:<path>`, `.db`/`.sqlite` extension, `postgresql://` URL | ✅ | civitas core (`cli/state.py`) |
+| `PostgresStateStore` — `asyncpg` backend, connection pool, `civitas_agent_state` JSONB table | ✅ | **civitas-contrib** — not this repo |
+| `civitas[postgres]` optional extra — `asyncpg>=0.29` | ❌ removed from core | use `civitas-contrib[postgres]` |
+| Helpful `ImportError`/`ConfigurationError` with install hint if civitas-contrib not installed | ✅ | civitas core (lazy-import pattern) |
+| 20 unit tests covering protocol, migrate CLI DSN parsing, and mocked contrib import | ✅ | civitas core |
+| Zero-downtime dual-write migration | ⏸️ Deferred — maintenance-window copy is sufficient for v0.4 |
+| PgBouncer deployment guide | ⏸️ Deferred to docs pass |
+| MySQL StateStore (`aiomysql`/`asyncmy` backend) | ⏸️ Deferred — see below; **civitas-contrib**'s job if built |
+
+> **MySQL StateStore** — deferred because Postgres covers the multi-process persistence gap and asyncpg is a better async foundation. If ever built, it belongs in **civitas-contrib** alongside the other state store implementations, following the same lazy plugin-loader pattern (`type: mysql` loader entry resolving to `civitas_contrib.plugins.mysql_store.MySQLStateStore`, `mysql://` DSN in `_parse_dsn`).
+
+---
+
+## v0.4.0 Release Fixes
+
+**Status: ✅ Completed — July 2026**
+
+Two bugs reported against v0.3.0, found by a downstream project building against `civitas` at HEAD. Both fixed and folded into the v0.4.0 release alongside the Phase 4 work above — the v0.4.0 changes were already sitting on `main`, unreleased, when these were reported.
+
+| Deliverable | Status |
+|-------------|--------|
+| [GH #6](https://github.com/civitas-io/python-civitas/issues/6) — Route-scoped gateway middleware wired into ASGI dispatch | ✅ |
+| [GH #7](https://github.com/civitas-io/python-civitas/issues/7) — `civitas/py.typed` marker added | ✅ |
+
+#### GH #6 — Route-scoped gateway middleware is parsed but never executed
+
+`RouteEntry.middleware` (a route's own `middleware:` list in topology YAML) was parsed into
+`RouteEntry` objects but never read by `GatewayASGI`. The dispatch layer built its middleware
+chain once at construction time from `config.middleware` (global only) — the matched route's
+`.middleware` field was never consulted. A route declaring its own auth/guard middleware (e.g.
+an admin-only route on an otherwise public gateway) would silently run **without** that guard,
+with no error or warning.
+
+This contradicted `docs/gateway.md` and this file's own Gateway API Surface checklist, both of
+which stated route-scoped middleware runs after global middleware, before contract validation.
+
+**Fix:**
+- `GatewayASGI._handle_http()` now matches the route *before* building the middleware chain.
+- Route-scoped middleware (`entry.middleware`, resolved via the existing `load_middleware()`
+  loader) is appended after global middleware when building the chain, restoring the documented
+  order: global → route-scoped → contract validation → bus dispatch.
+- Resolved route middleware callables are cached per `RouteEntry` (by object identity) so they
+  are loaded once, not on every request.
+- Unresolvable route middleware paths are logged and skipped, matching the existing behavior for
+  global middleware — never raises at request time.
+- Corrected the two checklist items below (Gateway API Surface, "Wire into ASGI" and "Tests")
+  that had been checked off despite this gap.
+
+#### GH #7 — Missing `py.typed` marker despite "Typing :: Typed" classifier + mypy --strict
+
+`pyproject.toml` declares the `"Typing :: Typed"` classifier and the package runs
+`mypy --strict` internally, but no `civitas/py.typed` marker file existed in the source tree or
+the published 0.3.0 wheel. Downstream projects running their own `mypy --strict` got
+`error: ... missing library stubs or py.typed marker [import-untyped]` for every import from
+`civitas`.
+
+**Fix:**
+- Added empty `civitas/py.typed`.
+- `[tool.hatch.build.targets.wheel] packages = ["civitas"]` picks it up automatically — verified
+  present in the built wheel (`unzip -l dist/*.whl`) as part of the release checklist below.
+
+---
+
+## v0.5.0 — Released
+
+**Status: ✅ Released — July 2026 (buckets A + B + C)**
+
+Scope was three buckets; a fourth candidate (D) was explicitly deferred to a future version — see
+below. Bucket A (correctness & hardening) ✅, Bucket B (durable suspension) ✅, Bucket C (doc
+hygiene) ✅ — all done and fully tested. A `msgpack>=1.2.1` security bump (GHSA-6v7p-g79w-8964) also
+landed on this line. Cutting the v0.5.0 release tag is the maintainer's call.
+
+### A — Correctness & hardening
+
+**Status: ✅ Completed — July 2026**
+
+Seven items from [`context/known-issues.md`](https://github.com/civitas-io/context) (private
+cross-repo tracker). Each was re-verified against the current codebase — via grep, not taken on
+faith — immediately before fixing, since one originally-scoped item (F01-2, span leak on
+serializer error in `bus.route()`) turned out already fixed, and F04-2 (below) turned out already
+fixed too, only found because a search for its old, differently-worded issue text missed the
+actual `_KNOWN_CONFIG_KEYS` implementation on first pass.
+
+| ID | Priority | Issue | Resolution |
+|---|---|---|---|
+| FD-01 | 🔴 High | `MetricsCollector` not wired to real event sources — dashboard always showed 0 for message flow, restarts | `civitas.observability.metrics.MetricsSink` protocol added; injected via `ComponentSet`/`Runtime.set_metrics()`. Wires `message_handled` + `agent_error` in `AgentProcess._dispatch()`, `message_sent` in `send()`/`ask()`. **`llm_call` is not auto-wired** — `llm_span()` is a bare context manager with no interception point for `ModelResponse` token/cost data without a larger redesign of how `self.llm` is wrapped; that's a real follow-up, not silently claimed done here. |
+| FD-03 | 🟡 Medium | `civitas/cli/dashboard.py` monkey-patched `runtime._root_supervisor._handle_crash` directly | `Supervisor.add_crash_callback()` + `Runtime.on_crash()` public hook added, invoked from `_handle_crash()` before the restart strategy runs. `cli/dashboard.py` monkeypatch removed. |
+| F04-2 | — | ~~`Runtime.from_config` silently accepts unknown topology YAML keys~~ | **Already fixed** — `Runtime._KNOWN_CONFIG_KEYS` + the `ConfigurationError` raise already existed in `from_config_dict()`. No code change; added the missing regression test only. |
+| F01-3 | 🟡 Medium | `Message.ttl` declared and documented, never enforced | `ttl` field (optional float, seconds) added to `Message`; enforced in `Mailbox.get()` — expired messages are discarded with a warning and the search continues. |
+| F11-5 | 🟡 Medium | `on_stop()` not called when `on_start()` raises | `AgentProcess._start()` now wraps `on_start()`; on failure, closes the open `civitas.agent.start` span with the error, sets `CRASHED`, runs `on_stop()` + MCP client cleanup, then re-raises. The pre-existing test asserting the *old* behavior (`on_stop` not called) was inverted to assert the new one. |
+| FD-07 | 🟢 Low | `Worker` processes didn't receive exporters from topology YAML | Fixed together with FD-09 (same underlying gap — see below). `exporters` now flows through `Worker.__init__` and `cli/run.py`'s `_run_worker()`. |
+| FD-09 | 🟢 Low | Two parallel OTEL span export paths coexist | **Scope note:** rather than the originally-sketched "write an `OTLPExportBackend` that converts `SpanData` to OTEL wire format," which is a genuinely large, failure-prone undertaking (hand-rolling OTLP span construction) for a bug-fix pass, the actual fix makes the two paths **mutually exclusive**: `Tracer.__init__` skips the direct `TracerProvider` entirely whenever a `span_queue` is supplied. `build_component_set()` now builds a `SpanQueue` + `FanOutBackend` only when `plugins.exporters` is configured in YAML, and `Runtime`/`Worker` own starting/stopping the `OTELAgent` task. This makes `plugins.exporters: [{type: console}]` actually work for the first time — previously dead code, per `civitas/plugins/loader.py`'s own docstring example (`type: otel`) which was never backed by a real implementation. The existing OTLP env-var auto-detect path (`OTEL_EXPORTER_OTLP_ENDPOINT`) is untouched and still uses the direct `TracerProvider` path when no `plugins.exporters` are configured — zero behavior change for that default case. |
+
+### B — Durable suspension
+
+**Status: ✅ Done** (design + implementation)
+
+`agent.suspend()` / `agent.resume()` — integration point #8 in
+[`boundary.md`](https://github.com/civitas-io/context)'s eight-point Civitas→Presidium contract,
+required for Presidium's human-in-the-loop (HITL) approval flow, where an agent must pause, durably
+persist enough state to resume later (possibly after a process restart), and resume when Presidium's
+policy engine or a human approves.
+
+Design spec: [`docs/design/durable-suspension.md`](design/durable-suspension.md) (FINAL DESIGN
+S1–S10). Delivered per that spec:
+
+- `ProcessStatus.SUSPENDED` re-introduced fully-wired (removed as dead API in **F02-6**), with every
+  transition defined and tested — the governing constraint that F02-6 flagged.
+- Suspension pauses *dispatch* only (no coroutine snapshotting). `suspend()` is a non-blocking flag
+  actioned at the message-loop boundary; while suspended only the priority queue is drained so
+  business messages stay buffered (FIFO + backpressure preserved).
+- Durable marker persisted inside `self.state` (reserved key `_civitas.suspended`) via the existing
+  `checkpoint()` path — no `StateStore` protocol change, so all contrib stores work unchanged.
+  Durable only with a persistent store (same caveat as `checkpoint()`).
+- Write-ahead suspend (pause in-memory first, then persist; never falls back to RUNNING);
+  approver-gated resume; marker cleared on permanent removal (despawn / restarts exhausted) but kept
+  on graceful shutdown / crash-restart. Supervisor `_stop()` and restart strategies handle SUSPENDED.
+- Suspend/resume emit spans + `AuditEvent`s (resume records the approver). A suspended agent does
+  **not** count as crashed. `ask()` into a suspended agent times out (fail-fast deferred).
+
+### C — Doc hygiene (completed as part of scoping this release)
+
+`docs/milestones.md` had drifted from [`boundary.md`](https://github.com/civitas-io/context)'s
+repo-ownership split in four places, all corrected in this pass:
+
+- **M3.4 MCP Integration** — table claimed `MCPClient`/`MCPTool`/`civitas[mcp]` as civitas-core
+  deliverables; they live in Fabrica (civitas-contrib). Corrected to show only the types +
+  `connect_mcp()` lazy-import point as core.
+- **Postgres StateStore + Migration** — table claimed `PostgresStateStore` itself as civitas-core;
+  it lives in civitas-contrib. Corrected to show only the protocol, loader resolution, and
+  `civitas state migrate` CLI as core.
+- **Infrastructure & Release — Framework adapters** — claimed LangGraph/OpenAI adapters as
+  civitas-core with CrewAI merely "planned"; `civitas/adapters/` doesn't exist in this repo at
+  all — all three (including CrewAI as a stub) live in civitas-contrib. Corrected.
+- **Phase 5 — Prompt Library & Playground, Skills Gateway** — framed as "Civitas-side features";
+  `boundary.md` assigns both to civitas-contrib. Corrected with explicit "Lives in" callouts
+  matching how Fabrica's entry already read.
+
+### D — Explicitly deferred to a future version
+
+Not python-civitas's job per `boundary.md`, and not touched in v0.5.0: Prompt Library &
+Playground, Skills Gateway, CrewAI adapter full implementation, MySQL StateStore, Fabrica. All
+belong to civitas-contrib or the separate `civitas-forge` repo — revisit there, not here.
+
+---
+
+## v0.6.0 — Gateway Completion (Released)
+
+**Status: ✅ Released — 2026-07-04** ([v0.6.0](https://github.com/civitas-io/python-civitas/releases/tag/v0.6.0), [PyPI](https://pypi.org/project/civitas/0.6.0/))
+
+The HTTP Gateway shipped in v0.4 with HTTP/1.1, HTTP/2, and HTTP/3 (QUIC), but several planned
+transport and middleware features were deferred across the gateway design docs
+([`http-gateway.md`](design/http-gateway.md) Phases 3–4, [`gateway-api-surface.md`](design/gateway-api-surface.md)).
+v0.6.0 completes the gateway as a coherent theme. A design refresh across those two docs should
+precede implementation (they were written pre-v0.4 and predate the shipped ASGI/middleware layer).
+
+| # | Deliverable | Priority | Source |
+|---|-------------|----------|--------|
+| G1 | **gRPC gateway** — generic `civitas.Agent` service proxying any agent by name; `Invoke`/`Cast` unary RPCs with a `Struct` payload; committed `.proto` + `_pb2` stubs; health + server reflection; `civitas[grpc]` (grpcio default). `Stream` (server-streaming) deferred to G3; per-agent `proto_dir` loading is a non-goal | ✅ Done | grpc-gateway.md |
+| G2 | **WebSocket upgrade** — long-lived bidirectional sessions: inbound frames `cast()` to an agent, agent streams back over the same socket (`ws_routes`) | ✅ Done | gateway-streaming.md |
+| G3 | **SSE / true streaming responses** — `mode: "stream"` routes stream agent output as Server-Sent Events (replaces the `{"chunks": [...]}` workaround); also completes the gRPC `Stream` RPC deferred in G1 | ✅ Done | gateway-streaming.md |
+| G4 | **Rate-limiting middleware** — `RateLimiter` GenServer + `rate_limit` middleware (`civitas.gateway.ratelimit`) | ✅ Done | gateway-api-surface.md |
+| G5 | **Auth middleware** — first-party API-key auth (`civitas.gateway.auth.require_api_key`, fail-closed, `CIVITAS_GATEWAY_API_KEY`); JWT (opt-in `civitas[jwt]`) + mTLS remain integration points | ✅ Done (API-key; JWT/mTLS deferred) | gateway-api-surface.md |
+| G6 | **File uploads** — `multipart/form-data` parsed at the ASGI edge; files delivered base64 under `__files__` | ✅ Done | gateway-api-surface.md |
+| G7 | **HTTP/2 server push** | ⛔ Won't do — Server Push was removed from Chrome (2022) and is effectively dead across browsers; use SSE/WebSocket (G2/G3) for server-initiated data | http-gateway.md |
+| G8 | **gRPC reflection service** — generic reflection for the gRPC surface | ✅ Done (shipped in G1) | grpc-gateway.md |
+| G9 | **Evaluate quiche-python** (Rust QUIC) as a drop-in for aioquic | ✅ Done (evaluated) — no official/production-ready Python binding exists today; stay on aioquic, revisit when one matures | http-gateway.md |
+
+**Status (2026-07-04): feature-complete.** G1–G6 and G8 shipped; G7 dropped (HTTP/2 Server Push is
+dead in browsers — use G2/G3 instead); G9 evaluated (no viable Rust QUIC Python binding — stay on
+aioquic). v0.6.0 Gateway Completion is ready to release.
+
+**Non-goals for v0.6.0:** business logic in the gateway, load balancing, request queuing — the
+gateway stays a thin translate-and-route edge ([`http-gateway.md`](design/http-gateway.md) Non-Goals).
+A **bus-native streaming primitive** (agent-to-agent `stream()` across all transports) is also out of
+scope — G2/G3 use gateway-mediated streaming; the first-class version is tracked in the
+[Deferred Backlog](#deferred-backlog) (see [`gateway-streaming.md`](design/gateway-streaming.md) §D1, Option B).
+
+---
+
+## v0.7.0 — Spawn Maturation & Gateway Auth (Released)
+
+**Released 2026-07-05.** R1 (non-blocking spawn, #14), R2 (`spawn_into`, #16), R3 (JWT+mTLS auth + fail-open fix, #18), R4 (encrypted StateStore, #19), R5 (per-agent spawn quotas, #21), R6 (cross-process spawn, #20) all shipped. R7 (bus-native streaming, #15) deferred as a stretch item.
+
+**Status: ✅ Released** — R1–R6 shipped in v0.7.0 (2026-07-05); R7 shipped in v0.7.1.
+
+Theme: *finish what v0.6.0 deferred.* The largest coherent cluster is **dynamic-spawn maturation**
+(the #8 / #9 / #10 follow-ups + quotas + cross-process), plus completing **gateway auth** and one
+**data-at-rest** security item. This also lays groundwork for a possible future **self-healing**
+capability, which builds on supervision + dynamic spawn + telemetry (under investigation).
+
+| # | Deliverable | Priority | Source |
+|---|-------------|----------|--------|
+| R1 | ✅ **Done (PR #14)** — **Non-blocking dynamic spawn**: `spawn(wait=False)` / `spawn_nowait()`; `on_start()` runs in-task; failures via `on_child_terminated`. Design: [`non-blocking-spawn.md`](design/non-blocking-spawn.md) (Oracle + Momus reviewed). | 🔴 High | GH #9 (from #8) |
+| R2 | ✅ **Done (PR #16)** — **`spawn_into(supervisor_name, …)`** public cross-tree spawn helper | 🟡 Medium | GH #10 |
+| R3 | ✅ **Done (PR #18)** — **First-party JWT auth** (opt-in `civitas[jwt]`) + **mTLS** client-cert auth + middleware fail-open fix | 🟡 Medium | v0.6.0 §G5 |
+| R4 | ✅ **Done (PR #19)** — **Encrypted `StateStore` at rest** (`civitas[encryption]`) | 🟡 Medium | design/security-hardening.md |
+| R5 | ✅ **Done (PR #21)** — **Per-agent spawn quotas** (beyond the global `max_children`) | 🟢 Low | design/dynamic-spawning.md Non-Goals |
+| R6 | ✅ **Done (PR #20)** — **Cross-process dynamic spawning** (ZMQ / NATS) | 🟡 Medium | design/dynamic-spawning.md Non-Goals |
+| R7 | **Bus-native streaming primitive** (`AgentProcess.stream()`, agent-to-agent, no transport change) | ✅ Done (v0.7.1) | [#22](https://github.com/civitas-io/python-civitas/pull/22) · [bus-native-streaming.md](design/bus-native-streaming.md) |
+
+**Suggested cut line:** R1–R2 (spawn follow-ups) are the headline; R3 (auth) + R4 (encrypted store)
+are strong companions; R5–R7 are opportunistic and can slip to a later patch.
+
+---
+
+## Deferred Backlog
+
+**Status: 🗂️ Tracked** — the single index of everything deferred and not in v0.6.0. Items with a
+dedicated section link there; items that currently live only in a design doc are captured here so
+nothing is lost. Owner column: `core` = python-civitas, else the target repo.
+
+### python-civitas — deferred (not in v0.6.0)
+
+| Item | Owner | Target | Where tracked |
+|------|-------|--------|---------------|
+| [Visual Topology Editor](#m41-visual-topology-editor) (drag-drop UI) | core | ⏸️ low priority | §M4.1 |
+| Textual dashboard rebuild (on `TopologyServer` endpoints) | core | ⏸️ follow-on | design/dynamic-spawning.md |
+| Cross-process dynamic spawning (ZMQ / NATS) | core | ✅ v0.7.0 (#20) | design/cross-process-spawn.md |
+| Per-agent spawn quotas (beyond global `max_children`) | core | ✅ v0.7.0 (#21) | design/dynamic-spawning.md Non-Goals |
+| External security audit before v1.0 (fix all HIGH+; publish summary) | core | ⏳ pre-v1.0 | §M4.3 |
+| Continuous security posture (CVE watch, CVSS advisories) | core | ⏳ ongoing | §M4.3 |
+| Encrypted `StateStore` at rest | core | ✅ v0.7.0 (#19) | design/encrypted-statestore.md |
+| Fine-grained ACL DSL (overlaps M4.4 capabilities) | core | ⏸️ | design/security-hardening.md |
+| HSM / TPM-backed signing keys | core | ⏸️ post-v1.0 | design/security-hardening.md |
+| PKI / CA integration (cert issuance) | core | ⏸️ deployment-layer | design/security-hardening.md |
+| Durable suspension: fail-fast `ask()` into a suspended agent (times out today) | core | ⏸️ | design/durable-suspension.md Non-Goals |
+| Durable suspension: crash-while-suspended restart-budget exemption | core | ⏸️ v1 | supervisor.py (S8 finding #5) |
+| Fiddler eval exporter: two-way guardrail receive | core/contrib | ⏸️ | §M2.6 |
+| Postgres: zero-downtime dual-write migration | core | ⏸️ | §Postgres StateStore |
+| Postgres: PgBouncer deployment guide | core | ⏸️ docs pass | §Postgres StateStore |
+| **Medicus self-healing hero demo** (P0+P1: detect → diagnose → verified PR) — flagship example; supersedes the Telegram personal assistant (which drops to a minor gateway+skills sample) | core | 💡 idea | design/medicus-demo.md |
+| Bus-native streaming primitive (`AgentProcess.stream()`, agent-to-agent across in-proc/ZMQ/NATS) | core | ✅ v0.7.1 | [#22](https://github.com/civitas-io/python-civitas/pull/22) · [bus-native-streaming.md](design/bus-native-streaming.md) |
+| First-party JWT gateway auth (opt-in `civitas[jwt]`) + mTLS client-cert auth | core | ✅ v0.7.0 (#18) — WS/gRPC surfaces pending (#17) | §v0.6.0 G5 |
+| Dynamic spawn: non-blocking spawn (#9, PR #14) + `spawn_into()` cross-tree helper (#10, PR #16) + bus-native streaming (#15, PR #22) | core | ✅ v0.7.0–v0.7.1 | GH #9, #10, #15 |
+| **Self-healing / autonomous remediation agent** — monitor (metrics/audit/OTEL/crash) → diagnose (LLM) → sandbox-verify → canary-deploy → auto-rollback, under staged autonomy + safety gates | core (+ contrib tools) | 💡 idea | design/self-healing.md |
+| Worker-level **restart-with-new-code** (blue-green drain) — the deploy primitive enabling self-healing & near-zero-downtime code updates (Python has no safe in-place reload) | core | ⏸️ v0.x | design/self-healing.md |
+
+### Other repos (per [`boundary.md`](https://github.com/civitas-io/context))
+
+| Item | Owner | Status | Where tracked |
+|------|-------|--------|---------------|
+| `CivitasMCPServer` — expose an agent tree as an MCP server | fabrica | ⏸️ not started anywhere | §M3.4 |
+| CrewAI adapter — full implementation (stub raises `NotImplementedError` today) | civitas-contrib | ⏳ stub | §Infrastructure & Release |
+| MySQL StateStore | civitas-contrib | ⏸️ | §Postgres StateStore |
+| [Prompt Library & Playground](#prompt-library--playground) | civitas-contrib | 💡 idea (🔴 high), spec unwritten | §Phase 5 |
+| [Skills Gateway](#skills-gateway) | civitas-contrib | 💡 idea, spec unwritten | §Phase 5 |
+| [Fabrica — Tools Gateway](#fabrica--tools-gateway) / `find_tools` (RFC 0001) | civitas-forge | 💡 idea (🔴 high), spec unwritten | §Phase 5, rfc/0001 |
+| [LLM Gateway](#llm-gateway) (governed: rate limits, budgets, grant routing) | presidium | ⏸️ moved | §Phase 5 |
+| Credential-propagation RFC (per-user OAuth for retrieved tools) | cross-repo | ⏸️ future RFC | rfc/0001 §out-of-scope |
 
 ---
 
@@ -534,13 +963,23 @@ Web-based drag-and-drop editor for designing agent topologies visually.
 
 ## Phase 5 — Agentic Platform
 
-Ideas awaiting full design specs. Each is a supervised GenServer (or group of GenServers) that runs inside the user's deployment — not external services, not SaaS. The SaaS boundary sits above these: hosted registries, managed observability, and multi-tenant governance are separate concerns.
+Civitas provides the runtime primitives. Governance lives in [Presidium](https://github.com/civitas-io/presidium) — an interface library that defines governance protocols (PolicyEngine, AgentRegistry, CredentialProvider, etc.) with lightweight defaults (CEL policy engine, in-memory registry) in the core package, and adapters for existing products (OPA, Vault, LiteLLM) plus reference implementations for novel components in presidium-contrib.
+
+Presidium follows the same pattern as Civitas: protocols in core, implementations in contrib. Every component works as an in-process library (single-process deployments) or as a service (distributed deployments via Civitas GenServers or standalone HTTP). See [Civitas-Presidium Boundary](design/civitas-presidium-boundary.md) for the full architecture.
+
+The items below are ideas across the wider Civitas product line that complement Presidium's governance layer. **Most of them are not python-civitas's job** — see the "Lives in" callout on each. Per [`boundary.md`](https://github.com/civitas-io/context) (2026-05-08), Prompt Library and Skills Gateway are civitas-contrib ("Dev tooling" / "skills routing layer"), same as Fabrica is its own repo. This file previously implied otherwise; corrected July 2026.
 
 ---
 
 ### Prompt Library & Playground
 
-**Status: 💡 Idea — to be specced | Priority: 🔴 High**
+**Status: 💡 Idea — to be specced | Priority: 🔴 High | Lives in: civitas-contrib, not python-civitas**
+
+> **Correction (July 2026):** Originally framed here as a "Civitas-side feature." `boundary.md`
+> lists "Prompt library" under civitas-contrib ownership ("Dev tooling"). If built, `PromptStore`
+> would be a `civitas_contrib`-namespaced `GenServer` subclass depending on this repo's `GenServer`
+> base class — not a `civitas/` module itself. The `civitas playground` CLI reference below would
+> need to become a civitas-contrib CLI plugin or a documented pattern, not a core subcommand.
 
 Prompts as first-class versioned entities, stored and served by a supervised `PromptStore(GenServer)`. Agents load instructions by name rather than hardcoding strings — prompt changes never require a code deploy. The playground (CLI + dashboard tab) lets you test a prompt version against a live agent before promoting it.
 
@@ -563,21 +1002,18 @@ This is one of the strongest SaaS upgrade stories: the OSS `PromptStore` runs in
 
 ### LLM Gateway
 
-**Status: 💡 Idea — to be specced | Priority: 🔴 High**
+**Status: ⏸️ Moved to Presidium**
 
-A supervised `GenServer` that sits between agents and LLM providers. All agents call `call("llm_gateway", {...})` instead of hitting providers directly. The gateway owns provider routing, fallback chains, cost tracking, rate limiting, and response caching — as supervised stateful processes on the bus.
+Model routing *without* governance (multi-provider fallback for reliability) is a thin Civitas utility — `CompositeModelProvider`. It is not a full gateway.
 
-**What this is not:** a replacement for LiteLLM proxy or Portkey. The implementation will wrap one of those (or expose the same interface) rather than re-implement provider routing for 100+ models.
+The full governed LLM gateway — per-agent rate limits, cost tracking, budget enforcement, grant-based provider routing — belongs in Presidium. It is implemented via the `GovernedModelProvider` protocol in the `presidium` core package, with the `LiteLLMProxyAdapter` and `PortkeyAdapter` available in `presidium-contrib`. It wraps any Civitas `ModelProvider` via the plugin protocol and enforces governance policy before delegating to the underlying provider.
 
-| Idea | Notes |
-|------|-------|
-| Provider routing by cost / latency / capability | Route `claude-opus-4-7` to Anthropic, fall back to `gpt-4o` on quota exhaustion |
-| Fallback chains | Configurable ordered provider list per model tier |
-| Semantic + exact response caching | `CacheStore(GenServer)` child; `civitas[llm-cache]` extra |
-| Per-agent cost tracking | Accumulate token spend by agent name; expose via `civitas dashboard` |
-| Rate limiting per agent | Prevents a single agent from exhausting provider quota |
-| LiteLLM proxy integration | `LiteLLMGateway` subclass as first implementation |
-| Spec | design/llm-gateway.md — to be written |
+Civitas provides the `ModelProvider` protocol (integration point 2 for Presidium). Civitas does not provide rate limiting, budgets, or grant-based routing — those are governance concerns.
+
+**Residual Civitas utility:** `CompositeModelProvider` — a simple ordered fallback chain (primary → fallback) for reliability. No governance, no per-agent tracking. Infrastructure, not governance.
+
+See [Presidium](https://github.com/civitas-io/presidium) for the governed implementation (`GovernedModelProvider` in core, `LiteLLMProxyAdapter` in contrib).
+See [docs/design/civitas-presidium-boundary.md](design/civitas-presidium-boundary.md) for the full boundary definition.
 
 ---
 
@@ -612,7 +1048,13 @@ See RFC 0001 (`docs/rfc/0001-tool-retrieval.md`) for the formal problem statemen
 
 ### Skills Gateway
 
-**Status: 💡 Idea — to be specced | Priority: 🟡 Medium**
+**Status: 💡 Idea — to be specced | Priority: 🟡 Medium | Lives in: civitas-contrib, not python-civitas**
+
+> **Correction (July 2026):** Originally framed here as a "Civitas-side feature." `boundary.md`
+> lists "Skills gateway" under civitas-contrib ownership ("skills routing layer"). It would
+> *consume* this repo's Capability-Aware Registry (M4.4) and `MessageBus` as a dependency, the
+> same way civitas-contrib's provider plugins and adapters consume civitas core today — it would
+> not be implemented inside `civitas/`.
 
 A supervised registry of composable agent workflows — "skills" — that can be discovered and invoked by name or capability. A skill is a named, versioned sequence of tool calls, LLM steps, or sub-agent invocations exposed as a single callable unit on the bus.
 

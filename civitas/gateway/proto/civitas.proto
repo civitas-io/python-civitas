@@ -1,0 +1,37 @@
+// Generic gRPC surface for the Civitas gateway (design G1 / D2).
+//
+// One tiny service proxies any agent by name, so callers need no per-agent
+// .proto or civitas SDK. The Struct payload maps cleanly to/from the JSON-ish
+// dict a civitas Message carries. Invoke -> agent call(), Cast -> agent cast().
+// Stream (server-streaming) is defined here but deferred to G3.
+
+syntax = "proto3";
+
+package civitas;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/struct.proto";
+
+service Agent {
+  // Unary request-reply: routed to the agent via call().
+  rpc Invoke(AgentRequest) returns (AgentReply);
+
+  // Fire-and-forget: routed to the agent via cast().
+  rpc Cast(AgentRequest) returns (google.protobuf.Empty);
+
+  // Server-streaming: deferred to G3; the handler returns UNIMPLEMENTED for now.
+  rpc Stream(AgentRequest) returns (stream AgentReply);
+}
+
+message AgentRequest {
+  string recipient = 1;                // target agent name
+  string type = 2;                     // message type (default "grpc.request")
+  google.protobuf.Struct payload = 3;  // JSON-ish payload; interop without an SDK
+  string correlation_id = 4;
+  string traceparent = 5;              // W3C trace context
+}
+
+message AgentReply {
+  google.protobuf.Struct payload = 1;
+  string error = 2;                    // set when the agent replied with an error
+}

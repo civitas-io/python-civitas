@@ -93,6 +93,10 @@ class EvalAgent(AgentProcess):
     Override on_eval_event() to implement your eval logic. Return a
     CorrectionSignal to intervene, or None to take no action.
 
+    Exporters (M2.6) receive every EvalEvent before on_eval_event() runs.
+    Errors in exporters are logged and swallowed — they never block the
+    local evaluation loop.
+
     Usage:
         class MyEval(EvalAgent):
             async def on_eval_event(self, event: EvalEvent) -> CorrectionSignal | None:
@@ -106,11 +110,13 @@ class EvalAgent(AgentProcess):
         name: str,
         max_corrections_per_window: int = 10,
         window_seconds: float = 60.0,
+        exporters: list[EvalExporter] | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(name, **kwargs)
         self._max_corrections = max_corrections_per_window
         self._window_seconds = window_seconds
+        self._exporters: list[EvalExporter] = exporters or []
         # Sliding window per target agent: agent_name -> list of correction timestamps
         self._correction_timestamps: dict[str, list[float]] = {}
 
@@ -141,6 +147,18 @@ class EvalAgent(AgentProcess):
             trace_id=message.trace_id,
             message_id=message.id,
         )
+
+        for exporter in self._exporters:
+            try:
+                await exporter.export(event)
+            except Exception as exc:
+                logger.warning(
+                    "EvalExporter %r failed for event '%s' from agent '%s': %s",
+                    exporter,
+                    event.event_type,
+                    event.agent_name,
+                    exc,
+                )
 
         signal = await self.on_eval_event(event)
         if signal is None:

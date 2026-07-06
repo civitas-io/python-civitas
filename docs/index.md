@@ -155,11 +155,15 @@ runtime = Runtime(
 - [Messaging](messaging.md) — send, ask, broadcast, request-reply internals, backpressure
 - [Transports](transports.md) — InProcess → ZMQ → NATS: the scaling ladder
 - [Observability](observability.md) — automatic OTEL tracing, console exporter, Jaeger
+- [GenServer](genserver.md) — stateful service processes: rate limiters, caches, coordinators
+- [EvalLoop](evalloop.md) — corrective observability: monitor agents and send correction signals
+- [MCP Integration](mcp.md) — call external MCP tool servers and expose agents as MCP servers
+- [HTTP Gateway](gateway.md) — expose agents as a REST API with routing, validation, and OpenAPI docs
 
 ### Reference
 
 - [Plugins](plugins.md) — ModelProvider, ToolProvider, StateStore, writing custom plugins
-- [Topology YAML](topology.md) — full schema reference, CLI commands
+- [Topology YAML](topology.md) — full schema reference, CLI commands, all node types
 - [Deployment](deployment.md) — single process through containerized, step by step
 - [Framework Adapters](adapters.md) — wrapping LangGraph and OpenAI SDK agents
 - [Architecture](architecture.md) — runtime internals, startup sequence, component wiring
@@ -180,6 +184,8 @@ python examples/hello_agent.py           # simplest possible agent
 python examples/supervised_agent.py      # crash + auto-restart
 python examples/research_pipeline.py     # three-agent pipeline
 python examples/research_assistant.py    # four-agent hero demo (no API key needed)
+python examples/http_gateway.py          # REST API with Swagger UI (civitas[http])
+python examples/mcp_agent.py             # connect to an MCP tool server (civitas[mcp])
 ```
 
 ---

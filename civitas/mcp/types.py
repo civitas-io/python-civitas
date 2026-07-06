@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from civitas.sandbox.config import SandboxConfig
+
 
 @dataclass
 class MCPServerConfig:
@@ -24,6 +26,9 @@ class MCPServerConfig:
 
     # sse fields
     url: str | None = None
+
+    # sandbox
+    sandbox: SandboxConfig | None = None
 
     def __post_init__(self) -> None:
         if self.transport == "stdio" and not self.command:

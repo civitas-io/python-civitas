@@ -6,39 +6,7 @@ Internal reference for contributors and advanced users. Covers the runtime start
 
 ## Component map
 
-```mermaid
-graph TD
-    subgraph Runtime
-        R["Runtime\nLifecycle orchestrator"]
-        CS["ComponentSet\nShared wiring container"]
-        SUP["Supervisor\nFault tolerance tree"]
-    end
-
-    subgraph Infrastructure
-        T["Transport\nInProcess / ZMQ / NATS"]
-        REG["Registry\nName → address map"]
-        SER["Serializer\nMsgpack / JSON"]
-        TR["Tracer\nSpan emitter + queue"]
-        BUS["MessageBus\nRouting + serialization"]
-        SS["StateStore\nCheckpoint persistence"]
-    end
-
-    subgraph Agents
-        A1["AgentProcess\n(mailbox + event loop)"]
-        A2["AgentProcess\n..."]
-    end
-
-    R --> CS
-    R --> SUP
-    CS --> T & REG & SER & TR & SS
-    CS --> BUS
-    BUS --> T
-    BUS --> REG
-    BUS --> SER
-    BUS --> TR
-    SUP --> A1 & A2
-    CS -->|"inject"| A1 & A2
-```
+![Civitas Components](assets/architecture-components.svg)
 
 Every component except `Supervisor` and `AgentProcess` lives in `ComponentSet`. `Runtime.start()` assembles the `ComponentSet`, injects it into every agent, then hands control to the supervisor tree.
 
@@ -48,28 +16,7 @@ Every component except `Supervisor` and `AgentProcess` lives in `ComponentSet`. 
 
 The startup sequence is defined in `Runtime.start()` and documented in the class docstring. Steps are in strict order — each depends on the previous.
 
-```mermaid
-flowchart TD
-    S1["1. Read configuration\n(YAML or constructor args)"]
-    S2["2. Create Serializer\n(Msgpack default, JSON optional)"]
-    S3["3. Create Tracer\n(SpanQueue + export backend)"]
-    S4["4. Create Transport\n(InProcess / ZMQ / NATS)"]
-    S5["5. Create Registry\n(LocalRegistry, empty)"]
-    S6["6. Create MessageBus\n(wires Transport + Registry + Serializer + Tracer)"]
-    S7["7. Create plugin instances\n(ModelProvider, ToolRegistry, StateStore)"]
-    S8["8. Inject dependencies\ninto all AgentProcesses"]
-    S9["9. Register all agents\nin Registry"]
-    S10["10. Start Transport\n(bind sockets / connect to NATS)"]
-    S10b["Subscribe each agent\nto its transport address"]
-    S10c["Subscribe to _agency.register\nand _agency.deregister"]
-    S10d["wait_ready()\n(ZMQ slow-joiner mitigation)"]
-    S11["11. Start supervision tree\n(bottom-up, supervisors first)"]
-    S12["12. Start all supervisors\n(heartbeat monitors)"]
-    S13["13. Runtime is READY"]
-
-    S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7 --> S8 --> S9 --> S10
-    S10 --> S10b --> S10c --> S10d --> S11 --> S12 --> S13
-```
+![Runtime Startup Sequence](assets/runtime-startup.svg)
 
 **Key invariants:**
 - Transport is started (step 10) before agents are started (step 11) — agents begin receiving messages the moment they start, so the delivery layer must be ready first.
@@ -112,37 +59,7 @@ class ComponentSet:
 
 This sequence traces a single `ask()` from one agent to another and back.
 
-```mermaid
-sequenceDiagram
-    participant Caller as agent_A.handle()
-    participant Bus as MessageBus
-    participant Ser as Serializer
-    participant Tr as Transport
-    participant Ser2 as Serializer
-    participant Mbox as agent_B mailbox
-    participant B as agent_B.handle()
-
-    Caller->>Bus: bus.request(message, timeout=30)
-    Bus->>Bus: registry.lookup("agent_b") → address
-    Bus->>Bus: tracer.start_send_span(message)
-    Bus->>Ser: serialize(message) → bytes
-    Bus->>Tr: transport.request(address, bytes, timeout)
-
-    Note over Tr: Transport creates ephemeral reply address<br/>Publishes message, awaits reply on _reply.{uuid}
-
-    Tr->>Ser2: bytes delivered to agent_b subscription
-    Ser2->>Ser2: deserialize(bytes) → Message
-    Ser2->>Mbox: agent.receive(message)
-    Mbox->>B: dequeue → handle(message)
-    B->>B: return self.reply({...})
-    B->>Bus: bus.route(reply_message)
-    Bus->>Ser: serialize(reply)
-    Bus->>Tr: transport.publish(_reply.{uuid}, bytes)
-
-    Tr->>Bus: return reply bytes
-    Bus->>Ser: deserialize(reply bytes) → Message
-    Bus-->>Caller: return Message
-```
+![Message Flow — End to End](assets/message-request-reply.svg)
 
 **Trace propagation:** The `trace_id` and `span_id` from the original message are carried in all downstream messages. `bus.request()` creates the initial span; every subsequent `handle()` creates a child span linked by `parent_span_id`. This chain works across process and machine boundaries because trace IDs are embedded in the serialized message payload — not in thread-local storage.
 
@@ -152,32 +69,7 @@ sequenceDiagram
 
 When an agent's asyncio task raises an unhandled exception, control flows through the supervisor:
 
-```mermaid
-flowchart TD
-    A["agent._task raises Exception"]
-    B["task.done_callback fires\n_on_child_done(name, task)"]
-    C["asyncio.create_task(\n_handle_crash(name, exc)\n)"]
-    D["Update sliding window\n(deque-based, O(1))"]
-    E{"len(timestamps) > max_restarts?"}
-    F["_escalate(name, exc)"]
-    G["emit supervisor.restart span"]
-    H["_compute_backoff(restart_count)\nasyncio.sleep(delay)"]
-    I{"strategy?"}
-    J["_restart_child(name)\nONE_FOR_ONE"]
-    K["_restart_all_children()\nONE_FOR_ALL"]
-    L["_restart_rest_for_one(name)\nREST_FOR_ONE"]
-    M{"parent supervisor?"}
-    N["parent._handle_crash(self.name, exc)\nescalate up the tree"]
-    O["Log permanent failure\nagent stays CRASHED"]
-
-    A --> B --> C --> D --> E
-    E -->|"Yes"| F
-    E -->|"No"| G --> H --> I
-    I --> J & K & L
-    F --> M
-    M -->|"Yes"| N
-    M -->|"No"| O
-```
+![Crash Recovery](assets/crash-recovery.svg)
 
 **Sliding window** (`_restart_timestamps`): A `deque` of crash timestamps. On each crash, the current time is appended and entries older than `restart_window` seconds are popped from the left. If the deque length exceeds `max_restarts`, the supervisor escalates. This is O(1) per crash.
 
@@ -254,15 +146,7 @@ Glob matching (`registry.lookup_all("worker.*")`) is used for broadcast (`self.b
 
 Each `AgentProcess` runs as a single asyncio task (`agent._task`). Inside that task:
 
-```mermaid
-stateDiagram-v2
-    [*] --> INITIALIZING: _start()
-    INITIALIZING --> RUNNING: on_start() completes
-    RUNNING --> RUNNING: handle(message)
-    RUNNING --> STOPPING: _stop() called
-    STOPPING --> STOPPED: on_stop() completes
-    RUNNING --> CRASHED: unhandled exception
-```
+![Agent State Machine](assets/agent-state-machine.svg)
 
 **Mailbox:** An `asyncio.Queue` with a bounded capacity (default: 1000 messages). `receive()` calls `put_nowait()` — if the mailbox is full, `asyncio.QueueFull` is raised and the message is dropped with a warning. The agent's event loop calls `get()` to dequeue messages one at a time.
 
@@ -292,11 +176,7 @@ class Serializer(Protocol):
 
 The `Tracer` never blocks the message loop. Span emission goes through a `SpanQueue`:
 
-```mermaid
-flowchart LR
-    A["agent.handle()"] -->|"put_nowait(span)"| Q["SpanQueue\n(asyncio.Queue, cap=10000)"]
-    Q -->|"background consumer"| E["ExportBackend\n(ConsoleBackend / OTEL)"]
-```
+![Span Queue](assets/span-queue.svg)
 
 If `put_nowait()` raises `QueueFull` (10,000 spans buffered), the oldest span is evicted to make room. Losing a span is always preferable to stalling the message loop.
 
@@ -313,23 +193,7 @@ If `put_nowait()` raises `QueueFull` (10,000 spans buffered), the oldest span is
 
 A `Worker` has the same `ComponentSet` as a `Runtime` — same transport, registry, serializer, tracer. The difference is that a `Worker` has no supervision tree. It hosts agents directly and does not manage restarts.
 
-```mermaid
-sequenceDiagram
-    participant W as Worker.start()
-    participant CS as build_component_set()
-    participant T as Transport
-    participant R as _agency.register
-
-    W->>CS: build ComponentSet (same as Runtime)
-    W->>W: inject(agent) for each agent
-    W->>T: transport.start()
-    W->>T: subscribe each agent
-    W->>R: publish _agency.register {name: agent.name}
-    Note over W: Runtime receives _agency.register<br/>and calls registry.register_remote(name)
-    W->>W: wait for shutdown signal
-    W->>R: publish _agency.deregister
-    W->>T: transport.stop()
-```
+![Worker Registration](assets/worker-registration.svg)
 
 The supervisor in the main process monitors worker agents via heartbeats. When a heartbeat is missed, the supervisor sends `_agency.restart` → the Worker restarts the named agent locally → the agent publishes `_agency.register` again → the Registry entry is refreshed.
 

@@ -1,6 +1,6 @@
 # Design: Gateway API Surface
 
-**Status:** Planned — v0.4
+**Status:** Implemented — v0.4
 **Author:** Jeryn Mathew Varghese
 **Last updated:** 2026-04
 
@@ -23,35 +23,7 @@ This spec defines that surface. The design principle is the same as `HTTPGateway
 
 ## Architecture
 
-```mermaid
-graph TD
-    subgraph "HTTP boundary"
-        REQ["Incoming request"]
-        MW["Middleware chain\n(auth, logging, rate-limit)"]
-        VAL["Request validation\n(Pydantic schema)"]
-        GW["HTTPGateway\n(route table)"]
-        VALR["Response validation\n(Pydantic schema)"]
-        RES["HTTP response"]
-    end
-
-    subgraph "Civitas bus"
-        BUS["MessageBus"]
-        GS["GenServer / AgentProcess"]
-    end
-
-    REQ --> MW
-    MW -->|"401/403 on rejection"| RES
-    MW --> VAL
-    VAL -->|"422 on schema error"| RES
-    VAL --> GW
-    GW -->|"call() / cast()"| BUS
-    BUS --> GS
-    GS -->|reply| BUS
-    BUS -->|reply| VALR
-    VALR --> RES
-
-    DOCS["GET /docs\nGET /openapi.json"] -.->|"introspects route table + schemas"| GW
-```
+![HTTP Gateway API Surface](../assets/http-gateway-api.svg)
 
 The agent only ever sees a `Message`. The gateway owns every HTTP concept — method, status code, headers, validation errors, OpenAPI schema.
 

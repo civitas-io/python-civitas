@@ -119,20 +119,34 @@ Renders a Rich tree in the terminal showing:
 
 - Supervisor names, strategies, restart limits, and backoff policies
 - Agent names and types
+- `DynamicSupervisor` nodes with `[dyn]` marker and `max_children` annotation
+- `TopologyServer` nodes with `[topo]` marker and bind address
 - Process affinity annotations (`@process`)
 - Summary footer: transport type, plugin count, agent/supervisor/process counts
 
-**Example output:**
+**Live mode:** If the topology file declares a `topology_server` node, `topology show` pings `GET /topology` on startup (1 second timeout). When the runtime is running, it renders the **live** tree with real-time agent statuses and dynamic child counts. When unreachable, it falls back to the static YAML tree with a `(runtime not running)` annotation.
+
+**Example output (live):**
 
 ```
-root  [ONE_FOR_ONE | max_restarts=3 | EXPONENTIAL]
-├── ingestion  [ONE_FOR_ONE | max_restarts=5 | CONSTANT]
-│   ├── fetcher  (FetcherAgent)  @workers
-│   └── parser   (ParserAgent)   @workers
-└── output
-    └── reporter  (ReporterAgent)
+Civitas Topology: topology.yaml  (live)
 
-Transport: nats  |  Plugins: 2  |  Agents: 3  |  Supervisors: 2  |  Processes: 1
+root  ONE_FOR_ONE
+├── orchestrator  RUNNING
+└── workers  dynamic  live: 2/20  status: RUNNING  [dyn]
+    ├── researcher-0  RUNNING
+    └── researcher-1  RUNNING
+```
+
+**Example output (static fallback):**
+
+```
+Civitas Topology: topology.yaml  (runtime not running)
+
+root  ONE_FOR_ONE  restarts: 3/60s  backoff: constant
+├── topo_server  http://127.0.0.1:6789  [topo]
+├── workers  dynamic  max_children: 20  [dyn]
+└── orchestrator  myapp.agents.OrchestratorAgent
 ```
 
 ### civitas topology diff

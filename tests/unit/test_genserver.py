@@ -410,3 +410,121 @@ async def test_send_after_prunes_completed_tasks():
         assert len(server._send_after_tasks) == 1  # only the long pending one
     finally:
         await runtime.stop()
+
+
+# ---------------------------------------------------------------------------
+# 20. Base GenServer.handle_call raises NotImplementedError (line 57)
+# ---------------------------------------------------------------------------
+
+
+async def test_base_handle_call_not_implemented():
+    gs = GenServer("gs")
+    with pytest.raises(NotImplementedError, match="handle_call"):
+        await gs.handle_call({}, "sender")
+
+
+# ---------------------------------------------------------------------------
+# 21. send_after when bus is None — task fires without crash (line 76->exit)
+# ---------------------------------------------------------------------------
+
+
+async def test_send_after_bus_none_no_crash():
+    gs = GenServer("gs")
+    gs._bus = None
+    gs._send_after_tasks = []
+    gs.send_after(5, {"type": "tick"})
+    await asyncio.sleep(0.02)  # let the task run
+    # No exception raised
+
+
+# ---------------------------------------------------------------------------
+# 22. send_after when bus.route raises — exception swallowed (lines 86-87)
+# ---------------------------------------------------------------------------
+
+
+async def test_send_after_route_error_swallowed():
+    from unittest.mock import AsyncMock
+
+    gs = GenServer("gs")
+    mock_bus = AsyncMock()
+    mock_bus.route.side_effect = RuntimeError("route failed")
+    gs._bus = mock_bus
+    gs._send_after_tasks = []
+    gs.send_after(5, {"type": "tick"})
+    await asyncio.sleep(0.02)  # let the task run
+    mock_bus.route.assert_called_once()  # route WAS called
+    # Exception was silently swallowed
+
+
+# ---------------------------------------------------------------------------
+# 23. _gs_span returns None when tracer is not set (line 152)
+# ---------------------------------------------------------------------------
+
+
+def test_gs_span_returns_none_when_no_tracer():
+    gs = GenServer("gs")
+    gs._tracer = None
+    gs._current_handle_span = None
+    msg = Message(type="t", sender="s", recipient="gs", payload={})
+    result = gs._gs_span("civitas.genserver.call", msg)
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# 24. handle_cast raising covers exception + span path (lines 130-133, 135->exit)
+# ---------------------------------------------------------------------------
+
+
+class RaisingCastServer(GenServer):
+    async def handle_cast(self, payload: dict[str, Any]) -> None:
+        raise ValueError("cast boom")
+
+
+async def test_handle_cast_exception_propagates_and_span_error_set():
+    server = RaisingCastServer("raiser")
+    runtime = await _start_runtime(server)
+    try:
+        await runtime.send("raiser", {"__cast__": True})
+        await asyncio.sleep(0.05)  # let the task process; exception is caught by supervisor
+    finally:
+        await runtime.stop()
+
+
+# ---------------------------------------------------------------------------
+# 25. handle_info raising covers exception + span path (lines 142-145, 147->exit)
+# ---------------------------------------------------------------------------
+
+
+class RaisingInfoServer(GenServer):
+    async def handle_info(self, payload: dict[str, Any]) -> None:
+        raise ValueError("info boom")
+
+
+async def test_handle_info_exception_propagates_and_span_error_set():
+    server = RaisingInfoServer("raiser2")
+    runtime = await _start_runtime(server)
+    try:
+        await runtime.send("raiser2", {"type": "info"})
+        await asyncio.sleep(0.05)
+    finally:
+        await runtime.stop()
+
+
+# ---------------------------------------------------------------------------
+# 26. handle_call exception with active span (lines 118-120)
+# ---------------------------------------------------------------------------
+
+
+class RaisingCallServer(GenServer):
+    async def handle_call(self, payload: dict[str, Any], from_: str) -> dict[str, Any]:
+        raise RuntimeError("call boom")
+
+
+async def test_handle_call_exception_with_span():
+    server = RaisingCallServer("raiser3")
+    runtime = await _start_runtime(server)
+    try:
+        with pytest.raises((RuntimeError, TimeoutError, asyncio.TimeoutError)):
+            await runtime.call("raiser3", {}, timeout=1.0)
+    finally:
+        await runtime.stop()

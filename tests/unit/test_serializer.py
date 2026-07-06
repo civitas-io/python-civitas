@@ -156,3 +156,33 @@ def test_schema_version_in_json_output():
     msg = Message(type="test")
     raw = json.loads(JsonSerializer().serialize(msg).decode("utf-8"))
     assert raw["schema_version"] == 1
+
+
+# civitas[fast]: orjson-backed JsonSerializer stays interoperable with stdlib json
+
+
+def test_json_serializer_uses_orjson_when_available():
+    """civitas[fast] is installed in dev, so the orjson backend is active."""
+    import civitas.serializer as serializer_module
+
+    assert serializer_module.orjson is not None
+    msg = Message(type="t", payload={"a": 1, "b": [1, 2, 3]})
+    restored = JsonSerializer().deserialize(JsonSerializer().serialize(msg))
+    assert restored.payload == {"a": 1, "b": [1, 2, 3]}
+
+
+def test_json_serializer_reads_stdlib_json_bytes():
+    """Bytes produced by the stdlib json backend deserialize regardless of backend."""
+    msg = Message(type="x", payload={"k": "v", "n": 7})
+    stdlib_bytes = json.dumps(msg.to_dict()).encode("utf-8")
+    restored = JsonSerializer().deserialize(stdlib_bytes)
+    assert restored.type == "x"
+    assert restored.payload == {"k": "v", "n": 7}
+
+
+def test_json_unicode_roundtrip():
+    """Non-ASCII payloads roundtrip through JsonSerializer (orjson emits UTF-8)."""
+    ser = JsonSerializer()
+    msg = Message(type="t", payload={"emoji": "🚀", "accents": "café"})
+    restored = ser.deserialize(ser.serialize(msg))
+    assert restored.payload == {"emoji": "🚀", "accents": "café"}
