@@ -20,6 +20,7 @@ from civitas.gateway.dispatch import (
     StreamSink,
     _StreamClosed,
 )
+from civitas.gateway.jwt_auth import _InvalidToken
 from civitas.gateway.middleware import build_chain, load_middleware
 from civitas.gateway.openapi import build_spec, swagger_html
 from civitas.gateway.types import GatewayRequest, GatewayResponse, MiddlewareCallable
@@ -38,6 +39,10 @@ _Send = Any
 
 _CONTENT_TYPE_JSON = (b"content-type", b"application/json")
 _CONTENT_TYPE_HTML = (b"content-type", b"text/html; charset=utf-8")
+
+# WS bearer token transport: a single pinned Sec-WebSocket-Protocol subprotocol
+# carrying the JWT as a suffix, e.g. "civitas.bearer.<jwt>" (D1).
+_WS_BEARER_PREFIX = "civitas.bearer."
 
 
 def _parse_traceparent(value: str) -> tuple[str, str | None]:
@@ -106,6 +111,19 @@ def _ws_parse(event: dict[str, Any]) -> dict[str, Any] | None:
     except (json.JSONDecodeError, ValueError):
         return None
     return parsed if isinstance(parsed, dict) else {"data": parsed}
+
+
+def _extract_ws_token(subprotocols: list[str]) -> tuple[str, str] | None:
+    """Return ``(subprotocol, token)`` for the first ``civitas.bearer.<jwt>`` offer.
+
+    The token rides the ``Sec-WebSocket-Protocol`` handshake header as the suffix of
+    a single pinned subprotocol string (D1). Returns ``None`` when no offered
+    subprotocol carries a token.
+    """
+    for subprotocol in subprotocols:
+        if subprotocol.startswith(_WS_BEARER_PREFIX):
+            return subprotocol, subprotocol[len(_WS_BEARER_PREFIX) :]
+    return None
 
 
 def _client_cert_from_scope(scope: _Scope) -> dict[str, Any] | None:
@@ -221,7 +239,24 @@ class GatewayASGI:
         if agent is None:
             await send({"type": "websocket.close", "code": 4404})
             return
-        await send({"type": "websocket.accept"})
+
+        # Auth resolves strictly before accept so no unauthenticated socket ever
+        # opens (D2). JWT auto-inherits from HTTP config (D6): no verifier -> open
+        # unchanged (regression guard). WS mTLS is out of scope (#25).
+        if self._gateway._jwt_verifier is not None:
+            extracted = _extract_ws_token(scope.get("subprotocols", []))
+            if extracted is None:
+                await send({"type": "websocket.close", "code": 4401})
+                return
+            subprotocol, token = extracted
+            try:
+                await self._gateway._jwt_verifier.verify(token)
+            except _InvalidToken:
+                await send({"type": "websocket.close", "code": 4401})
+                return
+            await send({"type": "websocket.accept", "subprotocol": subprotocol})
+        else:
+            await send({"type": "websocket.accept"})
 
         session_id = _uuid7()
         sink = self._gateway._open_stream(session_id)
