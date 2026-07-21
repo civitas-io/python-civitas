@@ -56,14 +56,19 @@ jobs:
           name: bandit-report
           path: bandit-report.json
 
+      # Invoked via CLI, not semgrep/semgrep-action: the action dropped the
+      # generateSarif input (valid inputs are now entryPoint/args/config/
+      # publishToken), so semgrep.sarif was silently never produced and the
+      # SARIF upload below became a no-op — a fail-open in the SAST pipeline.
       - name: Semgrep — Python security + secrets ruleset
-        uses: semgrep/semgrep-action@v1
-        with:
-          config: >-
-            p/python
-            p/secrets
-            p/owasp-top-ten
-          generateSarif: "1"
+        run: |
+          uv tool install semgrep
+          uv tool run semgrep scan \
+            --config p/python \
+            --config p/secrets \
+            --config p/owasp-top-ten \
+            --sarif --output semgrep.sarif \
+            --severity ERROR --error
         env:
           # SEMGREP_APP_TOKEN is optional — set in repo secrets for dashboard
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}

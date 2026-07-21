@@ -46,7 +46,7 @@ Everything in this part is done.
 | — | [v0.4.0 Release Fixes](#v040-release-fixes) | Jul 2026 |
 | — | [v0.5.0 — Released](#v050--released) | Jul 2026 |
 | — | [v0.6.0 — Gateway Completion](#v060--gateway-completion-released) | Jul 2026 |
-| — | [v0.7.0 / v0.7.1 / v0.7.2 / v0.7.3 — Spawn Maturation, Gateway Auth & Bus-Native Streaming](#v070--spawn-maturation--gateway-auth-released) | Jul 2026 |
+| — | [v0.7.0 / v0.7.1 / v0.7.2 / v0.7.3 / v0.7.4 — Spawn Maturation, Gateway Auth & Bus-Native Streaming](#v070--spawn-maturation--gateway-auth-released) | Jul 2026 |
 
 ---
 
@@ -877,7 +877,11 @@ as R7 (see [`bus-native-streaming.md`](design/bus-native-streaming.md), [#22](ht
 **Released 2026-07-05.** R1 (non-blocking spawn, #14), R2 (`spawn_into`, #16), R3 (JWT+mTLS auth + fail-open fix, #18), R4 (encrypted StateStore, #19), R5 (per-agent spawn quotas, #21), R6 (cross-process spawn, #20) all shipped. R7 (bus-native streaming, #15) deferred as a stretch item.
 
 **Status: ✅ Released** — R1–R6 shipped in v0.7.0 (2026-07-05); R7 shipped in v0.7.1; R8 shipped in
-v0.7.2; R9 shipped in v0.7.3.
+v0.7.2; R9 shipped in v0.7.3; **v0.7.4** (2026-07-21) is a security patch: `click` ≥ 8.3.3
+([PYSEC-2026-2132](https://osv.dev/vulnerability/PYSEC-2026-2132), transitive via typer, not
+exploitable in civitas — `click.edit()` is never called) + restored the Semgrep SARIF pipeline in
+the Security workflow (the action's `generateSarif` input was dropped upstream, silently
+disabling SAST uploads — fail-open, now CLI-invoked).
 
 Theme: *finish what v0.6.0 deferred.* The largest coherent cluster is **dynamic-spawn maturation**
 (the #8 / #9 / #10 follow-ups + quotas + cross-process), plus completing **gateway auth** and one
