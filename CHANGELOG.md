@@ -11,6 +11,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+## [0.7.4] — 2026-07-21
+
+### Security
+
+- **Dependency: `click` bumped 8.3.1 → 8.4.2** ([PYSEC-2026-2132](https://osv.dev/vulnerability/PYSEC-2026-2132)) — Click ≤ 8.3.2 contains a command-injection vulnerability in `click.edit()`. Civitas never calls `click.edit()` (`click` is a transitive dependency via `typer`), so the runtime was **not exploitable**; the bump keeps the zero-known-vulnerability dependency gate (pip-audit `--strict`) green.
+- **CI: Semgrep SARIF pipeline restored** — `semgrep/semgrep-action@v1` dropped the `generateSarif` input, so `semgrep.sarif` was silently never produced and SAST findings stopped flowing to GitHub code scanning (a fail-open in the security pipeline; the job stayed green throughout). The Security workflow now invokes the semgrep CLI directly (`semgrep scan --sarif --output semgrep.sarif`) and fails on ERROR-severity findings.
+
 ## [0.7.3] — 2026-07-06
 
 ### Fixed
