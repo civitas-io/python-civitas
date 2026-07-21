@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://civitas-io.github.io/python-civitas/design/self-healing/">
+        <link rel="canonical" href="https://civitas-io.github.io/python-civitas/design/supervision-hardening/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Design: Self-Healing / Autonomous Remediation - civitas</title>
+        <title>Design: Supervision Core Hardening (Actor-Model Fidelity) - civitas</title>
       
     
     
@@ -86,7 +86,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#design-self-healing-autonomous-remediation" class="md-skip">
+        <a href="#design-supervision-core-hardening-actor-model-fidelity" class="md-skip">
           Skip to content
         </a>
       
@@ -122,7 +122,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Design: Self-Healing / Autonomous Remediation
+              Design: Supervision Core Hardening (Actor-Model Fidelity)
             
           </span>
         </div>
@@ -1671,22 +1671,44 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#oracle-review-verdict-required-revisions-2026-07-04" class="md-nav__link">
+  <a href="#1-findings-catalog" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Oracle review — verdict &amp; required revisions (2026-07-04)
+        1. Findings catalog
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Oracle review — verdict &amp; required revisions (2026-07-04)">
+    <nav class="md-nav" aria-label="1. Findings catalog">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#must-fix-before-build-ready" class="md-nav__link">
+  <a href="#a-actor-model-violations" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Must-fix before build-ready
+        A. Actor-model violations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b-supervision-layer-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        B. Supervision-layer structure
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c-secondary-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        C. Secondary issues
       
     </span>
   </a>
@@ -1699,55 +1721,99 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#motivation" class="md-nav__link">
+  <a href="#2-corrective-design" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Motivation
+        2. Corrective design
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#reconciliation-with-what-exists-honest-inventory" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Reconciliation with what exists (honest inventory)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#the-hard-truth-about-reload-otp-vs-python-decides-d1" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The hard truth about "reload" (OTP vs Python) — decides D1
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#architecture-the-self-healing-loop" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Architecture — the self-healing loop
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Architecture — the self-healing loop">
+    <nav class="md-nav" aria-label="2. Corrective design">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#where-each-piece-lives-d2-respects-boundarymd" class="md-nav__link">
+  <a href="#d1-restart-semantics-fresh-start-protocol-a1" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Where each piece lives (D2 — respects boundary.md)
+        D1 — Restart semantics: fresh-start protocol (A1)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d2-escalation-restarts-the-subtree-a2-28" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D2 — Escalation restarts the subtree (A2, #28)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d3-registration-snapshot-preserved-across-restart-a3-29" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D3 — Registration snapshot preserved across restart (A3, #29)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d4-serialized-observable-crash-handling-b2-30" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D4 — Serialized, observable crash handling (B2, #30)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d5-liveness-redesign-a6a7-31" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D5 — Liveness redesign (A6/A7, #31)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d6-unify-supervision-as-actors-b1-larger-phased" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D6 — Unify supervision as actors (B1) — larger, phased
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d7-semantics-documentation-pass-a4a5a8-c8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D7 — Semantics documentation pass (A4/A5/A8, C8)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d8-hygiene-batch-c1c7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D8 — Hygiene batch (C1–C7)
       
     </span>
   </a>
@@ -1760,10 +1826,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#staged-autonomy-model-d3" class="md-nav__link">
+  <a href="#3-priorities" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Staged autonomy model (D3)
+        3. Priorities
       
     </span>
   </a>
@@ -1771,10 +1837,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#safety-controls-non-negotiable-from-aiops-prior-art" class="md-nav__link">
+  <a href="#4-verification" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Safety controls (non-negotiable — from AIOps prior art)
+        4. Verification
       
     </span>
   </a>
@@ -1782,65 +1848,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#new-primitives-to-build-the-gaps" class="md-nav__link">
+  <a href="#5-non-goals" class="md-nav__link">
     <span class="md-ellipsis">
       
-        New primitives to build (the gaps)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#decisions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Decisions
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#open-questions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Open questions
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#non-goals" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Non-goals
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#implementation-phases-staged-safety-first" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Implementation phases (staged, safety-first)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#addendum-2026-07-21-supervision-core-findings-intersect-this-design" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Addendum (2026-07-21) — supervision-core findings intersect this design
+        5. Non-goals
       
     </span>
   </a>
@@ -1867,386 +1878,311 @@
   
 
 
-<h1 id="design-self-healing-autonomous-remediation">Design: Self-Healing / Autonomous Remediation<a class="headerlink" href="#design-self-healing-autonomous-remediation" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> DRAFT — Oracle-reviewed 2026-07-04, revised per critique. Not approved; build P0–P1 only when greenlit.
-<strong>Author:</strong> Sisyphus
-<strong>Date:</strong> 2026-07-04
-<strong>Verdict (Oracle):</strong> feasible-with-caveats as an SRE copilot (P0–P1); the deploy primitive is
-<strong>orchestrator-first</strong>, in-runtime canary deferred. See "Oracle review" below.
-<strong>Reference demo:</strong> <a href="../medicus-demo/"><code>medicus-demo.md</code></a> — the P0+P1 hero demo (detect → diagnose → verified PR).</p>
+<h1 id="design-supervision-core-hardening-actor-model-fidelity">Design: Supervision Core Hardening (Actor-Model Fidelity)<a class="headerlink" href="#design-supervision-core-hardening-actor-model-fidelity" title="Permanent link">&para;</a></h1>
+<p><strong>Status:</strong> DRAFT — findings verified by regression tests 2026-07-21; corrective design proposed, not yet approved.
+<strong>Author:</strong> architecture review session (2026-07-21)
+<strong>Scope:</strong> <code>civitas/supervisor.py</code>, <code>civitas/process.py</code>, <code>civitas/registry.py</code>, <code>civitas/worker.py</code>, <code>civitas/bus.py</code>
+<strong>Tracking:</strong> issues <a href="https://github.com/civitas-io/python-civitas/issues/28">#28</a>, <a href="https://github.com/civitas-io/python-civitas/issues/29">#29</a>, <a href="https://github.com/civitas-io/python-civitas/issues/30">#30</a>, <a href="https://github.com/civitas-io/python-civitas/issues/31">#31</a>, <a href="https://github.com/civitas-io/python-civitas/issues/32">#32</a>, <a href="https://github.com/civitas-io/python-civitas/issues/33">#33</a>, <a href="https://github.com/civitas-io/python-civitas/issues/34">#34</a>, <a href="https://github.com/civitas-io/python-civitas/issues/35">#35</a> · regression tests <code>tests/unit/test_actor_model_gaps.py</code> (strict xfail)</p>
 <blockquote>
-<p><strong>One-line framing:</strong> Civitas already gives agents <em>fault-tolerance</em> (crash → supervised restart).
-Self-healing extends that from "restart the same code" to "diagnose the fault, propose a code fix,
-verify it in a sandbox, and roll it out safely" — under <strong>staged autonomy</strong> with a human able to set
-exactly how much the system may do on its own. This is an SRE-agent capability layered on the
-runtime, <strong>not</strong> Erlang-style in-place hot code loading (which Python cannot do safely).</p>
+<p><strong>One-line framing:</strong> Civitas advertises Erlang/OTP fault-tolerance semantics ("let it crash,
+supervisor handles the rest"). A code-level review found a gap between those advertised semantics
+and the implementation — several reachable scenarios where the guarantee fails silently. This doc
+is the findings catalog and the corrective design. The distributed edge (R1–R9) was designed
+carefully; the <em>local supervision core</em> (Phase 1, pre-design-doc era) is where the debt lives.</p>
 </blockquote>
 <hr />
-<h2 id="oracle-review-verdict-required-revisions-2026-07-04">Oracle review — verdict &amp; required revisions (2026-07-04)<a class="headerlink" href="#oracle-review-verdict-required-revisions-2026-07-04" title="Permanent link">&para;</a></h2>
-<p>Oracle pressure-tested this design against the runtime code. <strong>Verdict: feasible-with-caveats as an SRE
-copilot (P0–P1); <em>not as described</em> for the deploy primitive (D1/P2).</strong> Detect → diagnose →
-sandboxed-verified PR is buildable on existing seams; the "blue-green worker restart" primitive was
-wishful and is reframed here. <strong>This section supersedes any conflicting canary/blue-green framing
-below.</strong></p>
-<p><strong>D1 reframed — no in-runtime code swap, no overlapping canary:</strong>
-- In-process reload is impossible — every class load is <code>importlib.import_module</code> → <code>sys.modules</code> cache
-  (<code>supervisor.py:588</code>); restart reuses the <em>same instance</em> (<code>supervisor.py:332-348</code>). New code exists
-  only in a <strong>new OS process</strong>.
-- The registry forbids two same-named instances (<code>registry.py:119-120,191-195</code>) and the runtime
-  silently swallows the collision (<code>runtime.py:712-713</code>) → <strong>no overlapping canary</strong>; today's reality
-  is <strong>stop-then-start (brief downtime)</strong>.
-- Worker restart <strong>drops in-flight mailbox messages</strong> (<code>process.py:977</code>, <code>worker.py:202</code>), reply
-  routing breaks mid-cutover, retries aren't idempotent, and cross-process state continuity <strong>requires
-  a shared durable store</strong> (default is in-memory, <code>state.py:33</code>).
-- <strong>Resolution (Q1):</strong> deploy is <strong>orchestrator-first</strong> — civitas emits a typed <code>redeploy vX</code> request +
-  best-effort drain; k8s/systemd does the rollout + health-check + rollback. In-runtime canary
-  (versioned names + alias routing) is a <strong>large separate primitive, deferred / cut from v1</strong>.</p>
-<p><strong>Safety hardened (was necessary-but-naive):</strong>
-- <strong>Verification anchored to reality (D8):</strong> the failing test must be <strong>derived from the real signal</strong>
-  (reproduce the actual crash/trace/input) — an LLM-authored test proves nothing. Require the <strong>full
-  existing suite + coverage on changed lines</strong>. Restrict auto-deploy to <strong>crash-class</strong> faults until a
-  correctness signal (golden output / shadow compare) exists — canary metrics are error/latency-only
-  (<code>metrics.py:17-30</code>), blind to silent wrong-output regressions.
-- <strong>Injection is structural (D9):</strong> the deterministic controller <strong>never lets free-text telemetry
-  authorize a transition</strong> — only typed/signed signals drive the machine; logs/traces/audit text are
-  <em>evidence for humans</em>, not control input (telemetry is attacker-influenceable, <code>bus.py:105-120</code>).
-- <strong>Self-guardrail isolation enforced, not prompted (Q5):</strong> healer/governance/CI paths mounted
-  <strong>read-only</strong> (<code>sandbox/config.py:18-23</code>) <strong>plus</strong> a deploy-gate that refuses diffs touching them;
-  Medicus's own supervision isolated so a bad self-fix can't disable the healer or its kill switch.
-- <strong>Deploy/fix circuit breaker (D10, core):</strong> global fix-rate limit + auto-freeze-on-regression +
-  kill-switch-to-known-good. Restart budgets today are per-crash only (<code>supervisor.py:270-293</code>).</p>
-<p><strong>Boundary corrected (D2):</strong> the <strong>safety floor</strong> (kill switch, protected-path refusal, circuit
-breaker) is <strong>runtime safety and ships in core/contrib</strong> — OSS is safe-by-default <em>without</em> Presidium.
-The governance seams already exist (<code>on_spawn_requested</code>, <code>Registry.add_listener</code>, suspend/resume,
-audit), so the minimal built-in gate needs no Presidium dependency; Presidium adds policy richness on
-top.</p>
-<p><strong>Phasing re-sized:</strong> insert a <strong>shadow stage</strong> (generate + verify a fix, measure precision, no PR)
-between P0 and P1; <strong>split P2</strong> into P2a = orchestrator rollout + health-check + auto-rollback (cheap,
-standard) and ~~P2b = in-runtime canary~~ <strong>cut from v1</strong>.</p>
-<h3 id="must-fix-before-build-ready">Must-fix before build-ready<a class="headerlink" href="#must-fix-before-build-ready" title="Permanent link">&para;</a></h3>
-<ol>
-<li>D1 / Q1 reframed orchestrator-first (done above).</li>
-<li>Drop overlapping canary for v1 — accept brief downtime + orchestrator rollback.</li>
-<li>Verification anchored to the real signal + full suite + coverage-on-diff; auto-deploy crash-class only.</li>
-<li>Structural guardrail isolation — read-only mounts + deploy-gate refusing healer/governance/CI diffs.</li>
-<li>Deploy/fix circuit breaker + kill-switch-to-known-good in core (Presidium-independent).</li>
-<li><strong>Runtime bug to fix first:</strong> <code>DynamicSupervisor._handle_spawn</code> wires deps but <strong>omits <code>_audit_sink</code>
-   and <code>_metrics</code></strong> (<code>supervisor.py:598-606</code> vs <code>components.py:84-93</code>) — a dynamically-spawned Medicus
-   would run with <strong>no audit trail or metrics</strong>. Fix the wiring, or mandate Medicus be a <em>static</em> child.</li>
-</ol>
-<p><strong>Build recommendation:</strong> ship <strong>P0 (observe) + P1 (suggest → verified PR) only</strong> for now — ~80% of the
-value at ~20% of the risk, mostly on existing primitives. Gate P2+ hard.</p>
-<hr />
-<h2 id="motivation">Motivation<a class="headerlink" href="#motivation" title="Permanent link">&para;</a></h2>
-<p>The customer ask: an agent that watches logs / traffic / audit trail / OTEL, has access to the
-codebase, detects bugs, raises fixes, deploys them, and reloads the affected component — "something
-Erlang OTP does."</p>
-<p>Civitas is unusually well-positioned for the <em>runtime</em> half of this: it is an OTP-inspired
-supervision runtime with first-class observability and dynamic process control. The gap is the
-<strong>closed loop</strong> (detect → diagnose → fix → verify → deploy → rollback) and, above all, the <strong>safety
-envelope</strong> that makes autonomous code changes responsible rather than reckless.</p>
-<hr />
-<h2 id="reconciliation-with-what-exists-honest-inventory">Reconciliation with what exists (honest inventory)<a class="headerlink" href="#reconciliation-with-what-exists-honest-inventory" title="Permanent link">&para;</a></h2>
-<p><strong>We do NOT have hot code reload today.</strong> <code>grep</code> for <code>reload|hot.?swap|code_change|importlib.reload</code>
-across <code>civitas/</code> returns zero matches; supervisor restart <em>reuses the same instance</em> and never
-re-imports the class; deploying fixed code means <strong>rebuild image + restart process</strong>.</p>
-<p>What already exists — the OTP-shaped skeleton the loop builds on:</p>
+<h2 id="1-findings-catalog">1. Findings catalog<a class="headerlink" href="#1-findings-catalog" title="Permanent link">&para;</a></h2>
+<p>Severity: 🔴 correctness bug (guarantee fails), 🟡 semantic gap (works, but not the advertised
+model), 🔵 limitation to document.</p>
+<h3 id="a-actor-model-violations">A. Actor-model violations<a class="headerlink" href="#a-actor-model-violations" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
 <tr>
-<th>Capability</th>
+<th>ID</th>
+<th>Sev</th>
+<th>Finding</th>
 <th>Where</th>
-<th>Use in self-healing</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Supervision: crash → restart (ONE_FOR_ONE/ALL/REST, backoff)</td>
+<td>A1</td>
+<td>🔴</td>
+<td><strong>Restart reuses the dirty instance.</strong> <code>_restart_child()</code> restarts the <em>same</em> <code>AgentProcess</code> object: instance variables survive, un-checkpointed <code>self.state</code> survives (<code>_restore_state()</code> only overwrites when a checkpoint exists), and the mailbox is retained. Corrupted in-memory state that caused a crash is resurrected — restart loops until the budget is exhausted. AGENTS.md anti-pattern #5 claims the opposite ("instance variables reset on restart").</td>
+<td><code>supervisor.py::_restart_child</code>, <code>process.py::_restore_state</code></td>
+</tr>
+<tr>
+<td>A2</td>
+<td>🔴</td>
+<td><strong>Escalation is a no-op under ONE_FOR_ONE</strong> (<a href="https://github.com/civitas-io/python-civitas/issues/28">#28</a>). <code>_restart_child()</code> returns early for <code>Supervisor</code> children, so an escalated subtree is never restarted; it stays dead while the system reports normal operation. The escalated supervisor's <code>_restart_timestamps</code> is also never cleared, so any later restart re-escalates immediately.</td>
+<td><code>supervisor.py::_restart_child</code>, <code>_escalate</code></td>
+</tr>
+<tr>
+<td>A3</td>
+<td>🔴</td>
+<td><strong>Restart drops capability registrations</strong> (<a href="https://github.com/civitas-io/python-civitas/issues/29">#29</a>). All restart paths re-register bare (<code>register(name)</code>), losing <code>capabilities</code> + <code>capability_metadata</code> (and YAML overrides, which only <code>Runtime</code> knows). <code>send_capable()</code> / <code>find_by_capability()</code> silently break after the first crash-restart. <code>Worker._on_restart_command</code> has the identical bug.</td>
+<td><code>supervisor.py</code> (3 sites), <code>worker.py</code></td>
+</tr>
+<tr>
+<td>A4</td>
+<td>🟡</td>
+<td><strong>Blocking <code>ask()</code> inside <code>handle()</code> + one-message-at-a-time loop → deadlock on cycles.</strong> While A awaits <code>ask("B")</code>, A processes nothing; if B (transitively) asks A back, both stall until the 30 s timeout crashes one side. No selective receive, no cycle detection, no documentation of the hazard — the README's own orchestrator pattern is one hop away from it.</td>
+<td><code>process.py::_message_loop</code></td>
+</tr>
+<tr>
+<td>A5</td>
+<td>🟡</td>
+<td><strong>Bounded mailboxes + blocking sends → backpressure deadlock cycles.</strong> <code>Mailbox.put()</code> blocks when full and <code>InProcessTransport.publish()</code> awaits the recipient inline, so a sender's <code>handle()</code> blocks inside a full recipient's mailbox. A↔B full-mailbox cycles deadlock with no detection. Priority queue is hardcoded <code>maxsize=100</code>; <code>broadcast()</code> is sequential (head-of-line).</td>
+<td><code>process.py::Mailbox</code>, <code>transport/inprocess.py</code></td>
+</tr>
+<tr>
+<td>A6</td>
+<td>🔴</td>
+<td><strong>Heartbeats measure mailbox latency, not liveness</strong> (<a href="https://github.com/civitas-io/python-civitas/issues/31">#31</a>). Sent at priority 0, acked only at a message-loop boundary: a busy agent (~15 s of legitimate <code>handle()</code> work at defaults) or a SUSPENDED remote agent is falsely declared crashed and restarted. Restart backoff sleeps inline in the heartbeat loop, stalling monitoring of all other remote children.</td>
+<td><code>supervisor.py::_heartbeat_loop</code></td>
+</tr>
+<tr>
+<td>A7</td>
+<td>🔴</td>
+<td><strong>Local agents have no hang detection at all.</strong> Supervision of local children relies solely on task exceptions; a <code>handle()</code> that hangs forever never raises, so the supervisor sees a healthy child indefinitely. There is no per-message watchdog. Remote agents (flawed heartbeats) are better supervised than local ones.</td>
+<td><code>supervisor.py::_start_child</code></td>
+</tr>
+<tr>
+<td>A8</td>
+<td>🔵</td>
+<td><strong>Cooperative scheduling limits fault isolation.</strong> All actors share one event loop; one blocking/CPU-bound <code>handle()</code> stalls every agent, supervisor, heartbeat ack, and gateway in the process. BEAM's preemptive scheduling is what makes OTP's isolation real; asyncio cannot replicate it. Must be documented as a boundary of the model, with <code>asyncio.to_thread</code> / worker-process guidance.</td>
+<td>architecture</td>
+</tr>
+</tbody>
+</table>
+<h3 id="b-supervision-layer-structure">B. Supervision-layer structure<a class="headerlink" href="#b-supervision-layer-structure" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Sev</th>
+<th>Finding</th>
+<th>Where</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>B1</td>
+<td>🟡</td>
+<td><strong>Two divergent supervision implementations.</strong> Static <code>Supervisor</code> is not an actor (direct method calls, private-state mutation, cannot be messaged/suspended/traced); <code>DynamicSupervisor</code> <em>is</em> an actor with separately implemented restart machinery and different semantics (never escalates). Duplicated logic, diverging behavior.</td>
 <td><code>supervisor.py</code></td>
-<td>Baseline fault-tolerance; restart budget = a failure signal</td>
 </tr>
 <tr>
-<td><code>runtime.on_crash(cb)</code> → <code>(agent_name, exc)</code></td>
-<td><code>runtime.py</code></td>
-<td><strong>Detect</strong> crashes (push)</td>
+<td>B2</td>
+<td>🔴</td>
+<td><strong>Crash handling is unserialized and failures vanish</strong> (<a href="https://github.com/civitas-io/python-civitas/issues/30">#30</a>). <code>_handle_crash</code> runs as a fire-and-forget task whose exception is never retrieved: a failed restart leaves the child dead with zero log output. Concurrent crashes under ONE_FOR_ALL race (<code>double _start()</code>, registry <code>ValueError</code> swallowed). During a nested stop/start window <code>_running=False</code> drops sibling crashes entirely.</td>
+<td><code>supervisor.py::_on_child_done</code></td>
 </tr>
 <tr>
-<td>Metrics (<code>MetricsSink</code> push, <code>MetricsCollector.snapshot</code> pull)</td>
-<td><code>observability/metrics.py</code>, <code>dashboard/collector.py</code></td>
-<td><strong>Monitor</strong> latency/error/throughput</td>
+<td>B3</td>
+<td>🟡</td>
+<td><strong>Inconsistent restart accounting.</strong> Budget window (<code>_restart_timestamps</code>) is supervisor-wide (Erlang-style intensity), but backoff uses the per-child <em>lifetime</em> count (<code>_restart_counts</code>, never windowed or reset) — surprising delays; neither model is documented as intended.</td>
+<td><code>supervisor.py::_compute_backoff</code></td>
 </tr>
 <tr>
-<td>Audit trail (<code>AuditSink</code>, <code>message.route</code> on every message)</td>
-<td><code>audit/</code></td>
-<td><strong>Monitor</strong> behavior; <strong>immutable audit</strong> for the loop</td>
-</tr>
-<tr>
-<td>OTEL spans (<code>send</code>/<code>recv</code>/<code>handle</code>/<code>llm</code>/<code>tool</code>/<code>supervisor.restart</code>)</td>
-<td><code>observability/tracer.py</code></td>
-<td><strong>Monitor/diagnose</strong> traces</td>
-</tr>
-<tr>
-<td>Live topology API (HTTP)</td>
-<td><code>topology_server.py</code></td>
-<td><strong>Monitor</strong> agent health (pull)</td>
-</tr>
-<tr>
-<td>Dynamic spawn/despawn/stop</td>
-<td><code>supervisor.py</code>, <code>process.py</code>, <code>runtime.py</code></td>
-<td><strong>Deploy</strong> via new instance; drain old</td>
-</tr>
-<tr>
-<td>Durable state (<code>checkpoint()</code> + <code>StateStore</code>)</td>
-<td><code>process.py</code>, <code>plugins/state.py</code></td>
-<td><strong>State continuity</strong> across restart</td>
-</tr>
-<tr>
-<td><code>self.llm.chat(tools=…)</code></td>
-<td><code>plugins/model.py</code></td>
-<td><strong>Diagnose</strong> + generate fix</td>
-</tr>
-<tr>
-<td>Tools / MCP / sandbox config</td>
-<td><code>plugins/tools.py</code>, <code>process.py connect_mcp</code>, <code>sandbox/</code></td>
-<td><strong>Fix</strong> (read/write/test/git); sandbox via fabrica bubblewrap</td>
+<td>B4</td>
+<td>🟡</td>
+<td><strong>DynamicSupervisor head-of-line blocking.</strong> <code>wait=True</code> spawn awaits child readiness inside the supervisor's own <code>handle()</code> — one slow <code>on_start()</code> blocks all spawn/despawn/stop traffic for up to 30 s; a child messaging its own spawning DynSup during <code>on_start</code> deadlocks.</td>
+<td><code>supervisor.py::_handle_spawn</code></td>
 </tr>
 </tbody>
 </table>
-<p>Every monitoring signal is consumable by an ordinary <code>AgentProcess</code> <strong>without monkey-patching</strong>.</p>
-<hr />
-<h2 id="the-hard-truth-about-reload-otp-vs-python-decides-d1">The hard truth about "reload" (OTP vs Python) — decides D1<a class="headerlink" href="#the-hard-truth-about-reload-otp-vs-python-decides-d1" title="Permanent link">&para;</a></h2>
-<p>Erlang/OTP hot code upgrade (two-version code, <code>gen_server:code_change/3</code> state migration,
-<code>sys:suspend → change_code → resume</code>, fully-qualified-call switching) is a <strong>BEAM VM</strong> feature. Python
-has no safe equivalent:</p>
-<ul>
-<li><code>importlib.reload()</code> is fundamentally unreliable — existing instances keep the old class, <code>from x
-  import y</code> aliases don't update, C-extensions break, and running coroutines keep old code (per the
-  CPython docs and jurigged/reloadium's own caveats).</li>
-<li><strong>Every</strong> production Python framework (uvicorn <code>--reload</code>, Django, Gunicorn <code>HUP</code>) reloads by <strong>full
-  process restart</strong>, never in-place swap.</li>
-</ul>
-<p><strong>Therefore the "reload the affected component" step = spawn-new-process + drain + retire-old</strong>
-(blue-green at the worker/process level). This is not a downgrade of the OTP idea — it is the <em>same</em>
-supervisor-restarts-child-with-new-code pattern, at <strong>process granularity</strong> instead of module
-granularity. It maps cleanly onto Civitas's worker + supervision model.</p>
-<hr />
-<h2 id="architecture-the-self-healing-loop">Architecture — the self-healing loop<a class="headerlink" href="#architecture-the-self-healing-loop" title="Permanent link">&para;</a></h2>
-<p><img alt="Self-healing loop" src="../../assets/self-healing-loop.svg" /></p>
-<p>A MAPE-K loop (Monitor → Analyze → Plan → Execute → Knowledge), run by a dedicated <strong>healer agent</strong>
-(working name <strong>Medicus</strong>), with a <strong>deterministic controller</strong> wrapping the LLM (the LLM proposes;
-the controller decides — see D5):</p>
-<ol>
-<li><strong>Monitor</strong> — subscribe to the signals above (metrics/audit/OTEL/on_crash) + poll topology. Feed a
-   rolling window into a <strong>failure classifier</strong>.</li>
-<li><strong>Analyze / Diagnose</strong> — on a qualifying signal, gather evidence (failing trace, stack, correlated
-   logs, the offending code via a filesystem tool) and ask the LLM for a root-cause hypothesis +
-   candidate fix. Screen all tool/telemetry inputs for prompt injection first.</li>
-<li><strong>Plan</strong> — produce a bounded change: a minimal diff within blast-radius limits, plus the
-   verification it must pass. Classify reversibility.</li>
-<li><strong>Verify</strong> — apply the diff in an <strong>isolated sandbox</strong> (fabrica bubblewrap / ephemeral worker), run
-   the affected tests + static analysis. Fail → rollback snapshot, retry with budget, else escalate.</li>
-<li><strong>Execute / Deploy</strong> — per the autonomy stage (below): open a PR (default), or canary-deploy via a
-   <strong>new worker with the fixed code</strong> and drain the old one, watching health.</li>
-<li><strong>Rollback / Verify-in-prod</strong> — automatic rollback on health/metric regression; post-hoc watch for
-   recurrence; write the outcome (and failed hypotheses) back to Knowledge.</li>
-</ol>
-<h3 id="where-each-piece-lives-d2-respects-boundarymd">Where each piece lives (D2 — respects <code>boundary.md</code>)<a class="headerlink" href="#where-each-piece-lives-d2-respects-boundarymd" title="Permanent link">&para;</a></h3>
-<ul>
-<li><strong>civitas (core):</strong> the monitoring surfaces (exist), a new <strong><code>restart-with-new-code</code> worker
-  primitive</strong> (blue-green drain), dynamic spawn/despawn, sandbox config, and a generic
-  <strong>remediation/health hook</strong>. Runtime only — no LLM, no policy.</li>
-<li><strong>civitas-contrib (or a new <code>medicus</code> package):</strong> the healer agent + code-fix tools
-  (filesystem/subprocess/git) + failure classifier. Application-level, depends on core.</li>
-<li><strong>presidium (governance):</strong> approval gates, fix-policy (what may be changed), budgets, and
-  <strong>graduated-autonomy enforcement</strong> + audit. The safety envelope is a <em>governance</em> concern, exactly
-  Presidium's role. A minimal built-in gate ships for OSS users without Presidium (see Q4).</li>
-</ul>
-<hr />
-<h2 id="staged-autonomy-model-d3">Staged autonomy model (D3)<a class="headerlink" href="#staged-autonomy-model-d3" title="Permanent link">&para;</a></h2>
-<p><img alt="Staged autonomy &amp; safety gates" src="../../assets/self-healing-autonomy.svg" /></p>
-<p>Autonomy is a <strong>dial</strong>, defaulting to the safest useful setting. A component earns higher autonomy only
-after proven behavior:</p>
+<h3 id="c-secondary-issues">C. Secondary issues<a class="headerlink" href="#c-secondary-issues" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
 <tr>
-<th>Stage</th>
-<th>What the healer may do</th>
-<th>Human role</th>
+<th>ID</th>
+<th>Sev</th>
+<th>Finding</th>
+<th>Tracking</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><strong>0 · Observe</strong></td>
-<td>Detect + diagnose + report (no changes)</td>
-<td>Reads findings</td>
+<td>C1</td>
+<td>🟡</td>
+<td><code>ErrorAction.RETRY</code> re-enqueues at the back of the mailbox — FIFO ordering silently broken for retries</td>
+<td><a href="https://github.com/civitas-io/python-civitas/issues/32">#32</a></td>
 </tr>
 <tr>
-<td><strong>1 · Suggest</strong> <em>(default)</em></td>
-<td>Everything in Observe + open a <strong>fix PR</strong> (sandbox-verified)</td>
-<td>Reviews/merges every fix</td>
+<td>C2</td>
+<td>🟡</td>
+<td>Wall clock (<code>time.time()</code>) used for restart windows / TTL / suspend markers; streams correctly use <code>monotonic</code> — clock jumps distort budgets</td>
+<td>this doc</td>
 </tr>
 <tr>
-<td><strong>2 · Supervised</strong></td>
-<td>Auto-apply <strong>low-risk, reversible</strong> fixes via canary; <strong>HITL</strong> for anything else</td>
-<td>Approves the exceptions; watches</td>
+<td>C3</td>
+<td>🔵</td>
+<td>Up to 4 serialization passes per in-process message (<code>json.dumps</code> validation + msgpack route + deserialize/reserialize for <code>reply_to</code> injection)</td>
+<td>this doc</td>
 </tr>
 <tr>
-<td><strong>3 · Autonomous</strong></td>
-<td>Full loop for <strong>proven, bounded</strong> failure classes; canary + auto-rollback</td>
-<td>Monitors dashboards; kill switch</td>
+<td>C4</td>
+<td>🟡</td>
+<td><code>sender="_runtime"</code> is unroutable — agent replies via <code>message.sender</code> crash</td>
+<td><a href="https://github.com/civitas-io/python-civitas/issues/33">#33</a></td>
+</tr>
+<tr>
+<td>C5</td>
+<td>🟡</td>
+<td><code>register_b64</code> pollutes the routing table with phantom non-routable entries (and drops the key it was given)</td>
+<td><a href="https://github.com/civitas-io/python-civitas/issues/34">#34</a></td>
+</tr>
+<tr>
+<td>C6</td>
+<td>🔵</td>
+<td><code>broadcast("*")</code> glob-matches system entries (<code>_agency.worker.restart</code>, gateways, topology server)</td>
+<td>this doc</td>
+</tr>
+<tr>
+<td>C7</td>
+<td>🔵</td>
+<td>Core violates its own encapsulation rule: <code>DynamicSupervisor</code> reads <code>bus._registry/_serializer/_transport</code>; <code>Runtime</code> swaps <code>cs.bus._serializer</code> post-hoc</td>
+<td>this doc</td>
+</tr>
+<tr>
+<td>C8</td>
+<td>🔵</td>
+<td>Delivery semantics undocumented: at-most-once, in-flight message lost on crash, queued messages survive restart, no DLQ</td>
+<td>this doc</td>
+</tr>
+<tr>
+<td>C10</td>
+<td>🟡</td>
+<td>README contradicts AGENTS.md/pyproject on provider extras + adapter imports</td>
+<td><a href="https://github.com/civitas-io/python-civitas/issues/35">#35</a></td>
 </tr>
 </tbody>
 </table>
-<p>Progression is per-failure-class and per-component, gated on metrics + audit review — never a global
-flip.</p>
 <hr />
-<h2 id="safety-controls-non-negotiable-from-aiops-prior-art">Safety controls (non-negotiable — from AIOps prior art)<a class="headerlink" href="#safety-controls-non-negotiable-from-aiops-prior-art" title="Permanent link">&para;</a></h2>
-<p>Reversibility beats approval clicks for high-consequence, short-window actions; humans review the rare
-irreversible ones. Tiered:</p>
+<h2 id="2-corrective-design">2. Corrective design<a class="headerlink" href="#2-corrective-design" title="Permanent link">&para;</a></h2>
+<h3 id="d1-restart-semantics-fresh-start-protocol-a1">D1 — Restart semantics: fresh-start protocol (A1)<a class="headerlink" href="#d1-restart-semantics-fresh-start-protocol-a1" title="Permanent link">&para;</a></h3>
+<p>Choose and implement one of two models; the review recommends <strong>(a)</strong>:</p>
 <ul>
-<li><strong>Structural:</strong> sandboxed validation; <strong>canary + automatic rollback</strong> (reversible actions);
-  blast-radius limits (max diff, <strong>no new dependencies</strong>, no schema/migration auto-apply, protected
-  paths); immutable audit; <strong>kill switch</strong> that leaves a known-good state.</li>
-<li><strong>Control-flow (D5):</strong> a <strong>deterministic state machine</strong>, not the LLM, owns the critical path
-  (auto-apply-if-generated, auto-commit-if-tests-pass, force-progress after N reads, bounded retries).
-  Reliability of comparable systems jumped ~10%→90% precisely by taking the LLM <em>out</em> of control.</li>
-<li><strong>Classification (D6):</strong> escalate — do <strong>not</strong> auto-fix — infrastructure/resource failures (a real
-  cautionary case: bumping memory weekly instead of fixing a leak), security-policy changes, and
-  anything without a clear reproduction + a test that goes red→green.</li>
-<li><strong>Oversight:</strong> confidence + risk routing to an approval queue (HMAC-locked payloads); maker-checker
-  for irreversible actions; a separate reviewer/classifier that only sees user-intent + tool calls
-  (defends against the agent talking itself into a bad action); <strong>prompt-injection screening</strong> of
-  telemetry/tool outputs before they enter the healer's context.</li>
+<li><strong>(a) OTP-faithful fresh actor (recommended).</strong> On restart the supervisor re-instantiates the
+  child from its class + constructor args (captured at first registration as a <em>child spec</em>, the
+  OTP <code>child_spec</code> concept — Civitas already has <code>_ChildRec</code> for dynamic children; extend the idea
+  to static ones). Fresh instance → fresh instance vars, fresh <code>self.state</code> (then
+  <code>_restore_state()</code> applies the last checkpoint), fresh mailbox <strong>except</strong> that the old mailbox is
+  drained into the new one (preserving queued messages and the teardown-error-reply behavior of
+  <code>bus.teardown_agent</code>). The checkpoint remains the <em>only</em> state that survives — which is exactly
+  the documented contract.</li>
+<li><strong>(b) Documented resume semantics (cheaper).</strong> Keep instance reuse but make <code>_run()</code> reset
+  <code>self.state = {}</code> before <code>_restore_state()</code>, and rewrite AGENTS.md anti-pattern #5 to say
+  instance variables <em>survive</em> restart and must not be trusted. This closes the state hole but
+  leaves the instance-variable hole open.</li>
 </ul>
+<p>Either way: <strong>fix AGENTS.md</strong>, which currently documents behavior the code does not have.</p>
+<h3 id="d2-escalation-restarts-the-subtree-a2-28">D2 — Escalation restarts the subtree (A2, #28)<a class="headerlink" href="#d2-escalation-restarts-the-subtree-a2-28" title="Permanent link">&para;</a></h3>
+<p><code>_restart_child()</code> gains a <code>Supervisor</code> branch:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>if isinstance(child, Supervisor):
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    await child.stop()                    # idempotent for already-dead children
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    child._restart_timestamps.clear()     # fresh budget for the new incarnation
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    child._restart_counts.clear()
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    await child.start()
+</span></code></pre></div>
+<p><code>_restart_all_children</code> / <code>_restart_rest_for_one</code> already call <code>stop()/start()</code> on supervisors but
+must also clear the budget (the "fresh incarnation" rule — an OTP-restarted supervisor is a new
+process with a zeroed intensity window).</p>
+<h3 id="d3-registration-snapshot-preserved-across-restart-a3-29">D3 — Registration snapshot preserved across restart (A3, #29)<a class="headerlink" href="#d3-registration-snapshot-preserved-across-restart-a3-29" title="Permanent link">&para;</a></h3>
+<p>Registry gains <code>snapshot = registry.lookup(name)</code> → re-register from the snapshot
+(<code>capabilities</code>, <code>capability_metadata</code>, <code>address</code>), or a single <code>registry.reregister(name)</code>
+that atomically bumps the entry without losing fields (also avoiding the deregister/register
+listener churn Presidium currently sees). Apply to all three <code>Supervisor</code> restart paths and
+<code>Worker._on_restart_command</code>.</p>
+<h3 id="d4-serialized-observable-crash-handling-b2-30">D4 — Serialized, observable crash handling (B2, #30)<a class="headerlink" href="#d4-serialized-observable-crash-handling-b2-30" title="Permanent link">&para;</a></h3>
+<ul>
+<li>One <strong>crash-processing queue per supervisor</strong>: <code>_on_child_done</code> enqueues <code>(name, exc)</code>; a single
+  long-lived task drains it sequentially (OTP supervisors process EXIT signals serially). This
+  removes the concurrent-restart races and the <code>_running=False</code> drop window in one move.</li>
+<li>The drain task wraps each restart in <code>try/except</code>: on failure, log at ERROR with child name and
+  exception, fire crash callbacks, and <strong>escalate</strong> (a supervisor that cannot restart its child is
+  itself failing).</li>
+</ul>
+<h3 id="d5-liveness-redesign-a6a7-31">D5 — Liveness redesign (A6/A7, #31)<a class="headerlink" href="#d5-liveness-redesign-a6a7-31" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Stopgap (ship first):</strong> heartbeats at <code>priority=1</code> — suspended agents ack them (priority-only
+  drain), loaded agents ack between messages. Move the backoff sleep out of the heartbeat loop
+  (schedule restarts on the crash queue from D4).</li>
+<li><strong>Structural:</strong> liveness is per-<em>process</em>, not per-agent-mailbox — a Worker-level heartbeat
+  responder that answers off-loop (it is not an agent), so agent busyness never gates liveness.
+  Per-agent health then becomes a separate, opt-in <strong>watchdog</strong>: an optional
+  <code>handle_timeout: float</code> on <code>AgentProcess</code>; the dispatch wraps <code>handle()</code> in
+  <code>asyncio.timeout(handle_timeout)</code>, converting a hung handler into a normal crash the supervisor
+  can see (closes A7 for local agents too).</li>
+</ul>
+<h3 id="d6-unify-supervision-as-actors-b1-larger-phased">D6 — Unify supervision as actors (B1) — larger, phased<a class="headerlink" href="#d6-unify-supervision-as-actors-b1-larger-phased" title="Permanent link">&para;</a></h3>
+<p>Static <code>Supervisor</code> becomes (or is wrapped by) an agent process, sharing one restart engine with
+<code>DynamicSupervisor</code>: one budget/window/backoff implementation, one escalation rule, one crash
+queue. This is a v0.9/v1.0-scale refactor and needs its own plan; D2–D4 are deliberately designed
+to be portable into it.</p>
+<h3 id="d7-semantics-documentation-pass-a4a5a8-c8">D7 — Semantics documentation pass (A4/A5/A8, C8)<a class="headerlink" href="#d7-semantics-documentation-pass-a4a5a8-c8" title="Permanent link">&para;</a></h3>
+<p>A new <code>docs/messaging-semantics.md</code> (or a section in <code>docs/messaging.md</code>) stating explicitly:
+at-most-once delivery; in-flight loss on crash; queued-message survival across restart; RETRY
+ordering (per #32 resolution); the ask-cycle deadlock hazard and the <code>asyncio.timeout</code> +
+fire-and-forget alternatives; bounded-mailbox backpressure and its deadlock mode; cooperative
+scheduling boundaries and <code>asyncio.to_thread</code> guidance. Every claim in README's comparison table
+must be reconciled against this document.</p>
+<h3 id="d8-hygiene-batch-c1c7">D8 — Hygiene batch (C1–C7)<a class="headerlink" href="#d8-hygiene-batch-c1c7" title="Permanent link">&para;</a></h3>
+<p>Small independent fixes, one PR each: retry-in-place or documented reordering (#32); <code>monotonic</code>
+for windows/TTL-relative checks (C2); single-validation fast path for in-process messages (C3 —
+skip <code>json.dumps</code> when the serializer will fail loudly anyway, or validate once at <code>route()</code>);
+<code>_runtime</code> sink or doc (#33); <code>register_b64</code> removal in favor of <code>KeyRegistry</code> (#34); glob
+broadcast excludes <code>_agency.*</code> names (C6); accessor methods on <code>MessageBus</code> for what
+<code>DynamicSupervisor</code> needs (C7).</p>
 <hr />
-<h2 id="new-primitives-to-build-the-gaps">New primitives to build (the gaps)<a class="headerlink" href="#new-primitives-to-build-the-gaps" title="Permanent link">&para;</a></h2>
-<ol>
-<li><strong><code>restart-with-new-code</code> (core)</strong> — a worker-level blue-green swap: start a fresh worker importing
-   the new code, drain/hand-off, retire the old. This is the only genuinely missing <em>runtime</em> piece.</li>
-<li><strong>Code-fix toolset (contrib)</strong> — <code>read_file</code> / <code>write_file</code> / <code>run_command</code> / <code>git</code> tools (≈4 small
-   <code>ToolProvider</code>s) or MCP filesystem/bash servers, executed under sandbox.</li>
-<li><strong>Failure classifier (contrib)</strong> — maps a signal to {logic-bug (remediable) | infra/resource
-   (escalate) | security (escalate) | flaky (observe)}.</li>
-<li><strong>Canary + auto-rollback controller (core/contrib)</strong> — health-watch + revert.</li>
-<li><strong>Governance hooks (presidium)</strong> — policy + approval + graduated-autonomy enforcement + audit.</li>
-</ol>
-<hr />
-<h2 id="decisions">Decisions<a class="headerlink" href="#decisions" title="Permanent link">&para;</a></h2>
+<h2 id="3-priorities">3. Priorities<a class="headerlink" href="#3-priorities" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
-<th>#</th>
-<th>Decision</th>
-<th>Resolution</th>
+<th>Priority</th>
+<th>Items</th>
+<th>Rationale</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>D1</td>
-<td>Deploy / "reload" mechanism</td>
-<td><strong>Orchestrator-first new-process deploy</strong> — emit a typed <code>redeploy vX</code> signal + best-effort drain; k8s/systemd rolls out + health-checks + rolls back. <em>No</em> in-place reload (Python) and <em>no</em> in-runtime overlapping canary in v1 (registry is 1-name→1-address).</td>
+<td><strong>P0</strong></td>
+<td>D2 (#28), D4 (#30), D3 (#29)</td>
+<td>The flagship guarantee ("supervisor handles the rest") is false in reachable scenarios; recovery-path routing corruption</td>
 </tr>
 <tr>
-<td>D2</td>
-<td>Component boundaries</td>
-<td>Runtime + primitive in <strong>core</strong>; healer agent + tools in <strong>contrib</strong>; governance/approval in <strong>presidium</strong> (minimal built-in gate for OSS).</td>
+<td><strong>P1</strong></td>
+<td>D5 stopgap (#31), D1 decision + implementation</td>
+<td>False-positive restarts in production; let-it-crash does not deliver a clean heap</td>
 </tr>
 <tr>
-<td>D3</td>
-<td>Autonomy</td>
-<td><strong>Staged</strong> (Observe → Suggest → Supervised → Autonomous); default <strong>Suggest</strong> (PR + HITL). Per class/component.</td>
+<td><strong>P2</strong></td>
+<td>D7 docs pass, D8 hygiene batch, #35 README sweep</td>
+<td>Semantics users can actually rely on</td>
 </tr>
 <tr>
-<td>D4</td>
-<td>Deploy safety</td>
-<td><strong>Reversibility-first</strong>: orchestrator rollout + health-check + <strong>auto-rollback</strong>; maker-checker only for irreversible ops. Auto-deploy restricted to <strong>crash-class</strong> faults until a correctness signal exists.</td>
-</tr>
-<tr>
-<td>D5</td>
-<td>Control loop</td>
-<td><strong>Deterministic state machine</strong> wraps the LLM; LLM proposes, controller decides; bounded retries + anti-loop.</td>
-</tr>
-<tr>
-<td>D6</td>
-<td>Scope of auto-fix</td>
-<td><strong>Logic bugs with a red→green test only.</strong> Escalate infra/resource/security.</td>
-</tr>
-<tr>
-<td>D7</td>
-<td>Verification</td>
-<td>Sandboxed test + static-analysis gate before any deploy (see D8 for anchoring).</td>
-</tr>
-<tr>
-<td>D8</td>
-<td>Verification anchoring</td>
-<td>Failing test <strong>derived from the real signal</strong> (reproduce actual crash/trace/input) + full suite + <strong>coverage on changed lines</strong>. LLM-authored-only tests are insufficient.</td>
-</tr>
-<tr>
-<td>D9</td>
-<td>Injection defense</td>
-<td>Deterministic controller transitions <strong>only on typed/signed signals</strong>; free-text telemetry is human evidence, never control input.</td>
-</tr>
-<tr>
-<td>D10</td>
-<td>Safety-floor location</td>
-<td>Kill switch, protected-path deploy-gate, and fix/deploy <strong>circuit breaker</strong> ship in <strong>core/contrib</strong> (OSS safe-by-default); Presidium adds policy richness.</td>
+<td><strong>P3</strong></td>
+<td>D5 structural, D6 unification</td>
+<td>Larger refactors; own design/plan cycle each</td>
 </tr>
 </tbody>
 </table>
-<h2 id="open-questions">Open questions<a class="headerlink" href="#open-questions" title="Permanent link">&para;</a></h2>
+<h2 id="4-verification">4. Verification<a class="headerlink" href="#4-verification" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Q1</strong> — Does <code>restart-with-new-code</code> live in core (single-deployment blue-green) or defer to the
-  orchestrator (k8s rolling update)? Proposed: a thin core primitive <strong>and</strong> a documented orchestrator
-  path for clustered deployments.</li>
-<li><strong>Q2</strong> — Name: <strong>Medicus</strong> (Latin <em>physician</em>, fits Civitas/Presidium/Fabrica) vs plain
-  <code>SelfHealingAgent</code>.</li>
-<li><strong>Q3</strong> — Default fix output per stage: PR-only (Suggest) → canary (Supervised) → auto (Autonomous).</li>
-<li><strong>Q4</strong> — Minimum viable governance for OSS users without Presidium (a built-in HITL gate + audit),
-  vs full policy via Presidium.</li>
-<li><strong>Q5</strong> — Should Medicus itself be supervised/sandboxed so a broken healer can't cascade (it must not
-  be able to "fix" or disable its own guardrails)?</li>
+<li><code>tests/unit/test_actor_model_gaps.py</code> — six <code>strict xfail</code> tests, one per verified finding
+  (A1×2, A2, A3, B2, A6). Fixing a bug flips its test to XPASS(strict), which <strong>fails the suite</strong>
+  until the marker is removed — the tracking cannot go stale.</li>
+<li>Each Dn fix must convert its xfail test(s) to plain tests in the same PR.</li>
+<li>D4 additionally needs a concurrent-crash stress test (N children crashing in the same tick,
+  ONE_FOR_ALL) asserting exactly one restart cycle.</li>
 </ul>
-<h2 id="non-goals">Non-goals<a class="headerlink" href="#non-goals" title="Permanent link">&para;</a></h2>
+<h2 id="5-non-goals">5. Non-goals<a class="headerlink" href="#5-non-goals" title="Permanent link">&para;</a></h2>
 <ul>
-<li>True OTP in-place module hot-swap / <code>code_change/3</code> live migration.</li>
-<li>Auto-remediating infrastructure, resource, or security-policy issues (always escalate).</li>
-<li>Auto-applying database migrations or other irreversible operations.</li>
-<li>Multi-service refactors or dependency changes without human sign-off.</li>
-</ul>
-<h2 id="implementation-phases-staged-safety-first">Implementation phases (staged, safety-first)<a class="headerlink" href="#implementation-phases-staged-safety-first" title="Permanent link">&para;</a></h2>
-<ul>
-<li><strong>P0 — Observe:</strong> monitoring adapters + failure classifier; detect + report only. Zero risk;
-  validates detection precision (which gates everything downstream).</li>
-<li><strong>P0.5 — Shadow:</strong> generate + sandbox-verify a fix but <strong>do not</strong> open a PR — measure fix precision
-  before humans get PR spam.</li>
-<li><strong>P1 — Suggest:</strong> diagnose + reproduce-from-real-signal + sandboxed verify (full suite +
-  coverage-on-diff) → <strong>PR</strong> (HITL). The code-fix toolset + verification gate. <strong>← smallest safe build (P0+P1).</strong></li>
-<li><strong>P2a — Deploy (orchestrator):</strong> emit a typed <code>redeploy vX</code> signal + best-effort drain; k8s/systemd
-  does the rollout + health-check + <strong>auto-rollback</strong>. Plus the core safety floor (protected-path
-  deploy-gate, fix/deploy circuit breaker, kill switch).</li>
-<li><strong>~~P2b — in-runtime canary~~ (cut from v1):</strong> versioned names + alias routing is a large
-  distributed-systems primitive; defer until there is a real need.</li>
-<li><strong>P3 — Supervised:</strong> auto-apply low-risk <strong>crash-class</strong> reversible fixes behind policy + graduated
-  autonomy.</li>
-<li><strong>P4 — Autonomous (bounded):</strong> proven failure classes only, with kill switch + post-hoc validation.</li>
-</ul>
-<p>Each phase is independently shippable and gated on the previous phase's measured reliability.</p>
-<hr />
-<h2 id="addendum-2026-07-21-supervision-core-findings-intersect-this-design">Addendum (2026-07-21) — supervision-core findings intersect this design<a class="headerlink" href="#addendum-2026-07-21-supervision-core-findings-intersect-this-design" title="Permanent link">&para;</a></h2>
-<p>An architecture review of the supervision core (see
-<a href="../supervision-hardening/"><code>supervision-hardening.md</code></a>) verified several findings this doc's
-Oracle review already touched on, and added new ones that constrain self-healing:</p>
-<ul>
-<li><strong>"Restart reuses the same instance" (Oracle, above) is now finding A1</strong> with a strict-xfail
-  regression test — un-checkpointed <code>self.state</code> <em>and</em> instance variables survive crash-restart.
-  Any Medicus "restart as remediation" primitive inherits this: a restart today does <strong>not</strong>
-  guarantee a clean heap. The D1 fresh-start protocol in supervision-hardening.md is a
-  prerequisite for treating restart as a trustworthy remediation.</li>
-<li><strong>Detection blind spots:</strong> a hung (non-crashing) local agent is invisible to supervision (A7),
-  and remote heartbeats false-positive on busy/suspended agents (A6, #31). Medicus P0's failure
-  classifier must not treat heartbeat-timeout crashes as ground truth until D5 lands.</li>
-<li><strong>Silent restart failures (B2, #30):</strong> the monitor must not assume "supervisor handled it" —
-  today a failed restart produces no signal at all.</li>
+<li>True preemptive scheduling / BEAM-style reductions (impossible on asyncio; documented instead).</li>
+<li>Selective receive (would change <code>handle()</code> semantics; revisit only with strong demand).</li>
+<li>Unbounded mailboxes by default (bounded + documented backpressure retained; alarm/DLQ optional later).</li>
+<li>In-place hot code reload (see <code>self-healing.md</code> — already ruled out).</li>
 </ul>
 
 

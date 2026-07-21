@@ -1869,6 +1869,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#addendum-2026-07-21-head-of-line-blocking-on-waittrue-spawns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Addendum (2026-07-21) — head-of-line blocking on wait=True spawns
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2234,6 +2245,16 @@ D1–D14). The essentials:</p>
 <li>The depth-1 spawner-vouch certificate chain (audit record only for now)</li>
 <li>Multi-datacenter (cross-cluster) spawn</li>
 </ul>
+<hr />
+<h2 id="addendum-2026-07-21-head-of-line-blocking-on-waittrue-spawns">Addendum (2026-07-21) — head-of-line blocking on wait=True spawns<a class="headerlink" href="#addendum-2026-07-21-head-of-line-blocking-on-waittrue-spawns" title="Permanent link">&para;</a></h2>
+<p>Verified finding (supervision review, <a href="../supervision-hardening/"><code>supervision-hardening.md</code></a> B4):
+<code>_handle_spawn</code> with <code>wait=True</code> awaits the child's readiness <em>inside the DynamicSupervisor's own
+<code>handle()</code></em>. One child with a slow <code>on_start()</code> blocks <strong>all</strong> other spawn/despawn/stop requests
+to that supervisor for up to the 30 s spawn timeout, and a child that messages its own spawning
+supervisor from <code>on_start()</code> deadlocks against it. Mitigation today: keep <code>on_start()</code> fast (as
+its docstring already instructs) and prefer <code>wait=False</code> for bulk spawning. Fix direction: move
+the readiness wait off the message loop (background task + deferred reply), which requires the
+reply-from-task plumbing introduced for announce-after-start (D13).</p>
 
 
 
