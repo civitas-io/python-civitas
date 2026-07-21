@@ -924,17 +924,50 @@ Owner column: `core` = python-civitas, else the target repo.
 
 > #28–#31 are tracked in code by strict-xfail regression tests in
 > `tests/unit/test_actor_model_gaps.py` — fixing one flips its test to XPASS and fails the suite
-> until the marker is removed.
+> until the marker is removed. #26–#35 (except #26) are scheduled for **v0.8.0** below.
+
+### v0.8.0 — Supervision Core Hardening (Planned)
+
+**Status: ⏳ Planned** — scoped from the 2026-07-21 actor-model architecture review.
+Design: [`supervision-hardening.md`](design/supervision-hardening.md). Theme: *make the advertised
+OTP guarantee true* — v0.1–v0.7 built the runtime outward (transports, spawning, gateway,
+security); v0.8.0 turns inward and fixes the supervision core those layers stand on. Prerequisite
+for the Medicus self-healing demo (restart-as-remediation needs trustworthy restarts).
+
+| # | Deliverable | Priority | Source |
+|---|-------------|----------|--------|
+| H1 | **Escalation restarts the escalated subtree** under ONE_FOR_ONE; budget window cleared on supervisor restart (fresh incarnation rule) | 🔴 P0 | [#28](https://github.com/civitas-io/python-civitas/issues/28) · design D2 |
+| H2 | **Serialized, observable crash handling** — per-supervisor crash queue; restart failures logged at ERROR + escalated, never swallowed; closes the `_running=False` crash-drop window | 🔴 P0 | [#30](https://github.com/civitas-io/python-civitas/issues/30) · design D4 |
+| H3 | **Registration snapshot preserved across restart** — capabilities/metadata/address survive crash-restart (Supervisor × 3 paths + Worker) | 🔴 P0 | [#29](https://github.com/civitas-io/python-civitas/issues/29) · design D3 |
+| H4 | **Priority heartbeats (stopgap)** — `_agency.heartbeat` at `priority=1`; restart backoff moved off the heartbeat loop | 🔴 P1 | [#31](https://github.com/civitas-io/python-civitas/issues/31) · design D5 |
+| H5 | **Fresh-start restart protocol** — restart re-instantiates from a child spec (fresh instance vars + `self.state`, checkpoint restore, mailbox carried over); AGENTS.md contract updated | 🔴 P1 | design D1 (A1) · xfail tests |
+| H6 | **Opt-in `handle_timeout` watchdog** — a hung local `handle()` becomes a visible crash instead of an undetectable stall | 🔴 P1 | design D5 (A7) |
+| H7 | **`on_stop()` exception containment** during normal shutdown | 🟡 P1 | [#27](https://github.com/civitas-io/python-civitas/issues/27) |
+| H8 | `ErrorAction.RETRY` ordering — retry in place or document reordering | 🟡 P2 | [#32](https://github.com/civitas-io/python-civitas/issues/32) · design D8 |
+| H9 | `_runtime` sender — register a sink or document non-routability | 🟡 P2 | [#33](https://github.com/civitas-io/python-civitas/issues/33) · design D8 |
+| H10 | Remove `register_b64` routing-table pollution (keys live in `KeyRegistry` only) | 🟡 P2 | [#34](https://github.com/civitas-io/python-civitas/issues/34) · design D8 |
+| H11 | README sweep — provider extras / adapter imports match AGENTS.md + pyproject | 🟡 P2 | [#35](https://github.com/civitas-io/python-civitas/issues/35) |
+| H12 | **Messaging-semantics doc** — at-most-once delivery, ask-cycle deadlock, backpressure deadlock, cooperative-scheduling bounds, restart/mailbox contract | 🟡 P2 | design D7 (A4/A5/A8/C8) |
+| H13 | Hygiene batch — monotonic clocks for windows/TTL, broadcast glob excludes `_agency.*`, bus accessor methods (encapsulation) | 🟢 Stretch | design D8 (C2/C6/C7) |
+
+**Exit criteria:** all six strict-xfail tests in `tests/unit/test_actor_model_gaps.py` converted to
+plain passing tests (each Hn fix flips its test in the same PR); H2 adds a concurrent-crash stress
+test (N children crashing in the same tick under ONE_FOR_ALL → exactly one restart cycle).
+
+**Suggested cut line:** H1–H4 (the P0/P1 correctness cluster) are the headline and must ship
+together; H5–H7 are strong companions; H8–H13 are opportunistic and can slip to v0.8.x patches.
+
+**Explicitly deferred to v0.9+:** D6 (unify static `Supervisor` + `DynamicSupervisor` into one
+actor-based engine — needs its own design/plan cycle), D5-structural (per-process out-of-band
+liveness), C3 (in-process serialization fast path), B4 (DynSup `wait=True` head-of-line move).
 
 ### Active backlog (python-civitas, no issue yet)
 
 | Item | Priority | Status | Where tracked |
 |------|----------|--------|----------------|
-| **Supervision hardening D1 — fresh-start restart protocol** (restart reuses dirty instance; un-checkpointed state survives) | 🔴 High | ⏳ design drafted | design/supervision-hardening.md D1 (A1) + xfail tests |
-| **Supervision hardening D5 (structural) — per-process liveness + opt-in `handle_timeout` watchdog** (local hung agents undetectable today) | 🔴 High | ⏳ design drafted | design/supervision-hardening.md D5 (A6/A7) |
-| **Supervision hardening D6 — unify static Supervisor + DynamicSupervisor as one actor-based engine** | 🟡 Medium | 💡 needs own plan | design/supervision-hardening.md D6 (B1) |
-| **Supervision hardening D7 — messaging-semantics doc pass** (at-most-once, ask-cycle deadlock, backpressure deadlock, cooperative-scheduling bounds) | 🟡 Medium | ⏳ | design/supervision-hardening.md D7 (A4/A5/A8/C8) |
-| Supervision hardening D8 — hygiene batch (monotonic clocks, in-process serialization overhead, glob broadcast vs system names, bus encapsulation) | 🟡 Medium | ⏳ | design/supervision-hardening.md D8 (C2/C3/C6/C7) |
+| ~~Supervision hardening D1/D5-watchdog/D7/D8~~ → scheduled into [v0.8.0](#v080--supervision-core-hardening-planned) (H5, H6, H12, H8–H10, H13) | — | ⏳ scheduled | design/supervision-hardening.md |
+| **Supervision hardening D5 (structural) — per-process out-of-band liveness** (beyond the v0.8.0 `handle_timeout` watchdog) | 🔴 High | ⏸️ deferred to v0.9+ | design/supervision-hardening.md D5 (A6/A7) |
+| **Supervision hardening D6 — unify static Supervisor + DynamicSupervisor as one actor-based engine** | 🟡 Medium | 💡 needs own plan (v0.9+) | design/supervision-hardening.md D6 (B1) |
 | DynamicSupervisor: move `wait=True` readiness wait off the message loop (head-of-line blocking) | 🟡 Medium | ⏸️ | design/dynamic-spawning.md addendum (B4) |
 | Restart accounting: reconcile supervisor-wide budget window vs per-child lifetime backoff counts | 🟢 Low | ⏸️ | design/supervision-hardening.md B3 |
 | R7 follow-up: credit-based stream backpressure (namespace `civitas.stream.credit` reserved) | 🟢 Low | ⏸️ opportunistic | design/bus-native-streaming.md §8 Q5 |
