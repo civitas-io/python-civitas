@@ -909,12 +909,34 @@ Owner column: `core` = python-civitas, else the target repo.
 
 ### Now open — tracked issue (python-civitas)
 
-_(none currently — see "Recently shipped" below)_
+| # | Issue | Severity | Area |
+|---|-------|----------|------|
+| [#28](https://github.com/civitas-io/python-civitas/issues/28) | Supervisor escalation is a no-op under ONE_FOR_ONE — escalated subtree never restarts | 🔴 P0 | supervision core ([design](design/supervision-hardening.md) A2) |
+| [#29](https://github.com/civitas-io/python-civitas/issues/29) | Crash-restart re-registration drops capabilities/metadata (Supervisor + Worker) | 🔴 P0 | supervision core (A3) |
+| [#30](https://github.com/civitas-io/python-civitas/issues/30) | Failed restarts are silent — crash-handler exceptions never retrieved; crash handling unserialized | 🔴 P0 | supervision core (B2) |
+| [#31](https://github.com/civitas-io/python-civitas/issues/31) | Heartbeats at priority 0 — busy/suspended remote agents falsely declared crashed | 🔴 P1 | supervision core (A6) |
+| [#32](https://github.com/civitas-io/python-civitas/issues/32) | `ErrorAction.RETRY` re-enqueues at back of mailbox — FIFO ordering broken | 🟡 P2 | process loop (C1) |
+| [#33](https://github.com/civitas-io/python-civitas/issues/33) | `sender="_runtime"` is unroutable — replies via `message.sender` crash | 🟡 P2 | runtime API (C4) |
+| [#34](https://github.com/civitas-io/python-civitas/issues/34) | `register_b64` pollutes routing table with phantom entries | 🟡 P2 | registry (C5) |
+| [#35](https://github.com/civitas-io/python-civitas/issues/35) | README drift: provider extras / adapter imports contradict AGENTS.md + pyproject | 🟡 P2 | docs (C10) |
+| [#27](https://github.com/civitas-io/python-civitas/issues/27) | `on_stop()` exceptions during normal shutdown aren't contained | — | process lifecycle |
+| [#26](https://github.com/civitas-io/python-civitas/issues/26) | MCP client lacks Streamable HTTP transport | — | mcp / fabrica |
+
+> #28–#31 are tracked in code by strict-xfail regression tests in
+> `tests/unit/test_actor_model_gaps.py` — fixing one flips its test to XPASS and fails the suite
+> until the marker is removed.
 
 ### Active backlog (python-civitas, no issue yet)
 
 | Item | Priority | Status | Where tracked |
 |------|----------|--------|----------------|
+| **Supervision hardening D1 — fresh-start restart protocol** (restart reuses dirty instance; un-checkpointed state survives) | 🔴 High | ⏳ design drafted | design/supervision-hardening.md D1 (A1) + xfail tests |
+| **Supervision hardening D5 (structural) — per-process liveness + opt-in `handle_timeout` watchdog** (local hung agents undetectable today) | 🔴 High | ⏳ design drafted | design/supervision-hardening.md D5 (A6/A7) |
+| **Supervision hardening D6 — unify static Supervisor + DynamicSupervisor as one actor-based engine** | 🟡 Medium | 💡 needs own plan | design/supervision-hardening.md D6 (B1) |
+| **Supervision hardening D7 — messaging-semantics doc pass** (at-most-once, ask-cycle deadlock, backpressure deadlock, cooperative-scheduling bounds) | 🟡 Medium | ⏳ | design/supervision-hardening.md D7 (A4/A5/A8/C8) |
+| Supervision hardening D8 — hygiene batch (monotonic clocks, in-process serialization overhead, glob broadcast vs system names, bus encapsulation) | 🟡 Medium | ⏳ | design/supervision-hardening.md D8 (C2/C3/C6/C7) |
+| DynamicSupervisor: move `wait=True` readiness wait off the message loop (head-of-line blocking) | 🟡 Medium | ⏸️ | design/dynamic-spawning.md addendum (B4) |
+| Restart accounting: reconcile supervisor-wide budget window vs per-child lifetime backoff counts | 🟢 Low | ⏸️ | design/supervision-hardening.md B3 |
 | R7 follow-up: credit-based stream backpressure (namespace `civitas.stream.credit` reserved) | 🟢 Low | ⏸️ opportunistic | design/bus-native-streaming.md §8 Q5 |
 | R7 follow-up: immediate `StreamInterrupted` on producer loss (bidirectional producer→sink index; today bounded by `idle_timeout`) | 🟢 Low | ⏸️ opportunistic | design/bus-native-streaming.md D6 |
 | Textual dashboard rebuild (on `TopologyServer` endpoints) | 🟡 Medium | ⏸️ follow-on | design/dynamic-spawning.md |

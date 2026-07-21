@@ -512,3 +512,17 @@ runtime.get_agent(name).status is ProcessStatus.SUSPENDED
 Not started — this document is the first deliverable of Bucket B and is for review before any
 code is written, per this repo's convention (design doc precedes implementation for changes to
 core lifecycle semantics; see M4.2 and dynamic-spawning).
+
+---
+
+## Addendum (2026-07-21) — suspension × remote heartbeats false-crash interaction
+
+Verified finding (supervision review, [`supervision-hardening.md`](supervision-hardening.md) A6,
+issue [#31](https://github.com/civitas-io/python-civitas/issues/31)): `_agency.heartbeat` is sent
+at **priority 0**, but a SUSPENDED agent drains only the priority queue (S3 in this doc). A
+suspended *remote* agent therefore buffers heartbeats, misses the ack threshold, and is declared
+crashed and restarted by its supervisor — a deliberately-paused agent gets forcibly recycled
+(its suspend marker survives the restart, but the restart consumes budget and fires spurious
+crash signals). Fix direction: heartbeats ride the priority channel (stopgap) and liveness moves
+out of the per-agent mailbox (structural), per supervision-hardening.md D5. Until then,
+cross-process suspend (already a non-goal for v0.5 above) must remain off.

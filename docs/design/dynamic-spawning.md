@@ -368,3 +368,16 @@ D1–D14). The essentials:
 - Placement groups / resource-aware scheduling
 - The depth-1 spawner-vouch certificate chain (audit record only for now)
 - Multi-datacenter (cross-cluster) spawn
+
+---
+
+## Addendum (2026-07-21) — head-of-line blocking on wait=True spawns
+
+Verified finding (supervision review, [`supervision-hardening.md`](supervision-hardening.md) B4):
+`_handle_spawn` with `wait=True` awaits the child's readiness *inside the DynamicSupervisor's own
+`handle()`*. One child with a slow `on_start()` blocks **all** other spawn/despawn/stop requests
+to that supervisor for up to the 30 s spawn timeout, and a child that messages its own spawning
+supervisor from `on_start()` deadlocks against it. Mitigation today: keep `on_start()` fast (as
+its docstring already instructs) and prefer `wait=False` for bulk spawning. Fix direction: move
+the readiness wait off the message loop (background task + deferred reply), which requires the
+reply-from-task plumbing introduced for announce-after-start (D13).

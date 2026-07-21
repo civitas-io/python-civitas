@@ -275,3 +275,22 @@ irreversible ones. Tiered:
 - **P4 — Autonomous (bounded):** proven failure classes only, with kill switch + post-hoc validation.
 
 Each phase is independently shippable and gated on the previous phase's measured reliability.
+
+---
+
+## Addendum (2026-07-21) — supervision-core findings intersect this design
+
+An architecture review of the supervision core (see
+[`supervision-hardening.md`](supervision-hardening.md)) verified several findings this doc's
+Oracle review already touched on, and added new ones that constrain self-healing:
+
+- **"Restart reuses the same instance" (Oracle, above) is now finding A1** with a strict-xfail
+  regression test — un-checkpointed `self.state` *and* instance variables survive crash-restart.
+  Any Medicus "restart as remediation" primitive inherits this: a restart today does **not**
+  guarantee a clean heap. The D1 fresh-start protocol in supervision-hardening.md is a
+  prerequisite for treating restart as a trustworthy remediation.
+- **Detection blind spots:** a hung (non-crashing) local agent is invisible to supervision (A7),
+  and remote heartbeats false-positive on busy/suspended agents (A6, #31). Medicus P0's failure
+  classifier must not treat heartbeat-timeout crashes as ground truth until D5 lands.
+- **Silent restart failures (B2, #30):** the monitor must not assume "supervisor handled it" —
+  today a failed restart produces no signal at all.

@@ -720,8 +720,14 @@ from `handle()`, not from `on_start()`.
 
 ### 5. Instance variables for persistent state
 
-Instance variables reset on supervisor restart. State that must survive goes in
-`self.state` (persisted to StateStore).
+Never rely on instance variables across messages. State that must survive goes in
+`self.state` + `checkpoint()` (persisted to StateStore).
+
+> **Current caveat** ([supervision-hardening](docs/design/supervision-hardening.md) A1): today a
+> crash-restart *reuses the same instance*, so instance variables and un-checkpointed
+> `self.state` actually **survive** restart — including whatever corrupted state caused the
+> crash. Do not depend on either behavior: the only contract is "checkpointed state is restored;
+> everything else is undefined across restarts" (the planned fresh-start protocol will reset both).
 
 ```python
 # Wrong — resets on restart
