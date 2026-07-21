@@ -69,7 +69,11 @@ COPY pyproject.toml .
 COPY civitas/ civitas/
 COPY examples/ examples/
 
-RUN pip install --no-cache-dir -e {install_target}
+RUN pip install --no-cache-dir -e {install_target} && \\
+    useradd --create-home --uid 1000 civitas
+
+# Never run agents as root — a compromised agent process would own the container.
+USER civitas
 
 ENTRYPOINT ["civitas", "run"]
 """
