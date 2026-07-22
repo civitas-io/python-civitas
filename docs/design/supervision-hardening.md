@@ -1,6 +1,6 @@
 # Design: Supervision Core Hardening (Actor-Model Fidelity)
 
-**Status:** DRAFT — findings verified by regression tests 2026-07-21; corrective design proposed, not yet approved.
+**Status:** ✅ ACCEPTED for v0.8.0 (2026-07-21) — findings verified by regression tests; decisions ratified (see §2.1); implementation plan in `.sisyphus/plans/supervision-hardening-v0.8.0.md`. D5-structural and D6 remain DRAFT (own ceremony in v0.9).
 **Author:** architecture review session (2026-07-21)
 **Scope:** `civitas/supervisor.py`, `civitas/process.py`, `civitas/registry.py`, `civitas/worker.py`, `civitas/bus.py`
 **Tracking:** issues [#28](https://github.com/civitas-io/python-civitas/issues/28), [#29](https://github.com/civitas-io/python-civitas/issues/29), [#30](https://github.com/civitas-io/python-civitas/issues/30), [#31](https://github.com/civitas-io/python-civitas/issues/31), [#32](https://github.com/civitas-io/python-civitas/issues/32), [#33](https://github.com/civitas-io/python-civitas/issues/33), [#34](https://github.com/civitas-io/python-civitas/issues/34), [#35](https://github.com/civitas-io/python-civitas/issues/35) · regression tests `tests/unit/test_actor_model_gaps.py` (strict xfail)
@@ -57,6 +57,20 @@ model), 🔵 limitation to document.
 ---
 
 ## 2. Corrective design
+
+### 2.1 Ratified decisions (maintainer, 2026-07-21)
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| D1 restart semantics | **Staged (b)→(a)** — v0.8.0 ships (b) (un-checkpointed `self.state` reset + documented instance-var survival) plus invisible ctor-capture groundwork (`AgentProcess.__new__` records `(cls, args, kwargs)`); full fresh-instance (a) lands in v0.9 with D6, where the required Runtime↔Supervisor re-wiring is being reworked anyway | (a)'s real cost is ctor-spec capture + re-injection + bus re-subscription + reference staleness — architecture work, not a bugfix; (b) kills the corrupted-state restart-loop death spiral now at ~zero risk |
+| C1 / #32 RETRY | **Retry in place** — re-run `handle()` immediately inside the dispatch, no mailbox round-trip; FIFO preserved; backoff is the user's job (`await asyncio.sleep` in `on_error`) | The back-of-queue behavior was an accident, not a designed unordered semantic |
+| C4 / #33 `_runtime` | **Sink + diagnostics** — register `_runtime` (not an agent: bare subscription); WARNING log on receipt; error-reply when the message carries a `correlation_id` so `ask("_runtime")` fails fast instead of timing out | Crash-proof for `send`, fail-fast for `ask`, every occurrence becomes a discoverable code smell |
+| D5 watchdog | **Opt-in `handle_timeout: float \| None = None`** per-agent + YAML; `TimeoutError` through the normal `on_error` path; async-only detection documented | Any finite default is wrong for someone; zero behavior change on upgrade |
+| Process | Plan file + this ratification; no external review cycle for v0.8.0 (bug-class work with pre-written regression tests); full ceremony resumes for v0.9 D6/(a) | The xfail harness is a stricter gate than a plan review for this class of change |
+
+Additional ground truth found during planning: `LocalRegistry.register_b64` (C5/#34) has **zero
+callers** — both apparent call sites target `KeyRegistry.register_b64`. C5 is dead-code removal
+(anti-pattern 16), not a behavior change.
 
 ### D1 — Restart semantics: fresh-start protocol (A1)
 
