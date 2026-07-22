@@ -1733,6 +1733,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#21-ratified-decisions-maintainer-2026-07-21" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 Ratified decisions (maintainer, 2026-07-21)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#d1-restart-semantics-fresh-start-protocol-a1" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1879,7 +1890,7 @@
 
 
 <h1 id="design-supervision-core-hardening-actor-model-fidelity">Design: Supervision Core Hardening (Actor-Model Fidelity)<a class="headerlink" href="#design-supervision-core-hardening-actor-model-fidelity" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> DRAFT — findings verified by regression tests 2026-07-21; corrective design proposed, not yet approved.
+<p><strong>Status:</strong> ✅ ACCEPTED for v0.8.0 (2026-07-21) — findings verified by regression tests; decisions ratified (see §2.1); implementation plan in <code>.sisyphus/plans/supervision-hardening-v0.8.0.md</code>. D5-structural and D6 remain DRAFT (own ceremony in v0.9).
 <strong>Author:</strong> architecture review session (2026-07-21)
 <strong>Scope:</strong> <code>civitas/supervisor.py</code>, <code>civitas/process.py</code>, <code>civitas/registry.py</code>, <code>civitas/worker.py</code>, <code>civitas/bus.py</code>
 <strong>Tracking:</strong> issues <a href="https://github.com/civitas-io/python-civitas/issues/28">#28</a>, <a href="https://github.com/civitas-io/python-civitas/issues/29">#29</a>, <a href="https://github.com/civitas-io/python-civitas/issues/30">#30</a>, <a href="https://github.com/civitas-io/python-civitas/issues/31">#31</a>, <a href="https://github.com/civitas-io/python-civitas/issues/32">#32</a>, <a href="https://github.com/civitas-io/python-civitas/issues/33">#33</a>, <a href="https://github.com/civitas-io/python-civitas/issues/34">#34</a>, <a href="https://github.com/civitas-io/python-civitas/issues/35">#35</a> · regression tests <code>tests/unit/test_actor_model_gaps.py</code> (strict xfail)</p>
@@ -2061,6 +2072,46 @@ model), 🔵 limitation to document.</p>
 </table>
 <hr />
 <h2 id="2-corrective-design">2. Corrective design<a class="headerlink" href="#2-corrective-design" title="Permanent link">&para;</a></h2>
+<h3 id="21-ratified-decisions-maintainer-2026-07-21">2.1 Ratified decisions (maintainer, 2026-07-21)<a class="headerlink" href="#21-ratified-decisions-maintainer-2026-07-21" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Decision</th>
+<th>Choice</th>
+<th>Rationale</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>D1 restart semantics</td>
+<td><strong>Staged (b)→(a)</strong> — v0.8.0 ships (b) (un-checkpointed <code>self.state</code> reset + documented instance-var survival) plus invisible ctor-capture groundwork (<code>AgentProcess.__new__</code> records <code>(cls, args, kwargs)</code>); full fresh-instance (a) lands in v0.9 with D6, where the required Runtime↔Supervisor re-wiring is being reworked anyway</td>
+<td>(a)'s real cost is ctor-spec capture + re-injection + bus re-subscription + reference staleness — architecture work, not a bugfix; (b) kills the corrupted-state restart-loop death spiral now at ~zero risk</td>
+</tr>
+<tr>
+<td>C1 / #32 RETRY</td>
+<td><strong>Retry in place</strong> — re-run <code>handle()</code> immediately inside the dispatch, no mailbox round-trip; FIFO preserved; backoff is the user's job (<code>await asyncio.sleep</code> in <code>on_error</code>)</td>
+<td>The back-of-queue behavior was an accident, not a designed unordered semantic</td>
+</tr>
+<tr>
+<td>C4 / #33 <code>_runtime</code></td>
+<td><strong>Sink + diagnostics</strong> — register <code>_runtime</code> (not an agent: bare subscription); WARNING log on receipt; error-reply when the message carries a <code>correlation_id</code> so <code>ask("_runtime")</code> fails fast instead of timing out</td>
+<td>Crash-proof for <code>send</code>, fail-fast for <code>ask</code>, every occurrence becomes a discoverable code smell</td>
+</tr>
+<tr>
+<td>D5 watchdog</td>
+<td><strong>Opt-in <code>handle_timeout: float \| None = None</code></strong> per-agent + YAML; <code>TimeoutError</code> through the normal <code>on_error</code> path; async-only detection documented</td>
+<td>Any finite default is wrong for someone; zero behavior change on upgrade</td>
+</tr>
+<tr>
+<td>Process</td>
+<td>Plan file + this ratification; no external review cycle for v0.8.0 (bug-class work with pre-written regression tests); full ceremony resumes for v0.9 D6/(a)</td>
+<td>The xfail harness is a stricter gate than a plan review for this class of change</td>
+</tr>
+</tbody>
+</table>
+<p>Additional ground truth found during planning: <code>LocalRegistry.register_b64</code> (C5/#34) has <strong>zero
+callers</strong> — both apparent call sites target <code>KeyRegistry.register_b64</code>. C5 is dead-code removal
+(anti-pattern 16), not a behavior change.</p>
 <h3 id="d1-restart-semantics-fresh-start-protocol-a1">D1 — Restart semantics: fresh-start protocol (A1)<a class="headerlink" href="#d1-restart-semantics-fresh-start-protocol-a1" title="Permanent link">&para;</a></h3>
 <p>Choose and implement one of two models; the review recommends <strong>(a)</strong>:</p>
 <ul>
