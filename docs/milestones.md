@@ -49,6 +49,7 @@ Everything in this part is done.
 | — | [v0.7.0 / v0.7.1 / v0.7.2 / v0.7.3 / v0.7.4 — Spawn Maturation, Gateway Auth & Bus-Native Streaming](#v070--spawn-maturation--gateway-auth-released) | Jul 2026 |
 | — | [v0.8.0 — Supervision Core Hardening](#v080--supervision-core-hardening-released) | Jul 2026 |
 | — | [v0.8.1 — Verification Perimeter](#v081--verification-perimeter-released) | Jul 2026 |
+| — | [v0.8.2 — Hygiene](#v082--hygiene-released) | Jul 2026 |
 
 ---
 
@@ -972,6 +973,19 @@ accumulating release PR (v0.8.0 model). Closes #39–#42 (+#43 if V6 tests; else
 
 ---
 
+## v0.8.2 — Hygiene (Released)
+
+**Status: ✅ Released 2026-07-24** (PR #45). Closed the last unwatched gate (13 NATS tests now run in CI) + v0.8.1 residue.
+
+| # | Deliverable | Priority |
+|---|-------------|----------|
+| G1 | ✅ **Done (dev/v0.8.2)** — nats-server v2.14.3 pinned+sha256 in CI; **14/14 NATS tests pass (13 had never run anywhere)**; fixture port genuinely random now | 🟡 Medium |
+| G2 | ✅ **Done (dev/v0.8.2)** — init auto-splits paths; basename-only identifier validation; docs/cli.md updated; 4 new tests | 🟢 Low |
+| G3 | ✅ **Done (dev/v0.8.2)** — deploy 88%, topology 89%, dashboard 39% (args), state at its contrib-gated ceiling (49%, documented); total 89.7% | 🟢 Low |
+
+
+---
+
 ## Part 2 — Backlog
 
 **Status: 🗂️ Tracked** — the active todo list: everything not yet done. New work lands here first
@@ -1002,16 +1016,6 @@ implementation), per the v0.8.0 §2.1 ratification.
 | **D5 (structural) — per-process out-of-band liveness** (beyond `handle_timeout`) | 🔴 High | design/supervision-hardening.md D5 (A6/A7) |
 | Fold-in (decide inside the design): DynSup `wait=True` head-of-line blocking (B4) | 🟡 Medium | design/dynamic-spawning.md addendum |
 | Fold-in (decide inside the design): restart accounting reconciliation (B3) | 🟢 Low | design/supervision-hardening.md B3 |
-
-### v0.8.2 — Hygiene (Planned — in progress)
-
-Plan: `.sisyphus/plans/hygiene-v0.8.2.md`. Closes the last unwatched gate + v0.8.1 residue.
-
-| # | Deliverable | Priority |
-|---|-------------|----------|
-| G1 | ✅ **Done (dev/v0.8.2)** — nats-server v2.14.3 pinned+sha256 in CI; **14/14 NATS tests pass (13 had never run anywhere)**; fixture port genuinely random now | 🟡 Medium |
-| G2 | ✅ **Done (dev/v0.8.2)** — init auto-splits paths; basename-only identifier validation; docs/cli.md updated; 4 new tests | 🟢 Low |
-| G3 | ✅ **Done (dev/v0.8.2)** — deploy 88%, topology 89%, dashboard 39% (args), state at its contrib-gated ceiling (49%, documented); total 89.7% | 🟢 Low |
 
 ### v0.9.1 — Post-endgame polish (Planned, after v0.9.0)
 

@@ -11,6 +11,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+## [0.8.2] — 2026-07-24
+
 ### Fixed
 
 - **The 13 NATS integration tests now run in CI** — they spawn a real `nats-server` binary, which was never present on runners, so they skipped everywhere since the suite existed (the last remnant of the #39 fail-open class). The CI integration job installs a pinned, checksum-verified release; Docker-verified 14/14 on Linux. Also fixed the test fixture's hardcoded port 14222 (the comment claimed "random") which collided on parallel runs.
