@@ -238,8 +238,18 @@ pip install civitas-contrib[litellm]       # 100+ models via LiteLLM
 pip install civitas[zmq]                   # ZMQ multi-process transport
 pip install civitas[nats]                  # NATS distributed transport
 
+# HTTP gateway
+pip install civitas[http]                  # HTTP/1.1 + HTTP/2 (uvicorn) edge
+pip install civitas[http3]                 # + HTTP/3 / QUIC
+pip install civitas[grpc]                  # + gRPC surface
+pip install civitas[jwt]                   # gateway JWT bearer auth
+
 # Observability
 pip install civitas[otel]                  # OpenTelemetry SDK + OTLP exporter
+
+# Security
+pip install civitas[security]              # Ed25519 transport-level message signing
+pip install civitas[encryption]            # encrypted StateStore at rest
 
 # Typical dev setup
 pip install civitas[otel] civitas-contrib[anthropic]

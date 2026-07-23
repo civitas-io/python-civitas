@@ -988,10 +988,28 @@ Owner column: `core` = python-civitas, else the target repo.
 > [v0.8.1](#v081--verification-perimeter-released). One strict-xfail tracker remains in
 > `tests/unit/test_actor_model_gaps.py` (instance-variable reset → v0.9 fresh-instance restart).
 
+### v0.9 — Supervision Endgame (proposed next)
+
+The three coupled items below are the natural v0.9: they share the Runtime↔Supervisor re-wiring,
+finish what the 2026-07 architecture review started, flip the last xfail tracker, and fully
+unblock the Medicus track. **Requires the full design ceremony** (design doc → review → plan →
+implementation), per the v0.8.0 §2.1 ratification.
+
+| Item | Priority | Source |
+|------|----------|--------|
+| **D6 — unify static Supervisor + DynamicSupervisor** into one actor-based engine | 🟡 Medium | design/supervision-hardening.md (B1) |
+| **D1(a) — fresh-instance restart** (child-spec capture shipped v0.8.0; flips the last xfail) | 🔴 High | design/supervision-hardening.md D1 |
+| **D5 (structural) — per-process out-of-band liveness** (beyond `handle_timeout`) | 🔴 High | design/supervision-hardening.md D5 (A6/A7) |
+
 ### Active backlog (python-civitas, no issue yet)
 
 | Item | Priority | Status | Where tracked |
 |------|----------|--------|----------------|
+| CLI coverage top-ups — newly visible in v0.8.1 V5: dashboard 28%, state 49%, deploy 57%, topology 70% | 🟢 Low | ⏸️ opportunistic | plan v0.8.1 V7 remainder |
+| `civitas init` accepts only a bare project name relative to cwd (full paths rejected by the identifier check) — UX wart | 🟢 Low | ⏸️ | plan v0.8.1 V2 note |
+| CI integration job: install nats-server so the 13 NATS tests run in CI (guards skip today) | 🟡 Medium | ⏸️ deferred from V1 | #39 (closed) · ci.yml comment |
+| process.py / runtime.py coverage miss-range top-ups (streaming internals, MCP connect, exporter/signing blocks) | 🟢 Low | ⏸️ opportunistic | plan v0.8.1 V7 remainder |
+| ZMQ route-establishment: full at-least-once guarantee (sender republish + message-id dedup) — sub-ms residual after the v0.8.1 settle-barrier | 🟢 Low | ⏸️ if ever needed | design/cross-process-spawn.md addendum |
 | **Supervision hardening D5 (structural) — per-process out-of-band liveness** (beyond the v0.8.0 `handle_timeout` watchdog) | 🔴 High | ⏸️ deferred to v0.9+ | design/supervision-hardening.md D5 (A6/A7) |
 | **Supervision hardening D6 — unify static Supervisor + DynamicSupervisor as one actor-based engine** | 🟡 Medium | 💡 needs own plan (v0.9+) | design/supervision-hardening.md D6 (B1) |
 | **Supervision hardening D1(a) — fresh-instance restart** (child-spec capture shipped in v0.8.0; consumes it; flips the last xfail tracker) | 🔴 High | 💡 needs own plan (v0.9, with D6) | design/supervision-hardening.md D1 |
