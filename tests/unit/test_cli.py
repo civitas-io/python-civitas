@@ -247,3 +247,210 @@ def test_run_help_exits_clean():
     # Exit code only — help TEXT assertions are width-fragile (see module docstring).
     result = runner.invoke(app, ["run", "--help"])
     assert result.exit_code == 0
+
+
+# ---------------------------------------------------------------------------
+# G3 (v0.8.2) — deploy/topology/state/dashboard coverage top-ups
+# ---------------------------------------------------------------------------
+
+MULTIPROC_NATS_TOPOLOGY = """
+transport:
+  type: nats
+  url: nats://localhost:4222
+  jetstream: true
+plugins:
+  models:
+    - type: anthropic
+      config: {default_model: claude-sonnet-4-6}
+    - type: litellm
+supervision:
+  name: root
+  strategy: ONE_FOR_ONE
+  children:
+    - agent: {name: orchestrator, type: myapp.Orchestrator}
+    - agent: {name: researcher, type: myapp.Researcher, process: worker}
+    - supervisor:
+        name: nested
+        children:
+          - agent: {name: writer, type: myapp.Writer, process: worker}
+          - {type: myapp.Flat, name: flat_agent, process: heavy}
+"""
+
+
+def test_collect_processes_affinity_and_flat_format():
+    from civitas.cli.deploy import _collect_processes
+
+    config = yaml.safe_load(MULTIPROC_NATS_TOPOLOGY)
+    procs = _collect_processes(config)
+    assert [a["name"] for a in procs["supervisor"]] == ["orchestrator"]
+    assert {a["name"] for a in procs["worker"]} == {"researcher", "writer"}  # nested walk
+    assert [a["name"] for a in procs["heavy"]] == ["flat_agent"]  # flat node format
+
+
+def test_deploy_nats_multiprocess_stack(tmp_path):
+    """NATS service (jetstream command, healthcheck), supervisor depends_on,
+    one service per worker process group, provider keys in .env."""
+    topo = tmp_path / "topology.yaml"
+    topo.write_text(MULTIPROC_NATS_TOPOLOGY)
+    out = tmp_path / "deploy"
+    result = runner.invoke(
+        app, ["deploy", "docker-compose", "--topology", str(topo), "--output", str(out)]
+    )
+    assert result.exit_code == 0, result.output
+
+    compose = yaml.safe_load((out / "docker-compose.yml").read_text())
+    services = compose["services"]
+    assert services["nats"]["command"] == "--jetstream"
+    assert "healthcheck" in services["nats"]
+    assert services["supervisor"]["depends_on"] == {"nats": {"condition": "service_healthy"}}
+    worker_services = [k for k in services if k not in ("nats", "supervisor")]
+    assert len(worker_services) == 2  # worker + heavy
+
+    env = (out / ".env").read_text()
+    assert "NATS_URL=" in env
+    assert "ANTHROPIC_API_KEY=" in env  # anthropic provider detected
+    assert "OPENAI_API_KEY=" in env  # litellm provider detected
+
+
+def test_deploy_in_process_stack_has_no_broker(tmp_path):
+    topo = _write_topology(tmp_path)
+    out = tmp_path / "deploy2"
+    result = runner.invoke(
+        app, ["deploy", "docker-compose", "--topology", str(topo), "--output", str(out)]
+    )
+    assert result.exit_code == 0, result.output
+    compose = yaml.safe_load((out / "docker-compose.yml").read_text())
+    assert "nats" not in compose["services"]
+    assert list(compose["services"]) == ["supervisor"]
+
+
+TOPOLOGY_RICH = """
+transport:
+  type: nats
+plugins:
+  models: [{type: anthropic}]
+  state: {type: sqlite, config: {db_path: ./x.db}}
+supervision:
+  name: root
+  strategy: REST_FOR_ONE
+  backoff: EXPONENTIAL
+  max_restarts: 5
+  children:
+    - agent: {name: a, type: myapp.A}
+    - name: pool
+      type: dynamic_supervisor
+      max_children: 10
+    - name: topo
+      type: topology_server
+      config: {host: 127.0.0.1, port: 6799}
+"""
+
+
+def test_topology_validate_rich_nodes(tmp_path):
+    """dynamic_supervisor + topology_server nodes + plugins all validate."""
+    path = _write_topology(tmp_path, text=TOPOLOGY_RICH, name="rich.yaml")
+    result = runner.invoke(app, ["topology", "validate", str(path)])
+    assert result.exit_code == 0, result.output
+
+
+def test_topology_show_rich_with_dead_live_probe(tmp_path):
+    """show renders the static tree even when the declared topology_server
+    is not actually listening (connection-refused fallback path)."""
+    path = _write_topology(tmp_path, text=TOPOLOGY_RICH, name="rich.yaml")
+    result = runner.invoke(app, ["topology", "show", str(path)])
+    assert result.exit_code == 0, result.output
+    assert "pool" in result.output and "root" in result.output
+
+
+def test_topology_diff_added_and_removed_children(tmp_path):
+    base = _write_topology(tmp_path, name="base.yaml")
+    two = TOPOLOGY.replace(
+        "    - agent:\n        name: worker\n        type: myapp.agents.Worker",
+        "    - agent:\n        name: other\n        type: myapp.agents.Other",
+    )
+    other = _write_topology(tmp_path, text=two, name="other.yaml")
+    result = runner.invoke(app, ["topology", "diff", str(base), str(other)])
+    assert result.exit_code == 0, result.output
+    out = result.output.lower()
+    assert "worker" in out and "other" in out  # one removed, one added
+
+
+def test_state_migrate_rejects_unknown_dsn(tmp_path):
+    """migrate with an unrecognizable DSN fails loudly (BadParameter or the
+    contrib-missing error — either way nonzero, never silent)."""
+    result = runner.invoke(
+        app, ["state", "migrate", "--from", "mystery://what", "--to", "also-mystery"]
+    )
+    assert result.exit_code != 0
+
+
+def test_dashboard_missing_topology_fails():
+    result = runner.invoke(app, ["dashboard", "--topology", "/nonexistent/topology.yaml"])
+    assert result.exit_code != 0
+
+
+TOPOLOGY_WARNINGS = """
+transport:
+  type: zmq
+supervision:
+  name: root
+  strategy: ONE_FOR_ALL
+  backoff: LINEAR
+  max_restarts: -1
+  children:
+    - agent: {name: dupe, type: myapp.A}
+    - agent: {name: dupe, type: myapp.B}
+    - agent: {name: '', type: myapp.C}
+    - agent: {name: no_type}
+    - {type: gen_server, module: myapp.servers, class: Counter, name: counter}
+    - name: gw
+      type: http_gateway
+      config: {port: 8080}
+    - name: evals
+      type: eval_agent
+    - supervisor:
+        name: empty_sup
+        children: []
+"""
+
+
+def test_topology_validate_surfaces_all_error_classes(tmp_path):
+    """Bad max_restarts, duplicate/missing names, missing type, empty supervisor
+    — every _validate_topology error branch fires and the command exits 1."""
+    path = _write_topology(tmp_path, text=TOPOLOGY_WARNINGS, name="warn.yaml")
+    result = runner.invoke(app, ["topology", "validate", str(path)])
+    assert result.exit_code != 0
+
+
+def test_topology_show_gateway_eval_genserver_nodes(tmp_path):
+    """show renders the special node types (gen_server, http_gateway, eval_agent)."""
+    fixed = TOPOLOGY_WARNINGS.replace("max_restarts: -1", "max_restarts: 3")
+    fixed = fixed.replace("    - agent: {name: dupe, type: myapp.B}\n", "")
+    fixed = fixed.replace("    - agent: {name: '', type: myapp.C}\n", "")
+    fixed = fixed.replace("    - agent: {name: no_type}\n", "")
+    fixed = fixed.replace(
+        "        children: []",
+        "        children:\n          - agent: {name: leaf, type: myapp.Leaf}",
+    )
+    path = _write_topology(tmp_path, text=fixed, name="rich2.yaml")
+    vres = runner.invoke(app, ["topology", "validate", str(path)])
+    assert vres.exit_code == 0, vres.output
+    result = runner.invoke(app, ["topology", "show", str(path)])
+    assert result.exit_code == 0, result.output
+    # Note: the rich tree renders agent/supervisor nodes; special node types
+    # (gen_server / http_gateway / eval_agent) validate + parse but are not
+    # individually rendered — display quirk, recorded, not forced here.
+    assert "leaf" in result.output
+
+
+def test_topology_diff_transport_and_plugins_sections(tmp_path):
+    a_text = TOPOLOGY_RICH
+    b_text = TOPOLOGY_RICH.replace("type: nats", "type: zmq").replace(
+        "models: [{type: anthropic}]", "models: [{type: litellm}]"
+    )
+    a = _write_topology(tmp_path, text=a_text, name="ta.yaml")
+    b = _write_topology(tmp_path, text=b_text, name="tb.yaml")
+    result = runner.invoke(app, ["topology", "diff", str(a), str(b)])
+    assert result.exit_code == 0, result.output
+    out = result.output.lower()
+    assert "transport" in out

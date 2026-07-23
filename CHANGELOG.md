@@ -11,6 +11,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+
+- **The 13 NATS integration tests now run in CI** — they spawn a real `nats-server` binary, which was never present on runners, so they skipped everywhere since the suite existed (the last remnant of the #39 fail-open class). The CI integration job installs a pinned, checksum-verified release; Docker-verified 14/14 on Linux. Also fixed the test fixture's hardcoded port 14222 (the comment claimed "random") which collided on parallel runs.
+- **`civitas init` accepts paths** — `civitas init path/to/proj` previously failed with a confusing "not a valid Python identifier" error because the whole path was validated. Paths now auto-split (parents created, basename identifier-validated); absolute paths and `--dir` combos supported, fully backwards compatible.
+
+### Added
+
+- **CLI coverage top-ups** — deploy 57→88% (multi-process/NATS compose generation, env-file provider detection, process-affinity collection incl. nested + flat formats), topology 70→89% (all validate error classes, special node types, diff transport/plugins sections, dead-live-probe fallback), dashboard arg paths. `cli/state.py` stays at its documented ceiling (~49%) — its misses are contrib-gated store/migrate bodies.
+
 ## [0.8.1] — 2026-07-24
 
 ### Added

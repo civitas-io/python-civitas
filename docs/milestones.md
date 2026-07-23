@@ -1009,9 +1009,9 @@ Plan: `.sisyphus/plans/hygiene-v0.8.2.md`. Closes the last unwatched gate + v0.8
 
 | # | Deliverable | Priority |
 |---|-------------|----------|
-| G1 | **nats-server in the CI integration job** — pinned release binary + sha256; un-skips the 13 NATS tests that currently run nowhere (last fail-open remnant); fix the fixture's hardcoded port 14222 | 🟡 Medium |
-| G2 | **`civitas init` accepts paths** — auto-split `init path/to/proj` into `--dir path/to` + name `proj` (basename identifier-validated; `--dir` already creates parents); docs/cli.md updated | 🟢 Low |
-| G3 | **CLI coverage top-ups** — deploy 57→≥80% (pure generation logic), topology 70→≥80%, state 49→~60% (contrib-gated paths stay), dashboard arg/error paths | 🟢 Low |
+| G1 | ✅ **Done (dev/v0.8.2)** — nats-server v2.14.3 pinned+sha256 in CI; **14/14 NATS tests pass (13 had never run anywhere)**; fixture port genuinely random now | 🟡 Medium |
+| G2 | ✅ **Done (dev/v0.8.2)** — init auto-splits paths; basename-only identifier validation; docs/cli.md updated; 4 new tests | 🟢 Low |
+| G3 | ✅ **Done (dev/v0.8.2)** — deploy 88%, topology 89%, dashboard 39% (args), state at its contrib-gated ceiling (49%, documented); total 89.7% | 🟢 Low |
 
 ### v0.9.1 — Post-endgame polish (Planned, after v0.9.0)
 
