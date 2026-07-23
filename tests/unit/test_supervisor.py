@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from civitas.messages import Message
 from civitas.process import AgentProcess, ProcessStatus
 from civitas.supervisor import (
     HeartbeatTimeout,
@@ -553,8 +554,10 @@ class TestHeartbeatMonitor:
         assert sup._missed_heartbeats.get("remote_a", 0) == 1
 
     @pytest.mark.asyncio
-    async def test_heartbeat_threshold_triggers_crash_handler(self):
-        """When missed count reaches threshold, _handle_crash is called."""
+    async def test_heartbeat_threshold_enqueues_crash_event(self):
+        """Threshold breach hands a HeartbeatTimeout to the crash queue (H4, #31)
+        — never an inline _handle_crash call, whose backoff sleep would stall
+        heartbeat monitoring of every other remote child."""
         sup = make_supervisor()
         sup.add_remote_child(
             "remote_a",
@@ -569,8 +572,7 @@ class TestHeartbeatMonitor:
         mock_bus.request = AsyncMock(side_effect=TimeoutError())
         sup._bus = mock_bus
 
-        crash_calls: list = []
-        sup._handle_crash = AsyncMock(side_effect=lambda n, e: crash_calls.append(n))  # type: ignore[method-assign]
+        sup._handle_crash = AsyncMock()  # type: ignore[method-assign]
 
         async def _stop_after_sleep(*_a: object, **_kw: object) -> None:
             sup._running = False
@@ -578,8 +580,77 @@ class TestHeartbeatMonitor:
         with patch("civitas.supervisor.asyncio.sleep", side_effect=_stop_after_sleep):
             await sup._heartbeat_loop()
 
-        assert "remote_a" in crash_calls
+        sup._handle_crash.assert_not_called()
+        assert sup._crash_queue.qsize() == 1
+        name, exc, task = sup._crash_queue.get_nowait()
+        assert name == "remote_a"
+        assert isinstance(exc, HeartbeatTimeout)
+        assert task is None  # remote children have no incarnation task
         assert sup._missed_heartbeats.get("remote_a", 0) == 0  # reset after trigger
+
+    @pytest.mark.asyncio
+    async def test_heartbeats_sent_at_priority_one(self):
+        """Liveness probes ride the priority channel (H4, #31)."""
+        sup = make_supervisor()
+        sup.add_remote_child("remote_a", heartbeat_interval=0.01, heartbeat_timeout=0.01)
+        sup._running = True
+
+        seen: list = []
+
+        async def _record(message, timeout):
+            seen.append(message)
+            sup._running = False
+            raise TimeoutError
+
+        mock_bus = AsyncMock()
+        mock_bus.request = AsyncMock(side_effect=_record)
+        sup._bus = mock_bus
+
+        async def _noop_sleep(*_a: object, **_kw: object) -> None:
+            return None
+
+        with patch("civitas.supervisor.asyncio.sleep", side_effect=_noop_sleep):
+            await sup._heartbeat_loop()
+
+        assert seen and all(m.priority == 1 for m in seen)
+
+    @pytest.mark.asyncio
+    async def test_monitor_keeps_pinging_others_after_breach(self):
+        """A breached child must not stall monitoring of its siblings (H4):
+        the restart happens on the drain task, not inline in the loop."""
+        sup = make_supervisor()
+        sup.add_remote_child(
+            "dead_a",
+            heartbeat_interval=0.01,
+            heartbeat_timeout=0.01,
+            missed_heartbeats_threshold=1,
+        )
+        sup.add_remote_child("live_b", heartbeat_interval=0.01, heartbeat_timeout=0.01)
+        sup._running = True
+        sup._handle_crash = AsyncMock()  # type: ignore[method-assign]
+
+        pings: list[str] = []
+
+        async def _selective(message, timeout):
+            pings.append(message.recipient)
+            if message.recipient == "dead_a":
+                raise TimeoutError
+            return Message(type="_agency.heartbeat_ack", sender="live_b", recipient=sup.name)
+
+        mock_bus = AsyncMock()
+        mock_bus.request = AsyncMock(side_effect=_selective)
+        sup._bus = mock_bus
+
+        await sup._start_heartbeat_monitor()
+        await asyncio.sleep(0.08)
+        sup._running = False
+        await sup._stop_heartbeat_monitor()
+
+        first_breach = pings.index("dead_a")
+        pings_to_b_after = pings[first_breach:].count("live_b")
+        assert pings_to_b_after >= 2, "monitoring of siblings stalled after a breach"
+        sup._handle_crash.assert_not_called()  # queued for the drain, not inline
+        assert sup._crash_queue.qsize() >= 1
 
     @pytest.mark.asyncio
     async def test_heartbeat_loop_continues_on_generic_exception(

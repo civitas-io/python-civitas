@@ -326,11 +326,6 @@ async def test_stop_during_crash_drain_no_zombie():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    reason="#31: heartbeats are sent at priority 0 — buffered behind business "
-    "messages and by SUSPENDED agents, causing false-positive crash detection",
-    strict=True,
-)
 async def test_heartbeat_uses_priority_channel():
     sup = Supervisor("sup")
     sup.add_remote_child("remote", heartbeat_interval=0.01, heartbeat_timeout=0.05)
@@ -358,3 +353,32 @@ async def test_heartbeat_uses_priority_channel():
         f"heartbeats sent at priority {seen[0].priority} — they queue behind "
         "business messages and are buffered by suspended agents"
     )
+
+
+async def test_suspended_agent_acks_priority_heartbeat():
+    """A SUSPENDED agent is alive and must say so (H4, #31): its loop drains
+    only the priority queue, so a priority-1 heartbeat reaches it and is acked
+    while business messages stay buffered — suspension is a governance state,
+    not a liveness failure."""
+    worker = CrashOnCommand("paused")
+    root = Supervisor("root", children=[worker], max_restarts=3, backoff_base=0.01)
+    runtime = Runtime(supervisor=root)
+    await runtime.start()
+    try:
+        await runtime.suspend("paused", reason="hitl gate")
+        assert await _wait_for(lambda: worker.status == ProcessStatus.SUSPENDED)
+
+        from civitas.messages import _uuid7
+
+        heartbeat = Message(
+            type="_agency.heartbeat",
+            sender="root",
+            recipient="paused",
+            correlation_id=_uuid7(),
+            priority=1,
+        )
+        ack = await runtime._bus.request(heartbeat, timeout=1.0)
+        assert ack.type == "_agency.heartbeat_ack"
+        assert worker.status == ProcessStatus.SUSPENDED  # still paused — ack ≠ resume
+    finally:
+        await runtime.stop()

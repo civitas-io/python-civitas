@@ -286,12 +286,21 @@ class Supervisor:
                 threshold = int(cfg.get("threshold", 3))
 
                 try:
+                    # H4 (#31): priority=1 — liveness probes ride the priority
+                    # channel, ahead of business traffic. A busy agent acks between
+                    # messages instead of after its whole backlog, and a SUSPENDED
+                    # agent (which drains ONLY the priority queue) acks too —
+                    # suspension is a governance state, not a liveness failure.
+                    # Limit: a single long handle() still starves acks until the
+                    # next loop boundary (structural fix: v0.9 D5, per-process
+                    # liveness).
                     heartbeat = Message(
                         type="_agency.heartbeat",
                         sender=self.name,
                         recipient=name,
                         correlation_id=_uuid7(),
                         span_id=_new_span_id(),
+                        priority=1,
                     )
                     if self._bus is None:
                         break
@@ -303,7 +312,11 @@ class Supervisor:
                     self._missed_heartbeats[name] = self._missed_heartbeats.get(name, 0) + 1
                     missed = self._missed_heartbeats[name]
                     if missed >= threshold:
-                        await self._handle_crash(name, HeartbeatTimeout(name, missed))
+                        # H4 (#31): hand the crash to the drain task instead of
+                        # restarting inline — the restart (incl. its backoff sleep)
+                        # must not stall heartbeat monitoring of the other remote
+                        # children, and it serializes with all other crash work.
+                        self._crash_queue.put_nowait((name, HeartbeatTimeout(name, missed), None))
                         self._missed_heartbeats[name] = 0
                 except asyncio.CancelledError:
                     raise  # propagate to stop the task cleanly (F03-7)
