@@ -181,7 +181,19 @@ broadcast excludes `_agency.*` names (C6); accessor methods on `MessageBus` for 
 - D4 additionally needs a concurrent-crash stress test (N children crashing in the same tick,
   ONE_FOR_ALL) asserting exactly one restart cycle.
 
-## 5. Non-goals
+## 5. Deferred design ideas
+
+- **`ErrorAction.RETRY_AFTER(delay)` — opt-in delayed-retry lane** (raised during PR4 review,
+  2026-07-21): a separate retry queue is only meaningful paired with *delay* semantics — with
+  plain RETRY, at most one message is ever "in retry" (dispatch is serial), so a dedicated queue
+  is an empty structure. A delay lane (park with due-time, keep processing, redeliver when due)
+  trades FIFO for throughput — the exact reordering #32 removed — so it must be an *explicit*
+  user choice, not an implicit queue behavior. If demand materializes: own design doc, riding the
+  Kafka-retry-topic / SQS-delay-queue precedent. Until then the documented pattern for rate-limit
+  errors is `on_error` → sleep-then-RETRY (blocking, ordered) or SKIP + self re-send (non-blocking,
+  explicitly reordered).
+
+## 6. Non-goals
 
 - True preemptive scheduling / BEAM-style reductions (impossible on asyncio; documented instead).
 - Selective receive (would change `handle()` semantics; revisit only with strong demand).

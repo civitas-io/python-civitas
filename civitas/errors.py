@@ -9,7 +9,10 @@ class ErrorAction(Enum):
     """Actions an agent can take when an error occurs in handle()."""
 
     RETRY = "RETRY"
-    """Re-deliver the same message (up to retry limit)."""
+    """Re-run handle() with the same message immediately, in place (up to
+    max_retries, then escalate). Mailbox order is preserved — no other message
+    is processed between attempts. For backoff, ``await asyncio.sleep(...)``
+    inside ``on_error()`` before returning RETRY."""
 
     SKIP = "SKIP"
     """Discard the failed message, continue with next."""

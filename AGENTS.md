@@ -332,7 +332,7 @@ completing a meaningful unit of work.
 
 | Value | Behaviour |
 |---|---|
-| `ErrorAction.RETRY` | Re-deliver the same message (up to retry limit) |
+| `ErrorAction.RETRY` | Re-run `handle()` with the same message **immediately, in place** (up to `max_retries`, then escalate). FIFO preserved — nothing else runs between attempts. For backoff, `await asyncio.sleep(...)` in `on_error()` before returning RETRY; for non-blocking deferral, SKIP + re-send to self (explicitly reordered) |
 | `ErrorAction.SKIP` | Discard message, continue with next |
 | `ErrorAction.ESCALATE` | Crash process — supervisor applies restart strategy |
 | `ErrorAction.STOP` | Graceful shutdown of this process |

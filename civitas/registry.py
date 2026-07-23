@@ -159,8 +159,22 @@ class LocalRegistry:
         return self._entries.get(name)
 
     def lookup_all(self, pattern: str) -> list[RoutingEntry]:
-        """Return all entries whose name matches a glob pattern."""
-        return [entry for name, entry in self._entries.items() if fnmatch.fnmatch(name, pattern)]
+        """Return all entries whose name matches a glob pattern.
+
+        Underscore-prefixed (system) names — ``_runtime``, ``_agency.*`` — match
+        only when the pattern itself starts with ``_`` (C6): ``broadcast("*")``
+        must not deliver business payloads to internal endpoints, but explicit
+        intent (``"_agency.*"``) still works.
+        """
+        if pattern.startswith("_"):
+            return [
+                entry for name, entry in self._entries.items() if fnmatch.fnmatch(name, pattern)
+            ]
+        return [
+            entry
+            for name, entry in self._entries.items()
+            if not name.startswith("_") and fnmatch.fnmatch(name, pattern)
+        ]
 
     def has(self, name: str) -> bool:
         """Return True if the name is registered."""
@@ -271,16 +285,6 @@ class LocalRegistry:
         if existing is not None and not existing.is_local:
             self._entries.pop(name)
             self._fire_listeners(existing, "deregister")
-
-    def register_b64(self, name: str, public_key_b64: str) -> None:
-        """Register a remote agent's public key for signing verification.
-
-        Used by the security layer — stores a RoutingEntry with no capability
-        info, solely so the signing layer can look up the public key.
-        This is a no-op if the agent is already registered.
-        """
-        if name not in self._entries:
-            self._entries[name] = RoutingEntry(name=name, address=name, is_local=False)
 
     def __contains__(self, name: str) -> bool:
         return name in self._entries

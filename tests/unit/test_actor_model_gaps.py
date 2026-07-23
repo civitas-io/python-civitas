@@ -404,6 +404,177 @@ async def test_on_stop_exception_contained_during_shutdown():
 
 
 # ---------------------------------------------------------------------------
+# H8/H9/H10 (PR4) — retry-in-place, _runtime sink, registry hygiene
+# ---------------------------------------------------------------------------
+
+
+class FlakyOnce(AgentProcess):
+    """Fails the first attempt of 'flaky' messages, then succeeds; records order."""
+
+    def __init__(self, name: str, **kwargs: Any) -> None:
+        super().__init__(name, **kwargs)
+        self.observed: list[tuple[str, int]] = []
+
+    async def handle(self, message: Message) -> Message | None:
+        self.observed.append((message.payload.get("tag", ""), message.attempt))
+        if message.payload.get("tag") == "flaky" and message.attempt == 0:
+            raise RuntimeError("transient")
+        return None
+
+    async def on_error(self, error: Exception, message: Message):
+        from civitas.errors import ErrorAction
+
+        return ErrorAction.RETRY
+
+
+async def test_retry_in_place_preserves_fifo():
+    """H8 (#32): a retried message completes before anything queued behind it —
+    per-sender FIFO holds even across transient failures."""
+    agent = FlakyOnce("fifo")
+    root = Supervisor("root", children=[agent], max_restarts=3, backoff_base=0.01)
+    runtime = Runtime(supervisor=root)
+    await runtime.start()
+    try:
+        await runtime.send("fifo", {"tag": "flaky"})
+        await runtime.send("fifo", {"tag": "behind"})
+        assert await _wait_for(lambda: len(agent.observed) >= 3)
+        assert agent.observed == [("flaky", 0), ("flaky", 1), ("behind", 0)], (
+            f"FIFO broken across retry: {agent.observed}"
+        )
+    finally:
+        await runtime.stop()
+
+
+async def test_retry_gets_fresh_handle_timeout_per_attempt():
+    """H8 × H6 (plan constraint 5): each attempt is wrapped separately — a
+    retried handler gets the full budget, and a hang-then-recover pattern works."""
+
+    class HangsOnceThenFast(AgentProcess):
+        attempts = 0
+
+        async def handle(self, message: Message) -> Message | None:
+            type(self).attempts += 1
+            if message.attempt == 0:
+                await asyncio.sleep(3600)  # times out
+            return self.reply({"recovered": True})
+
+        async def on_error(self, error: Exception, message: Message):
+            from civitas.errors import ErrorAction
+
+            if isinstance(error, TimeoutError):
+                return ErrorAction.RETRY
+            return ErrorAction.ESCALATE
+
+    HangsOnceThenFast.attempts = 0
+    agent = HangsOnceThenFast("hangs_once", handle_timeout=0.05)
+    root = Supervisor("root", children=[agent], max_restarts=3, backoff_base=0.01)
+    runtime = Runtime(supervisor=root)
+    await runtime.start()
+    try:
+        reply = await runtime.ask("hangs_once", {"work": 1}, timeout=3.0)
+        assert reply.payload["recovered"] is True
+        assert HangsOnceThenFast.attempts == 2
+        assert root._restart_counts.get("hangs_once", 0) == 0  # recovered, no crash
+    finally:
+        await runtime.stop()
+
+
+async def test_retry_aborts_when_agent_leaves_running():
+    """H8 (plan constraint 5): a STOP arriving mid-retry is not delayed by
+    max_retries × handler-time — the message is dropped (at-most-once)."""
+
+    class StopMidRetry(AgentProcess):
+        attempts = 0
+
+        async def handle(self, message: Message) -> Message | None:
+            type(self).attempts += 1
+            raise RuntimeError("always")
+
+        async def on_error(self, error: Exception, message: Message):
+            from civitas.errors import ErrorAction
+
+            self._status = ProcessStatus.STOPPING  # simulate STOP landing mid-retry
+            return ErrorAction.RETRY
+
+    StopMidRetry.attempts = 0
+    agent = StopMidRetry("stopper", max_retries=5)
+    await agent._start()
+    await agent._mailbox.put(Message(type="work"))
+    assert await _wait_for(lambda: agent.status == ProcessStatus.STOPPED)
+    assert StopMidRetry.attempts == 1  # no further attempts after status change
+
+
+class RepliesToSender(AgentProcess):
+    """Does the natural-but-dangerous send(message.sender) follow-up."""
+
+    async def handle(self, message: Message) -> Message | None:
+        await self.send(message.sender, {"heads_up": True})
+        return self.reply({"ok": True})
+
+
+async def test_send_to_runtime_sender_is_dropped_not_crashed(caplog):
+    """H9 (#33): send(message.sender) on a Runtime-initiated message lands in
+    the '_runtime' sink — WARNING-logged, dropped, agent unharmed."""
+    import logging as _logging
+
+    agent = RepliesToSender("chatty")
+    root = Supervisor("root", children=[agent], max_restarts=3, backoff_base=0.01)
+    runtime = Runtime(supervisor=root)
+    await runtime.start()
+    try:
+        with caplog.at_level(_logging.WARNING, logger="civitas.runtime"):
+            reply = await runtime.ask("chatty", {"q": 1}, timeout=2.0)
+        assert reply.payload["ok"] is True
+        assert agent.status == ProcessStatus.RUNNING  # no crash
+        assert any("_runtime" in r.getMessage() for r in caplog.records)
+        assert root._restart_counts.get("chatty", 0) == 0
+    finally:
+        await runtime.stop()
+
+
+async def test_ask_runtime_fails_fast_with_error_reply():
+    """H9 (#33): ask('_runtime') gets an immediate error reply, not a timeout."""
+    agent = CrashOnCommand("bystander")
+    root = Supervisor("root", children=[agent], max_restarts=3, backoff_base=0.01)
+    runtime = Runtime(supervisor=root)
+    await runtime.start()
+    try:
+        start = asyncio.get_running_loop().time()
+        reply = await runtime.ask("_runtime", {"oops": True}, timeout=10.0)
+        elapsed = asyncio.get_running_loop().time() - start
+        assert reply.payload["status"] == "error"
+        assert "_runtime" in reply.payload["error"]
+        assert elapsed < 2.0, "error reply should be immediate, not a timeout"
+    finally:
+        await runtime.stop()
+
+
+def test_glob_patterns_exclude_system_names():
+    """C6 slice of H13: broadcast('*') must not hit internal endpoints; explicit
+    underscore patterns still match."""
+    from civitas.registry import LocalRegistry
+
+    registry = LocalRegistry()
+    registry.register("worker_a")
+    registry.register("_runtime")
+    registry.register("_agency.worker.restart")
+
+    assert [e.name for e in registry.lookup_all("*")] == ["worker_a"]
+    assert [e.name for e in registry.lookup_all("_agency.*")] == ["_agency.worker.restart"]
+    assert [e.name for e in registry.lookup_all("_*")] == ["_runtime", "_agency.worker.restart"]
+
+
+def test_local_registry_register_b64_removed():
+    """H10 (#34): the dead, key-dropping routing-table polluter is gone — verify
+    keys live in KeyRtry only."""
+    from civitas.registry import LocalRegistry
+    from civitas.security.registry import KeyRegistry
+
+    assert not hasattr(LocalRegistry, "register_b64")
+    assert hasattr(KeyRegistry, "register_b64")  # the real home, untouched
+
+
+# ---------------------------------------------------------------------------
 # H2 (#30) — crash-queue serialization, staleness, and shutdown properties
 # ---------------------------------------------------------------------------
 
