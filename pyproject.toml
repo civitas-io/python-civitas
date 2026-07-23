@@ -111,31 +111,16 @@ addopts = "--cov=civitas --cov-report=term-missing --cov-fail-under=85"
 [tool.coverage.run]
 branch = true
 omit = [
-    # Requires live infra (ZMQ IPC/TCP, NATS server) — covered in test_m2_1/m2_2
+    # Requires live infra (ZMQ IPC/TCP, NATS server) — covered by the
+    # integration CI job (test_m2_1 / test_m2_2 / cross-process spawn), which
+    # gates PRs since v0.8.1 (#39); unit-coverage measurement stays unit-only.
     "*/civitas/transport/zmq.py",
     "*/civitas/transport/nats.py",
     "*/civitas/transport/__init__.py",   # protocol definition only
-    # Require live API keys — unit-tested via mocks
-    "*/civitas/plugins/anthropic.py",
-    "*/civitas/plugins/openai.py",
-    "*/civitas/plugins/gemini.py",
-    "*/civitas/plugins/mistral.py",
-    "*/civitas/plugins/litellm.py",
-    # Fiddler plugin stub (implementation is in civitas/eval/exporters.py)
-    "*/civitas/plugins/fiddler.py",
-    # SQLite store and tools — deferred to a dedicated plugin testing sprint
-    "*/civitas/plugins/sqlite_store.py",
-    "*/civitas/plugins/tools.py",
     # CLI — deferred to a dedicated CLI testing sprint using CliRunner
     "*/civitas/cli/*",
-    # Adapters — require third-party frameworks (crewai, langgraph, openai)
-    "*/civitas/adapters/*",
-    # Dashboard — requires live runtime for meaningful testing
+    # Dashboard — requires live runtime; exercised by integration test_m3_3
     "*/civitas/dashboard/*",
-    # MCP integration — branches that open stdio subprocesses / SSE sessions
-    # require live MCP server processes; covered by integration tests, not unit
-    "*/civitas/mcp/client.py",
-    "*/civitas/mcp/server.py",
     # Entry point shim
     "*/civitas/__main__.py",
     # HTTP/3 — requires aioquic which is not installed in the dev environment

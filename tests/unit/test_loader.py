@@ -6,7 +6,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from civitas.plugins.loader import PluginError, load_plugin, resolve_plugin_class
+from civitas.plugins.loader import (
+    PluginError,
+    load_plugin,
+    load_plugins_from_config,
+    resolve_plugin_class,
+)
 from civitas.plugins.state import InMemoryStateStore
 
 # ---------------------------------------------------------------------------
@@ -74,3 +79,47 @@ def test_load_plugin_constructor_type_error() -> None:
     # in_memory takes no config kwargs — passing an unexpected kwarg triggers TypeError
     with pytest.raises(PluginError, match="Constructor error"):
         load_plugin("state", "in_memory", {"totally_invalid_kwarg": True})
+
+
+# ---------------------------------------------------------------------------
+# V4 (#42) — top-ups for the previously-unmeasured error paths
+# ---------------------------------------------------------------------------
+
+
+def test_unknown_plugin_name_raises_with_hint() -> None:
+    """A bare name not in entrypoints/builtins/dotted form fails with guidance."""
+    with pytest.raises(PluginError, match="Unknown plugin 'no_such_plugin'"):
+        resolve_plugin_class("model", "no_such_plugin")
+
+
+def test_dotted_path_missing_attribute_raises() -> None:
+    """A valid module without the named class is a loud PluginError."""
+    with pytest.raises(PluginError, match="has no attribute 'NoSuchClass'"):
+        resolve_plugin_class("state", "civitas.plugins.state.NoSuchClass")
+
+
+def test_dotted_path_unimportable_module_raises() -> None:
+    with pytest.raises(PluginError, match="Cannot import module"):
+        resolve_plugin_class("state", "civitas.no_such_module.Thing")
+
+
+def test_config_models_entry_missing_type_raises() -> None:
+    with pytest.raises(PluginError, match="missing a 'type' field"):
+        load_plugins_from_config({"plugins": {"models": [{"config": {}}]}})
+
+
+def test_config_exporters_entry_missing_type_raises() -> None:
+    with pytest.raises(PluginError, match="missing a 'type' field"):
+        load_plugins_from_config({"plugins": {"exporters": [{"config": {}}]}})
+
+
+def test_config_state_entry_missing_type_defaults_to_in_memory() -> None:
+    """Deliberate asymmetry vs models/exporters: a state entry without 'type'
+    falls back to the in-memory store rather than raising."""
+    loaded = load_plugins_from_config({"plugins": {"state": {"config": {}}}})
+    assert isinstance(loaded["state_store"], InMemoryStateStore)
+
+
+def test_config_without_plugins_section_returns_empty() -> None:
+    loaded = load_plugins_from_config({})
+    assert loaded == {"model_providers": [], "exporters": [], "state_store": None}
