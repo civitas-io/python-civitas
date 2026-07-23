@@ -41,10 +41,16 @@ runner = CliRunner()
 
 
 def test_version():
-    """civitas version prints version info."""
+    """civitas version prints the PACKAGE version.
+
+    This test previously asserted '0.1.0' — pinning the hardcoded-version bug
+    (wrong in every release since M3.1) as correct behavior. Fixed in v0.8.1 V5.
+    """
+    from importlib.metadata import version as pkg_version
+
     result = runner.invoke(app, ["version"])
     assert result.exit_code == 0
-    assert "0.1.0" in result.output
+    assert pkg_version("civitas") in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -300,4 +306,6 @@ def test_python_m_agency():
         timeout=10,
     )
     assert result.returncode == 0
-    assert "0.1.0" in result.stdout
+    from importlib.metadata import version as pkg_version
+
+    assert pkg_version("civitas") in result.stdout
