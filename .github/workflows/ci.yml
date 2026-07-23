@@ -58,6 +58,15 @@ jobs:
         run: uv sync --extra dev --extra otel --extra zmq --extra nats
 
       - name: Run integration tests
+        env:
+          # Rich/Typer render --help at terminal width with ANSI styling; the
+          # CLI console is created at import time, so width/color must be fixed
+          # via environment before Python starts. Without this, option names
+          # wrap inside box-drawing at the runner's narrow default and the
+          # help-text assertions fail (first-run catch of this very gate).
+          COLUMNS: "200"
+          NO_COLOR: "1"
+          TERM: dumb
         run: uv run pytest tests/integration --no-cov -p no:cacheprovider -q -ra
 
   lint:
