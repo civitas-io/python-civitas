@@ -117,8 +117,10 @@ omit = [
     "*/civitas/transport/zmq.py",
     "*/civitas/transport/nats.py",
     "*/civitas/transport/__init__.py",   # protocol definition only
-    # CLI — deferred to a dedicated CLI testing sprint using CliRunner
-    "*/civitas/cli/*",
+    # CLI: run.py's live-runtime paths need a real event loop + topology —
+    # exercised by integration test_m3_1 (in the CI integration job, #39);
+    # everything else is unit-tested via CliRunner (V5, #42)
+    "*/civitas/cli/run.py",
     # Dashboard — requires live runtime; exercised by integration test_m3_3
     "*/civitas/dashboard/*",
     # Entry point shim
