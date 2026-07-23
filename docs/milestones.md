@@ -965,9 +965,9 @@ Owner column: `core` = python-civitas, else the target repo.
 
 | Item | Priority | Status | Where tracked |
 |------|----------|--------|----------------|
-| ~~Supervision hardening D1/D5-watchdog/D7/D8~~ → scheduled into [v0.8.0](#v080--supervision-core-hardening-planned) (H5, H6, H12, H8–H10, H13) | — | ⏳ scheduled | design/supervision-hardening.md |
 | **Supervision hardening D5 (structural) — per-process out-of-band liveness** (beyond the v0.8.0 `handle_timeout` watchdog) | 🔴 High | ⏸️ deferred to v0.9+ | design/supervision-hardening.md D5 (A6/A7) |
 | **Supervision hardening D6 — unify static Supervisor + DynamicSupervisor as one actor-based engine** | 🟡 Medium | 💡 needs own plan (v0.9+) | design/supervision-hardening.md D6 (B1) |
+| **Supervision hardening D1(a) — fresh-instance restart** (child-spec capture shipped in v0.8.0; consumes it; flips the last xfail tracker) | 🔴 High | 💡 needs own plan (v0.9, with D6) | design/supervision-hardening.md D1 |
 | DynamicSupervisor: move `wait=True` readiness wait off the message loop (head-of-line blocking) | 🟡 Medium | ⏸️ | design/dynamic-spawning.md addendum (B4) |
 | Restart accounting: reconcile supervisor-wide budget window vs per-child lifetime backoff counts | 🟢 Low | ⏸️ | design/supervision-hardening.md B3 |
 | R7 follow-up: credit-based stream backpressure (namespace `civitas.stream.credit` reserved) | 🟢 Low | ⏸️ opportunistic | design/bus-native-streaming.md §8 Q5 |
