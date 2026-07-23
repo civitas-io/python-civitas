@@ -28,10 +28,22 @@ def _load_template(name: str) -> Template:
 
 @app.command()
 def init(
-    name: str = typer.Argument(help="Project name (also the directory name)"),
+    name: str = typer.Argument(
+        help="Project name, or a path ending in the project name (e.g. apps/my_agents)"
+    ),
     directory: str | None = typer.Option(None, "--dir", "-d", help="Parent directory"),
 ) -> None:
     """Scaffold a new Civitas project."""
+    # G2 (v0.8.2): `init path/to/proj` used to hit the identifier check with a
+    # confusing error because the WHOLE path was validated. Auto-split instead:
+    # everything up to the basename joins the parent directory; only the
+    # basename must be a valid Python identifier (it names the module/class).
+    name_path = Path(name)
+    parent = Path(directory) if directory else Path.cwd()
+    if name_path.parent != Path("."):
+        parent = name_path.parent if name_path.is_absolute() else parent / name_path.parent
+        name = name_path.name
+
     # F09-6: validate name as a Python identifier (used as class name and file name)
     if not name.isidentifier():
         err_console.print(
@@ -40,7 +52,6 @@ def init(
         )
         raise typer.Exit(1)
 
-    parent = Path(directory) if directory else Path.cwd()
     project_dir = parent / name
 
     if project_dir.exists():

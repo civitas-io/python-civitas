@@ -24,12 +24,16 @@ Scaffold a new Civitas project in the current directory (or a named subdirectory
 
 ```bash
 civitas init <name> [--dir <directory>]
+
+# name may also be a path — parents are created, the basename is the project name
+civitas init apps/nested/my_agents
+civitas init /abs/path/to/my_agents
 ```
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `name` | required | Project name — must be a valid Python identifier |
-| `--dir` | `./<name>` | Directory to create the project in |
+| `name` | required | Project name, or a path ending in it — the basename must be a valid Python identifier (it names the module and agent class) |
+| `--dir` | cwd | Parent directory; a relative path in `name` is joined under it |
 
 **Generated files:**
 

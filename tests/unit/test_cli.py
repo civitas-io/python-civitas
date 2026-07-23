@@ -57,8 +57,6 @@ def test_version_matches_package_metadata():
 
 
 def test_init_scaffolds_all_files(tmp_path, monkeypatch):
-    # Contract: init takes a BARE project name, relative to cwd (a full path is
-    # rejected by the identifier check — arguably a UX wart, noted in the plan).
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(app, ["init", "myproj"])
     assert result.exit_code == 0, result.output
@@ -80,6 +78,33 @@ def test_init_rejects_existing_directory(tmp_path, monkeypatch):
 def test_init_rejects_invalid_identifier(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(app, ["init", "not-a-valid-module!"])
+    assert result.exit_code != 0
+
+
+def test_init_accepts_relative_path(tmp_path, monkeypatch):
+    """G2 (v0.8.2): `init path/to/proj` auto-splits — parents created, basename
+    identifier-validated. Previously failed with a confusing identifier error."""
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(app, ["init", "apps/nested/my_agents"])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "apps" / "nested" / "my_agents" / "topology.yaml").exists()
+
+
+def test_init_accepts_absolute_path(tmp_path):
+    result = runner.invoke(app, ["init", str(tmp_path / "abs_proj")])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "abs_proj" / "agents.py").exists()
+
+
+def test_init_path_with_dir_option_joins(tmp_path):
+    result = runner.invoke(app, ["init", "sub/proj_x", "--dir", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "sub" / "proj_x" / "run.py").exists()
+
+
+def test_init_path_basename_still_validated(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(app, ["init", "apps/not-valid!"])
     assert result.exit_code != 0
 
 
