@@ -11,6 +11,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+### Changed
+
+- **Backoff now derives from the restart window, not lifetime counters (B3)** — both supervisor classes delegate restart accounting to one internal `RestartEngine` (previously two duplicated implementations with divergent semantics). Backoff for the Nth crash is computed from the intensity-window occupancy, so it **decays naturally once the window empties** — previously a child's 4th-ever crash earned `base × 2³` forever, even weeks later. Lifetime counters remain in logs/spans as observability only. `DynamicSupervisor` per-child budgets and its no-backoff behavior are unchanged.
+
 ## [0.8.2] — 2026-07-24
 
 ### Fixed

@@ -5,8 +5,6 @@ from __future__ import annotations
 import asyncio
 import importlib
 import logging
-import random
-import time
 from collections import deque
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -19,6 +17,7 @@ from civitas.process import DYNAMIC_SUPERVISOR_CAPABILITY, AgentProcess, Process
 from civitas.registry import reregister_preserving
 from civitas.security.identity import AgentIdentity
 from civitas.security.signing import SigningSerializer
+from civitas.supervision.engine import BackoffPolicy, RestartEngine
 from civitas.transport.inprocess import InProcessTransport
 
 logger = logging.getLogger(__name__)
@@ -46,14 +45,6 @@ class RestartStrategy(Enum):
     REST_FOR_ONE = "REST_FOR_ONE"
 
 
-class BackoffPolicy(Enum):
-    """Delay strategy applied between successive restart attempts."""
-
-    CONSTANT = "CONSTANT"
-    LINEAR = "LINEAR"
-    EXPONENTIAL = "EXPONENTIAL"
-
-
 class Supervisor:
     """Manages child processes with restart strategies.
 
@@ -76,14 +67,20 @@ class Supervisor:
         self.name = name
         self.children: list[AgentProcess | Supervisor] = children or []
         self.strategy = RestartStrategy(strategy)
-        self.max_restarts = max_restarts
-        self.restart_window = restart_window
-        self.backoff = BackoffPolicy(backoff)
-        self.backoff_base = backoff_base
-        self.backoff_max = backoff_max
+        # E1 (v0.9.0): budgets/window/backoff live in ONE engine shared with
+        # DynamicSupervisor's per-child engines (design supervision-endgame §3).
+        # The five knobs remain public attributes via properties below.
+        self._engine = RestartEngine(
+            max_restarts=max_restarts,
+            restart_window=restart_window,
+            backoff=BackoffPolicy(backoff),
+            backoff_base=backoff_base,
+            backoff_max=backoff_max,
+        )
 
         # Internal state
-        self._restart_timestamps: deque[float] = deque()  # F03-10: deque for O(1) sliding window
+        # Lifetime crash counters — OBSERVABILITY ONLY since B3 (logs/spans);
+        # never a backoff input (backoff derives from window occupancy).
         self._restart_counts: dict[str, int] = {}
         self._child_tasks: dict[str, asyncio.Task[None]] = {}
         self._children_by_name: dict[str, AgentProcess | Supervisor] = {  # F03-11: O(1) lookup
@@ -115,6 +112,55 @@ class Supervisor:
         self._heartbeat_task: asyncio.Task[None] | None = None
         self._missed_heartbeats: dict[str, int] = {}
         self._remote_child_config: dict[str, dict[str, float | int]] = {}  # F03-3: per-child config
+
+    # ------------------------------------------------------------------
+    # Engine facade — the knobs stay public attributes (tests + user code)
+    # ------------------------------------------------------------------
+
+    @property
+    def max_restarts(self) -> int:
+        return self._engine.max_restarts
+
+    @max_restarts.setter
+    def max_restarts(self, value: int) -> None:
+        self._engine.max_restarts = value
+
+    @property
+    def restart_window(self) -> float:
+        return self._engine.restart_window
+
+    @restart_window.setter
+    def restart_window(self, value: float) -> None:
+        self._engine.restart_window = value
+
+    @property
+    def backoff(self) -> BackoffPolicy | None:
+        return self._engine.backoff
+
+    @backoff.setter
+    def backoff(self, value: BackoffPolicy | None) -> None:
+        self._engine.backoff = value
+
+    @property
+    def backoff_base(self) -> float:
+        return self._engine.backoff_base
+
+    @backoff_base.setter
+    def backoff_base(self, value: float) -> None:
+        self._engine.backoff_base = value
+
+    @property
+    def backoff_max(self) -> float:
+        return self._engine.backoff_max
+
+    @backoff_max.setter
+    def backoff_max(self, value: float) -> None:
+        self._engine.backoff_max = value
+
+    @property
+    def _restart_timestamps(self) -> deque[float]:
+        """The engine's intensity window (kept for tests/introspection)."""
+        return self._engine.window
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -343,17 +389,12 @@ class Supervisor:
 
     async def _handle_crash(self, name: str, exc: Exception) -> None:
         """Apply the restart strategy after a child crash."""
-        now = time.time()
-
-        # Update crash log for the child
+        # Lifetime counter — observability only (B3); the engine rules on the
+        # window and computes backoff from its occupancy.
         self._restart_counts.setdefault(name, 0)
         self._restart_counts[name] += 1
 
-        # F03-10: deque-based sliding window — O(1) append and popleft
-        cutoff = now - self.restart_window
-        self._restart_timestamps.append(now)
-        while self._restart_timestamps and self._restart_timestamps[0] <= cutoff:
-            self._restart_timestamps.popleft()
+        verdict = self._engine.record_crash()
 
         for callback in self._crash_callbacks:
             try:
@@ -361,8 +402,7 @@ class Supervisor:
             except Exception:
                 logger.exception("Supervisor %r: crash callback raised", self.name)
 
-        # Check if we've exceeded max restarts
-        if len(self._restart_timestamps) > self.max_restarts:
+        if verdict.action == "exhausted":
             await self._escalate(name, exc)
             return
 
@@ -375,6 +415,7 @@ class Supervisor:
                     "civitas.supervisor": self.name,
                     "civitas.child": name,
                     "civitas.restart_count": restart_num,
+                    "civitas.crashes_in_window": verdict.crashes_in_window,
                     "civitas.strategy": self.strategy.value,
                     "civitas.error": str(exc),
                 },
@@ -390,10 +431,9 @@ class Supervisor:
                 exc,
             )
 
-        # Apply backoff delay
-        delay = self._compute_backoff(restart_num)
-        if delay > 0:
-            await asyncio.sleep(delay)
+        # Apply backoff delay (B3: derived from window occupancy)
+        if verdict.delay > 0:
+            await asyncio.sleep(verdict.delay)
 
         # Apply restart strategy
         if self.strategy == RestartStrategy.ONE_FOR_ONE:
@@ -420,7 +460,7 @@ class Supervisor:
         # this any later crash instantly re-escalates), then start.
         if isinstance(child, Supervisor):
             await child.stop()
-            child._restart_timestamps.clear()
+            child._engine.reset()  # fresh incarnation, fresh budget (H1)
             child._restart_counts.clear()
             await child.start()
             return
@@ -459,7 +499,7 @@ class Supervisor:
         # Restart all
         for child in self.children:
             if isinstance(child, Supervisor):
-                child._restart_timestamps.clear()  # fresh incarnation, fresh budget (H1)
+                child._engine.reset()  # fresh incarnation, fresh budget (H1)
                 child._restart_counts.clear()
                 await child.start()
             else:
@@ -494,7 +534,7 @@ class Supervisor:
         # Restart in order
         for child in to_restart:
             if isinstance(child, Supervisor):
-                child._restart_timestamps.clear()  # fresh incarnation, fresh budget (H1)
+                child._engine.reset()  # fresh incarnation, fresh budget (H1)
                 child._restart_counts.clear()
                 await child.start()
             else:
@@ -537,19 +577,8 @@ class Supervisor:
     # ------------------------------------------------------------------
 
     def _compute_backoff(self, restart_count: int) -> float:
-        """Compute the delay before restarting, based on backoff policy."""
-        if self.backoff == BackoffPolicy.CONSTANT:
-            delay = self.backoff_base
-        elif self.backoff == BackoffPolicy.LINEAR:
-            delay = self.backoff_base * restart_count
-        elif self.backoff == BackoffPolicy.EXPONENTIAL:
-            delay = self.backoff_base * (2 ** (restart_count - 1))
-            # Add jitter (up to 25%)
-            delay += delay * random.random() * 0.25
-        else:
-            delay = self.backoff_base
-
-        return min(delay, self.backoff_max)
+        """Delegate to the engine (kept for compatibility/introspection)."""
+        return self._engine.compute_backoff(restart_count)
 
     # ------------------------------------------------------------------
     # Helpers
@@ -658,7 +687,9 @@ class DynamicSupervisor(AgentProcess):
         self._child_tasks: dict[str, asyncio.Task[None]] = {}
         self._spawner_names: dict[str, str] = {}
         self._child_restart_counts: dict[str, int] = {}
-        self._child_restart_timestamps: dict[str, deque[float]] = {}
+        # E1: one RestartEngine per dynamic child (per-child budgets — the
+        # pre-existing DynSup semantics; backoff=None — DynSup never delayed).
+        self._child_engines: dict[str, RestartEngine] = {}
         self._total_spawns: int = 0
         self._spawner_total_counts: dict[str, int] = {}
         self._pending_child_tasks: set[asyncio.Task[None]] = set()
@@ -1045,18 +1076,20 @@ class DynamicSupervisor(AgentProcess):
             return
 
         # permanent or transient+crashed: attempt restart
-        now = time.time()
         self._child_restart_counts.setdefault(name, 0)
-        self._child_restart_counts[name] += 1
+        self._child_restart_counts[name] += 1  # observability only (B3)
 
-        self._child_restart_timestamps.setdefault(name, deque())
-        ts = self._child_restart_timestamps[name]
-        cutoff = now - self._ds_restart_window
-        ts.append(now)
-        while ts and ts[0] <= cutoff:
-            ts.popleft()
+        engine = self._child_engines.setdefault(
+            name,
+            RestartEngine(
+                max_restarts=self._ds_max_restarts,
+                restart_window=self._ds_restart_window,
+                backoff=None,
+            ),
+        )
+        verdict = engine.record_crash()
 
-        if len(ts) > self._ds_max_restarts:
+        if verdict.action == "exhausted":
             # Exhausted — remove and notify spawner; do NOT escalate to parent supervisor
             await self._clear_child_marker(name)
             self._remove_child(name)
