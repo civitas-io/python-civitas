@@ -950,8 +950,8 @@ for the Medicus self-healing demo (restart-as-remediation needs trustworthy rest
 | H8 | ✅ **Done (dev/v0.8.0)** — `ErrorAction.RETRY` retries **in place** — FIFO preserved, fresh `handle_timeout` per attempt, STOP aborts mid-retry; `RETRY_AFTER` delay-lane idea recorded as deferred (design §5) | 🟡 P2 | [#32](https://github.com/civitas-io/python-civitas/issues/32) · design D8 |
 | H9 | ✅ **Done (dev/v0.8.0)** — `_runtime` sink (bare subscription): WARNING + drop for send, fail-fast error reply for ask; glob patterns exclude `_`-prefixed system names (C6 slice of H13) | 🟡 P2 | [#33](https://github.com/civitas-io/python-civitas/issues/33) · design D8 |
 | H10 | ✅ **Done (dev/v0.8.0)** — `LocalRegistry.register_b64` deleted (zero callers; keys live in `KeyRegistry` only) | 🟡 P2 | [#34](https://github.com/civitas-io/python-civitas/issues/34) · design D8 |
-| H11 | README sweep — provider extras / adapter imports match AGENTS.md + pyproject | 🟡 P2 | [#35](https://github.com/civitas-io/python-civitas/issues/35) |
-| H12 | **Messaging-semantics doc** — at-most-once delivery, ask-cycle deadlock, backpressure deadlock, cooperative-scheduling bounds, restart/mailbox contract | 🟡 P2 | design D7 (A4/A5/A8/C8) |
+| H11 | ✅ **Done (dev/v0.8.0)** — Truth sweep: README + getting-started + index + plugins (extras/imports → civitas-contrib); 5 orphaned guide pages + security docs added to site nav | 🟡 P2 | [#35](https://github.com/civitas-io/python-civitas/issues/35) |
+| H12 | ✅ **Done (dev/v0.8.0)** — "Delivery semantics & hazards" in messaging.md; restart-contract + escalation + handle_timeout + suspension sections in supervision.md; NEW `recipes.md` (when-to-use decision guide) + `agents-guide.md` + `llms.txt` (coding-agent-consumable docs) | 🟡 P2 | design D7 (A4/A5/A8/C8) |
 | H13 | Hygiene batch — monotonic clocks for windows/TTL, broadcast glob excludes `_agency.*`, bus accessor methods (encapsulation) | 🟢 Stretch | design D8 (C2/C6/C7) |
 
 **Exit criteria:** all six strict-xfail tests in `tests/unit/test_actor_model_gaps.py` converted to

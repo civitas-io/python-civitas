@@ -227,12 +227,12 @@ open http://localhost:16686
 ```bash
 pip install civitas                        # core runtime
 
-# Model providers (pick one or more)
-pip install civitas[anthropic]             # Anthropic Claude
-pip install civitas[openai]                # OpenAI GPT-4o, o1, o3
-pip install civitas[gemini]                # Google Gemini 2.0 / 1.5
-pip install civitas[mistral]               # Mistral Large / Codestral
-pip install civitas[litellm]               # 100+ models via LiteLLM
+# Model providers (live in civitas-contrib — pick one or more)
+pip install civitas-contrib[anthropic]     # Anthropic Claude
+pip install civitas-contrib[openai]        # OpenAI GPT-4o, o1, o3
+pip install civitas-contrib[gemini]        # Google Gemini 2.0 / 1.5
+pip install civitas-contrib[mistral]       # Mistral Large / Codestral
+pip install civitas-contrib[litellm]       # 100+ models via LiteLLM
 
 # Transports
 pip install civitas[zmq]                   # ZMQ multi-process transport
@@ -242,7 +242,7 @@ pip install civitas[nats]                  # NATS distributed transport
 pip install civitas[otel]                  # OpenTelemetry SDK + OTLP exporter
 
 # Typical dev setup
-pip install civitas[anthropic,otel]
+pip install civitas[otel] civitas-contrib[anthropic]
 ```
 
 **Requires Python 3.12+.**
@@ -270,7 +270,7 @@ Civitas is a **runtime**, not a framework. LangGraph, CrewAI, and the OpenAI Age
 Civitas wraps LangGraph and OpenAI SDK agents natively:
 
 ```python
-from civitas.adapters.langgraph import LangGraphAgent
+from civitas_contrib.adapters.langgraph import LangGraphAgent
 
 # Your existing LangGraph graph gains supervision,
 # message routing, and OTEL tracing in 3 lines.
@@ -402,6 +402,8 @@ Full documentation is available at **[civitas-io.github.io/python-civitas](https
 | | |
 |---|---|
 | [Getting Started](https://civitas-io.github.io/python-civitas/getting-started/) | Install, hello agent, first supervised system |
+| [Choosing Your Configuration](https://civitas-io.github.io/python-civitas/recipes/) | When to use which strategy, transport, timeout, store — decision tables |
+| [For Coding Agents](https://civitas-io.github.io/python-civitas/agents-guide/) | Dense rules + copy-paste patterns for AI agents building on Civitas ([llms.txt](https://civitas-io.github.io/python-civitas/llms.txt)) |
 | [Core Concepts](https://civitas-io.github.io/python-civitas/concepts/) | AgentProcess, Supervisor, MessageBus, Transport |
 | [Supervision](https://civitas-io.github.io/python-civitas/supervision/) | Strategies, backoff, escalation, heartbeats |
 | [Messaging](https://civitas-io.github.io/python-civitas/messaging/) | send, ask, broadcast, backpressure, trace propagation |
