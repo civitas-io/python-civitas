@@ -730,12 +730,12 @@ from `handle()`, not from `on_start()`.
 Never rely on instance variables across messages. State that must survive goes in
 `self.state` + `checkpoint()` (persisted to StateStore).
 
-> **The restart contract (v0.8.0):** only checkpointed state survives a restart. On every
-> (re)start, `self.state` is reset and then restored from the last checkpoint — un-checkpointed
-> state (including whatever corruption caused a crash) dies with the old incarnation. Instance
-> variables still survive today because the instance is reused ([supervision-hardening](docs/design/supervision-hardening.md)
-> A1 — fresh-instance restart lands in v0.9); treat them as undefined across restarts.
-> Durable suspension (S7) is unaffected: the suspend marker rides in the checkpoint.
+> **The restart contract (v0.9.0, final):** a restart builds a **fresh instance** from the
+> constructor call you made (`__init__` re-runs; instance variables do NOT survive). Only
+> checkpointed `self.state` is restored; queued mailbox messages carry over in order; the
+> in-flight message is lost (at-most-once). Object references held across a restart go stale —
+> always route by name. Durable suspension (S7): the suspend marker rides in the checkpoint, so
+> suspended agents restart into SUSPENDED on the fresh instance.
 
 ```python
 # Wrong — resets on restart

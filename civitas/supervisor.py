@@ -9,7 +9,7 @@ from collections import deque
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from civitas.errors import ConfigurationError
 from civitas.messages import Message, _new_span_id, _uuid7
@@ -21,6 +21,37 @@ from civitas.supervision.engine import BackoffPolicy, RestartEngine
 from civitas.transport.inprocess import InProcessTransport
 
 logger = logging.getLogger(__name__)
+
+
+def _fresh_incarnation(old: AgentProcess) -> AgentProcess:
+    """Build a NEW instance from the child spec captured at construction (D1a).
+
+    ``_civitas_spec`` holds ``(cls, args, kwargs)`` exactly as the user called
+    the constructor — re-instantiation re-runs ``__init__`` (that is the fresh
+    heap). Two things are not constructor state and carry over from the old
+    incarnation: spawn-time ``config`` (assigned post-construction by
+    DynamicSupervisor) and the wired ``_dynamic_supervisor_name``. Note the
+    spec holds *references* to ctor args (e.g. a GatewayConfig) — deliberately
+    shared, not deep-copied (design supervision-endgame.md §4 constraint 3).
+    """
+    cls, args, kwargs = old._civitas_spec
+    fresh = cast(AgentProcess, cls(*args, **kwargs))
+    fresh.config = old.config
+    fresh._dynamic_supervisor_name = old._dynamic_supervisor_name
+    return fresh
+
+
+async def _transfer_mailbox(old: AgentProcess, new: AgentProcess) -> None:
+    """Carry queued messages to the new incarnation, in order (D1a).
+
+    ``drain()`` yields priority-first then FIFO; ``put()`` re-classifies by
+    ``priority``, so ordering within each class is preserved. The message that
+    was IN FLIGHT when the old incarnation died is not here — it was lost with
+    the crash (documented at-most-once).
+    """
+    for message in old._mailbox.drain():
+        await new._mailbox.put(message)
+
 
 if TYPE_CHECKING:
     from civitas.bus import MessageBus
@@ -101,6 +132,15 @@ class Supervisor:
         self._running = False
         self._parent: Supervisor | None = None
         self._crash_callbacks: list[Callable[[str, Exception], Awaitable[None]]] = []
+
+        # D1a (v0.9.0): re-invokable wiring for fresh incarnations. Runtime
+        # registers this at start (ComponentSet.inject + credentials); a fresh
+        # instance must be FULLY wired before its task starts (constraint 1).
+        self._wire_child: Callable[[AgentProcess], None] | None = None
+        # Notified with (name, new_agent) after a child object is replaced —
+        # Runtime updates its O(1) map and TopologyServer references here (Q1:
+        # user-held references go stale by design; route by name).
+        self._child_replaced_callbacks: list[Callable[[str, AgentProcess], None]] = []
 
         # Injected by Runtime
         self._bus: MessageBus | None = None
@@ -221,6 +261,56 @@ class Supervisor:
         is logged and does not prevent the restart strategy from running.
         """
         self._crash_callbacks.append(callback)
+
+    def add_child_replaced_callback(self, callback: Callable[[str, AgentProcess], None]) -> None:
+        """Register a callback invoked with (name, new_agent) after a restart
+        replaces a child object with a fresh incarnation (D1a)."""
+        self._child_replaced_callbacks.append(callback)
+
+    async def _restart_agent_child(self, old: AgentProcess) -> None:
+        """Restart an agent child as a FRESH INCARNATION (D1a, v0.9.0).
+
+        Order is load-bearing (design §4 constraints 1–2): instantiate → wire
+        fully → re-register → re-subscribe (handler closures capture the agent
+        object) → carry the mailbox over → only then start. A failure at ANY
+        step raises — the H2 drain wrapper makes it loud and escalates; there
+        is never a half-wired child with a live task. The old incarnation's
+        task is already done on every path that reaches here.
+        """
+        name = old.name
+        fresh = _fresh_incarnation(old)
+        if self._wire_child is not None:
+            self._wire_child(fresh)
+        else:
+            # Bare-Supervisor usage (tests, embedded): preserve the old wiring.
+            fresh._bus = old._bus
+            fresh._tracer = old._tracer
+            fresh._registry = old._registry
+            fresh.llm = old.llm
+            fresh.tools = old.tools
+            fresh.store = old.store
+            fresh._audit_sink = old._audit_sink
+            fresh._metrics = old._metrics
+            fresh._credentials = old._credentials
+        if self._registry is not None:
+            reregister_preserving(self._registry, name)
+        if self._bus is not None:
+            await self._bus.setup_agent(fresh)
+        await _transfer_mailbox(old, fresh)
+
+        # Swap the object everywhere the supervisor tracks it.
+        for i, c in enumerate(self.children):
+            if c.name == name:
+                self.children[i] = fresh
+                break
+        self._children_by_name[name] = fresh
+        for replaced_cb in self._child_replaced_callbacks:
+            try:
+                replaced_cb(name, fresh)
+            except Exception:
+                logger.exception("Supervisor %r: child-replaced callback raised", self.name)
+
+        await self._start_child(fresh)
 
     async def _start_child(self, agent: AgentProcess) -> None:
         """Start a single child agent and monitor its task."""
@@ -465,11 +555,8 @@ class Supervisor:
             await child.start()
             return
 
-        # Re-initialize the agent
-        child._status = ProcessStatus.INITIALIZING
-        if self._registry is not None:
-            reregister_preserving(self._registry, name)
-        await self._start_child(child)
+        # D1a: restart = fresh incarnation from the child spec.
+        await self._restart_agent_child(child)
 
     async def _restart_remote_child(self, name: str) -> None:
         """Send a restart command to a remote worker via ZMQ."""
@@ -496,17 +583,15 @@ class Supervisor:
             ):
                 await child._stop()
 
-        # Restart all
-        for child in self.children:
+        # Restart all — iterate over a snapshot: _restart_agent_child mutates
+        # self.children in place when swapping incarnations.
+        for child in list(self.children):
             if isinstance(child, Supervisor):
                 child._engine.reset()  # fresh incarnation, fresh budget (H1)
                 child._restart_counts.clear()
                 await child.start()
             else:
-                child._status = ProcessStatus.INITIALIZING
-                if self._registry is not None:
-                    reregister_preserving(self._registry, child.name)
-                await self._start_child(child)
+                await self._restart_agent_child(child)  # D1a fresh incarnation
 
     async def _restart_rest_for_one(self, name: str) -> None:
         """Restart the crashed child and all children after it (REST_FOR_ONE)."""
@@ -531,17 +616,14 @@ class Supervisor:
             ):
                 await child._stop()
 
-        # Restart in order
+        # Restart in order (to_restart is already a snapshot list)
         for child in to_restart:
             if isinstance(child, Supervisor):
                 child._engine.reset()  # fresh incarnation, fresh budget (H1)
                 child._restart_counts.clear()
                 await child.start()
             else:
-                child._status = ProcessStatus.INITIALIZING
-                if self._registry is not None:
-                    reregister_preserving(self._registry, child.name)
-                await self._start_child(child)
+                await self._restart_agent_child(child)  # D1a fresh incarnation
 
     async def _escalate(self, name: str, exc: Exception) -> None:
         """Max restarts exceeded — escalate to parent or stop permanently."""
@@ -1103,7 +1185,7 @@ class DynamicSupervisor(AgentProcess):
             )
             return
 
-        agent = rec.agent
+        old = rec.agent
 
         logger.info(
             "[%s] restarting '%s' (attempt %d/%d)",
@@ -1112,16 +1194,41 @@ class DynamicSupervisor(AgentProcess):
             self._child_restart_counts[name],
             self._ds_max_restarts,
         )
-        # A child crashed while SUSPENDED restarts back into SUSPENDED (its marker
-        # survives in self.state) and consumes a restart; budget exemption (S8
-        # finding #5) is deferred for v1.
-        agent._status = ProcessStatus.INITIALIZING
-        await agent._start()
+        # D1a (v0.9.0): restart = fresh incarnation from the child spec. Wire
+        # exactly as _handle_spawn does (the target supervisor equips its
+        # children), re-subscribe the bus to the NEW object, carry the mailbox.
+        # A child crashed while SUSPENDED restarts back into SUSPENDED (its
+        # marker rides the checkpoint); budget exemption (S8 #5) deferred to v1.
+        try:
+            fresh = _fresh_incarnation(old)
+            fresh._bus = self._bus
+            fresh._tracer = self._tracer
+            fresh._registry = self._registry
+            fresh._dynamic_supervisor_name = self.name
+            fresh.llm = self.llm
+            fresh.tools = self.tools
+            fresh.store = self.store
+            fresh._audit_sink = self._audit_sink
+            fresh._metrics = self._metrics
+            if self._bus is not None:
+                await self._bus.setup_agent(fresh)
+            await _transfer_mailbox(old, fresh)
+        except Exception:
+            # A restart we cannot even construct/wire is terminal for this child
+            # — loud, cleaned up, spawner notified (never a half-wired zombie).
+            logger.exception("[%s] fresh-incarnation restart of '%s' failed", self.name, name)
+            await self._clear_child_marker(name)
+            await self._terminal_cleanup(name)
+            await self._notify_spawner(name, "restarts_exhausted")
+            return
 
-        if agent._task is not None:
-            rec.task = agent._task
-            self._child_tasks[name] = agent._task
-            agent._task.add_done_callback(lambda t: self._on_child_done(name, t))
+        rec.agent = fresh
+        await fresh._start()
+
+        if fresh._task is not None:
+            rec.task = fresh._task
+            self._child_tasks[name] = fresh._task
+            fresh._task.add_done_callback(lambda t: self._on_child_done(name, t))
 
     def _remove_child(self, name: str) -> None:
         self._dynamic_children.pop(name, None)

@@ -677,10 +677,28 @@ class Runtime:
                 agent._credentials = self._agent_credentials.get(agent.name, {})
 
         # Inject into supervisors (supervisor-specific wiring, not via ComponentSet)
+        # D1a (v0.9.0): also hand every supervisor a RE-INVOKABLE wiring callback
+        # (fresh incarnations must be wired exactly like startup wiring) and a
+        # replaced-callback that keeps Runtime's O(1) map + TopologyServer
+        # references fresh. User-held object references go stale by design (Q1:
+        # route by name, never by object).
+        def _wire_child(agent: AgentProcess) -> None:
+            cs.inject(agent)
+            if self._agent_credentials:
+                agent._credentials = self._agent_credentials.get(agent.name, {})
+
+        def _on_child_replaced(name: str, new_agent: AgentProcess) -> None:
+            self._agents_by_name[name] = new_agent
+            if isinstance(new_agent, TopologyServer):
+                new_agent._root_supervisor = self._root_supervisor
+                new_agent._agents = self._agents_by_name
+
         for sup in self._root_supervisor.all_supervisors():
             sup._bus = cs.bus
             sup._registry = cs.registry
             sup._tracer = cs.tracer
+            sup._wire_child = _wire_child
+            sup.add_child_replaced_callback(_on_child_replaced)
 
         # Wire _dynamic_supervisor_name for all agents based on the static topology.
         # Each agent receives the name of the nearest DynamicSupervisor in its

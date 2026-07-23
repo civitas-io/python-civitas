@@ -6,9 +6,10 @@ while the bug exists, and a fix flips the test to XPASS — failing the run and
 forcing the marker's removal, so the tracking can never go stale.
 
 Findings catalog: docs/design/supervision-hardening.md
-Still open here: #31 (A6, heartbeat priority — PR2) and A1 (restart
-semantics — PR3 flips the state test; the instance-var test waits for the
-v0.9 fresh-instance restart).
+As of v0.9.0 E2 every tracker is a plain regression — ZERO xfails remain:
+the 2026-07 architecture review is fully closed in code. Waits observe the
+CURRENT incarnation via runtime.get_agent (Q1: object refs go stale across
+restarts by design — route by name).
 """
 
 from __future__ import annotations
@@ -16,8 +17,6 @@ from __future__ import annotations
 import asyncio
 import logging
 from typing import Any
-
-import pytest
 
 from civitas.messages import Message
 from civitas.process import AgentProcess, ProcessStatus
@@ -80,12 +79,6 @@ class DirtyStateAgent(AgentProcess):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    reason="A1 / design D1(a): restart reuses the same AgentProcess instance — "
-    "instance variables survive the crash. Scheduled for the v0.9 fresh-instance "
-    "restart (child spec is already captured by __new__ since v0.8.0 PR3)",
-    strict=True,
-)
 async def test_restart_resets_instance_variables():
     agent = DirtyInstanceAgent("dirty")
     root = Supervisor("root", children=[agent], max_restarts=3, backoff_base=0.01)
@@ -96,7 +89,9 @@ async def test_restart_resets_instance_variables():
         # Wait until the supervisor has observed the crash, then for recovery —
         # checking RUNNING alone races the crash and passes spuriously.
         assert await _wait_for(lambda: root._restart_counts.get("dirty", 0) >= 1)
-        assert await _wait_for(lambda: agent.status == ProcessStatus.RUNNING)
+        # Q1 (v0.9.0): observe the CURRENT incarnation — the old ref is stale.
+        assert await _wait_for(lambda: runtime.get_agent("dirty").status == ProcessStatus.RUNNING)
+        assert runtime.get_agent("dirty") is not agent  # fresh incarnation
         reply = await runtime.ask("dirty", {"cmd": "check"}, timeout=2.0)
         # OTP semantics: a restarted actor is a fresh actor — corrupted
         # in-memory state must not survive the crash that it caused.
@@ -113,7 +108,10 @@ async def test_restart_resets_uncheckpointed_state():
     try:
         await runtime.send("dirty_state", {"cmd": "poison"})
         assert await _wait_for(lambda: root._restart_counts.get("dirty_state", 0) >= 1)
-        assert await _wait_for(lambda: agent.status == ProcessStatus.RUNNING)
+        # Q1: current incarnation, not the stale pre-crash ref
+        assert await _wait_for(
+            lambda: runtime.get_agent("dirty_state").status == ProcessStatus.RUNNING
+        )
         reply = await runtime.ask("dirty_state", {"cmd": "check"}, timeout=2.0)
         assert reply.payload["corrupt"] is False
     finally:
@@ -176,7 +174,9 @@ async def test_capabilities_survive_restart():
         # Wait for the supervisor to observe the crash and complete the restart —
         # checking capabilities before the restart races and passes spuriously.
         assert await _wait_for(lambda: root._restart_counts.get("cap_worker", 0) >= 1)
-        assert await _wait_for(lambda: worker.status == ProcessStatus.RUNNING)
+        assert await _wait_for(  # Q1: current incarnation
+            lambda: runtime.get_agent("cap_worker").status == ProcessStatus.RUNNING
+        )
 
         found = runtime._registry.find_by_capability("gap.probe")
         assert [e.name for e in found] == ["cap_worker"], (
@@ -254,7 +254,9 @@ async def test_checkpointed_state_survives_reset_and_restart():
         await runtime.ask("saver", {"cmd": "save", "value": 42}, timeout=2.0)
         await runtime.send("saver", {"cmd": "boom"})
         assert await _wait_for(lambda: root._restart_counts.get("saver", 0) >= 1)
-        assert await _wait_for(lambda: agent.status == ProcessStatus.RUNNING)
+        assert await _wait_for(  # Q1: current incarnation
+            lambda: runtime.get_agent("saver").status == ProcessStatus.RUNNING
+        )
         reply = await runtime.ask("saver", {"cmd": "check"}, timeout=2.0)
         assert reply.payload["saved"] == 42
     finally:
@@ -321,7 +323,9 @@ async def test_handle_timeout_turns_hang_into_visible_crash():
     try:
         await runtime.send("hanger", {"cmd": "hang"})
         assert await _wait_for(lambda: root._restart_counts.get("hanger", 0) >= 1)
-        assert await _wait_for(lambda: agent.status == ProcessStatus.RUNNING)
+        assert await _wait_for(  # Q1: current incarnation
+            lambda: runtime.get_agent("hanger").status == ProcessStatus.RUNNING
+        )
         reply = await runtime.ask("hanger", {"cmd": "work"}, timeout=2.0)
         assert reply.payload["ok"] is True  # recovered and serving
     finally:
@@ -617,8 +621,9 @@ async def test_simultaneous_crash_events_one_restart_cycle():
         await asyncio.sleep(0.1)  # allow a (buggy) second cycle to happen
         # Exactly one ONE_FOR_ALL cycle: initial start + one restart each.
         assert CountingCrasher.starts == {"cc_a": 2, "cc_b": 2}
-        assert a.status == ProcessStatus.RUNNING
-        assert b.status == ProcessStatus.RUNNING
+        # Q1: fresh incarnations — check the current objects
+        assert runtime.get_agent("cc_a").status == ProcessStatus.RUNNING
+        assert runtime.get_agent("cc_b").status == ProcessStatus.RUNNING
     finally:
         await runtime.stop()
 
@@ -640,8 +645,11 @@ async def test_two_independent_crashes_both_recover():
                 and root._restart_counts.get("ind_b", 0) >= 1
             )
         )
-        assert await _wait_for(
-            lambda: a.status == ProcessStatus.RUNNING and b.status == ProcessStatus.RUNNING
+        assert await _wait_for(  # Q1: current incarnations
+            lambda: (
+                runtime.get_agent("ind_a").status == ProcessStatus.RUNNING
+                and runtime.get_agent("ind_b").status == ProcessStatus.RUNNING
+            )
         )
     finally:
         await runtime.stop()
@@ -725,5 +733,173 @@ async def test_suspended_agent_acks_priority_heartbeat():
         ack = await runtime._bus.request(heartbeat, timeout=1.0)
         assert ack.type == "_agency.heartbeat_ack"
         assert worker.status == ProcessStatus.SUSPENDED  # still paused — ack ≠ resume
+    finally:
+        await runtime.stop()
+
+
+# ---------------------------------------------------------------------------
+# D1a (v0.9.0 E2) — fresh-incarnation restart edge inventory
+# ---------------------------------------------------------------------------
+
+
+async def test_fresh_incarnation_is_fully_rewired():
+    """The new incarnation carries every injected dependency (llm/tools/store/
+    credentials/metrics) — wire-fully-before-start, design §4 constraint 1."""
+    from civitas.plugins.tools import ToolRegistry
+
+    llm, tools = object(), ToolRegistry()
+    agent = CrashOnCommand("wired")
+    root = Supervisor("root", children=[agent], max_restarts=3, backoff_base=0.01)
+    runtime = Runtime(supervisor=root, model_provider=llm, tool_registry=tools)
+    runtime._agent_credentials = {"wired": {"anthropic": "sk-test"}}
+    await runtime.start()
+    try:
+        assert agent.llm is llm and agent._credentials == {"anthropic": "sk-test"}
+        await runtime.send("wired", {"cmd": "boom"})
+        assert await _wait_for(
+            lambda: (
+                runtime.get_agent("wired") is not agent
+                and runtime.get_agent("wired").status == ProcessStatus.RUNNING
+            )
+        )
+        fresh = runtime.get_agent("wired")
+        assert fresh.llm is llm
+        assert fresh.tools is tools
+        assert fresh.store is not None
+        assert fresh._credentials == {"anthropic": "sk-test"}
+        assert fresh._metrics is agent._metrics and fresh._audit_sink is agent._audit_sink
+    finally:
+        await runtime.stop()
+
+
+async def test_mailbox_carries_over_in_order():
+    """Messages queued behind the poison one are processed by the FRESH
+    incarnation, in order (design §4 constraint 2)."""
+    CountingCrasher.starts = {}
+
+    class OrderRecorder(AgentProcess):
+        seen: list[str] = []  # class-level: survives incarnations
+
+        async def handle(self, message: Message) -> Message | None:
+            if message.payload.get("cmd") == "boom":
+                raise RuntimeError("boom")
+            type(self).seen.append(message.payload.get("tag", ""))
+            return None
+
+    OrderRecorder.seen = []
+    agent = OrderRecorder("keeper")
+    root = Supervisor("root", children=[agent], max_restarts=3, backoff_base=0.05)
+    runtime = Runtime(supervisor=root)
+    await runtime.start()
+    try:
+        await runtime.send("keeper", {"cmd": "boom"})
+        for tag in ("a", "b", "c"):  # these land while the crash/backoff runs
+            await runtime.send("keeper", {"tag": tag})
+        assert await _wait_for(lambda: len(OrderRecorder.seen) >= 3)
+        assert OrderRecorder.seen == ["a", "b", "c"]
+        assert runtime.get_agent("keeper") is not agent  # processed by the fresh one
+    finally:
+        await runtime.stop()
+
+
+async def test_suspended_child_restarts_into_suspended_fresh_instance():
+    """S7 × D1a: the checkpointed marker restores SUSPENDED on a NEW object."""
+    worker = CrashOnCommand("paused_fresh")
+    root = Supervisor("root", children=[worker], max_restarts=3, backoff_base=0.01)
+    runtime = Runtime(supervisor=root)
+    await runtime.start()
+    try:
+        await runtime.suspend("paused_fresh", reason="gate")
+        assert await _wait_for(lambda: worker.status == ProcessStatus.SUSPENDED)
+        # White-box: drive the restart machinery directly (a suspended agent
+        # processes no business messages, so we can't crash it organically).
+        await root._restart_agent_child(worker)
+        fresh = runtime.get_agent("paused_fresh")
+        assert fresh is not worker
+        assert await _wait_for(lambda: fresh.status == ProcessStatus.SUSPENDED)
+    finally:
+        await runtime.stop()
+
+
+async def test_wire_failure_is_loud_restart_failure(caplog):
+    """A wiring failure escalates through the H2 loud path — never a
+    half-wired child with a live task (design §4 constraint 1)."""
+    import logging as _logging
+
+    worker = CrashOnCommand("unwirable")
+    root = Supervisor("root", children=[worker], max_restarts=3, backoff_base=0.01)
+    runtime = Runtime(supervisor=root)
+    await runtime.start()
+    try:
+
+        def bad_wire(agent):
+            raise RuntimeError("injection infrastructure down")
+
+        root._wire_child = bad_wire
+        with caplog.at_level(_logging.WARNING):
+            await runtime.send("unwirable", {"cmd": "boom"})
+            await asyncio.sleep(0.3)
+        assert any(
+            "unwirable" in r.getMessage() and r.levelno >= _logging.WARNING for r in caplog.records
+        )
+        assert runtime.get_agent("unwirable").status != ProcessStatus.RUNNING
+    finally:
+        await runtime.stop()
+
+
+async def test_restart_of_restart_works():
+    """The fresh incarnation re-captures its own spec — crash twice, recover twice."""
+    agent = CrashOnCommand("phoenix")
+    root = Supervisor("root", children=[agent], max_restarts=5, backoff_base=0.01)
+    runtime = Runtime(supervisor=root)
+    await runtime.start()
+    try:
+        for expected in (1, 2):
+            await runtime.send("phoenix", {"cmd": "boom"})
+            assert await _wait_for(lambda n=expected: root._restart_counts.get("phoenix", 0) >= n)
+            assert await _wait_for(
+                lambda: runtime.get_agent("phoenix").status == ProcessStatus.RUNNING
+            )
+        second = runtime.get_agent("phoenix")
+        assert second is not agent
+        cls, args, kwargs = second._civitas_spec  # re-captured on the incarnation
+        assert cls is CrashOnCommand and args == ("phoenix",)
+        reply = await runtime.ask("phoenix", {"cmd": "work"}, timeout=2.0)
+        assert reply.payload["ok"] is True
+    finally:
+        await runtime.stop()
+
+
+class SpawnedJob(AgentProcess):
+    """Module-level: spawn() resolves classes by dotted import path."""
+
+    instances = 0
+
+    def __init__(self, name: str, **kwargs: Any) -> None:
+        super().__init__(name, **kwargs)
+        type(self).instances += 1
+
+    async def handle(self, message: Message) -> Message | None:
+        if message.payload.get("cmd") == "boom":
+            raise RuntimeError("boom")
+        return self.reply({"job": self.config.get("job_id")})
+
+
+async def test_dynamic_child_fresh_restart_preserves_config():
+    """DynSup restart path: fresh incarnation, spawn-time config carried over."""
+    from civitas import DynamicSupervisor
+
+    Job = SpawnedJob
+    Job.instances = 0
+    dyn = DynamicSupervisor("pool", restart="permanent", max_restarts=3)
+    runtime = Runtime(supervisor=Supervisor("root", children=[dyn]))
+    await runtime.start()
+    try:
+        await runtime.spawn("pool", Job, "job-1", config={"job_id": 42})
+        assert Job.instances == 1
+        await runtime.send("job-1", {"cmd": "boom"})
+        assert await _wait_for(lambda: Job.instances >= 2)  # fresh incarnation built
+        reply = await runtime.ask("job-1", {"cmd": "check"}, timeout=2.0)
+        assert reply.payload["job"] == 42  # spawn-time config carried over
     finally:
         await runtime.stop()

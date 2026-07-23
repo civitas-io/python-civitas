@@ -200,13 +200,13 @@ Crash handling is **strictly serialized** per supervisor (one crash processed at
 
 ## The restart contract — what survives, what doesn't
 
-**Only checkpointed state survives a restart.** On every (re)start, `self.state` is reset and then restored from the last `checkpoint()`:
+**A restart is a fresh incarnation** (v0.9.0): a new object is built from your constructor call, and only checkpointed state is restored:
 
 | | Survives restart? |
 |---|---|
 | `self.state` you checkpointed | ✅ restored from the store |
 | `self.state` you did NOT checkpoint | ❌ reset — including whatever corruption caused the crash (that's the point of "let it crash") |
-| Instance variables (`self.foo`) | ⚠️ survive today (instance reuse; fresh-instance restart planned) — **treat as undefined**, never rely on them |
+| Instance variables (`self.foo`) | ❌ reset — a restart builds a **fresh instance** from your constructor call (`__init__` re-runs) |
 | Mailbox (queued messages) | ✅ retained; the in-flight message is lost |
 | Registration (name, capabilities, metadata) | ✅ preserved exactly |
 | Durable-suspension marker | ✅ rides in the checkpoint — a suspended agent restarts into `SUSPENDED` |

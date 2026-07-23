@@ -501,14 +501,19 @@ async def test_one_for_all_restart_stops_suspended_no_double_loop():
         old_task = victim._task
 
         await crasher._mailbox.put(Message(type="go"))
-        # ONE_FOR_ALL stops every sibling then restarts; the suspended victim's
-        # marker survives in self.state so it comes back SUSPENDED on a NEW task.
+        # ONE_FOR_ALL stops every sibling then restarts as a FRESH incarnation
+        # (D1a); the checkpointed marker restores it into SUSPENDED. Observe the
+        # CURRENT object via the supervisor — the old ref is stale (Q1).
         await wait_for(
-            lambda: victim._task is not old_task and victim.status == ProcessStatus.SUSPENDED,
+            lambda: (
+                sup._children_by_name["victim"] is not victim
+                and sup._children_by_name["victim"].status == ProcessStatus.SUSPENDED
+            ),
             timeout=3.0,
         )
+        current = sup._children_by_name["victim"]
         assert old_task is not None and old_task.done()  # old loop stopped, no double-loop
-        assert victim._task is not None and not victim._task.done()  # exactly one live loop
+        assert current._task is not None and not current._task.done()  # exactly one live loop
     finally:
         await sup.stop()
 
@@ -531,8 +536,12 @@ async def test_rest_for_one_restart_handles_suspended_downstream():
         old_task = victim._task
 
         await crasher._mailbox.put(Message(type="go"))
+        # D1a fresh incarnation + Q1: observe the current object, not the stale ref.
         await wait_for(
-            lambda: victim._task is not old_task and victim.status == ProcessStatus.SUSPENDED,
+            lambda: (
+                sup._children_by_name["downstream"] is not victim
+                and sup._children_by_name["downstream"].status == ProcessStatus.SUSPENDED
+            ),
             timeout=3.0,
         )
         assert old_task is not None and old_task.done()

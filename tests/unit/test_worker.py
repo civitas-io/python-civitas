@@ -165,21 +165,26 @@ class TestOnRestartCommand:
         assert any("exceeded max_restarts" in r.message for r in caplog.records)
 
     async def test_successful_restart_increments_counter(self) -> None:
-        """Successful restart increments restart_counts and re-starts the agent."""
+        """Successful restart increments restart_counts and starts a FRESH
+        incarnation (D1a, v0.9.0) — the old object is stopped and replaced."""
         worker, agent = self._make_started_worker()
         agent._stop = AsyncMock()  # type: ignore[method-assign]
-        agent._start = AsyncMock()  # type: ignore[method-assign]
+
+        replacement = NullAgent("bot")
+        replacement._start = AsyncMock()  # type: ignore[method-assign]
 
         serializer = worker._serializer
         assert serializer is not None
         msg = Message(type="_agency.restart", payload={"agent_name": "bot"})
         data = serializer.serialize(msg)
 
-        await worker._on_restart_command(data)
+        with patch("civitas.worker._fresh_incarnation", return_value=replacement):
+            await worker._on_restart_command(data)
 
         assert worker._restart_counts["bot"] == 1
         agent._stop.assert_awaited_once()
-        agent._start.assert_awaited_once()
+        replacement._start.assert_awaited_once()
+        assert worker._agents["bot"] is replacement  # object swapped
 
     async def test_restart_failure_logs_exception(self, caplog: pytest.LogCaptureFixture) -> None:
         """If the restart raises, the exception is logged and does not propagate."""

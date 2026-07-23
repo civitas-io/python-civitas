@@ -37,10 +37,10 @@ from civitas.components import ComponentSet, build_component_set
 from civitas.errors import ConfigurationError
 from civitas.messages import Message
 from civitas.observability.otel_agent import run_otel_agent
-from civitas.process import DYNAMIC_SUPERVISOR_CAPABILITY, AgentProcess, ProcessStatus
+from civitas.process import DYNAMIC_SUPERVISOR_CAPABILITY, AgentProcess
 from civitas.registry import reregister_preserving
 from civitas.serializer import Serializer
-from civitas.supervisor import DynamicSupervisor
+from civitas.supervisor import DynamicSupervisor, _fresh_incarnation, _transfer_mailbox
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +142,7 @@ class Worker:
         self._transport = cs.transport
         self._registry = cs.registry
         self._bus = cs.bus
+        self._components = cs  # D1a: re-invokable wiring for fresh incarnations
 
         # Drain span_queue via OTELAgent when exporters are configured (FD-07/FD-09)
         if cs.span_queue is not None and cs.export_backend is not None:
@@ -214,12 +215,18 @@ class Worker:
 
         try:
             await agent._stop()
-            agent._status = ProcessStatus.INITIALIZING
+            # D1a (v0.9.0): restart = fresh incarnation from the child spec,
+            # wired exactly like startup, mailbox carried over in order.
+            fresh = _fresh_incarnation(agent)
+            if self._components is not None:
+                self._components.inject(fresh)
             if self._registry is not None:
-                reregister_preserving(self._registry, agent.name)  # H3 (#29)
+                reregister_preserving(self._registry, fresh.name)  # H3 (#29)
             if self._bus is not None:
-                await self._bus.setup_agent(agent)
-            await agent._start()
+                await self._bus.setup_agent(fresh)
+            await _transfer_mailbox(agent, fresh)
+            self._agents[target_name] = fresh
+            await fresh._start()
             self._restart_counts[target_name] = restart_count + 1
             logger.info(
                 "Worker: restarted agent %r (attempt %d/%d)",

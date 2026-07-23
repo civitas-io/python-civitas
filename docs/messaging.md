@@ -448,11 +448,12 @@ senders to re-send on missing replies (idempotency via your own message IDs).
 
 ### The restart state contract (v0.8.0)
 
-**Only checkpointed state survives a restart.** On every (re)start `self.state` is reset, then
-restored from the last `checkpoint()`. Un-checkpointed state — including whatever corruption
-caused the crash — dies with the old incarnation. Instance variables currently survive (the
-instance is reused; fresh-instance restart lands in v0.9) — treat them as undefined across
-restarts. The durable-suspension marker rides in the checkpoint, so suspended agents restart into
+**A restart is a fresh incarnation** (v0.9.0): a new object is built from your constructor
+call — `__init__` re-runs, instance variables reset, and `self.state` is restored from the last
+`checkpoint()`. Un-checkpointed anything — including whatever corruption caused the crash — dies
+with the old incarnation. Queued mailbox messages carry over in order. Object references held
+across a restart go stale (route by name — `runtime.get_agent()` always returns the current
+incarnation). The durable-suspension marker rides in the checkpoint, so suspended agents restart into
 `SUSPENDED`. Durable suspension across restarts therefore requires a StateStore (`Runtime` always
 injects one; default is in-memory).
 
