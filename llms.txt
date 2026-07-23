@@ -1,0 +1,45 @@
+# Civitas
+
+> Civitas is a production runtime for Python multi-agent systems: Erlang-style supervision trees
+> (automatic restart of crashed agents), transport-agnostic message passing (in-process → ZMQ →
+> NATS with unchanged agent code), durable state via checkpoints, human-in-the-loop suspension,
+> and zero-instrumentation OpenTelemetry tracing. It is infrastructure, not a framework: it does
+> not define how agents reason or call LLMs. Package: `pip install civitas` (Python ≥ 3.12).
+> Model providers and framework adapters live in the separate `civitas-contrib` package —
+> `civitas[anthropic]` extras do NOT exist.
+
+Key invariants (violations are the most common bugs): handlers answering `ask()` must
+`return self.reply(...)`; message payloads are JSON primitives only; never send from
+`on_start()`; only checkpointed `self.state` survives restarts; never block the event loop;
+route to agents by name, never by object reference; delivery is at-most-once (in-flight message
+lost on crash, queued messages survive); `ErrorAction.RETRY` re-runs the handler immediately in
+place (FIFO preserved — backoff via `asyncio.sleep` in `on_error`).
+
+## Primary references
+
+- [Coding-agent quick reference](https://civitas-io.github.io/python-civitas/agents-guide/): dense rules, decision tables, copy-paste patterns — start here
+- [Choosing your configuration](https://civitas-io.github.io/python-civitas/recipes/): when to use which restart strategy, transport, timeout, store, and security tier
+- [Messaging & delivery semantics](https://civitas-io.github.io/python-civitas/messaging/): send/ask/reply/broadcast, at-most-once contract, deadlock hazards, restart state contract
+- [Getting started](https://civitas-io.github.io/python-civitas/getting-started/): install → first supervised agent → topology YAML
+
+## Guides
+
+- [Core concepts](https://civitas-io.github.io/python-civitas/concepts/): AgentProcess, Supervisor, MessageBus, Transport
+- [Supervision](https://civitas-io.github.io/python-civitas/supervision/): strategies, budgets, backoff, escalation, dynamic spawning
+- [Streaming](https://civitas-io.github.io/python-civitas/streaming/): stream_reply/emit producer + stream() consumer, agent-to-agent
+- [GenServer](https://civitas-io.github.io/python-civitas/genserver/): OTP-style call/cast/info service processes
+- [Transports](https://civitas-io.github.io/python-civitas/transports/): in_process → ZMQ → NATS scaling ladder
+- [HTTP Gateway](https://civitas-io.github.io/python-civitas/gateway/): supervised ASGI edge, JWT/mTLS auth, WS/gRPC/SSE
+- [Topology YAML](https://civitas-io.github.io/python-civitas/topology/): full schema reference
+- [CLI](https://civitas-io.github.io/python-civitas/cli/): civitas run | topology | state | deploy
+- [Observability](https://civitas-io.github.io/python-civitas/observability/): automatic OTEL spans, exporters
+- [Plugins](https://civitas-io.github.io/python-civitas/plugins/): ModelProvider / ToolProvider / StateStore protocols
+- [MCP tools](https://civitas-io.github.io/python-civitas/mcp/): Model Context Protocol servers as agent tools
+- [Deployment](https://civitas-io.github.io/python-civitas/deployment/): single process → Docker Compose → distributed
+
+## Optional
+
+- [Architecture internals](https://civitas-io.github.io/python-civitas/architecture/)
+- [Security architecture](https://civitas-io.github.io/python-civitas/security/architecture/) and [threat model](https://civitas-io.github.io/python-civitas/security/threat-model/)
+- [FAQ](https://civitas-io.github.io/python-civitas/faq/): vs Temporal, vs LangGraph, GIL concerns
+- [Framework adapters](https://civitas-io.github.io/python-civitas/adapters/): LangGraph / OpenAI SDK (via civitas-contrib)

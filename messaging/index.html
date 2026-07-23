@@ -16,7 +16,7 @@
         <link rel="prev" href="../supervision/">
       
       
-        <link rel="next" href="../transports/">
+        <link rel="next" href="../streaming/">
       
       
         
@@ -294,6 +294,47 @@
   
   
   
+    <li class="md-tabs__item">
+      <a href="../agents-guide/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  For Coding Agents
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../security/architecture/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Security
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
     
     
       <li class="md-tabs__item">
@@ -529,6 +570,18 @@
       
         
       
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
     
     
     
@@ -592,6 +645,34 @@
     
   
     Core Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing Your Configuration
   
 
     
@@ -937,10 +1018,171 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#delivery-semantics-hazards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Delivery semantics &amp; hazards
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Delivery semantics &amp; hazards">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#delivery-is-at-most-once" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Delivery is at-most-once
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-restart-state-contract-v080" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The restart state contract (v0.8.0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#retry-semantics-in-place-ordered" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Retry semantics: in place, ordered
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-ask-cycle-deadlock" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The ask-cycle deadlock
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bounded-mailboxes-backpressure-can-deadlock-too" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bounded mailboxes: backpressure can deadlock too
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cooperative-scheduling-what-erlang-has-that-we-dont" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cooperative scheduling: what Erlang has that we don't
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#handle_timeout-what-it-can-and-cannot-catch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        handle_timeout: what it can and cannot catch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#liveness-vs-load-remote-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Liveness vs. load (remote agents)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../streaming/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Streaming
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../genserver/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GenServer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -981,6 +1223,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../gateway/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP Gateway
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../observability/" class="md-nav__link">
         
   
@@ -989,6 +1259,62 @@
     
   
     Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../evalloop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    EvalLoop
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Tools
   
 
     
@@ -1155,6 +1481,33 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../agents-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For Coding Agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
     
     
       
@@ -1179,10 +1532,163 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Security
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/threat-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Threat Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/enterprise-checklist/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Enterprise Checklist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
             
   
   
@@ -1200,8 +1706,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1309,10 +1815,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_3" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6_3" >
         
           
-          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_6_3" id="__nav_6_3_label" tabindex="0">
             
   
   
@@ -1330,8 +1836,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4_3">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_3">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1667,10 +2173,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
             
   
   
@@ -1688,8 +2194,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1844,10 +2350,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
         
           
-          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
             
   
   
@@ -1865,8 +2371,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2199,6 +2705,111 @@
       
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#delivery-semantics-hazards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Delivery semantics &amp; hazards
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Delivery semantics &amp; hazards">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#delivery-is-at-most-once" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Delivery is at-most-once
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-restart-state-contract-v080" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The restart state contract (v0.8.0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#retry-semantics-in-place-ordered" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Retry semantics: in place, ordered
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-ask-cycle-deadlock" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The ask-cycle deadlock
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bounded-mailboxes-backpressure-can-deadlock-too" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bounded mailboxes: backpressure can deadlock too
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cooperative-scheduling-what-erlang-has-that-we-dont" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cooperative scheduling: what Erlang has that we don't
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#handle_timeout-what-it-can-and-cannot-catch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        handle_timeout: what it can and cannot catch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#liveness-vs-load-remote-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Liveness vs. load (remote agents)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2588,6 +3199,93 @@
 </span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_start</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 </span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a>    <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="s2">&quot;coordinator&quot;</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;ready&quot;</span><span class="p">})</span>
 </span></code></pre></div>
+<h2 id="delivery-semantics-hazards">Delivery semantics &amp; hazards<a class="headerlink" href="#delivery-semantics-hazards" title="Permanent link">&para;</a></h2>
+<p>Everything in this section is a deliberate, documented property of the runtime. Knowing these
+before production saves you from discovering them there.</p>
+<h3 id="delivery-is-at-most-once">Delivery is at-most-once<a class="headerlink" href="#delivery-is-at-most-once" title="Permanent link">&para;</a></h3>
+<p><code>send()</code> is fire-and-forget: no delivery confirmation, no dead-letter queue, no automatic
+redelivery. The contract across failures:</p>
+<table>
+<thead>
+<tr>
+<th>Event</th>
+<th>Queued messages (in mailbox)</th>
+<th>In-flight message (being handled)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Crash + supervisor restart</td>
+<td><strong>Survive</strong> — the mailbox is retained</td>
+<td><strong>Lost</strong> — unless <code>on_error</code> returned <code>RETRY</code> before the crash</td>
+</tr>
+<tr>
+<td>Graceful stop</td>
+<td>Drained per <code>drain=</code> policy (dynamic children) or dropped</td>
+<td>Completed first</td>
+</tr>
+<tr>
+<td>Dynamic child teardown</td>
+<td>Request-reply messages get an <strong>error reply</strong> (callers fail fast); fire-and-forget dropped with a log line</td>
+<td>Lost</td>
+</tr>
+</tbody>
+</table>
+<p>If a message must not be lost, make its <em>effect</em> durable: checkpoint after processing, and design
+senders to re-send on missing replies (idempotency via your own message IDs).</p>
+<h3 id="the-restart-state-contract-v080">The restart state contract (v0.8.0)<a class="headerlink" href="#the-restart-state-contract-v080" title="Permanent link">&para;</a></h3>
+<p><strong>Only checkpointed state survives a restart.</strong> On every (re)start <code>self.state</code> is reset, then
+restored from the last <code>checkpoint()</code>. Un-checkpointed state — including whatever corruption
+caused the crash — dies with the old incarnation. Instance variables currently survive (the
+instance is reused; fresh-instance restart lands in v0.9) — treat them as undefined across
+restarts. The durable-suspension marker rides in the checkpoint, so suspended agents restart into
+<code>SUSPENDED</code>. Durable suspension across restarts therefore requires a StateStore (<code>Runtime</code> always
+injects one; default is in-memory).</p>
+<h3 id="retry-semantics-in-place-ordered">Retry semantics: in place, ordered<a class="headerlink" href="#retry-semantics-in-place-ordered" title="Permanent link">&para;</a></h3>
+<p><code>ErrorAction.RETRY</code> re-runs <code>handle()</code> with the same message <strong>immediately</strong> — no mailbox
+round-trip, so per-sender FIFO order holds even across transient failures. Consequences:</p>
+<ul>
+<li>Nothing else is processed between attempts (that <em>is</em> the ordering guarantee).</li>
+<li>Backoff belongs in your hook: <code>await asyncio.sleep(...)</code> inside <code>on_error()</code> before returning
+  <code>RETRY</code>. The agent is blocked while sleeping — bounded by <code>max_retries</code>.</li>
+<li>Need non-blocking deferral (e.g. a long rate-limit)? Return <code>SKIP</code> and re-send the work to
+  yourself — an <strong>explicit</strong> choice to reorder, instead of an accidental one.</li>
+</ul>
+<h3 id="the-ask-cycle-deadlock">The ask-cycle deadlock<a class="headerlink" href="#the-ask-cycle-deadlock" title="Permanent link">&para;</a></h3>
+<p>Agents process one message at a time, and <code>ask()</code> blocks the caller's loop. If A's handler asks B
+and B's handler (directly or transitively) asks A, <strong>both stall until a timeout crashes one side</strong>
+— A cannot answer B while awaiting B.</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>A.handle() ── ask ──▶ B.handle() ── ask ──▶ A   (queued behind A&#39;s blocked loop) ⚠
+</span></code></pre></div>
+<p>Mitigations, in order of preference: keep your <code>ask</code> call-graph <strong>acyclic</strong> (draw it); use
+<code>send()</code> + a reply message for back-channels instead of nested asks; set short <code>ask</code> timeouts on
+anything that could cycle so the failure is fast and visible.</p>
+<h3 id="bounded-mailboxes-backpressure-can-deadlock-too">Bounded mailboxes: backpressure can deadlock too<a class="headerlink" href="#bounded-mailboxes-backpressure-can-deadlock-too" title="Permanent link">&para;</a></h3>
+<p><code>send()</code> to a full mailbox <strong>blocks the sender</strong> until space frees — deliberate backpressure. A
+cycle of mutually-full mailboxes (A blocked sending to B, B blocked sending to A) deadlocks with
+no detection. Size mailboxes for your burst profile (<code>mailbox_size=</code>, default 1000), keep
+<code>handle()</code> fast relative to arrival rate, and prefer acyclic flow here too. Note the priority
+queue is small (100) and reserved for system traffic. A long-<code>SUSPENDED</code> agent buffers business
+messages until full, then back-propagates blocking to its senders — plan approval latency
+accordingly.</p>
+<h3 id="cooperative-scheduling-what-erlang-has-that-we-dont">Cooperative scheduling: what Erlang has that we don't<a class="headerlink" href="#cooperative-scheduling-what-erlang-has-that-we-dont" title="Permanent link">&para;</a></h3>
+<p>All agents share one event loop per process. One blocking call in <code>handle()</code> — <code>time.sleep()</code>,
+synchronous HTTP, a CPU-heavy loop — stalls <strong>every agent, supervisor, heartbeat ack, and gateway
+in that process</strong>. BEAM preempts; asyncio cannot. Rules: all I/O async; wrap unavoidable blocking
+work in <code>asyncio.to_thread()</code>; move CPU-bound agents to a Worker process (see
+<a href="../transports/">Transports</a>).</p>
+<h3 id="handle_timeout-what-it-can-and-cannot-catch"><code>handle_timeout</code>: what it can and cannot catch<a class="headerlink" href="#handle_timeout-what-it-can-and-cannot-catch" title="Permanent link">&para;</a></h3>
+<p>The opt-in watchdog (<code>AgentProcess(..., handle_timeout=N)</code> or <code>agent: {handle_timeout: N}</code> in
+YAML) converts a hung handler into a normal crash via <code>on_error()</code>. Limits: it fires only at
+<strong>await points</strong> — a <em>blocking</em> hang (previous section) never yields and is undetectable; and on
+expiry your handler is <strong>cancelled at its current await</strong>, so hold resources with <code>async with</code>.
+Choose N per agent: generously above your slowest legitimate path (LLM chains included), or leave
+it off for streaming agents.</p>
+<h3 id="liveness-vs-load-remote-agents">Liveness vs. load (remote agents)<a class="headerlink" href="#liveness-vs-load-remote-agents" title="Permanent link">&para;</a></h3>
+<p>Heartbeats ride the priority channel: a busy remote agent acks between messages, and a
+<code>SUSPENDED</code> agent acks while staying suspended. A single very long <code>handle()</code> still delays acks
+until the next loop boundary — bound it with <code>handle_timeout</code>, and keep heartbeat thresholds
+(<code>interval × missed</code>) above your slowest legitimate handler.</p>
 
 
 
