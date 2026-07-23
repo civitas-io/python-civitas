@@ -1002,12 +1002,11 @@ Owner column: `core` = python-civitas, else the target repo.
 > [v0.8.1](#v081--verification-perimeter-released). One strict-xfail tracker remains in
 > `tests/unit/test_actor_model_gaps.py` (instance-variable reset → v0.9 fresh-instance restart).
 
-### v0.9.0 — Supervision Endgame (Proposed next)
+### v0.9.0 — Supervision Endgame (Accepted — design ratified, plan ready)
 
-The three coupled items below are the natural v0.9: they share the Runtime↔Supervisor re-wiring,
-finish what the 2026-07 architecture review started, flip the last xfail tracker, and fully
-unblock the Medicus track. **Requires the full design ceremony** (design doc → review → plan →
-implementation), per the v0.8.0 §2.1 ratification.
+**Design:** [`supervision-endgame.md`](design/supervision-endgame.md) — ✅ ACCEPTED 2026-07-24
+(Q1–Q4 ratified). **Plan:** `.sisyphus/plans/supervision-endgame-v0.9.0.md` (E1–E5, cut line
+E1–E3). Flips the last xfail tracker; fully unblocks the Medicus track.
 
 | Item | Priority | Source |
 |------|----------|--------|

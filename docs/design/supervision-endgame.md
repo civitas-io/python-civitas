@@ -1,6 +1,9 @@
 # Design: Supervision Endgame (v0.9.0)
 
-**Status:** DRAFT — for maintainer review (full ceremony per v0.8.0 §2.1 ratification: design → review → sign-off → plan → implementation).
+**Status:** ✅ ACCEPTED 2026-07-24 — maintainer ratified Q1–Q4 (§9: Q1 accept staleness, no
+warning · Q2 one-minor-version skew tolerance · Q3 hard-reject supervisor suspension · Q4 P4 in
+v0.9.0 with the P1–P3 cut line). Implementation plan:
+`.sisyphus/plans/supervision-endgame-v0.9.0.md`.
 **Author:** design session 2026-07-24
 **Scope:** D6 (supervisor unification), D1a (fresh-instance restart), D5-structural (per-process liveness), fold-in decisions B4 + B3.
 **Parents:** [`supervision-hardening.md`](supervision-hardening.md) (findings + v0.8.0 groundwork), [`dynamic-spawning.md`](dynamic-spawning.md), [`durable-suspension.md`](durable-suspension.md).
