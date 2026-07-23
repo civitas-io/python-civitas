@@ -10,11 +10,27 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+import pytest
 import yaml
 from typer.testing import CliRunner
 
 from civitas.cli import app
-from civitas.plugins.sqlite_store import SQLiteStateStore
+
+# `civitas state` operates on SQLite databases via the contrib store (cli/state.py
+# lazy-imports it), so the state tests genuinely require civitas-contrib (#40).
+# Everything else in this module is core-only and runs unconditionally.
+try:
+    from civitas_contrib.plugins.sqlite_store import SQLiteStateStore
+
+    _HAS_CONTRIB_SQLITE = True
+except ImportError:
+    SQLiteStateStore = None  # type: ignore[assignment, misc]
+    _HAS_CONTRIB_SQLITE = False
+
+requires_sqlite = pytest.mark.skipif(
+    not _HAS_CONTRIB_SQLITE,
+    reason="requires civitas-contrib (sqlite state store used by `civitas state`)",
+)
 
 runner = CliRunner()
 
@@ -127,6 +143,7 @@ def test_state_list_no_db():
     assert result.exit_code == 0
 
 
+@requires_sqlite
 def test_state_list_shows_agents():
     """civitas state list shows agents in a Rich table."""
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
@@ -147,6 +164,7 @@ def test_state_list_shows_agents():
         os.unlink(db_path)
 
 
+@requires_sqlite
 def test_state_clear_specific_agent():
     """civitas state clear <name> removes state for that agent."""
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
@@ -171,6 +189,7 @@ def test_state_clear_specific_agent():
         os.unlink(db_path)
 
 
+@requires_sqlite
 def test_state_clear_all():
     """civitas state clear (no name) removes all agent states."""
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
@@ -192,6 +211,7 @@ def test_state_clear_all():
         os.unlink(db_path)
 
 
+@requires_sqlite
 def test_state_clear_nonexistent_agent():
     """civitas state clear for unknown agent shows message."""
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:

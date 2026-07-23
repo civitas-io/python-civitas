@@ -11,10 +11,19 @@ import tempfile
 
 import pytest
 
+# The SQLite state store moved to civitas-contrib in the core/contrib split (#40):
+# this module integration-tests persistence against it and skips cleanly without
+# contrib (InMemory checkpoint behavior is unit-covered in tests/unit).
+pytest.importorskip(
+    "civitas_contrib.plugins.sqlite_store",
+    reason="civitas-contrib not installed — skipping SQLite state-persistence integration tests",
+)
+
+from civitas_contrib.plugins.sqlite_store import SQLiteStateStore
+
 from civitas import AgentProcess, Runtime, Supervisor
 from civitas.messages import Message
 from civitas.plugins.loader import load_plugin
-from civitas.plugins.sqlite_store import SQLiteStateStore
 from civitas.plugins.state import InMemoryStateStore
 
 # ---------------------------------------------------------------------------
