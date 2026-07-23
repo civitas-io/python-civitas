@@ -54,3 +54,15 @@ class Transport(Protocol):
         going through the Registry.
         """
         ...
+
+    async def wait_subscribed(self, address: str, timeout: float = 2.0) -> None:
+        """Block until the subscription for ``address`` is effective for peers.
+
+        Transports where subscription takes effect synchronously (in-process
+        dict insert) or broker-side (NATS) implement this as a no-op / flush.
+        Transports with asynchronous subscription propagation to publisher
+        sockets (ZMQ PUB/SUB) must confirm propagation — announcing a
+        freshly-subscribed address before its subscription reaches peer PUB
+        sockets makes peers publish into a void (#41).
+        """
+        ...

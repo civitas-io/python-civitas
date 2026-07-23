@@ -85,3 +85,6 @@ class InProcessTransport:
     def has_reply_address(self, address: str) -> bool:
         """Return True if address is an active ephemeral reply queue."""
         return address in self._reply_queues
+
+    async def wait_subscribed(self, address: str, timeout: float = 2.0) -> None:
+        """No-op — in-process subscription is a dict insert, effective immediately."""

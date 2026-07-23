@@ -143,6 +143,14 @@ class ZMQTransport:
         self._reply_queues: dict[str, asyncio.Queue[bytes]] = {}
         self._receiver_task: asyncio.Task[None] | None = None
         self._started = False
+        # Stable per-transport reply-topic prefix (#41): ONE prefix subscription
+        # at start() — covered by wait_ready — instead of a fresh subscription per
+        # request. A per-request subscription races its own first use: the
+        # replier's PUB socket drops the reply unless the ephemeral topic's
+        # subscription has propagated (SUB → XPUB → XSUB → peer PUBs, 5–25 ms),
+        # and replies typically arrive in ~1 ms. ZMQ prefix matching delivers
+        # every _reply.<iid>.<req> topic to us with zero per-request churn.
+        self._reply_prefix = f"_reply.{_uuid7()}."
 
     async def start(self) -> None:
         """Initialize sockets and connect to the proxy."""
@@ -176,6 +184,10 @@ class ZMQTransport:
 
         self._pub.connect(self._pub_addr)
         self._sub.connect(self._sub_addr)
+
+        # One prefix subscription covers every future reply topic (#41); its
+        # propagation is absorbed by the startup wait_ready(), not by requests.
+        self._sub.subscribe(self._reply_prefix.encode())
 
         # Start background receiver
         self._receiver_task = asyncio.create_task(self._receiver_loop())
@@ -253,13 +265,14 @@ class ZMQTransport:
         Creates a temporary reply topic, subscribes to it, injects reply_to
         into the message, publishes the request, and awaits the reply.
         """
-        reply_address = f"_reply.{_uuid7()}"
+        # Rides the stable per-transport prefix subscription made in start()
+        # (#41) — no per-request subscribe, so the replier's PUB already knows
+        # the prefix and the reply cannot be dropped by subscription lag.
+        reply_address = f"{self._reply_prefix}{_uuid7()}"
         reply_queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize=1)
 
-        # Subscribe to the reply topic
         if self._sub is None:
             raise RuntimeError("ZMQTransport not started")
-        self._sub.subscribe(reply_address.encode() + _TOPIC_SEP)
         self._reply_queues[reply_address] = reply_queue
 
         try:
@@ -280,12 +293,57 @@ class ZMQTransport:
             return reply_data
         finally:
             self._reply_queues.pop(reply_address, None)
-            if self._sub is not None:
-                self._sub.unsubscribe(reply_address.encode() + _TOPIC_SEP)
 
     def has_reply_address(self, address: str) -> bool:
         """Return True if address is an active ephemeral reply queue."""
         return address in self._reply_queues
+
+    async def wait_subscribed(self, address: str, timeout: float = 2.0) -> None:
+        """Block until the subscription for ``address`` has propagated to PUB peers.
+
+        ZMQ PUB sockets silently drop messages for topics no subscriber is known
+        for, and subscription propagation (SUB → XPUB → XSUB → every PUB) is
+        asynchronous — measured at ~5–10 ms on Linux and ~20–25 ms on macOS over
+        IPC (#41). Announcing a freshly-subscribed address before propagation
+        completes makes peers publish into a void.
+
+        Mechanism: subscribe a throwaway probe topic on the SAME SUB socket
+        *after* ``address`` was subscribed — same pipe, FIFO, so the probe's
+        subscription cannot overtake it — then self-publish to the probe topic
+        until one frame loops back through the proxy. When the probe returns,
+        the ``address`` subscription has propagated at least as far as this
+        process's own PUB pipe; peer PUB pipes receive the same XSUB broadcast
+        in parallel (residual window: pipe jitter, sub-millisecond — the full
+        at-least-once route-establishment guarantee is deferred; see
+        docs/design/cross-process-spawn.md addendum).
+
+        Raises:
+            TimeoutError: if the probe does not loop back within ``timeout``
+                (proxy down or SUB pipe stalled) — callers should log and
+                degrade rather than fail the spawn.
+        """
+        if self._sub is None or self._pub is None:
+            raise RuntimeError("ZMQTransport not started")
+        if address not in self._handlers:
+            raise ValueError(f"wait_subscribed({address!r}): address is not subscribed")
+
+        probe_topic = f"_probe.{_uuid7()}"
+        probe_queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize=1)
+        self._sub.subscribe(probe_topic.encode() + _TOPIC_SEP)
+        self._reply_queues[probe_topic] = probe_queue
+        try:
+            async with asyncio.timeout(timeout):
+                while True:
+                    await self._pub.send_multipart([probe_topic.encode() + _TOPIC_SEP, b""])
+                    try:
+                        async with asyncio.timeout(0.02):
+                            await probe_queue.get()
+                        return
+                    except TimeoutError:
+                        continue  # not propagated yet — probe again
+        finally:
+            self._reply_queues.pop(probe_topic, None)
+            self._sub.unsubscribe(probe_topic.encode() + _TOPIC_SEP)
 
     async def _receiver_loop(self) -> None:
         """Background task: receive from SUB socket and dispatch to handlers."""

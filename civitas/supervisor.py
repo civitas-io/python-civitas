@@ -1137,9 +1137,30 @@ class DynamicSupervisor(AgentProcess):
         pubkey: str,
         epoch: int,
     ) -> None:
-        """Publish a signed ``_agency.register`` so peers can route to the child."""
+        """Publish a signed ``_agency.register`` so peers can route to the child.
+
+        Subscription-settle barrier first (#41): the announcement rides a
+        long-established fast channel and systematically outruns the child's
+        own topic-subscription propagation (SUB → XPUB → XSUB → peer PUBs,
+        measured 5–25 ms) — without the barrier, a peer that asks the child
+        immediately after the announcement publishes into a void and times
+        out. The barrier makes D13's 'announce-after-start' guarantee mean
+        "routable", not merely "locally subscribed". A barrier failure only
+        logs — a late announcement beats no announcement.
+        """
         if self._bus is None:
             return
+        waiter = getattr(self._bus._transport, "wait_subscribed", None)
+        if waiter is not None:
+            try:
+                await waiter(child_name)
+            except Exception:
+                logger.warning(
+                    "[%s] subscription-settle barrier for %r failed; announcing anyway "
+                    "(first messages to the child may be dropped)",
+                    self.name,
+                    child_name,
+                )
         msg = Message(
             type="_agency.register",
             sender=self.name,

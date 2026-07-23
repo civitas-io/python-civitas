@@ -11,6 +11,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+
+- **Cross-process spawn: first messages to a freshly-spawned remote child are no longer lost** ([#41](https://github.com/civitas-io/python-civitas/issues/41)) — two ZMQ subscription-propagation races, present since R6 (v0.7.0): the cluster-wide announcement systematically outran the child's topic-subscription propagation to peer PUB sockets (which silently drop unknown topics), so `spawn()`-then-`ask()` timed out — deterministically on macOS (~20 ms window), coin-flip on Linux (~5 ms); and per-request ephemeral reply topics raced their own first use, dropping fast responders' replies inside the responder's PUB socket. Fixed with (1) a **subscription-settle barrier**: `DynamicSupervisor` confirms the child's topic has propagated (probe loopback, `ZMQTransport.wait_subscribed()`) before announcing it — "announced" now means *routable*; and (2) a **stable per-transport reply-topic prefix** subscribed once at startup, eliminating per-request subscription churn and the reply race entirely. Verified 5/5 on macOS and Linux (was 0/5); E2E runtime dropped from 5.8 s timeout to 0.76 s. Root-cause analysis: `docs/design/cross-process-spawn.md` addendum.
+
 ## [0.8.0] — 2026-07-23
 
 ### Changed

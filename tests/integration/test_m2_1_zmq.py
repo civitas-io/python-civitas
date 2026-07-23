@@ -618,3 +618,94 @@ async def test_agent_code_identical_to_phase1(zmq_addrs):
 
     # Identical behavior
     assert r_inproc.payload == r_zmq.payload
+
+
+# ---------------------------------------------------------------------------
+# #41 — subscription-propagation races (v0.8.1 V3 regressions)
+# ---------------------------------------------------------------------------
+
+
+async def test_wait_subscribed_barrier_makes_fresh_topic_routable(zmq_addrs):
+    """A single publish immediately after wait_subscribed() must be delivered.
+
+    Without the barrier, a freshly-subscribed topic's first messages are
+    silently dropped by the sender's PUB socket until the subscription
+    propagates (SUB → XPUB → XSUB → peer PUBs; measured 5–25 ms, #41).
+    """
+    frontend, backend = zmq_addrs
+    serializer = MsgpackSerializer()
+    a = ZMQTransport(serializer, pub_addr=frontend, sub_addr=backend, start_proxy=True)
+    b = ZMQTransport(serializer, pub_addr=frontend, sub_addr=backend)
+    await a.start()
+    await b.start()
+    await a.wait_ready()
+    await b.wait_ready()
+    try:
+        got: list[bytes] = []
+
+        async def handler(data: bytes) -> None:
+            got.append(data)
+
+        # Deliberately AFTER wait_ready — a fresh, late subscription.
+        await b.subscribe("fresh.topic", handler)
+        await b.wait_subscribed("fresh.topic")
+
+        await a.publish("fresh.topic", b"first-and-only")
+        for _ in range(100):
+            if got:
+                break
+            await asyncio.sleep(0.01)
+        assert got == [b"first-and-only"], "first publish after barrier was dropped"
+    finally:
+        await b.stop()
+        await a.stop()
+
+
+async def test_request_reply_with_instant_responder(zmq_addrs):
+    """An instantly-replying responder must not lose the reply (#41 leg 2).
+
+    Replies ride a stable per-transport prefix subscription made at start()
+    (its propagation absorbed by wait_ready), not a per-request subscription
+    that races its own first use — a ~1 ms reply used to lose to the ~5–25 ms
+    propagation window and vanish inside the replier's PUB socket.
+    """
+    frontend, backend = zmq_addrs
+    serializer = MsgpackSerializer()
+    a = ZMQTransport(serializer, pub_addr=frontend, sub_addr=backend, start_proxy=True)
+    b = ZMQTransport(serializer, pub_addr=frontend, sub_addr=backend)
+    await a.start()
+    await b.start()
+
+    async def instant_echo(data: bytes) -> None:
+        msg = serializer.deserialize(data)
+        reply = Message(
+            type="reply",
+            sender="echo",
+            recipient=msg.reply_to,
+            payload={"echoed": True},
+            correlation_id=msg.correlation_id,
+        )
+        await b.publish(msg.reply_to, serializer.serialize(reply))
+
+    await b.subscribe("echo", instant_echo)
+    await a.wait_ready()
+    await b.wait_ready()
+    try:
+        request = Message(type="q", sender="a", recipient="echo", payload={}, correlation_id="c1")
+        reply_data = await a.request("echo", serializer.serialize(request), timeout=3.0)
+        assert serializer.deserialize(reply_data).payload == {"echoed": True}
+    finally:
+        await b.stop()
+        await a.stop()
+
+
+async def test_wait_subscribed_rejects_unsubscribed_address(zmq_addrs):
+    """Calling the barrier for a topic that was never subscribed is a bug."""
+    frontend, backend = zmq_addrs
+    a = ZMQTransport(MsgpackSerializer(), pub_addr=frontend, sub_addr=backend, start_proxy=True)
+    await a.start()
+    try:
+        with pytest.raises(ValueError):
+            await a.wait_subscribed("never.subscribed")
+    finally:
+        await a.stop()
