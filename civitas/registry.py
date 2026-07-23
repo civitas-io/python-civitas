@@ -322,6 +322,29 @@ class LocalRegistry:
             task.add_done_callback(_log_listener_error)
 
 
+def reregister_preserving(registry: Registry, name: str) -> None:
+    """Deregister and re-register ``name``, preserving its full RoutingEntry (H3, #29).
+
+    Restart paths must not re-derive registration data from the agent object:
+    YAML ``capabilities:`` overrides live only in the registry entry (Runtime
+    applied them at startup), so the snapshot is the single source of truth.
+    Falls back to a bare registration if no entry exists — a restart must never
+    fail on a registry miss.
+    """
+    entry = registry.lookup(name)
+    registry.deregister(name)
+    if entry is not None:
+        registry.register(
+            name,
+            address=entry.address,
+            is_local=entry.is_local,
+            capabilities=list(entry.capabilities),
+            capability_metadata=dict(entry.capability_metadata),
+        )
+    else:
+        registry.register(name)
+
+
 def _log_listener_error(task: asyncio.Task[None]) -> None:
     if not task.cancelled() and task.exception() is not None:
         logger.warning("Registry listener raised an exception: %s", task.exception())

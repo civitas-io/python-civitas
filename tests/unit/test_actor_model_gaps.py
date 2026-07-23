@@ -1,13 +1,14 @@
-"""Regression tests tracking known actor-model gaps in the supervision core.
+"""Regression tests tracking actor-model gaps in the supervision core.
 
-Each test asserts the *intended* (OTP-faithful) behavior and is marked
-``xfail(strict=True)`` against the tracked GitHub issue. The suite therefore
-stays green while the bugs exist, and a fix flips the test to XPASS — failing
-the run and forcing the marker's removal, so the tracking can never go stale.
+Fixed gaps keep their tests here as plain regressions (v0.8.0 PR1 flipped
+#28/#29/#30). Remaining gaps stay ``xfail(strict=True)``: the suite is green
+while the bug exists, and a fix flips the test to XPASS — failing the run and
+forcing the marker's removal, so the tracking can never go stale.
 
 Findings catalog: docs/design/supervision-hardening.md
-Issues: #28 (A2), #29 (A3), #30 (B2), #31 (A6), plus A1 (restart semantics,
-design-level — no single issue; see the design doc).
+Still open here: #31 (A6, heartbeat priority — PR2) and A1 (restart
+semantics — PR3 flips the state test; the instance-var test waits for the
+v0.9 fresh-instance restart).
 """
 
 from __future__ import annotations
@@ -128,11 +129,6 @@ async def test_restart_resets_uncheckpointed_state():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    reason="#28: _restart_child() returns early for Supervisor children — "
-    "escalated subtree is never restarted under ONE_FOR_ONE",
-    strict=True,
-)
 async def test_escalation_restarts_subtree_under_one_for_one():
     worker = CrashOnCommand("worker")
     # max_restarts=0: the first crash immediately exhausts the child budget
@@ -149,15 +145,19 @@ async def test_escalation_restarts_subtree_under_one_for_one():
     await runtime.start()
     try:
         await runtime.send("worker", {"cmd": "boom"})
-        # First wait until child_sup has observed the crash (and escalated) —
-        # only then is "worker is RUNNING again" meaningful.
-        assert await _wait_for(lambda: child_sup._restart_counts.get("worker", 0) >= 1)
-        assert await _wait_for(lambda: worker.status == ProcessStatus.CRASHED, timeout=1.0)
+        # Wait until ROOT has observed the escalation (root's counter is never
+        # cleared; child_sup's own counters are wiped by the H1 subtree restart,
+        # so waiting on those would race the restart).
+        assert await _wait_for(lambda: root._restart_counts.get("child_sup", 0) >= 1)
         # OTP semantics: root restarts the escalated child_sup, which restarts
         # its children — the worker must come back RUNNING.
         assert await _wait_for(lambda: worker.status == ProcessStatus.RUNNING), (
             f"escalated subtree was never restarted — worker stayed {worker.status.value}"
         )
+        # Fresh incarnation, fresh budget (H1): without the clear, the next
+        # crash would instantly re-escalate on the still-exhausted window.
+        assert len(child_sup._restart_timestamps) == 0
+        assert child_sup._restart_counts == {}
     finally:
         await runtime.stop()
 
@@ -167,11 +167,6 @@ async def test_escalation_restarts_subtree_under_one_for_one():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    reason="#29: _restart_child() re-registers bare — capabilities and "
-    "capability_metadata are dropped after the first crash-restart",
-    strict=True,
-)
 async def test_capabilities_survive_restart():
     worker = CrashOnCommand("cap_worker")
     root = Supervisor("root", children=[worker], max_restarts=3, backoff_base=0.01)
@@ -200,11 +195,6 @@ async def test_capabilities_survive_restart():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    reason="#30: crash-handler task exceptions are never retrieved — a failed "
-    "restart leaves the child dead with no log line",
-    strict=True,
-)
 async def test_failed_restart_is_surfaced(caplog):
     worker = CrashOnCommand("fragile")
     root = Supervisor("root", children=[worker], max_restarts=3, backoff_base=0.01)
@@ -237,6 +227,98 @@ async def test_failed_restart_is_surfaced(caplog):
         assert surfaced, "restart failure was swallowed silently — child dead, no log"
     finally:
         await runtime.stop()
+
+
+# ---------------------------------------------------------------------------
+# H2 (#30) — crash-queue serialization, staleness, and shutdown properties
+# ---------------------------------------------------------------------------
+
+
+class CountingCrasher(AgentProcess):
+    """Counts on_start() invocations per name in a class-level dict."""
+
+    starts: dict[str, int] = {}
+
+    async def on_start(self) -> None:
+        type(self).starts[self.name] = type(self).starts.get(self.name, 0) + 1
+
+    async def handle(self, message: Message) -> Message | None:
+        if message.payload.get("cmd") == "boom":
+            raise RuntimeError("boom")
+        return self.reply({"ok": True})
+
+
+async def test_simultaneous_crash_events_one_restart_cycle():
+    """Two crash events for the same ONE_FOR_ALL burst → exactly one restart
+    cycle: the second event is stale (its incarnation task was already replaced)
+    and must be skipped — the OTP EXIT-pid-matching analog."""
+    CountingCrasher.starts = {}
+    a = CountingCrasher("cc_a")
+    b = CountingCrasher("cc_b")
+    root = Supervisor(
+        "root", children=[a, b], strategy="ONE_FOR_ALL", max_restarts=5, backoff_base=0.01
+    )
+    runtime = Runtime(supervisor=root)
+    await runtime.start()
+    try:
+        assert CountingCrasher.starts == {"cc_a": 1, "cc_b": 1}
+        # Enqueue both events in the same tick, before the drain task wakes —
+        # deterministically modelling "both children crashed simultaneously".
+        exc = RuntimeError("burst")
+        root._crash_queue.put_nowait(("cc_a", exc, root._child_tasks["cc_a"]))
+        root._crash_queue.put_nowait(("cc_b", exc, root._child_tasks["cc_b"]))
+
+        assert await _wait_for(lambda: CountingCrasher.starts.get("cc_a", 0) >= 2)
+        await asyncio.sleep(0.1)  # allow a (buggy) second cycle to happen
+        # Exactly one ONE_FOR_ALL cycle: initial start + one restart each.
+        assert CountingCrasher.starts == {"cc_a": 2, "cc_b": 2}
+        assert a.status == ProcessStatus.RUNNING
+        assert b.status == ProcessStatus.RUNNING
+    finally:
+        await runtime.stop()
+
+
+async def test_two_independent_crashes_both_recover():
+    """Serialization must not lose events: two ONE_FOR_ONE crashes queued
+    back-to-back are both processed — both children recover."""
+    a = CrashOnCommand("ind_a")
+    b = CrashOnCommand("ind_b")
+    root = Supervisor("root", children=[a, b], max_restarts=5, backoff_base=0.01)
+    runtime = Runtime(supervisor=root)
+    await runtime.start()
+    try:
+        await runtime.send("ind_a", {"cmd": "boom"})
+        await runtime.send("ind_b", {"cmd": "boom"})
+        assert await _wait_for(
+            lambda: (
+                root._restart_counts.get("ind_a", 0) >= 1
+                and root._restart_counts.get("ind_b", 0) >= 1
+            )
+        )
+        assert await _wait_for(
+            lambda: a.status == ProcessStatus.RUNNING and b.status == ProcessStatus.RUNNING
+        )
+    finally:
+        await runtime.stop()
+
+
+async def test_stop_during_crash_drain_no_zombie():
+    """stop() during a pending restart (backoff sleep) must not resurrect the
+    child afterwards, and must tear the drain task down cleanly."""
+    worker = CrashOnCommand("zombie")
+    root = Supervisor("root", children=[worker], max_restarts=5, backoff_base=0.5)
+    runtime = Runtime(supervisor=root)
+    await runtime.start()
+    try:
+        await runtime.send("zombie", {"cmd": "boom"})
+        # Crash observed (count bumped before the 0.5 s backoff sleep) — the
+        # drain task is now mid-restart.
+        assert await _wait_for(lambda: root._restart_counts.get("zombie", 0) >= 1)
+    finally:
+        await runtime.stop()
+
+    assert worker.status != ProcessStatus.RUNNING, "child resurrected after stop()"
+    assert root._crash_drain_task is None
 
 
 # ---------------------------------------------------------------------------

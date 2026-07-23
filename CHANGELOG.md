@@ -11,6 +11,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+
+- **Supervisor escalation now restarts the escalated subtree** ([#28](https://github.com/civitas-io/python-civitas/issues/28)) — under `ONE_FOR_ONE`, a child supervisor that exhausted its restart budget escalated to its parent, which then silently restarted **nothing**: the entire subtree stayed dead while the system reported normal operation. `_restart_child` now stops the escalated supervisor, clears its restart budget (a fresh incarnation gets a fresh intensity window — previously the exhausted window survived and any later crash instantly re-escalated), and starts it again.
+- **Crash handling is serialized and failed restarts are loud** ([#30](https://github.com/civitas-io/python-civitas/issues/30)) — crash events now flow through one queue per supervisor, drained strictly sequentially (the OTP model). This removes the concurrent-restart races (double `ONE_FOR_ALL` cycles, registry collisions) and the window where crashes arriving during a nested stop/start were dropped. A restart that itself fails is no longer silently swallowed: it is logged at ERROR and escalated to the parent supervisor (or logged as terminal at the root). Stale crash events for an already-replaced child incarnation are skipped (the OTP EXIT-pid-matching analog). Escalation hands off to the parent's crash queue instead of calling into the parent inline.
+- **Registration survives crash-restarts intact** ([#29](https://github.com/civitas-io/python-civitas/issues/29)) — every restart path re-registered agents bare, silently dropping `capabilities`, `capability_metadata`, and the address (including YAML `capabilities:` overrides). `send_capable()` / `find_by_capability()` stopped finding an agent after its first crash-restart. All Supervisor restart paths and `Worker._on_restart_command` now snapshot the full `RoutingEntry` and re-register from it.
+
 ## [0.7.4] — 2026-07-21
 
 ### Security

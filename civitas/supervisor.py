@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 from civitas.errors import ConfigurationError
 from civitas.messages import Message, _new_span_id, _uuid7
 from civitas.process import DYNAMIC_SUPERVISOR_CAPABILITY, AgentProcess, ProcessStatus
+from civitas.registry import reregister_preserving
 from civitas.security.identity import AgentIdentity
 from civitas.security.signing import SigningSerializer
 from civitas.transport.inprocess import InProcessTransport
@@ -88,7 +89,18 @@ class Supervisor:
         self._children_by_name: dict[str, AgentProcess | Supervisor] = {  # F03-11: O(1) lookup
             c.name: c for c in self.children
         }
-        self._pending_crash_tasks: set[asyncio.Task[None]] = set()  # F03-4: track handlers
+        # H2 (#30): crash events are queued and processed strictly sequentially by
+        # one drain task per supervisor — OTP supervisors handle EXIT signals one at
+        # a time. The queue is unbounded on purpose: a bounded queue would
+        # reintroduce a silent crash-drop path, the exact bug class this removes.
+        # Items: (child_name, exception, task-at-crash-time | None). The task is the
+        # child's incarnation marker — a queued event whose task is no longer the
+        # child's current task is stale (the child was already restarted by an
+        # earlier cycle) and is skipped, mirroring OTP's EXIT-pid matching.
+        self._crash_queue: asyncio.Queue[tuple[str, Exception, asyncio.Task[None] | None]] = (
+            asyncio.Queue()
+        )
+        self._crash_drain_task: asyncio.Task[None] | None = None
         self._running = False
         self._parent: Supervisor | None = None
         self._crash_callbacks: list[Callable[[str, Exception], Awaitable[None]]] = []
@@ -112,6 +124,12 @@ class Supervisor:
         """Start all children and begin monitoring them."""
         self._running = True
 
+        # Start (or restart, after an H1 subtree restart) the crash drain task.
+        if self._crash_drain_task is None or self._crash_drain_task.done():
+            self._crash_drain_task = asyncio.create_task(
+                self._drain_crashes(), name=f"{self.name}-crash-drain"
+            )
+
         # Set parent references for child supervisors
         for child in self.children:
             if isinstance(child, Supervisor):
@@ -131,11 +149,17 @@ class Supervisor:
         """Stop all children gracefully."""
         self._running = False
 
-        # Cancel pending crash handlers before tearing down children (F03-4)
-        for t in list(self._pending_crash_tasks):
-            t.cancel()
-        if self._pending_crash_tasks:
-            await asyncio.gather(*self._pending_crash_tasks, return_exceptions=True)
+        # Cancel the crash drain BEFORE tearing down children so a restart that is
+        # mid-flight (e.g. sleeping in backoff) cannot resurrect a child after this
+        # supervisor has stopped. Queued events survive in the queue; a later
+        # start() resumes draining (stale events are skipped by incarnation check).
+        if self._crash_drain_task is not None:
+            self._crash_drain_task.cancel()
+            try:
+                await self._crash_drain_task
+            except asyncio.CancelledError:
+                pass
+            self._crash_drain_task = None
 
         await self._stop_heartbeat_monitor()
         for child in reversed(self.children):
@@ -167,20 +191,52 @@ class Supervisor:
             agent._task.add_done_callback(_make_callback(agent.name))
 
     def _on_child_done(self, name: str, task: asyncio.Task[None]) -> None:
-        """Callback when a child task completes (crash or normal exit)."""
-        if not self._running:
-            return
+        """Callback when a child task completes (crash or normal exit).
+
+        Enqueues unconditionally — no ``_running`` check here (H2). Crashes that
+        land while this supervisor is being stopped/restarted by its parent wait
+        in the queue instead of being dropped; the drain loop decides their fate
+        (stale-incarnation skip, or discard after a final stop).
+        """
         if task.cancelled():
             return
         exc = task.exception()
         if exc is not None:
-            t = asyncio.create_task(
-                self._handle_crash(
-                    name, exc if isinstance(exc, Exception) else RuntimeError(str(exc))
-                )
-            )  # F03-4
-            self._pending_crash_tasks.add(t)
-            t.add_done_callback(self._pending_crash_tasks.discard)
+            self._crash_queue.put_nowait(
+                (name, exc if isinstance(exc, Exception) else RuntimeError(str(exc)), task)
+            )
+
+    async def _drain_crashes(self) -> None:
+        """Process crash events strictly sequentially (H2, #30).
+
+        Serialization removes the concurrent-restart races by construction; the
+        try/except makes a *failed restart* loud and escalates it — a supervisor
+        that cannot restart its child is itself failing.
+        """
+        while True:
+            name, exc, task = await self._crash_queue.get()
+            if not self._running:
+                continue  # final-stop window — discard; task is about to be cancelled
+            # Stale incarnation (OTP EXIT-pid analog): an earlier cycle (e.g.
+            # ONE_FOR_ALL from a sibling's simultaneous crash) already replaced
+            # this child's task — the failure was handled; skip.
+            if task is not None and self._child_tasks.get(name) is not task:
+                continue
+            try:
+                await self._handle_crash(name, exc)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("[%s] restart of child %r failed — escalating", self.name, name)
+                if self._parent is not None:
+                    self._parent._crash_queue.put_nowait((self.name, exc, None))
+                else:
+                    logger.error(
+                        "[%s] child %r is DOWN and could not be restarted "
+                        "(top-level supervisor; no parent to escalate to)",
+                        self.name,
+                        name,
+                    )
 
     # ------------------------------------------------------------------
     # Remote child / heartbeat support
@@ -335,22 +391,32 @@ class Supervisor:
             await self._restart_rest_for_one(name)
 
     async def _restart_child(self, name: str) -> None:
-        """Restart a single child by name (local or remote)."""
+        """Restart a single child by name (local agent, child supervisor, or remote)."""
         # Remote child — send restart command via message bus
         if name in self._remote_children:
             await self._restart_remote_child(name)
             return
 
-        agent = self._find_child(name)
-        if agent is None or isinstance(agent, Supervisor):
+        child = self._find_child(name)
+        if child is None:
+            return
+
+        # H1 (#28): an escalated child supervisor is restarted as a subtree —
+        # stop (idempotent for already-dead children), clear its budget (a fresh
+        # incarnation gets a fresh restart-intensity window, the OTP rule; without
+        # this any later crash instantly re-escalates), then start.
+        if isinstance(child, Supervisor):
+            await child.stop()
+            child._restart_timestamps.clear()
+            child._restart_counts.clear()
+            await child.start()
             return
 
         # Re-initialize the agent
-        agent._status = ProcessStatus.INITIALIZING
+        child._status = ProcessStatus.INITIALIZING
         if self._registry is not None:
-            self._registry.deregister(name)
-            self._registry.register(name)
-        await self._start_child(agent)
+            reregister_preserving(self._registry, name)
+        await self._start_child(child)
 
     async def _restart_remote_child(self, name: str) -> None:
         """Send a restart command to a remote worker via ZMQ."""
@@ -380,12 +446,13 @@ class Supervisor:
         # Restart all
         for child in self.children:
             if isinstance(child, Supervisor):
+                child._restart_timestamps.clear()  # fresh incarnation, fresh budget (H1)
+                child._restart_counts.clear()
                 await child.start()
             else:
                 child._status = ProcessStatus.INITIALIZING
                 if self._registry is not None:
-                    self._registry.deregister(child.name)
-                    self._registry.register(child.name)
+                    reregister_preserving(self._registry, child.name)
                 await self._start_child(child)
 
     async def _restart_rest_for_one(self, name: str) -> None:
@@ -414,12 +481,13 @@ class Supervisor:
         # Restart in order
         for child in to_restart:
             if isinstance(child, Supervisor):
+                child._restart_timestamps.clear()  # fresh incarnation, fresh budget (H1)
+                child._restart_counts.clear()
                 await child.start()
             else:
                 child._status = ProcessStatus.INITIALIZING
                 if self._registry is not None:
-                    self._registry.deregister(child.name)
-                    self._registry.register(child.name)
+                    reregister_preserving(self._registry, child.name)
                 await self._start_child(child)
 
     async def _escalate(self, name: str, exc: Exception) -> None:
@@ -431,8 +499,13 @@ class Supervisor:
             name,
         )
         if self._parent is not None:
-            # Escalate: parent treats this supervisor as crashed
-            await self._parent._handle_crash(self.name, exc)
+            # Escalate: hand the event to the parent's crash queue rather than
+            # calling into the parent inline (H2). The inline call would run the
+            # parent's restart of *this* supervisor from inside this supervisor's
+            # own drain task — and that restart cancels this drain task, i.e. the
+            # task would cancel itself mid-restart. The queue hand-off also
+            # serializes the escalation with the parent's other crash work.
+            self._parent._crash_queue.put_nowait((self.name, exc, None))
         else:
             # F03-6: agent is already CRASHED (task done); don't mutate status directly.
             # Log the permanent failure — agent stays CRASHED, no further restarts.
