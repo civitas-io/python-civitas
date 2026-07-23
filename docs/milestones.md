@@ -47,6 +47,7 @@ Everything in this part is done.
 | — | [v0.5.0 — Released](#v050--released) | Jul 2026 |
 | — | [v0.6.0 — Gateway Completion](#v060--gateway-completion-released) | Jul 2026 |
 | — | [v0.7.0 / v0.7.1 / v0.7.2 / v0.7.3 / v0.7.4 — Spawn Maturation, Gateway Auth & Bus-Native Streaming](#v070--spawn-maturation--gateway-auth-released) | Jul 2026 |
+| — | [v0.8.0 — Supervision Core Hardening](#v080--supervision-core-hardening-released) | Jul 2026 |
 
 ---
 
@@ -905,34 +906,10 @@ are strong companions; R5–R9 are opportunistic and can slip to a later patch.
 
 ---
 
-## Part 2 — Backlog
+## v0.8.0 — Supervision Core Hardening (Released)
 
-**Status: 🗂️ Tracked** — the active todo list: everything not yet done. New work lands here first
-(a design doc if warranted), then moves into [Part 1 — Shipped](#part-1--shipped) once released.
-Owner column: `core` = python-civitas, else the target repo.
-
-### Now open — tracked issue (python-civitas)
-
-| # | Issue | Severity | Area |
-|---|-------|----------|------|
-| [#28](https://github.com/civitas-io/python-civitas/issues/28) | Supervisor escalation is a no-op under ONE_FOR_ONE — escalated subtree never restarts | 🔴 P0 | supervision core ([design](design/supervision-hardening.md) A2) |
-| [#29](https://github.com/civitas-io/python-civitas/issues/29) | Crash-restart re-registration drops capabilities/metadata (Supervisor + Worker) | 🔴 P0 | supervision core (A3) |
-| [#30](https://github.com/civitas-io/python-civitas/issues/30) | Failed restarts are silent — crash-handler exceptions never retrieved; crash handling unserialized | 🔴 P0 | supervision core (B2) |
-| [#31](https://github.com/civitas-io/python-civitas/issues/31) | Heartbeats at priority 0 — busy/suspended remote agents falsely declared crashed | 🔴 P1 | supervision core (A6) |
-| [#32](https://github.com/civitas-io/python-civitas/issues/32) | `ErrorAction.RETRY` re-enqueues at back of mailbox — FIFO ordering broken | 🟡 P2 | process loop (C1) |
-| [#33](https://github.com/civitas-io/python-civitas/issues/33) | `sender="_runtime"` is unroutable — replies via `message.sender` crash | 🟡 P2 | runtime API (C4) |
-| [#34](https://github.com/civitas-io/python-civitas/issues/34) | `register_b64` pollutes routing table with phantom entries | 🟡 P2 | registry (C5) |
-| [#35](https://github.com/civitas-io/python-civitas/issues/35) | README drift: provider extras / adapter imports contradict AGENTS.md + pyproject | 🟡 P2 | docs (C10) |
-| [#27](https://github.com/civitas-io/python-civitas/issues/27) | `on_stop()` exceptions during normal shutdown aren't contained | — | process lifecycle |
-| [#26](https://github.com/civitas-io/python-civitas/issues/26) | MCP client lacks Streamable HTTP transport | — | mcp / fabrica |
-
-> #28–#31 are tracked in code by strict-xfail regression tests in
-> `tests/unit/test_actor_model_gaps.py` — fixing one flips its test to XPASS and fails the suite
-> until the marker is removed. #26–#35 (except #26) are scheduled for **v0.8.0** below.
-
-### v0.8.0 — Supervision Core Hardening (Planned)
-
-**Status: ⏳ Planned** — scoped from the 2026-07-21 actor-model architecture review.
+**Status: ✅ Released 2026-07-23.** Scoped from the 2026-07-21 actor-model architecture review;
+shipped as five work packages on `dev/v0.8.0`, merged via PR #38. Closed #27–#35.
 Design: [`supervision-hardening.md`](design/supervision-hardening.md). Theme: *make the advertised
 OTP guarantee true* — v0.1–v0.7 built the runtime outward (transports, spawning, gateway,
 security); v0.8.0 turns inward and fixes the supervision core those layers stand on. Prerequisite
@@ -964,6 +941,25 @@ together; H5–H7 are strong companions; H8–H13 are opportunistic and can slip
 **Explicitly deferred to v0.9+:** D6 (unify static `Supervisor` + `DynamicSupervisor` into one
 actor-based engine — needs its own design/plan cycle), D5-structural (per-process out-of-band
 liveness), C3 (in-process serialization fast path), B4 (DynSup `wait=True` head-of-line move).
+
+
+---
+
+## Part 2 — Backlog
+
+**Status: 🗂️ Tracked** — the active todo list: everything not yet done. New work lands here first
+(a design doc if warranted), then moves into [Part 1 — Shipped](#part-1--shipped) once released.
+Owner column: `core` = python-civitas, else the target repo.
+
+### Now open — tracked issue (python-civitas)
+
+| # | Issue | Severity | Area |
+|---|-------|----------|------|
+| [#26](https://github.com/civitas-io/python-civitas/issues/26) | MCP client lacks Streamable HTTP transport | — | mcp / fabrica (blocked on fabrica) |
+
+> #27–#35 closed by [v0.8.0](#v080--supervision-core-hardening-released). The one remaining
+> strict-xfail tracker in `tests/unit/test_actor_model_gaps.py` (instance-variable reset) points
+> at the v0.9 fresh-instance restart (design D1a).
 
 ### Active backlog (python-civitas, no issue yet)
 
@@ -1011,6 +1007,7 @@ liveness), C3 (in-process serialization fast path), B4 (DynSup `wait=True` head-
 | Credential-propagation RFC (per-user OAuth for retrieved tools) | cross-repo | ⏸️ future RFC | rfc/0001 §out-of-scope |
 
 **Recently shipped** (moved out of this backlog; see [Part 1](#part-1--shipped) for detail):
+supervision core hardening v0.8.0 (#27–#35, PR #38),
 cross-process dynamic spawning (#20), per-agent spawn quotas (#21), encrypted `StateStore` at rest
 (#19), first-party JWT + mTLS gateway auth for HTTP (#18), non-blocking dynamic spawn +
 `spawn_into()` (#14, #16), bus-native streaming (#22), WS/gRPC gateway auth (#17), HTTP mTLS via

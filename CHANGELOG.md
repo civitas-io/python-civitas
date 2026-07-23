@@ -11,6 +11,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-07-23
+
 ### Changed
 
 - **Restart state contract enforced: only checkpointed state survives** — on every (re)start, `self.state` is reset before the checkpoint restore, so un-checkpointed in-memory state (including whatever corruption caused a crash) dies with the old incarnation instead of resurrecting into a restart loop. **Behavior change:** agents that relied on un-checkpointed `self.state` accidentally surviving restarts must call `checkpoint()` (the documented contract all along). Durable suspension is unaffected — the suspend marker rides in the checkpoint (restored agents still come up SUSPENDED). Note: durable suspension across restarts requires a StateStore; `Runtime` always injects one.
