@@ -31,6 +31,35 @@ jobs:
       - name: Run tests with coverage
         run: uv run pytest
 
+  # A gate that doesn't run is indistinguishable from a gate that passes (#39):
+  # the integration suite rotted silently for months because nothing executed it.
+  # Runs the full tests/integration tree — in-process (~2s) + real-ZMQ (~10s).
+  # NATS tests self-guard (skip when nats-server is not on PATH — server binary
+  # install deferred, see #39); contrib-dependent tests self-guard via
+  # importorskip. pytest exits nonzero on any failure OR collection error, so
+  # import rot like #40 fails this job immediately.
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v7.0.0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --extra dev --extra otel --extra zmq --extra nats
+
+      - name: Run integration tests
+        run: uv run pytest tests/integration --no-cov -p no:cacheprovider -q -ra
+
   lint:
     name: Lint & type-check
     runs-on: ubuntu-latest
