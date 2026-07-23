@@ -42,7 +42,13 @@ class _H3RequestHandler:
         self._queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
 
     def h3_event_received(self, event: Any) -> None:
-        from aioquic.h3.events import DataReceived, StreamReset
+        # StreamReset is a QUIC-layer event (aioquic.quic.events), NOT an H3
+        # event — the previous `from aioquic.h3.events import StreamReset`
+        # raised ImportError on the first received event with every aioquic in
+        # this package's own >=1.0 range: HTTP/3 event handling had never
+        # executed successfully (#43, the #25 pattern).
+        from aioquic.h3.events import DataReceived
+        from aioquic.quic.events import StreamReset
 
         if isinstance(event, DataReceived):
             self._queue.put_nowait(
@@ -80,71 +86,26 @@ class _H3RequestHandler:
             logger.exception("H3 request handler error on stream %d", self._stream_id)
 
 
-class _HttpServerProtocol:
-    """QUIC connection protocol — handles H3 events and spawns request handlers."""
-
-    def __init__(self, quic: Any, event_handler: Any, asgi_app: GatewayASGI) -> None:
-        from aioquic.asyncio.protocol import QuicConnectionProtocol
-
-        # Dynamically subclass to inject asgi_app
-        self._quic = quic
-        self._asgi_app = asgi_app
-        self._http: Any = None
-        self._handlers: dict[int, _H3RequestHandler] = {}
-        self._quic_protocol = QuicConnectionProtocol(quic, event_handler)
-
-    def quic_event_received(self, event: Any) -> None:
-        from aioquic.h3.connection import H3Connection
-        from aioquic.h3.events import DataReceived, HeadersReceived, StreamReset
-
-        if self._http is None:
-            self._http = H3Connection(self._quic, enable_webtransport=False)
-
-        for h3_event in self._http.handle_event(event):
-            if isinstance(h3_event, HeadersReceived):
-                header_dict = dict(h3_event.headers)
-                raw_path = header_dict.get(b":path", b"/").decode()
-                path, _, query = raw_path.partition("?")
-                scope: dict[str, Any] = {
-                    "type": "http",
-                    "asgi": {"version": "3.0"},
-                    "http_version": "3",
-                    "method": header_dict.get(b":method", b"GET").decode().upper(),
-                    "path": path,
-                    "query_string": query.encode(),
-                    "root_path": "",
-                    "scheme": header_dict.get(b":scheme", b"https").decode(),
-                    "headers": [(k, v) for k, v in h3_event.headers if not k.startswith(b":")],
-                    "server": None,
-                }
-                handler = _H3RequestHandler(
-                    connection=self._http,
-                    stream_id=h3_event.stream_id,
-                    scope=scope,
-                    transmit=self._quic_protocol.transmit,
-                )
-                self._handlers[h3_event.stream_id] = handler
-                asyncio.ensure_future(handler.run(self._asgi_app))
-
-            elif isinstance(h3_event, DataReceived | StreamReset):
-                existing = self._handlers.get(h3_event.stream_id)
-                if existing:
-                    existing.h3_event_received(h3_event)
-
-
 def _make_protocol_factory(asgi_app: GatewayASGI) -> Any:
     """Return a protocol factory compatible with aioquic.asyncio.serve()."""
     from aioquic.asyncio.protocol import QuicConnectionProtocol
     from aioquic.h3.connection import H3Connection
-    from aioquic.h3.events import DataReceived, HeadersReceived, StreamReset
+    from aioquic.h3.events import DataReceived, HeadersReceived
+    from aioquic.quic.events import StreamReset as QuicStreamReset
 
-    class _Protocol(QuicConnectionProtocol):  # type: ignore[misc]
+    class _Protocol(QuicConnectionProtocol):
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             super().__init__(*args, **kwargs)
             self._http: H3Connection | None = None
             self._handlers: dict[int, _H3RequestHandler] = {}
 
         def quic_event_received(self, event: Any) -> None:
+            # Stream resets surface at the QUIC layer, not as H3 events —
+            # deliver the disconnect to the stream's handler directly (#43).
+            if isinstance(event, QuicStreamReset):
+                reset_handler = self._handlers.get(event.stream_id)
+                if reset_handler:
+                    reset_handler.h3_event_received(event)
             if self._http is None:
                 self._http = H3Connection(self._quic, enable_webtransport=False)
             for h3_event in self._http.handle_event(event):
@@ -173,7 +134,7 @@ def _make_protocol_factory(asgi_app: GatewayASGI) -> Any:
                     self._handlers[h3_event.stream_id] = handler
                     asyncio.ensure_future(handler.run(asgi_app))
 
-                elif isinstance(h3_event, DataReceived | StreamReset):
+                elif isinstance(h3_event, DataReceived):
                     existing = self._handlers.get(h3_event.stream_id)
                     if existing:
                         existing.h3_event_received(h3_event)
@@ -206,7 +167,7 @@ class H3Server:
 
     async def start(self) -> None:
         try:
-            from aioquic.asyncio import serve
+            from aioquic.asyncio.server import serve
             from aioquic.h3.connection import H3_ALPN
             from aioquic.quic.configuration import QuicConfiguration
         except ImportError as exc:
