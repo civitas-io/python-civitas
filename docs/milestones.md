@@ -988,7 +988,7 @@ Owner column: `core` = python-civitas, else the target repo.
 > [v0.8.1](#v081--verification-perimeter-released). One strict-xfail tracker remains in
 > `tests/unit/test_actor_model_gaps.py` (instance-variable reset → v0.9 fresh-instance restart).
 
-### v0.9 — Supervision Endgame (proposed next)
+### v0.9.0 — Supervision Endgame (Proposed next)
 
 The three coupled items below are the natural v0.9: they share the Runtime↔Supervisor re-wiring,
 finish what the 2026-07 architecture review started, flip the last xfail tracker, and fully
@@ -1000,35 +1000,56 @@ implementation), per the v0.8.0 §2.1 ratification.
 | **D6 — unify static Supervisor + DynamicSupervisor** into one actor-based engine | 🟡 Medium | design/supervision-hardening.md (B1) |
 | **D1(a) — fresh-instance restart** (child-spec capture shipped v0.8.0; flips the last xfail) | 🔴 High | design/supervision-hardening.md D1 |
 | **D5 (structural) — per-process out-of-band liveness** (beyond `handle_timeout`) | 🔴 High | design/supervision-hardening.md D5 (A6/A7) |
+| Fold-in (decide inside the design): DynSup `wait=True` head-of-line blocking (B4) | 🟡 Medium | design/dynamic-spawning.md addendum |
+| Fold-in (decide inside the design): restart accounting reconciliation (B3) | 🟢 Low | design/supervision-hardening.md B3 |
 
-### Active backlog (python-civitas, no issue yet)
+### v0.8.2 — Hygiene (Planned — in progress)
 
-| Item | Priority | Status | Where tracked |
-|------|----------|--------|----------------|
-| CLI coverage top-ups — newly visible in v0.8.1 V5: dashboard 28%, state 49%, deploy 57%, topology 70% | 🟢 Low | ⏸️ opportunistic | plan v0.8.1 V7 remainder |
-| `civitas init` accepts only a bare project name relative to cwd (full paths rejected by the identifier check) — UX wart | 🟢 Low | ⏸️ | plan v0.8.1 V2 note |
-| CI integration job: install nats-server so the 13 NATS tests run in CI (guards skip today) | 🟡 Medium | ⏸️ deferred from V1 | #39 (closed) · ci.yml comment |
-| process.py / runtime.py coverage miss-range top-ups (streaming internals, MCP connect, exporter/signing blocks) | 🟢 Low | ⏸️ opportunistic | plan v0.8.1 V7 remainder |
-| ZMQ route-establishment: full at-least-once guarantee (sender republish + message-id dedup) — sub-ms residual after the v0.8.1 settle-barrier | 🟢 Low | ⏸️ if ever needed | design/cross-process-spawn.md addendum |
-| **Supervision hardening D5 (structural) — per-process out-of-band liveness** (beyond the v0.8.0 `handle_timeout` watchdog) | 🔴 High | ⏸️ deferred to v0.9+ | design/supervision-hardening.md D5 (A6/A7) |
-| **Supervision hardening D6 — unify static Supervisor + DynamicSupervisor as one actor-based engine** | 🟡 Medium | 💡 needs own plan (v0.9+) | design/supervision-hardening.md D6 (B1) |
-| **Supervision hardening D1(a) — fresh-instance restart** (child-spec capture shipped in v0.8.0; consumes it; flips the last xfail tracker) | 🔴 High | 💡 needs own plan (v0.9, with D6) | design/supervision-hardening.md D1 |
-| DynamicSupervisor: move `wait=True` readiness wait off the message loop (head-of-line blocking) | 🟡 Medium | ⏸️ | design/dynamic-spawning.md addendum (B4) |
-| Restart accounting: reconcile supervisor-wide budget window vs per-child lifetime backoff counts | 🟢 Low | ⏸️ | design/supervision-hardening.md B3 |
-| R7 follow-up: credit-based stream backpressure (namespace `civitas.stream.credit` reserved) | 🟢 Low | ⏸️ opportunistic | design/bus-native-streaming.md §8 Q5 |
-| R7 follow-up: immediate `StreamInterrupted` on producer loss (bidirectional producer→sink index; today bounded by `idle_timeout`) | 🟢 Low | ⏸️ opportunistic | design/bus-native-streaming.md D6 |
-| Textual dashboard rebuild (on `TopologyServer` endpoints) | 🟡 Medium | ⏸️ follow-on | design/dynamic-spawning.md |
-| [Visual Topology Editor](#m41-visual-topology-editor) (drag-drop UI) | 🟢 Low | ⏸️ low priority | §M4.1 |
-| Fine-grained ACL DSL (overlaps M4.4 capabilities) | 🟡 Medium | ⏸️ | design/security-hardening.md |
-| HSM / TPM-backed signing keys | 🟢 Low | ⏸️ post-v1.0 | design/security-hardening.md |
-| PKI / CA integration (cert issuance) | 🟢 Low | ⏸️ deployment-layer | design/security-hardening.md |
-| Durable suspension: fail-fast `ask()` into a suspended agent (times out today) | 🟡 Medium | ⏸️ | design/durable-suspension.md Non-Goals |
-| Durable suspension: crash-while-suspended restart-budget exemption | 🟡 Medium | ⏸️ v1 | supervisor.py (S8 finding #5) |
-| Fiddler eval exporter: two-way guardrail receive | 🟢 Low | ⏸️ | §M2.6 |
-| Postgres: zero-downtime dual-write migration | 🟢 Low | ⏸️ | §Postgres StateStore |
-| Postgres: PgBouncer deployment guide | 🟢 Low | ⏸️ docs pass | §Postgres StateStore |
-| External security audit before v1.0 (fix all HIGH+; publish summary) | 🟡 Medium | ⏳ pre-v1.0 | §M4.3 |
-| Continuous security posture (CVE watch, CVSS advisories) | 🟡 Medium | ⏳ ongoing | §M4.3 |
+Plan: `.sisyphus/plans/hygiene-v0.8.2.md`. Closes the last unwatched gate + v0.8.1 residue.
+
+| # | Deliverable | Priority |
+|---|-------------|----------|
+| G1 | ✅ **Done (dev/v0.8.2)** — nats-server v2.14.3 pinned+sha256 in CI; **14/14 NATS tests pass (13 had never run anywhere)**; fixture port genuinely random now | 🟡 Medium |
+| G2 | ✅ **Done (dev/v0.8.2)** — init auto-splits paths; basename-only identifier validation; docs/cli.md updated; 4 new tests | 🟢 Low |
+| G3 | ✅ **Done (dev/v0.8.2)** — deploy 88%, topology 89%, dashboard 39% (args), state at its contrib-gated ceiling (49%, documented); total 89.7% | 🟢 Low |
+
+### v0.9.1 — Post-endgame polish (Planned, after v0.9.0)
+
+| Item | Priority | Why after v0.9.0 |
+|------|----------|------------------|
+| process.py / runtime.py coverage miss-range top-ups (streaming internals, MCP connect, exporter/signing blocks) | 🟢 Low | the D6/D1a rewiring churns exactly these regions — topping up first is wasted motion |
+| Textual dashboard rebuild on `TopologyServer` endpoints | 🟡 Medium | topology data model stabilizes in v0.9.0 |
+
+### v0.10.0 — HITL & Streaming polish (Planned — the Medicus runway)
+
+| Item | Priority | Source |
+|------|----------|--------|
+| Durable suspension: fail-fast `ask()` into a suspended agent (times out today) | 🟡 Medium | design/durable-suspension.md Non-Goals |
+| Durable suspension: crash-while-suspended restart-budget exemption | 🟡 Medium | supervisor.py (S8 finding #5) |
+| R7: credit-based stream backpressure (`civitas.stream.credit` reserved) | 🟢 Low | design/bus-native-streaming.md §8 Q5 |
+| R7: immediate `StreamInterrupted` on producer loss | 🟢 Low | design/bus-native-streaming.md D6 |
+
+### v1.0.0 — GA gates (Planned)
+
+| Item | Priority | Notes |
+|------|----------|-------|
+| External security audit (fix all HIGH+; publish summary) | 🟡 Medium | hard blocker for declaring 1.0 |
+| Postgres: zero-downtime dual-write migration | 🟢 Low | production-ops for GA |
+| Postgres: PgBouncer deployment guide | 🟢 Low | docs pass |
+| ZMQ at-least-once route establishment — go/no-go review | 🟢 Low | sub-ms residual after v0.8.1 settle-barrier; build only if reproduced (design/cross-process-spawn.md addendum) |
+
+> Continuous (every release, no version): CVE watch / CVSS advisories — enforced by the Security
+> workflow (pip-audit --strict caught PYSEC-2026-2132 in practice).
+
+### v1.1+ — Enterprise ladder (Planned, demand-driven)
+
+| Item | Priority | Source |
+|------|----------|--------|
+| Fine-grained ACL DSL (overlaps M4.4 capabilities) | 🟡 Medium | design/security-hardening.md |
+| HSM / TPM-backed signing keys | 🟢 Low | design/security-hardening.md |
+| PKI / CA integration (cert issuance) | 🟢 Low | design/security-hardening.md |
+| Visual Topology Editor (drag-drop UI) | 🟢 Low | §M4.1 |
+| Fiddler eval exporter: two-way guardrail receive | 🟢 Low | §M2.6 |
 
 ### Ideas (not yet specced)
 
@@ -1038,7 +1059,7 @@ implementation), per the v0.8.0 §2.1 ratification.
 | **Self-healing / autonomous remediation agent** — monitor (metrics/audit/OTEL/crash) → diagnose (LLM) → sandbox-verify → canary-deploy → auto-rollback, under staged autonomy + safety gates | 🟡 Medium | design/self-healing.md |
 | Worker-level **restart-with-new-code** (blue-green drain) — the deploy primitive enabling self-healing & near-zero-downtime code updates (Python has no safe in-place reload) | 🟡 Medium | design/self-healing.md |
 
-### Other repos (tracked for visibility only — per [`boundary.md`](https://github.com/civitas-io/context))
+### Other repos (versioned by their owning repo — tracked here for visibility only — per [`boundary.md`](https://github.com/civitas-io/context))
 
 | Item | Owner | Status | Where tracked |
 |------|-------|--------|---------------|

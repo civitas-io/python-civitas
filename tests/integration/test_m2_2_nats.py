@@ -12,6 +12,7 @@ server is unavailable. To run:
 import asyncio
 import os
 import shutil
+import socket
 import subprocess
 import tempfile
 import time
@@ -42,8 +43,11 @@ def nats_server():
     if binary is None:
         pytest.skip("nats-server not found on PATH")
 
-    # Use a random port to avoid conflicts
-    port = 14222
+    # G1 (v0.8.2): genuinely random — the previous hardcoded 14222 (despite
+    # this very comment) collided on parallel/simultaneous runs.
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as _s:
+        _s.bind(("127.0.0.1", 0))
+        port = _s.getsockname()[1]
     proc = subprocess.Popen(
         [binary, "-p", str(port)],
         stdout=subprocess.DEVNULL,
