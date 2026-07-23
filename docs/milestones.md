@@ -955,11 +955,37 @@ Owner column: `core` = python-civitas, else the target repo.
 
 | # | Issue | Severity | Area |
 |---|-------|----------|------|
+| [#39](https://github.com/civitas-io/python-civitas/issues/39) | Integration tests never run in CI — suite rotted silently (fail-open gate) | 🔴 P0 | CI / test infra → [v0.8.1](#v081--verification-perimeter-planned) V1 |
+| [#40](https://github.com/civitas-io/python-civitas/issues/40) | 3 integration modules uncollectable since core/contrib split (~46 tests dead) | 🔴 P0 | tests → v0.8.1 V2 |
+| [#41](https://github.com/civitas-io/python-civitas/issues/41) | Cross-process spawn E2E fails deterministically (pre-existing at v0.7.4) | 🔴 P0 | R6 verification → v0.8.1 V3 |
+| [#42](https://github.com/civitas-io/python-civitas/issues/42) | Coverage omit list overstates coverage: stale entries, ToolRegistry/CLI/model.py untested | 🟡 P1 | coverage → v0.8.1 V4+V5 |
+| [#43](https://github.com/civitas-io/python-civitas/issues/43) | HTTP/3 gateway has zero tests while advertised as supported | 🟡 P2 | gateway → v0.8.1 V6 |
 | [#26](https://github.com/civitas-io/python-civitas/issues/26) | MCP client lacks Streamable HTTP transport | — | mcp / fabrica (blocked on fabrica) |
 
 > #27–#35 closed by [v0.8.0](#v080--supervision-core-hardening-released). The one remaining
 > strict-xfail tracker in `tests/unit/test_actor_model_gaps.py` (instance-variable reset) points
 > at the v0.9 fresh-instance restart (design D1a).
+
+### v0.8.1 — Verification Perimeter (Planned)
+
+**Status: ⏳ Planned** — scoped from the 2026-07-23 full test/coverage review. Plan:
+`.sisyphus/plans/verification-perimeter-v0.8.1.md` (no design doc — test infrastructure, not
+runtime semantics). Theme: *a gate that doesn't run is indistinguishable from a gate that
+passes* — closes the fail-open verification class (3rd instance: Semgrep SARIF, example
+Dockerfile, now the integration suite).
+
+| # | Deliverable | Priority | Source |
+|---|-------------|----------|--------|
+| V1 | **Integration tests gate CI** — new required job (in-process 1.7 s + ZMQ 8 s chunks; NATS guarded); gate proven to gate | 🔴 P0 | [#39](https://github.com/civitas-io/python-civitas/issues/39) |
+| V2 | **Revive 3 dead integration modules** — contrib imports → `importorskip` / core-only fixtures (~46 tests back) | 🔴 P0 | [#40](https://github.com/civitas-io/python-civitas/issues/40) |
+| V3 | **Root-cause cross-process spawn E2E** — bisect v0.7.0..v0.7.4; prime suspect R7 receive-path interception; fix or deterministic-quarantine | 🔴 P0 | [#41](https://github.com/civitas-io/python-civitas/issues/41) |
+| V4 | **Omit-list audit** — delete 10 stale entries; test + un-omit ToolRegistry (`plugins/tools.py`), `plugins/model.py` (0%!), loader 84→90% | 🟡 P1 | [#42](https://github.com/civitas-io/python-civitas/issues/42) |
+| V5 | **CLI unit tests** via Typer CliRunner (`version/init/topology/state/security/run --help`); un-omit `cli/*` (~1,800 LOC into the gate) | 🟡 P1 | [#42](https://github.com/civitas-io/python-civitas/issues/42) |
+| V6 | **HTTP/3**: test it (aioquic dev extra + lifecycle/smoke tests) or demote to experimental in docs | 🟡 P2 | [#43](https://github.com/civitas-io/python-civitas/issues/43) |
+| V7 | Hygiene: process/runtime miss-range top-ups, un-awaited-coroutine test warning | 🟢 Stretch | review §F4 |
+
+**Sequencing:** V3 → V2 → V1 (gate lands green) → V4 → V5 → V6 → release. Branch `dev/v0.8.1`,
+accumulating release PR (v0.8.0 model). Closes #39–#42 (+#43 if V6 tests; else docs-demote).
 
 ### Active backlog (python-civitas, no issue yet)
 
