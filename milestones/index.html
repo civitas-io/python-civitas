@@ -5024,6 +5024,37 @@ Owner column: <code>core</code> = python-civitas, else the target repo.</p>
 <p><a href="#v081--verification-perimeter-released">v0.8.1</a>. One strict-xfail tracker remains in
 <code>tests/unit/test_actor_model_gaps.py</code> (instance-variable reset → v0.9 fresh-instance restart).</p>
 </blockquote>
+<h3 id="v09-supervision-endgame-proposed-next">v0.9 — Supervision Endgame (proposed next)<a class="headerlink" href="#v09-supervision-endgame-proposed-next" title="Permanent link">&para;</a></h3>
+<p>The three coupled items below are the natural v0.9: they share the Runtime↔Supervisor re-wiring,
+finish what the 2026-07 architecture review started, flip the last xfail tracker, and fully
+unblock the Medicus track. <strong>Requires the full design ceremony</strong> (design doc → review → plan →
+implementation), per the v0.8.0 §2.1 ratification.</p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Priority</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>D6 — unify static Supervisor + DynamicSupervisor</strong> into one actor-based engine</td>
+<td>🟡 Medium</td>
+<td>design/supervision-hardening.md (B1)</td>
+</tr>
+<tr>
+<td><strong>D1(a) — fresh-instance restart</strong> (child-spec capture shipped v0.8.0; flips the last xfail)</td>
+<td>🔴 High</td>
+<td>design/supervision-hardening.md D1</td>
+</tr>
+<tr>
+<td><strong>D5 (structural) — per-process out-of-band liveness</strong> (beyond <code>handle_timeout</code>)</td>
+<td>🔴 High</td>
+<td>design/supervision-hardening.md D5 (A6/A7)</td>
+</tr>
+</tbody>
+</table>
 <h3 id="active-backlog-python-civitas-no-issue-yet">Active backlog (python-civitas, no issue yet)<a class="headerlink" href="#active-backlog-python-civitas-no-issue-yet" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -5035,6 +5066,36 @@ Owner column: <code>core</code> = python-civitas, else the target repo.</p>
 </tr>
 </thead>
 <tbody>
+<tr>
+<td>CLI coverage top-ups — newly visible in v0.8.1 V5: dashboard 28%, state 49%, deploy 57%, topology 70%</td>
+<td>🟢 Low</td>
+<td>⏸️ opportunistic</td>
+<td>plan v0.8.1 V7 remainder</td>
+</tr>
+<tr>
+<td><code>civitas init</code> accepts only a bare project name relative to cwd (full paths rejected by the identifier check) — UX wart</td>
+<td>🟢 Low</td>
+<td>⏸️</td>
+<td>plan v0.8.1 V2 note</td>
+</tr>
+<tr>
+<td>CI integration job: install nats-server so the 13 NATS tests run in CI (guards skip today)</td>
+<td>🟡 Medium</td>
+<td>⏸️ deferred from V1</td>
+<td>#39 (closed) · ci.yml comment</td>
+</tr>
+<tr>
+<td>process.py / runtime.py coverage miss-range top-ups (streaming internals, MCP connect, exporter/signing blocks)</td>
+<td>🟢 Low</td>
+<td>⏸️ opportunistic</td>
+<td>plan v0.8.1 V7 remainder</td>
+</tr>
+<tr>
+<td>ZMQ route-establishment: full at-least-once guarantee (sender republish + message-id dedup) — sub-ms residual after the v0.8.1 settle-barrier</td>
+<td>🟢 Low</td>
+<td>⏸️ if ever needed</td>
+<td>design/cross-process-spawn.md addendum</td>
+</tr>
 <tr>
 <td><strong>Supervision hardening D5 (structural) — per-process out-of-band liveness</strong> (beyond the v0.8.0 <code>handle_timeout</code> watchdog)</td>
 <td>🔴 High</td>
