@@ -14,10 +14,18 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+# Framework adapters moved to civitas-contrib in the core/contrib split (#40):
+# these tests exercise the contrib integration and skip cleanly without it.
+pytest.importorskip(
+    "civitas_contrib.adapters.langgraph",
+    reason="civitas-contrib not installed — skipping framework-adapter integration tests",
+)
+
+from civitas_contrib.adapters.crewai import CrewAIAgent
+from civitas_contrib.adapters.langgraph import LangGraphAgent
+from civitas_contrib.adapters.openai import OpenAIAgent
+
 from civitas import AgentProcess, Runtime, Supervisor
-from civitas.adapters.crewai import CrewAIAgent
-from civitas.adapters.langgraph import LangGraphAgent
-from civitas.adapters.openai import OpenAIAgent
 from civitas.errors import ErrorAction
 from civitas.messages import Message
 from civitas.process import ProcessStatus

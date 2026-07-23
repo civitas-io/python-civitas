@@ -258,3 +258,9 @@ class NATSTransport:
     def has_reply_address(self, address: str) -> bool:
         """Return True if address is an active ephemeral reply queue."""
         return address in self._reply_queues
+
+    async def wait_subscribed(self, address: str, timeout: float = 2.0) -> None:
+        """Flush the connection — the broker owns routing, so once the server has
+        processed the SUB (flush round-trips it), peers' publishes are routed."""
+        if self._nc is not None and self._nc.is_connected:
+            await self._nc.flush(timeout=max(1, int(timeout)))

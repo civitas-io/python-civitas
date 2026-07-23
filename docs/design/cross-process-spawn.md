@@ -89,3 +89,40 @@ Oracle's must-fixes (D8–D14) are folded in above. Decisions:
 
 ## 9. Non-goals
 Heterogeneous clusters; code serialization/distribution/hot-reload; placement groups / resource-aware scheduling; cross-cluster (multi-datacenter) spawn.
+
+---
+
+## Addendum (2026-07-23) — the announce/subscription race (#41, fixed in v0.8.1)
+
+**Defect (design-level, present since R6):** D13's "announce-after-start" guaranteed the child was
+*locally subscribed* on its Worker before the cluster-wide announcement — but not that the
+subscription had **propagated to peer PUB sockets**. ZMQ PUB sockets silently drop messages for
+topics with no known subscriber, and subscription propagation (SUB → XPUB → XSUB → every peer
+PUB) is asynchronous: measured ~5–10 ms on Linux, ~20–25 ms on macOS over IPC. The announcement
+rides a long-established fast channel (`_agency.register`) and arrives in ~2–4 ms — it
+**systematically outruns routability**. A peer that messaged the child immediately after the
+announcement published into a void: deterministic loss on macOS, coin-flip on Linux (which is how
+R6's verification could pass while the E2E test later failed everywhere — unnoticed because
+integration tests were not in CI, #39).
+
+**The same race had a second leg:** per-request ephemeral reply topics. `ZMQTransport.request()`
+subscribed a fresh `_reply.<uuid>` and published immediately; a fast responder's reply (~1 ms)
+lost to the same 5–25 ms window and died inside the *responder's* PUB socket. Spawn's own ask
+survived only because spawn *processing* happened to exceed the window.
+
+**Fix (v0.8.1):**
+1. **Subscription-settle barrier** — `ZMQTransport.wait_subscribed(topic)`: a probe topic
+   subscribed on the same SUB pipe (FIFO — cannot overtake the target subscription) is
+   self-published until it loops back through the proxy. `DynamicSupervisor._announce_child`
+   awaits it before announcing, making D13 mean *routable*, not merely *subscribed*. Transport
+   protocol gains the method; in-process is a no-op, NATS flushes (broker-side routing).
+2. **Stable reply-topic prefix** — each ZMQTransport subscribes ONCE at start to
+   `_reply.<instance>.` (propagation absorbed by the startup `wait_ready`); per-request reply
+   topics live under that prefix via ZMQ prefix matching. Eliminates leg 2 entirely and removes
+   per-request subscribe/unsubscribe churn.
+
+**Residual (recorded, deferred):** the barrier confirms propagation through the Worker's own PUB
+pipe; peer PUB pipes receive the same XSUB broadcast in parallel — sub-millisecond jitter is
+theoretically possible. A full at-least-once route-establishment guarantee (sender-side
+republish + message-id dedup) is a v0.9+ design if ever needed; 10/10 cross-platform E2E runs
+show no residual loss.

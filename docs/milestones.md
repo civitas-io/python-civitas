@@ -976,12 +976,12 @@ Dockerfile, now the integration suite).
 
 | # | Deliverable | Priority | Source |
 |---|-------------|----------|--------|
-| V1 | **Integration tests gate CI** — new required job (in-process 1.7 s + ZMQ 8 s chunks; NATS guarded); gate proven to gate | 🔴 P0 | [#39](https://github.com/civitas-io/python-civitas/issues/39) |
-| V2 | **Revive 3 dead integration modules** — contrib imports → `importorskip` / core-only fixtures (~46 tests back) | 🔴 P0 | [#40](https://github.com/civitas-io/python-civitas/issues/40) |
-| V3 | **Root-cause cross-process spawn E2E** — bisect v0.7.0..v0.7.4; prime suspect R7 receive-path interception; fix or deterministic-quarantine | 🔴 P0 | [#41](https://github.com/civitas-io/python-civitas/issues/41) |
-| V4 | **Omit-list audit** — delete 10 stale entries; test + un-omit ToolRegistry (`plugins/tools.py`), `plugins/model.py` (0%!), loader 84→90% | 🟡 P1 | [#42](https://github.com/civitas-io/python-civitas/issues/42) |
-| V5 | **CLI unit tests** via Typer CliRunner (`version/init/topology/state/security/run --help`); un-omit `cli/*` (~1,800 LOC into the gate) | 🟡 P1 | [#42](https://github.com/civitas-io/python-civitas/issues/42) |
-| V6 | **HTTP/3**: test it (aioquic dev extra + lifecycle/smoke tests) or demote to experimental in docs | 🟡 P2 | [#43](https://github.com/civitas-io/python-civitas/issues/43) |
+| V1 | ✅ **Done (dev/v0.8.1)** — **Integration tests gate CI**: required job, full tests/integration (~12 s); its FIRST run caught a real env bug (Rich help width). nats-server install deferred (guards skip) | 🔴 P0 | [#39](https://github.com/civitas-io/python-civitas/issues/39) |
+| V2 | ✅ **Done (dev/v0.8.1)** — **3 dead modules revived**: contrib `importorskip` guards + core-only fixtures; collection 3 errors → 0; suite 157 passed / 23 honest skips | 🔴 P0 | [#40](https://github.com/civitas-io/python-civitas/issues/40) |
+| V3 | ✅ **Done (dev/v0.8.1)** — **Root-caused + fixed cross-process spawn E2E**: TWO ZMQ subscription-propagation races since R6 (announce outran child-topic propagation; per-request reply topics raced their own first use). Fixed via subscription-settle barrier before announce + stable per-transport reply prefix. 5/5 green on macOS AND Linux (docker-verified); design addendum in cross-process-spawn.md | 🔴 P0 | [#41](https://github.com/civitas-io/python-civitas/issues/41) |
+| V4 | ✅ **Done (dev/v0.8.1)** — omit-list audit: 10 stale entries deleted; ToolRegistry + model.py 100% (were omitted / 0%); loader 96% | 🟡 P1 | [#42](https://github.com/civitas-io/python-civitas/issues/42) |
+| V5 | ✅ **Done (dev/v0.8.1)** — 19 CliRunner tests; cli/* measured (except run.py live paths). CAUGHT: `civitas version` hardcoded '0.1.0' in every release since M3.1. Coverage 92→87.6% over ~900 newly-measured stmts (honest direction) | 🟡 P1 | [#42](https://github.com/civitas-io/python-civitas/issues/42) |
+| V6 | ✅ **Done (dev/v0.8.1)** — tested it, and the first test found that **HTTP/3 had never worked**: `StreamReset` imported from the wrong aioquic module → ImportError on first event (the #25 pattern). Fixed + first-ever QUIC loopback GET green; h3.py measured | 🟡 P2 | [#43](https://github.com/civitas-io/python-civitas/issues/43) |
 | V7 | Hygiene: process/runtime miss-range top-ups, un-awaited-coroutine test warning | 🟢 Stretch | review §F4 |
 
 **Sequencing:** V3 → V2 → V1 (gate lands green) → V4 → V5 → V6 → release. Branch `dev/v0.8.1`,

@@ -263,6 +263,7 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "aioquic" },
     { name = "cryptography" },
     { name = "grpcio" },
     { name = "grpcio-health-checking" },
@@ -337,6 +338,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aioquic", marker = "extra == 'dev'", specifier = ">=1.0" },
     { name = "aioquic", marker = "extra == 'http3'", specifier = ">=1.0" },
     { name = "cryptography", marker = "extra == 'dev'", specifier = ">=41" },
     { name = "cryptography", marker = "extra == 'encryption'", specifier = ">=41" },

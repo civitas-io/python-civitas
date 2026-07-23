@@ -11,6 +11,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+### Added
+
+- **CLI unit test suite + honest coverage** ([#42](https://github.com/civitas-io/python-civitas/issues/42)) — the CLI (~1,800 LOC) and `ToolRegistry`/`ModelResponse` are now unit-tested and **measured**: 10 stale coverage-omit entries deleted, `plugins/tools.py` and `plugins/model.py` at 100% (were omitted / 0%), loader at 96%. The headline coverage moved from 91.2% to 87.6% — a *more honest* number over ~900 newly-measured statements, still above the 85% gate.
+
+### Fixed
+
+- **HTTP/3 event handling had never worked** ([#43](https://github.com/civitas-io/python-civitas/issues/43)) — `gateway/h3.py` imported `StreamReset` from `aioquic.h3.events`, where it does not exist in any aioquic within the package's own `>=1.0` requirement (it is a QUIC-layer event) — the handler raised `ImportError` on the first received event. The feature was advertised since M4.x but no test anywhere had ever driven a request through it (the #25 pattern, again caught only when a test finally existed). Fixed the imports, moved stream-reset handling to the QUIC layer where it belongs, removed an unreferenced duplicate protocol class carrying the same latent bug, and added the first-ever HTTP/3 tests: unit coverage of the stream↔ASGI adapter + a real QUIC loopback GET (`aioquic` is now a dev dependency; `h3.py` un-omitted from coverage).
+- **`civitas version` reported "0.1.0" in every release** — the version string was hardcoded in `cli/version.py` since M3.1 and never updated; now read from package metadata. Caught by the first-ever CLI unit test (#42).
+- **Integration tests now gate CI** ([#39](https://github.com/civitas-io/python-civitas/issues/39)) — the suite had never run in CI and rotted silently: 3 modules were uncollectable since the core/contrib split (~46 tests dead, [#40](https://github.com/civitas-io/python-civitas/issues/40) — revived with contrib `importorskip` guards / core-only fixtures) and the cross-process spawn E2E was failing everywhere unnoticed (#41). New required `Integration tests` job (~12 s); the gate's very first run caught a real environment bug (Rich help-text rendering width).
+
+- **Cross-process spawn: first messages to a freshly-spawned remote child are no longer lost** ([#41](https://github.com/civitas-io/python-civitas/issues/41)) — two ZMQ subscription-propagation races, present since R6 (v0.7.0): the cluster-wide announcement systematically outran the child's topic-subscription propagation to peer PUB sockets (which silently drop unknown topics), so `spawn()`-then-`ask()` timed out — deterministically on macOS (~20 ms window), coin-flip on Linux (~5 ms); and per-request ephemeral reply topics raced their own first use, dropping fast responders' replies inside the responder's PUB socket. Fixed with (1) a **subscription-settle barrier**: `DynamicSupervisor` confirms the child's topic has propagated (probe loopback, `ZMQTransport.wait_subscribed()`) before announcing it — "announced" now means *routable*; and (2) a **stable per-transport reply-topic prefix** subscribed once at startup, eliminating per-request subscription churn and the reply race entirely. Verified 5/5 on macOS and Linux (was 0/5); E2E runtime dropped from 5.8 s timeout to 0.76 s. Root-cause analysis: `docs/design/cross-process-spawn.md` addendum.
+
 ## [0.8.0] — 2026-07-23
 
 ### Changed
