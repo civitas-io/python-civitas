@@ -57,6 +57,21 @@ jobs:
       - name: Install dependencies
         run: uv sync --extra dev --extra otel --extra zmq --extra nats
 
+      # G1 (v0.8.2): the NATS integration tests spawn a real nats-server binary
+      # from PATH (a service container does not satisfy them). Without this,
+      # 13 tests skip — the last remnant of the #39 fail-open class. Pinned
+      # release + checksum; no third-party setup action (supply-chain surface).
+      - name: Install nats-server
+        run: |
+          NATS_VERSION=v2.14.3
+          NATS_SHA256=f3d0c820c749f81d717310fb00d4903919e70e3e66b268bd352a088b9788eb93
+          curl -sSL -o /tmp/nats.tar.gz \
+            "https://github.com/nats-io/nats-server/releases/download/${NATS_VERSION}/nats-server-${NATS_VERSION}-linux-amd64.tar.gz"
+          echo "${NATS_SHA256}  /tmp/nats.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/nats.tar.gz -C /tmp
+          sudo mv "/tmp/nats-server-${NATS_VERSION}-linux-amd64/nats-server" /usr/local/bin/
+          nats-server --version
+
       - name: Run integration tests
         env:
           # Rich/Typer render --help at terminal width with ANSI styling; the
