@@ -151,20 +151,22 @@ class TestEscalate:
         assert agent.status == ProcessStatus.CRASHED
 
     @pytest.mark.asyncio
-    async def test_escalate_with_parent_calls_parent_handle_crash(self):
+    async def test_escalate_with_parent_enqueues_on_parent_crash_queue(self):
+        """Escalation hands off to the parent's crash queue (H2) — never an inline
+        call, which would let the parent's restart cancel the very drain task
+        performing the escalation."""
         child_sup = Supervisor("child", max_restarts=1)
         parent_sup = Supervisor("root", children=[child_sup], max_restarts=5)
         child_sup._parent = parent_sup
 
-        called_with: list = []
-
-        async def mock_handle(name, exc):
-            called_with.append((name, exc))
-
-        parent_sup._handle_crash = mock_handle  # type: ignore[method-assign]
         exc = ValueError("cascade")
         await child_sup._escalate("child", exc)
-        assert called_with == [("child", exc)]
+
+        assert parent_sup._crash_queue.qsize() == 1
+        name, queued_exc, task = parent_sup._crash_queue.get_nowait()
+        assert name == "child"  # the escalating supervisor itself
+        assert queued_exc is exc
+        assert task is None  # supervisors have no incarnation task
 
 
 # ---------------------------------------------------------------------------
@@ -414,16 +416,21 @@ class TestOnChildDone:
         sup._on_child_done("worker", task)
         sup._handle_crash.assert_not_called()
 
-    def test_not_running_ignores_done_callback(self):
+    def test_not_running_still_enqueues_crash(self):
+        """Crashes landing while stopped are queued, not dropped (H2, #30).
+
+        The old code checked _running at enqueue time, dropping crashes that
+        arrived during a nested stop/start window. The drain loop now decides
+        at dequeue time (discard after final stop, stale-skip after restart)."""
         sup = make_supervisor()
         sup._running = False
 
         task = MagicMock()
         task.cancelled.return_value = False
+        task.exception.return_value = ValueError("boom")
 
-        sup._handle_crash = AsyncMock()  # type: ignore[method-assign]
         sup._on_child_done("worker", task)
-        sup._handle_crash.assert_not_called()
+        assert sup._crash_queue.qsize() == 1
 
 
 # ---------------------------------------------------------------------------
@@ -621,34 +628,45 @@ class TestRestartChildBranches:
         assert remote_calls == ["remote_a"]
 
     @pytest.mark.asyncio
-    async def test_restart_child_supervisor_child_returns_early(self):
-        """_restart_child does nothing when the named child is a Supervisor."""
+    async def test_restart_child_supervisor_restarts_subtree(self):
+        """_restart_child stops, budget-clears, and restarts a Supervisor child (H1, #28)."""
         child_sup = Supervisor("inner")
         sup = Supervisor("root", children=[child_sup])
 
-        # Should not raise and should not try to start
-        child_sup._start = AsyncMock()  # type: ignore[method-assign]
+        child_sup._restart_timestamps.extend([1.0, 2.0])  # exhausted budget
+        child_sup._restart_counts["a"] = 2
+        child_sup.stop = AsyncMock()  # type: ignore[method-assign]
+        child_sup.start = AsyncMock()  # type: ignore[method-assign]
+
         await sup._restart_child("inner")
-        child_sup._start.assert_not_called()
+
+        child_sup.stop.assert_awaited_once()
+        child_sup.start.assert_awaited_once()
+        # Fresh incarnation gets a fresh budget — no instant re-escalation
+        assert len(child_sup._restart_timestamps) == 0
+        assert child_sup._restart_counts == {}
 
     @pytest.mark.asyncio
-    async def test_restart_child_uses_registry_when_present(self):
-        """_restart_child deregisters and re-registers via the registry."""
+    async def test_restart_child_preserves_registration_snapshot(self):
+        """_restart_child re-registers with the full prior entry (H3, #29)."""
+        from civitas.registry import LocalRegistry
+
         agent = NullAgent("worker")
         sup = Supervisor("root", children=[agent], backoff="CONSTANT", backoff_base=0.0)
 
-        mock_registry = MagicMock()
-        mock_registry.deregister = MagicMock()
-        mock_registry.register = MagicMock()
-        sup._registry = mock_registry
+        registry = LocalRegistry()
+        registry.register("worker", capabilities=["gap.probe"], capability_metadata={"v": "1"})
+        sup._registry = registry
 
         agent._start = AsyncMock()  # type: ignore[method-assign]
         agent._task = None
 
         await sup._restart_child("worker")
 
-        mock_registry.deregister.assert_called_once_with("worker")
-        mock_registry.register.assert_called_once_with("worker")
+        entry = registry.lookup("worker")
+        assert entry is not None
+        assert entry.capabilities == ("gap.probe",)
+        assert entry.capability_metadata == {"v": "1"}
 
     @pytest.mark.asyncio
     async def test_restart_remote_child_routes_restart_message(self):
@@ -694,13 +712,17 @@ class TestRestartAllChildren:
         agent._task = None
 
         sup = Supervisor("root", strategy="ONE_FOR_ALL", children=[agent])
-        mock_registry = MagicMock()
-        sup._registry = mock_registry
+        from civitas.registry import LocalRegistry
+
+        registry = LocalRegistry()
+        registry.register("worker", capabilities=["gap.probe"])
+        sup._registry = registry
 
         await sup._restart_all_children()
 
-        mock_registry.deregister.assert_called_with("worker")
-        mock_registry.register.assert_called_with("worker")
+        entry = registry.lookup("worker")
+        assert entry is not None
+        assert entry.capabilities == ("gap.probe",)  # snapshot preserved (H3)
 
 
 # ---------------------------------------------------------------------------
