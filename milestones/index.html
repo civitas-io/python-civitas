@@ -2181,6 +2181,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#v082-hygiene-released" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.8.2 — Hygiene (Released)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#part-2-backlog" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2939,6 +2950,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#v082-hygiene-released" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.8.2 — Hygiene (Released)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#part-2-backlog" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3147,6 +3169,11 @@ active todo list — everything not yet done).</p>
 <tr>
 <td>—</td>
 <td><a href="#v081--verification-perimeter-released">v0.8.1 — Verification Perimeter</a></td>
+<td>Jul 2026</td>
+</tr>
+<tr>
+<td>—</td>
+<td><a href="#v082--hygiene-released">v0.8.2 — Hygiene</a></td>
 <td>Jul 2026</td>
 </tr>
 </tbody>
@@ -4996,6 +5023,35 @@ Dockerfile, now the integration suite).</p>
 <p><strong>Sequencing:</strong> V3 → V2 → V1 (gate lands green) → V4 → V5 → V6 → release. Branch <code>dev/v0.8.1</code>,
 accumulating release PR (v0.8.0 model). Closes #39–#42 (+#43 if V6 tests; else docs-demote).</p>
 <hr />
+<h2 id="v082-hygiene-released">v0.8.2 — Hygiene (Released)<a class="headerlink" href="#v082-hygiene-released" title="Permanent link">&para;</a></h2>
+<p><strong>Status: ✅ Released 2026-07-24</strong> (PR #45). Closed the last unwatched gate (13 NATS tests now run in CI) + v0.8.1 residue.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Deliverable</th>
+<th>Priority</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>G1</td>
+<td>✅ <strong>Done (dev/v0.8.2)</strong> — nats-server v2.14.3 pinned+sha256 in CI; <strong>14/14 NATS tests pass (13 had never run anywhere)</strong>; fixture port genuinely random now</td>
+<td>🟡 Medium</td>
+</tr>
+<tr>
+<td>G2</td>
+<td>✅ <strong>Done (dev/v0.8.2)</strong> — init auto-splits paths; basename-only identifier validation; docs/cli.md updated; 4 new tests</td>
+<td>🟢 Low</td>
+</tr>
+<tr>
+<td>G3</td>
+<td>✅ <strong>Done (dev/v0.8.2)</strong> — deploy 88%, topology 89%, dashboard 39% (args), state at its contrib-gated ceiling (49%, documented); total 89.7%</td>
+<td>🟢 Low</td>
+</tr>
+</tbody>
+</table>
+<hr />
 <h2 id="part-2-backlog">Part 2 — Backlog<a class="headerlink" href="#part-2-backlog" title="Permanent link">&para;</a></h2>
 <p><strong>Status: 🗂️ Tracked</strong> — the active todo list: everything not yet done. New work lands here first
 (a design doc if warranted), then moves into <a href="#part-1--shipped">Part 1 — Shipped</a> once released.
@@ -5062,34 +5118,6 @@ implementation), per the v0.8.0 §2.1 ratification.</p>
 <td>Fold-in (decide inside the design): restart accounting reconciliation (B3)</td>
 <td>🟢 Low</td>
 <td>design/supervision-hardening.md B3</td>
-</tr>
-</tbody>
-</table>
-<h3 id="v082-hygiene-planned-in-progress">v0.8.2 — Hygiene (Planned — in progress)<a class="headerlink" href="#v082-hygiene-planned-in-progress" title="Permanent link">&para;</a></h3>
-<p>Plan: <code>.sisyphus/plans/hygiene-v0.8.2.md</code>. Closes the last unwatched gate + v0.8.1 residue.</p>
-<table>
-<thead>
-<tr>
-<th>#</th>
-<th>Deliverable</th>
-<th>Priority</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>G1</td>
-<td>✅ <strong>Done (dev/v0.8.2)</strong> — nats-server v2.14.3 pinned+sha256 in CI; <strong>14/14 NATS tests pass (13 had never run anywhere)</strong>; fixture port genuinely random now</td>
-<td>🟡 Medium</td>
-</tr>
-<tr>
-<td>G2</td>
-<td>✅ <strong>Done (dev/v0.8.2)</strong> — init auto-splits paths; basename-only identifier validation; docs/cli.md updated; 4 new tests</td>
-<td>🟢 Low</td>
-</tr>
-<tr>
-<td>G3</td>
-<td>✅ <strong>Done (dev/v0.8.2)</strong> — deploy 88%, topology 89%, dashboard 39% (args), state at its contrib-gated ceiling (49%, documented); total 89.7%</td>
-<td>🟢 Low</td>
 </tr>
 </tbody>
 </table>
