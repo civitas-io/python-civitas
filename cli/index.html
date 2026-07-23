@@ -2482,6 +2482,10 @@
 <h2 id="civitas-init">civitas init<a class="headerlink" href="#civitas-init" title="Permanent link">&para;</a></h2>
 <p>Scaffold a new Civitas project in the current directory (or a named subdirectory).</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>civitas<span class="w"> </span>init<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="o">[</span>--dir<span class="w"> </span>&lt;directory&gt;<span class="o">]</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="c1"># name may also be a path — parents are created, the basename is the project name</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>civitas<span class="w"> </span>init<span class="w"> </span>apps/nested/my_agents
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>civitas<span class="w"> </span>init<span class="w"> </span>/abs/path/to/my_agents
 </span></code></pre></div>
 <table>
 <thead>
@@ -2495,12 +2499,12 @@
 <tr>
 <td><code>name</code></td>
 <td>required</td>
-<td>Project name — must be a valid Python identifier</td>
+<td>Project name, or a path ending in it — the basename must be a valid Python identifier (it names the module and agent class)</td>
 </tr>
 <tr>
 <td><code>--dir</code></td>
-<td><code>./&lt;name&gt;</code></td>
-<td>Directory to create the project in</td>
+<td>cwd</td>
+<td>Parent directory; a relative path in <code>name</code> is joined under it</td>
 </tr>
 </tbody>
 </table>

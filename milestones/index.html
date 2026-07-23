@@ -5024,7 +5024,7 @@ Owner column: <code>core</code> = python-civitas, else the target repo.</p>
 <p><a href="#v081--verification-perimeter-released">v0.8.1</a>. One strict-xfail tracker remains in
 <code>tests/unit/test_actor_model_gaps.py</code> (instance-variable reset → v0.9 fresh-instance restart).</p>
 </blockquote>
-<h3 id="v09-supervision-endgame-proposed-next">v0.9 — Supervision Endgame (proposed next)<a class="headerlink" href="#v09-supervision-endgame-proposed-next" title="Permanent link">&para;</a></h3>
+<h3 id="v090-supervision-endgame-proposed-next">v0.9.0 — Supervision Endgame (Proposed next)<a class="headerlink" href="#v090-supervision-endgame-proposed-next" title="Permanent link">&para;</a></h3>
 <p>The three coupled items below are the natural v0.9: they share the Runtime↔Supervisor re-wiring,
 finish what the 2026-07 architecture review started, flip the last xfail tracker, and fully
 unblock the Medicus track. <strong>Requires the full design ceremony</strong> (design doc → review → plan →
@@ -5053,162 +5053,170 @@ implementation), per the v0.8.0 §2.1 ratification.</p>
 <td>🔴 High</td>
 <td>design/supervision-hardening.md D5 (A6/A7)</td>
 </tr>
+<tr>
+<td>Fold-in (decide inside the design): DynSup <code>wait=True</code> head-of-line blocking (B4)</td>
+<td>🟡 Medium</td>
+<td>design/dynamic-spawning.md addendum</td>
+</tr>
+<tr>
+<td>Fold-in (decide inside the design): restart accounting reconciliation (B3)</td>
+<td>🟢 Low</td>
+<td>design/supervision-hardening.md B3</td>
+</tr>
 </tbody>
 </table>
-<h3 id="active-backlog-python-civitas-no-issue-yet">Active backlog (python-civitas, no issue yet)<a class="headerlink" href="#active-backlog-python-civitas-no-issue-yet" title="Permanent link">&para;</a></h3>
+<h3 id="v082-hygiene-planned-in-progress">v0.8.2 — Hygiene (Planned — in progress)<a class="headerlink" href="#v082-hygiene-planned-in-progress" title="Permanent link">&para;</a></h3>
+<p>Plan: <code>.sisyphus/plans/hygiene-v0.8.2.md</code>. Closes the last unwatched gate + v0.8.1 residue.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Deliverable</th>
+<th>Priority</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>G1</td>
+<td>✅ <strong>Done (dev/v0.8.2)</strong> — nats-server v2.14.3 pinned+sha256 in CI; <strong>14/14 NATS tests pass (13 had never run anywhere)</strong>; fixture port genuinely random now</td>
+<td>🟡 Medium</td>
+</tr>
+<tr>
+<td>G2</td>
+<td>✅ <strong>Done (dev/v0.8.2)</strong> — init auto-splits paths; basename-only identifier validation; docs/cli.md updated; 4 new tests</td>
+<td>🟢 Low</td>
+</tr>
+<tr>
+<td>G3</td>
+<td>✅ <strong>Done (dev/v0.8.2)</strong> — deploy 88%, topology 89%, dashboard 39% (args), state at its contrib-gated ceiling (49%, documented); total 89.7%</td>
+<td>🟢 Low</td>
+</tr>
+</tbody>
+</table>
+<h3 id="v091-post-endgame-polish-planned-after-v090">v0.9.1 — Post-endgame polish (Planned, after v0.9.0)<a class="headerlink" href="#v091-post-endgame-polish-planned-after-v090" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
 <tr>
 <th>Item</th>
 <th>Priority</th>
-<th>Status</th>
-<th>Where tracked</th>
+<th>Why after v0.9.0</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>CLI coverage top-ups — newly visible in v0.8.1 V5: dashboard 28%, state 49%, deploy 57%, topology 70%</td>
-<td>🟢 Low</td>
-<td>⏸️ opportunistic</td>
-<td>plan v0.8.1 V7 remainder</td>
-</tr>
-<tr>
-<td><code>civitas init</code> accepts only a bare project name relative to cwd (full paths rejected by the identifier check) — UX wart</td>
-<td>🟢 Low</td>
-<td>⏸️</td>
-<td>plan v0.8.1 V2 note</td>
-</tr>
-<tr>
-<td>CI integration job: install nats-server so the 13 NATS tests run in CI (guards skip today)</td>
-<td>🟡 Medium</td>
-<td>⏸️ deferred from V1</td>
-<td>#39 (closed) · ci.yml comment</td>
-</tr>
-<tr>
 <td>process.py / runtime.py coverage miss-range top-ups (streaming internals, MCP connect, exporter/signing blocks)</td>
 <td>🟢 Low</td>
-<td>⏸️ opportunistic</td>
-<td>plan v0.8.1 V7 remainder</td>
+<td>the D6/D1a rewiring churns exactly these regions — topping up first is wasted motion</td>
 </tr>
 <tr>
-<td>ZMQ route-establishment: full at-least-once guarantee (sender republish + message-id dedup) — sub-ms residual after the v0.8.1 settle-barrier</td>
-<td>🟢 Low</td>
-<td>⏸️ if ever needed</td>
-<td>design/cross-process-spawn.md addendum</td>
-</tr>
-<tr>
-<td><strong>Supervision hardening D5 (structural) — per-process out-of-band liveness</strong> (beyond the v0.8.0 <code>handle_timeout</code> watchdog)</td>
-<td>🔴 High</td>
-<td>⏸️ deferred to v0.9+</td>
-<td>design/supervision-hardening.md D5 (A6/A7)</td>
-</tr>
-<tr>
-<td><strong>Supervision hardening D6 — unify static Supervisor + DynamicSupervisor as one actor-based engine</strong></td>
+<td>Textual dashboard rebuild on <code>TopologyServer</code> endpoints</td>
 <td>🟡 Medium</td>
-<td>💡 needs own plan (v0.9+)</td>
-<td>design/supervision-hardening.md D6 (B1)</td>
+<td>topology data model stabilizes in v0.9.0</td>
 </tr>
+</tbody>
+</table>
+<h3 id="v0100-hitl-streaming-polish-planned-the-medicus-runway">v0.10.0 — HITL &amp; Streaming polish (Planned — the Medicus runway)<a class="headerlink" href="#v0100-hitl-streaming-polish-planned-the-medicus-runway" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
 <tr>
-<td><strong>Supervision hardening D1(a) — fresh-instance restart</strong> (child-spec capture shipped in v0.8.0; consumes it; flips the last xfail tracker)</td>
-<td>🔴 High</td>
-<td>💡 needs own plan (v0.9, with D6)</td>
-<td>design/supervision-hardening.md D1</td>
+<th>Item</th>
+<th>Priority</th>
+<th>Source</th>
 </tr>
-<tr>
-<td>DynamicSupervisor: move <code>wait=True</code> readiness wait off the message loop (head-of-line blocking)</td>
-<td>🟡 Medium</td>
-<td>⏸️</td>
-<td>design/dynamic-spawning.md addendum (B4)</td>
-</tr>
-<tr>
-<td>Restart accounting: reconcile supervisor-wide budget window vs per-child lifetime backoff counts</td>
-<td>🟢 Low</td>
-<td>⏸️</td>
-<td>design/supervision-hardening.md B3</td>
-</tr>
-<tr>
-<td>R7 follow-up: credit-based stream backpressure (namespace <code>civitas.stream.credit</code> reserved)</td>
-<td>🟢 Low</td>
-<td>⏸️ opportunistic</td>
-<td>design/bus-native-streaming.md §8 Q5</td>
-</tr>
-<tr>
-<td>R7 follow-up: immediate <code>StreamInterrupted</code> on producer loss (bidirectional producer→sink index; today bounded by <code>idle_timeout</code>)</td>
-<td>🟢 Low</td>
-<td>⏸️ opportunistic</td>
-<td>design/bus-native-streaming.md D6</td>
-</tr>
-<tr>
-<td>Textual dashboard rebuild (on <code>TopologyServer</code> endpoints)</td>
-<td>🟡 Medium</td>
-<td>⏸️ follow-on</td>
-<td>design/dynamic-spawning.md</td>
-</tr>
-<tr>
-<td><a href="#m41-visual-topology-editor">Visual Topology Editor</a> (drag-drop UI)</td>
-<td>🟢 Low</td>
-<td>⏸️ low priority</td>
-<td>§M4.1</td>
-</tr>
-<tr>
-<td>Fine-grained ACL DSL (overlaps M4.4 capabilities)</td>
-<td>🟡 Medium</td>
-<td>⏸️</td>
-<td>design/security-hardening.md</td>
-</tr>
-<tr>
-<td>HSM / TPM-backed signing keys</td>
-<td>🟢 Low</td>
-<td>⏸️ post-v1.0</td>
-<td>design/security-hardening.md</td>
-</tr>
-<tr>
-<td>PKI / CA integration (cert issuance)</td>
-<td>🟢 Low</td>
-<td>⏸️ deployment-layer</td>
-<td>design/security-hardening.md</td>
-</tr>
+</thead>
+<tbody>
 <tr>
 <td>Durable suspension: fail-fast <code>ask()</code> into a suspended agent (times out today)</td>
 <td>🟡 Medium</td>
-<td>⏸️</td>
 <td>design/durable-suspension.md Non-Goals</td>
 </tr>
 <tr>
 <td>Durable suspension: crash-while-suspended restart-budget exemption</td>
 <td>🟡 Medium</td>
-<td>⏸️ v1</td>
 <td>supervisor.py (S8 finding #5)</td>
 </tr>
 <tr>
-<td>Fiddler eval exporter: two-way guardrail receive</td>
+<td>R7: credit-based stream backpressure (<code>civitas.stream.credit</code> reserved)</td>
 <td>🟢 Low</td>
-<td>⏸️</td>
-<td>§M2.6</td>
+<td>design/bus-native-streaming.md §8 Q5</td>
+</tr>
+<tr>
+<td>R7: immediate <code>StreamInterrupted</code> on producer loss</td>
+<td>🟢 Low</td>
+<td>design/bus-native-streaming.md D6</td>
+</tr>
+</tbody>
+</table>
+<h3 id="v100-ga-gates-planned">v1.0.0 — GA gates (Planned)<a class="headerlink" href="#v100-ga-gates-planned" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Priority</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>External security audit (fix all HIGH+; publish summary)</td>
+<td>🟡 Medium</td>
+<td>hard blocker for declaring 1.0</td>
 </tr>
 <tr>
 <td>Postgres: zero-downtime dual-write migration</td>
 <td>🟢 Low</td>
-<td>⏸️</td>
-<td>§Postgres StateStore</td>
+<td>production-ops for GA</td>
 </tr>
 <tr>
 <td>Postgres: PgBouncer deployment guide</td>
 <td>🟢 Low</td>
-<td>⏸️ docs pass</td>
-<td>§Postgres StateStore</td>
+<td>docs pass</td>
 </tr>
 <tr>
-<td>External security audit before v1.0 (fix all HIGH+; publish summary)</td>
+<td>ZMQ at-least-once route establishment — go/no-go review</td>
+<td>🟢 Low</td>
+<td>sub-ms residual after v0.8.1 settle-barrier; build only if reproduced (design/cross-process-spawn.md addendum)</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>Continuous (every release, no version): CVE watch / CVSS advisories — enforced by the Security
+workflow (pip-audit --strict caught PYSEC-2026-2132 in practice).</p>
+</blockquote>
+<h3 id="v11-enterprise-ladder-planned-demand-driven">v1.1+ — Enterprise ladder (Planned, demand-driven)<a class="headerlink" href="#v11-enterprise-ladder-planned-demand-driven" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Priority</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Fine-grained ACL DSL (overlaps M4.4 capabilities)</td>
 <td>🟡 Medium</td>
-<td>⏳ pre-v1.0</td>
-<td>§M4.3</td>
+<td>design/security-hardening.md</td>
 </tr>
 <tr>
-<td>Continuous security posture (CVE watch, CVSS advisories)</td>
-<td>🟡 Medium</td>
-<td>⏳ ongoing</td>
-<td>§M4.3</td>
+<td>HSM / TPM-backed signing keys</td>
+<td>🟢 Low</td>
+<td>design/security-hardening.md</td>
+</tr>
+<tr>
+<td>PKI / CA integration (cert issuance)</td>
+<td>🟢 Low</td>
+<td>design/security-hardening.md</td>
+</tr>
+<tr>
+<td>Visual Topology Editor (drag-drop UI)</td>
+<td>🟢 Low</td>
+<td>§M4.1</td>
+</tr>
+<tr>
+<td>Fiddler eval exporter: two-way guardrail receive</td>
+<td>🟢 Low</td>
+<td>§M2.6</td>
 </tr>
 </tbody>
 </table>
@@ -5239,7 +5247,7 @@ implementation), per the v0.8.0 §2.1 ratification.</p>
 </tr>
 </tbody>
 </table>
-<h3 id="other-repos-tracked-for-visibility-only-per-boundarymd">Other repos (tracked for visibility only — per <a href="https://github.com/civitas-io/context"><code>boundary.md</code></a>)<a class="headerlink" href="#other-repos-tracked-for-visibility-only-per-boundarymd" title="Permanent link">&para;</a></h3>
+<h3 id="other-repos-versioned-by-their-owning-repo-tracked-here-for-visibility-only-per-boundarymd">Other repos (versioned by their owning repo — tracked here for visibility only — per <a href="https://github.com/civitas-io/context"><code>boundary.md</code></a>)<a class="headerlink" href="#other-repos-versioned-by-their-owning-repo-tracked-here-for-visibility-only-per-boundarymd" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
 <tr>
