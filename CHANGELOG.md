@@ -11,6 +11,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+## [0.8.1] — 2026-07-24
+
 ### Added
 
 - **CLI unit test suite + honest coverage** ([#42](https://github.com/civitas-io/python-civitas/issues/42)) — the CLI (~1,800 LOC) and `ToolRegistry`/`ModelResponse` are now unit-tested and **measured**: 10 stale coverage-omit entries deleted, `plugins/tools.py` and `plugins/model.py` at 100% (were omitted / 0%), loader at 96%. The headline coverage moved from 91.2% to 87.6% — a *more honest* number over ~900 newly-measured statements, still above the 85% gate.

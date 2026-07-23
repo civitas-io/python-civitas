@@ -48,6 +48,7 @@ Everything in this part is done.
 | — | [v0.6.0 — Gateway Completion](#v060--gateway-completion-released) | Jul 2026 |
 | — | [v0.7.0 / v0.7.1 / v0.7.2 / v0.7.3 / v0.7.4 — Spawn Maturation, Gateway Auth & Bus-Native Streaming](#v070--spawn-maturation--gateway-auth-released) | Jul 2026 |
 | — | [v0.8.0 — Supervision Core Hardening](#v080--supervision-core-hardening-released) | Jul 2026 |
+| — | [v0.8.1 — Verification Perimeter](#v081--verification-perimeter-released) | Jul 2026 |
 
 ---
 
@@ -945,30 +946,11 @@ liveness), C3 (in-process serialization fast path), B4 (DynSup `wait=True` head-
 
 ---
 
-## Part 2 — Backlog
+## v0.8.1 — Verification Perimeter (Released)
 
-**Status: 🗂️ Tracked** — the active todo list: everything not yet done. New work lands here first
-(a design doc if warranted), then moves into [Part 1 — Shipped](#part-1--shipped) once released.
-Owner column: `core` = python-civitas, else the target repo.
-
-### Now open — tracked issue (python-civitas)
-
-| # | Issue | Severity | Area |
-|---|-------|----------|------|
-| [#39](https://github.com/civitas-io/python-civitas/issues/39) | Integration tests never run in CI — suite rotted silently (fail-open gate) | 🔴 P0 | CI / test infra → [v0.8.1](#v081--verification-perimeter-planned) V1 |
-| [#40](https://github.com/civitas-io/python-civitas/issues/40) | 3 integration modules uncollectable since core/contrib split (~46 tests dead) | 🔴 P0 | tests → v0.8.1 V2 |
-| [#41](https://github.com/civitas-io/python-civitas/issues/41) | Cross-process spawn E2E fails deterministically (pre-existing at v0.7.4) | 🔴 P0 | R6 verification → v0.8.1 V3 |
-| [#42](https://github.com/civitas-io/python-civitas/issues/42) | Coverage omit list overstates coverage: stale entries, ToolRegistry/CLI/model.py untested | 🟡 P1 | coverage → v0.8.1 V4+V5 |
-| [#43](https://github.com/civitas-io/python-civitas/issues/43) | HTTP/3 gateway has zero tests while advertised as supported | 🟡 P2 | gateway → v0.8.1 V6 |
-| [#26](https://github.com/civitas-io/python-civitas/issues/26) | MCP client lacks Streamable HTTP transport | — | mcp / fabrica (blocked on fabrica) |
-
-> #27–#35 closed by [v0.8.0](#v080--supervision-core-hardening-released). The one remaining
-> strict-xfail tracker in `tests/unit/test_actor_model_gaps.py` (instance-variable reset) points
-> at the v0.9 fresh-instance restart (design D1a).
-
-### v0.8.1 — Verification Perimeter (Planned)
-
-**Status: ⏳ Planned** — scoped from the 2026-07-23 full test/coverage review. Plan:
+**Status: ✅ Released 2026-07-24.** Scoped from the 2026-07-23 full test/coverage review;
+shipped as V1–V7 on `dev/v0.8.1`, merged via PR #44. Closed #39–#43. Five shipped defects found
+(all invisible until something finally executed the code). Plan:
 `.sisyphus/plans/verification-perimeter-v0.8.1.md` (no design doc — test infrastructure, not
 runtime semantics). Theme: *a gate that doesn't run is indistinguishable from a gate that
 passes* — closes the fail-open verification class (3rd instance: Semgrep SARIF, example
@@ -986,6 +968,25 @@ Dockerfile, now the integration suite).
 
 **Sequencing:** V3 → V2 → V1 (gate lands green) → V4 → V5 → V6 → release. Branch `dev/v0.8.1`,
 accumulating release PR (v0.8.0 model). Closes #39–#42 (+#43 if V6 tests; else docs-demote).
+
+
+---
+
+## Part 2 — Backlog
+
+**Status: 🗂️ Tracked** — the active todo list: everything not yet done. New work lands here first
+(a design doc if warranted), then moves into [Part 1 — Shipped](#part-1--shipped) once released.
+Owner column: `core` = python-civitas, else the target repo.
+
+### Now open — tracked issue (python-civitas)
+
+| # | Issue | Severity | Area |
+|---|-------|----------|------|
+| [#26](https://github.com/civitas-io/python-civitas/issues/26) | MCP client lacks Streamable HTTP transport | — | mcp / fabrica (blocked on fabrica) |
+
+> #27–#35 closed by [v0.8.0](#v080--supervision-core-hardening-released); #39–#43 closed by
+> [v0.8.1](#v081--verification-perimeter-released). One strict-xfail tracker remains in
+> `tests/unit/test_actor_model_gaps.py` (instance-variable reset → v0.9 fresh-instance restart).
 
 ### Active backlog (python-civitas, no issue yet)
 
@@ -1033,6 +1034,7 @@ accumulating release PR (v0.8.0 model). Closes #39–#42 (+#43 if V6 tests; else
 | Credential-propagation RFC (per-user OAuth for retrieved tools) | cross-repo | ⏸️ future RFC | rfc/0001 §out-of-scope |
 
 **Recently shipped** (moved out of this backlog; see [Part 1](#part-1--shipped) for detail):
+verification perimeter v0.8.1 (#39–#43, PR #44),
 supervision core hardening v0.8.0 (#27–#35, PR #38),
 cross-process dynamic spawning (#20), per-agent spawn quotas (#21), encrypted `StateStore` at rest
 (#19), first-party JWT + mTLS gateway auth for HTTP (#18), non-blocking dynamic spawn +
