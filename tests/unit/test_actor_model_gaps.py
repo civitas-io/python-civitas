@@ -81,8 +81,9 @@ class DirtyStateAgent(AgentProcess):
 
 
 @pytest.mark.xfail(
-    reason="A1: restart reuses the same AgentProcess instance — instance "
-    "variables survive the crash (docs/design/supervision-hardening.md)",
+    reason="A1 / design D1(a): restart reuses the same AgentProcess instance — "
+    "instance variables survive the crash. Scheduled for the v0.9 fresh-instance "
+    "restart (child spec is already captured by __new__ since v0.8.0 PR3)",
     strict=True,
 )
 async def test_restart_resets_instance_variables():
@@ -104,11 +105,6 @@ async def test_restart_resets_instance_variables():
         await runtime.stop()
 
 
-@pytest.mark.xfail(
-    reason="A1: un-checkpointed self.state survives restart — _restore_state() "
-    "only overwrites when a checkpoint exists (docs/design/supervision-hardening.md)",
-    strict=True,
-)
 async def test_restart_resets_uncheckpointed_state():
     agent = DirtyStateAgent("dirty_state")
     root = Supervisor("root", children=[agent], max_restarts=3, backoff_base=0.01)
@@ -227,6 +223,184 @@ async def test_failed_restart_is_surfaced(caplog):
         assert surfaced, "restart failure was swallowed silently — child dead, no log"
     finally:
         await runtime.stop()
+
+
+# ---------------------------------------------------------------------------
+# H5b/H6/H7 (PR3) — restart state contract, watchdog, on_stop containment
+# ---------------------------------------------------------------------------
+
+
+class CheckpointingCrasher(AgentProcess):
+    """Checkpoints business state, then crashes on command."""
+
+    async def handle(self, message: Message) -> Message | None:
+        if message.payload.get("cmd") == "save":
+            self.state["saved"] = message.payload["value"]
+            await self.checkpoint()
+            return self.reply({"ok": True})
+        if message.payload.get("cmd") == "boom":
+            raise RuntimeError("boom")
+        return self.reply({"saved": self.state.get("saved")})
+
+
+async def test_checkpointed_state_survives_reset_and_restart():
+    """H5b keeps the documented contract intact: checkpointed state is restored
+    after the incarnation reset."""
+    agent = CheckpointingCrasher("saver")
+    root = Supervisor("root", children=[agent], max_restarts=3, backoff_base=0.01)
+    runtime = Runtime(supervisor=root)
+    await runtime.start()
+    try:
+        await runtime.ask("saver", {"cmd": "save", "value": 42}, timeout=2.0)
+        await runtime.send("saver", {"cmd": "boom"})
+        assert await _wait_for(lambda: root._restart_counts.get("saver", 0) >= 1)
+        assert await _wait_for(lambda: agent.status == ProcessStatus.RUNNING)
+        reply = await runtime.ask("saver", {"cmd": "check"}, timeout=2.0)
+        assert reply.payload["saved"] == 42
+    finally:
+        await runtime.stop()
+
+
+async def test_checkpointed_suspend_marker_survives_reset():
+    """Constraint 4 (plan §2): the H5b reset must not defeat durable suspension —
+    the checkpointed marker is restored and the agent comes up SUSPENDED (S7)."""
+    from civitas.plugins.state import InMemoryStateStore
+
+    store = InMemoryStateStore()
+    await store.set(
+        "restorer",
+        {"_civitas.suspended": {"reason": "hitl", "since": 1.0, "approver": None}},
+    )
+    agent = CrashOnCommand("restorer")
+    root = Supervisor("root", children=[agent], max_restarts=3, backoff_base=0.01)
+    runtime = Runtime(supervisor=root, state_store=store)
+    await runtime.start()
+    try:
+        assert await _wait_for(lambda: agent.status == ProcessStatus.SUSPENDED)
+    finally:
+        await runtime.stop()
+
+
+def test_ctor_spec_captured_for_fresh_instance_restart():
+    """__new__ records (cls, args, kwargs) — the child spec the v0.9
+    fresh-instance restart (design D1a) will consume."""
+    from civitas.supervisor import DynamicSupervisor
+
+    dyn = DynamicSupervisor("workers", max_children=7, restart="never")
+    cls, args, kwargs = dyn._civitas_spec
+    assert cls is DynamicSupervisor
+    assert args == ("workers",)
+    assert kwargs == {"max_children": 7, "restart": "never"}
+
+
+class HangingAgent(AgentProcess):
+    """Hangs forever on command; SKIPs timeouts when configured to."""
+
+    skip_on_timeout = False
+
+    async def handle(self, message: Message) -> Message | None:
+        if message.payload.get("cmd") == "hang":
+            await asyncio.sleep(3600)
+        return self.reply({"ok": True})
+
+    async def on_error(self, error: Exception, message: Message):
+        from civitas.errors import ErrorAction
+
+        if self.skip_on_timeout and isinstance(error, TimeoutError):
+            return ErrorAction.SKIP
+        return ErrorAction.ESCALATE
+
+
+async def test_handle_timeout_turns_hang_into_visible_crash():
+    """H6: a hung async handle() becomes an ordinary crash the supervisor sees
+    and restarts — hung local agents stop being invisible (A7)."""
+    agent = HangingAgent("hanger", handle_timeout=0.05)
+    root = Supervisor("root", children=[agent], max_restarts=3, backoff_base=0.01)
+    runtime = Runtime(supervisor=root)
+    await runtime.start()
+    try:
+        await runtime.send("hanger", {"cmd": "hang"})
+        assert await _wait_for(lambda: root._restart_counts.get("hanger", 0) >= 1)
+        assert await _wait_for(lambda: agent.status == ProcessStatus.RUNNING)
+        reply = await runtime.ask("hanger", {"cmd": "work"}, timeout=2.0)
+        assert reply.payload["ok"] is True  # recovered and serving
+    finally:
+        await runtime.stop()
+
+
+async def test_handle_timeout_respects_on_error_skip():
+    """H6: TimeoutError flows through the normal on_error path — an agent may
+    choose to SKIP instead of crashing."""
+    agent = HangingAgent("tolerant", handle_timeout=0.05)
+    agent.skip_on_timeout = True
+    root = Supervisor("root", children=[agent], max_restarts=3, backoff_base=0.01)
+    runtime = Runtime(supervisor=root)
+    await runtime.start()
+    try:
+        await runtime.send("tolerant", {"cmd": "hang"})
+        reply = await runtime.ask("tolerant", {"cmd": "work"}, timeout=2.0)
+        assert reply.payload["ok"] is True
+        assert root._restart_counts.get("tolerant", 0) == 0  # never crashed
+    finally:
+        await runtime.stop()
+
+
+async def test_handle_timeout_disabled_by_default():
+    """H6: default None — no watchdog, zero behavior change on upgrade."""
+    agent = HangingAgent("unbounded")
+    assert agent._handle_timeout is None
+    root = Supervisor("root", children=[agent], max_restarts=3, backoff_base=0.01)
+    runtime = Runtime(supervisor=root)
+    await runtime.start()
+    try:
+        await runtime.send("unbounded", {"cmd": "hang"})
+        await asyncio.sleep(0.15)  # well past the other tests' timeout
+        assert agent.status == ProcessStatus.RUNNING  # still "handling", no crash
+        assert root._restart_counts.get("unbounded", 0) == 0
+    finally:
+        await runtime.stop()
+
+
+def test_yaml_handle_timeout_passthrough():
+    """H6: topology YAML `agent: {handle_timeout: N}` reaches the constructor."""
+    config = {
+        "supervision": {
+            "name": "root",
+            "children": [
+                {"agent": {"name": "bounded", "type": "W", "handle_timeout": 12.5}},
+                {"agent": {"name": "unbounded", "type": "W"}},
+            ],
+        }
+    }
+    rt = Runtime.from_config_dict(config, agent_classes={"W": CrashOnCommand})
+    agents = {a.name: a for a in rt._root_supervisor.all_agents()}
+    assert agents["bounded"]._handle_timeout == 12.5
+    assert agents["unbounded"]._handle_timeout is None
+
+
+class FaultyStopAgent(AgentProcess):
+    async def handle(self, message: Message) -> Message | None:
+        return self.reply({"ok": True})
+
+    async def on_stop(self) -> None:
+        raise RuntimeError("cleanup exploded")
+
+
+async def test_on_stop_exception_contained_during_shutdown():
+    """H7 (#27): a raising on_stop() during graceful shutdown is contained —
+    the agent reaches STOPPED, no crash event lands on the supervisor, and the
+    shutdown sequence completes."""
+    faulty = FaultyStopAgent("faulty")
+    healthy = CrashOnCommand("healthy")
+    root = Supervisor("root", children=[faulty, healthy], max_restarts=3, backoff_base=0.01)
+    runtime = Runtime(supervisor=root)
+    await runtime.start()
+
+    await runtime.stop()  # must not raise despite faulty.on_stop()
+
+    assert faulty.status == ProcessStatus.STOPPED
+    assert healthy.status == ProcessStatus.STOPPED  # shutdown sequence completed
+    assert root._crash_queue.qsize() == 0  # graceful stop produced no crash event
 
 
 # ---------------------------------------------------------------------------

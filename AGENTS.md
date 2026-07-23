@@ -252,6 +252,13 @@ uv run ruff check . && uv run ruff format . && uv run pytest tests/unit
 
 `AgentProcess` is **always subclassed**, never instantiated directly.
 
+Constructor knobs: `mailbox_size=1000`, `max_retries=3`, `shutdown_timeout=30.0`, and
+`handle_timeout=None` — opt-in per-message watchdog (also settable per agent in topology YAML).
+When set, a `handle()` exceeding it raises `TimeoutError` through the normal `on_error()` path
+(default ESCALATE → crash → supervisor restart), so a hung *async* handler becomes visible.
+Limits: the handler is cancelled at its current await point (use `async with` for resources), and
+blocking code (`time.sleep`, busy loops) cannot be detected — only stuck awaits.
+
 ```python
 class MyAgent(AgentProcess):
 
@@ -723,11 +730,12 @@ from `handle()`, not from `on_start()`.
 Never rely on instance variables across messages. State that must survive goes in
 `self.state` + `checkpoint()` (persisted to StateStore).
 
-> **Current caveat** ([supervision-hardening](docs/design/supervision-hardening.md) A1): today a
-> crash-restart *reuses the same instance*, so instance variables and un-checkpointed
-> `self.state` actually **survive** restart — including whatever corrupted state caused the
-> crash. Do not depend on either behavior: the only contract is "checkpointed state is restored;
-> everything else is undefined across restarts" (the planned fresh-start protocol will reset both).
+> **The restart contract (v0.8.0):** only checkpointed state survives a restart. On every
+> (re)start, `self.state` is reset and then restored from the last checkpoint — un-checkpointed
+> state (including whatever corruption caused a crash) dies with the old incarnation. Instance
+> variables still survive today because the instance is reused ([supervision-hardening](docs/design/supervision-hardening.md)
+> A1 — fresh-instance restart lands in v0.9); treat them as undefined across restarts.
+> Durable suspension (S7) is unaffected: the suspend marker rides in the checkpoint.
 
 ```python
 # Wrong — resets on restart

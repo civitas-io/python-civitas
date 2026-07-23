@@ -11,7 +11,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+### Changed
+
+- **Restart state contract enforced: only checkpointed state survives** — on every (re)start, `self.state` is reset before the checkpoint restore, so un-checkpointed in-memory state (including whatever corruption caused a crash) dies with the old incarnation instead of resurrecting into a restart loop. **Behavior change:** agents that relied on un-checkpointed `self.state` accidentally surviving restarts must call `checkpoint()` (the documented contract all along). Durable suspension is unaffected — the suspend marker rides in the checkpoint (restored agents still come up SUSPENDED). Note: durable suspension across restarts requires a StateStore; `Runtime` always injects one.
+
+### Added
+
+- **`handle_timeout` — opt-in per-message watchdog** — `AgentProcess(..., handle_timeout=N)` (or `agent: {handle_timeout: N}` in topology YAML) bounds each `handle()` call; on expiry a `TimeoutError` flows through the normal `on_error()` path (default ESCALATE → visible crash → supervisor restart), so a hung *async* handler stops being invisible to its supervisor. Default `None` = disabled, zero behavior change. The handle span gains `civitas.handle.timeout=true` for hung-vs-buggy triage. Documented limits: cancellation lands at the current await point; blocking code (`time.sleep`, busy loops) is undetectable — async hangs only.
+
 ### Fixed
+
+- **`on_stop()` exceptions during graceful shutdown are contained** ([#27](https://github.com/civitas-io/python-civitas/issues/27)) — a raising `on_stop()` propagated out of the message loop's `finally`, past `_stop()`'s narrow guard, and crashed whatever awaited it — in practice a supervisor stopping multiple children, taking the whole shutdown sequence down. Now logged at ERROR and contained; the agent still reaches STOPPED and shutdown proceeds (mirrors the existing failed-`on_start` guard).
 
 - **Heartbeats now ride the priority channel** ([#31](https://github.com/civitas-io/python-civitas/issues/31)) — liveness probes were sent at priority 0, so a remote agent with a deep mailbox answered them only after its whole backlog (false-positive crash + forced restart under load — a restart-storm amplifier), and a SUSPENDED remote agent (which drains only its priority queue) never saw them at all — a deliberately-paused agent was unconditionally declared crashed after ~15 s at defaults. Heartbeats are now `priority=1`: busy agents ack between messages, suspended agents ack while staying suspended (suspension is a governance state, not a liveness failure). Threshold breaches are handed to the supervisor's serialized crash queue instead of restarting inline, so one child's restart backoff no longer stalls heartbeat monitoring of every other remote child. *Known limit (documented): a single long-running `handle()` still delays acks until the next loop boundary — bounded by the `handle_timeout` watchdog (upcoming), structurally fixed by per-process liveness in v0.9.*
 

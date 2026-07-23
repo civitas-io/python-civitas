@@ -484,6 +484,10 @@ async def test_one_for_all_restart_stops_suspended_no_double_loop():
     """ONE_FOR_ALL stops-then-restarts a suspended sibling with exactly one live loop (S7)."""
     crasher = CrashOnMessageAgent("crasher")
     victim = RecorderAgent("victim")
+    # H5b: only checkpointed state survives a restart — the suspend marker needs
+    # a store to persist across the ONE_FOR_ALL cycle (Runtime always injects
+    # one; this bare-Supervisor setup must do it explicitly).
+    victim.store = InMemoryStateStore()
     sup = Supervisor(
         "root",
         children=[crasher, victim],
@@ -513,6 +517,7 @@ async def test_rest_for_one_restart_handles_suspended_downstream():
     """REST_FOR_ONE restarts a suspended downstream child cleanly (S7)."""
     crasher = CrashOnMessageAgent("crasher")
     victim = RecorderAgent("downstream")
+    victim.store = InMemoryStateStore()  # H5b: marker must be checkpointed to survive
     sup = Supervisor(
         "root",
         children=[crasher, victim],

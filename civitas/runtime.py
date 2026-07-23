@@ -393,7 +393,12 @@ class Runtime:
             elif "agent" in node:
                 agent_cfg = node["agent"]
                 agent_cls = _resolve_class(agent_cfg["type"])
-                return agent_cls(name=agent_cfg["name"])
+                agent_kwargs: dict[str, Any] = {"name": agent_cfg["name"]}
+                # H6: opt-in per-message watchdog — only passed when configured, so
+                # subclasses with narrow __init__ signatures stay compatible.
+                if "handle_timeout" in agent_cfg:
+                    agent_kwargs["handle_timeout"] = float(agent_cfg["handle_timeout"])
+                return agent_cls(**agent_kwargs)
             elif (
                 node.get("type") in ("gen_server", "agent") and "module" in node and "class" in node
             ):
