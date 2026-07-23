@@ -2170,6 +2170,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#v081-verification-perimeter-released" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.8.1 — Verification Perimeter (Released)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#part-2-backlog" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2917,6 +2928,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#v081-verification-perimeter-released" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.8.1 — Verification Perimeter (Released)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#part-2-backlog" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3120,6 +3142,11 @@ active todo list — everything not yet done).</p>
 <tr>
 <td>—</td>
 <td><a href="#v080--supervision-core-hardening-released">v0.8.0 — Supervision Core Hardening</a></td>
+<td>Jul 2026</td>
+</tr>
+<tr>
+<td>—</td>
+<td><a href="#v081--verification-perimeter-released">v0.8.1 — Verification Perimeter</a></td>
 <td>Jul 2026</td>
 </tr>
 </tbody>
@@ -4904,66 +4931,10 @@ together; H5–H7 are strong companions; H8–H13 are opportunistic and can slip
 actor-based engine — needs its own design/plan cycle), D5-structural (per-process out-of-band
 liveness), C3 (in-process serialization fast path), B4 (DynSup <code>wait=True</code> head-of-line move).</p>
 <hr />
-<h2 id="part-2-backlog">Part 2 — Backlog<a class="headerlink" href="#part-2-backlog" title="Permanent link">&para;</a></h2>
-<p><strong>Status: 🗂️ Tracked</strong> — the active todo list: everything not yet done. New work lands here first
-(a design doc if warranted), then moves into <a href="#part-1--shipped">Part 1 — Shipped</a> once released.
-Owner column: <code>core</code> = python-civitas, else the target repo.</p>
-<h3 id="now-open-tracked-issue-python-civitas">Now open — tracked issue (python-civitas)<a class="headerlink" href="#now-open-tracked-issue-python-civitas" title="Permanent link">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>#</th>
-<th>Issue</th>
-<th>Severity</th>
-<th>Area</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><a href="https://github.com/civitas-io/python-civitas/issues/39">#39</a></td>
-<td>Integration tests never run in CI — suite rotted silently (fail-open gate)</td>
-<td>🔴 P0</td>
-<td>CI / test infra → <a href="#v081--verification-perimeter-planned">v0.8.1</a> V1</td>
-</tr>
-<tr>
-<td><a href="https://github.com/civitas-io/python-civitas/issues/40">#40</a></td>
-<td>3 integration modules uncollectable since core/contrib split (~46 tests dead)</td>
-<td>🔴 P0</td>
-<td>tests → v0.8.1 V2</td>
-</tr>
-<tr>
-<td><a href="https://github.com/civitas-io/python-civitas/issues/41">#41</a></td>
-<td>Cross-process spawn E2E fails deterministically (pre-existing at v0.7.4)</td>
-<td>🔴 P0</td>
-<td>R6 verification → v0.8.1 V3</td>
-</tr>
-<tr>
-<td><a href="https://github.com/civitas-io/python-civitas/issues/42">#42</a></td>
-<td>Coverage omit list overstates coverage: stale entries, ToolRegistry/CLI/model.py untested</td>
-<td>🟡 P1</td>
-<td>coverage → v0.8.1 V4+V5</td>
-</tr>
-<tr>
-<td><a href="https://github.com/civitas-io/python-civitas/issues/43">#43</a></td>
-<td>HTTP/3 gateway has zero tests while advertised as supported</td>
-<td>🟡 P2</td>
-<td>gateway → v0.8.1 V6</td>
-</tr>
-<tr>
-<td><a href="https://github.com/civitas-io/python-civitas/issues/26">#26</a></td>
-<td>MCP client lacks Streamable HTTP transport</td>
-<td>—</td>
-<td>mcp / fabrica (blocked on fabrica)</td>
-</tr>
-</tbody>
-</table>
-<blockquote>
-<h1 id="2735-closed-by-v080-the-one-remaining">27–#35 closed by <a href="#v080--supervision-core-hardening-released">v0.8.0</a>. The one remaining<a class="headerlink" href="#2735-closed-by-v080-the-one-remaining" title="Permanent link">&para;</a></h1>
-<p>strict-xfail tracker in <code>tests/unit/test_actor_model_gaps.py</code> (instance-variable reset) points
-at the v0.9 fresh-instance restart (design D1a).</p>
-</blockquote>
-<h3 id="v081-verification-perimeter-planned">v0.8.1 — Verification Perimeter (Planned)<a class="headerlink" href="#v081-verification-perimeter-planned" title="Permanent link">&para;</a></h3>
-<p><strong>Status: ⏳ Planned</strong> — scoped from the 2026-07-23 full test/coverage review. Plan:
+<h2 id="v081-verification-perimeter-released">v0.8.1 — Verification Perimeter (Released)<a class="headerlink" href="#v081-verification-perimeter-released" title="Permanent link">&para;</a></h2>
+<p><strong>Status: ✅ Released 2026-07-24.</strong> Scoped from the 2026-07-23 full test/coverage review;
+shipped as V1–V7 on <code>dev/v0.8.1</code>, merged via PR #44. Closed #39–#43. Five shipped defects found
+(all invisible until something finally executed the code). Plan:
 <code>.sisyphus/plans/verification-perimeter-v0.8.1.md</code> (no design doc — test infrastructure, not
 runtime semantics). Theme: <em>a gate that doesn't run is indistinguishable from a gate that
 passes</em> — closes the fail-open verification class (3<sup>rd</sup> instance: Semgrep SARIF, example
@@ -5024,6 +4995,35 @@ Dockerfile, now the integration suite).</p>
 </table>
 <p><strong>Sequencing:</strong> V3 → V2 → V1 (gate lands green) → V4 → V5 → V6 → release. Branch <code>dev/v0.8.1</code>,
 accumulating release PR (v0.8.0 model). Closes #39–#42 (+#43 if V6 tests; else docs-demote).</p>
+<hr />
+<h2 id="part-2-backlog">Part 2 — Backlog<a class="headerlink" href="#part-2-backlog" title="Permanent link">&para;</a></h2>
+<p><strong>Status: 🗂️ Tracked</strong> — the active todo list: everything not yet done. New work lands here first
+(a design doc if warranted), then moves into <a href="#part-1--shipped">Part 1 — Shipped</a> once released.
+Owner column: <code>core</code> = python-civitas, else the target repo.</p>
+<h3 id="now-open-tracked-issue-python-civitas">Now open — tracked issue (python-civitas)<a class="headerlink" href="#now-open-tracked-issue-python-civitas" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Issue</th>
+<th>Severity</th>
+<th>Area</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/civitas-io/python-civitas/issues/26">#26</a></td>
+<td>MCP client lacks Streamable HTTP transport</td>
+<td>—</td>
+<td>mcp / fabrica (blocked on fabrica)</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<h1 id="2735-closed-by-v080-3943-closed-by">27–#35 closed by <a href="#v080--supervision-core-hardening-released">v0.8.0</a>; #39–#43 closed by<a class="headerlink" href="#2735-closed-by-v080-3943-closed-by" title="Permanent link">&para;</a></h1>
+<p><a href="#v081--verification-perimeter-released">v0.8.1</a>. One strict-xfail tracker remains in
+<code>tests/unit/test_actor_model_gaps.py</code> (instance-variable reset → v0.9 fresh-instance restart).</p>
+</blockquote>
 <h3 id="active-backlog-python-civitas-no-issue-yet">Active backlog (python-civitas, no issue yet)<a class="headerlink" href="#active-backlog-python-civitas-no-issue-yet" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -5240,6 +5240,7 @@ accumulating release PR (v0.8.0 model). Closes #39–#42 (+#43 if V6 tests; else
 </tbody>
 </table>
 <p><strong>Recently shipped</strong> (moved out of this backlog; see <a href="#part-1--shipped">Part 1</a> for detail):
+verification perimeter v0.8.1 (#39–#43, PR #44),
 supervision core hardening v0.8.0 (#27–#35, PR #38),
 cross-process dynamic spawning (#20), per-agent spawn quotas (#21), encrypted <code>StateStore</code> at rest
 (#19), first-party JWT + mTLS gateway auth for HTTP (#18), non-blocking dynamic spawn +
