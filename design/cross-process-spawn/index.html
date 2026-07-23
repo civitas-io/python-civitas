@@ -2170,6 +2170,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#addendum-2026-07-23-the-announcesubscription-race-41-fixed-in-v081" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Addendum (2026-07-23) — the announce/subscription race (#41, fixed in v0.8.1)
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2334,6 +2345,37 @@ audit.</p>
 </ul>
 <h2 id="9-non-goals">9. Non-goals<a class="headerlink" href="#9-non-goals" title="Permanent link">&para;</a></h2>
 <p>Heterogeneous clusters; code serialization/distribution/hot-reload; placement groups / resource-aware scheduling; cross-cluster (multi-datacenter) spawn.</p>
+<hr />
+<h2 id="addendum-2026-07-23-the-announcesubscription-race-41-fixed-in-v081">Addendum (2026-07-23) — the announce/subscription race (#41, fixed in v0.8.1)<a class="headerlink" href="#addendum-2026-07-23-the-announcesubscription-race-41-fixed-in-v081" title="Permanent link">&para;</a></h2>
+<p><strong>Defect (design-level, present since R6):</strong> D13's "announce-after-start" guaranteed the child was
+<em>locally subscribed</em> on its Worker before the cluster-wide announcement — but not that the
+subscription had <strong>propagated to peer PUB sockets</strong>. ZMQ PUB sockets silently drop messages for
+topics with no known subscriber, and subscription propagation (SUB → XPUB → XSUB → every peer
+PUB) is asynchronous: measured ~5–10 ms on Linux, ~20–25 ms on macOS over IPC. The announcement
+rides a long-established fast channel (<code>_agency.register</code>) and arrives in ~2–4 ms — it
+<strong>systematically outruns routability</strong>. A peer that messaged the child immediately after the
+announcement published into a void: deterministic loss on macOS, coin-flip on Linux (which is how
+R6's verification could pass while the E2E test later failed everywhere — unnoticed because
+integration tests were not in CI, #39).</p>
+<p><strong>The same race had a second leg:</strong> per-request ephemeral reply topics. <code>ZMQTransport.request()</code>
+subscribed a fresh <code>_reply.&lt;uuid&gt;</code> and published immediately; a fast responder's reply (~1 ms)
+lost to the same 5–25 ms window and died inside the <em>responder's</em> PUB socket. Spawn's own ask
+survived only because spawn <em>processing</em> happened to exceed the window.</p>
+<p><strong>Fix (v0.8.1):</strong>
+1. <strong>Subscription-settle barrier</strong> — <code>ZMQTransport.wait_subscribed(topic)</code>: a probe topic
+   subscribed on the same SUB pipe (FIFO — cannot overtake the target subscription) is
+   self-published until it loops back through the proxy. <code>DynamicSupervisor._announce_child</code>
+   awaits it before announcing, making D13 mean <em>routable</em>, not merely <em>subscribed</em>. Transport
+   protocol gains the method; in-process is a no-op, NATS flushes (broker-side routing).
+2. <strong>Stable reply-topic prefix</strong> — each ZMQTransport subscribes ONCE at start to
+   <code>_reply.&lt;instance&gt;.</code> (propagation absorbed by the startup <code>wait_ready</code>); per-request reply
+   topics live under that prefix via ZMQ prefix matching. Eliminates leg 2 entirely and removes
+   per-request subscribe/unsubscribe churn.</p>
+<p><strong>Residual (recorded, deferred):</strong> the barrier confirms propagation through the Worker's own PUB
+pipe; peer PUB pipes receive the same XSUB broadcast in parallel — sub-millisecond jitter is
+theoretically possible. A full at-least-once route-establishment guarantee (sender-side
+republish + message-id dedup) is a v0.9+ design if ever needed; 10/10 cross-platform E2E runs
+show no residual loss.</p>
 
 
 

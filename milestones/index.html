@@ -4980,37 +4980,37 @@ Dockerfile, now the integration suite).</p>
 <tbody>
 <tr>
 <td>V1</td>
-<td><strong>Integration tests gate CI</strong> — new required job (in-process 1.7 s + ZMQ 8 s chunks; NATS guarded); gate proven to gate</td>
+<td>✅ <strong>Done (dev/v0.8.1)</strong> — <strong>Integration tests gate CI</strong>: required job, full tests/integration (~12 s); its FIRST run caught a real env bug (Rich help width). nats-server install deferred (guards skip)</td>
 <td>🔴 P0</td>
 <td><a href="https://github.com/civitas-io/python-civitas/issues/39">#39</a></td>
 </tr>
 <tr>
 <td>V2</td>
-<td><strong>Revive 3 dead integration modules</strong> — contrib imports → <code>importorskip</code> / core-only fixtures (~46 tests back)</td>
+<td>✅ <strong>Done (dev/v0.8.1)</strong> — <strong>3 dead modules revived</strong>: contrib <code>importorskip</code> guards + core-only fixtures; collection 3 errors → 0; suite 157 passed / 23 honest skips</td>
 <td>🔴 P0</td>
 <td><a href="https://github.com/civitas-io/python-civitas/issues/40">#40</a></td>
 </tr>
 <tr>
 <td>V3</td>
-<td><strong>Root-cause cross-process spawn E2E</strong> — bisect v0.7.0..v0.7.4; prime suspect R7 receive-path interception; fix or deterministic-quarantine</td>
+<td>✅ <strong>Done (dev/v0.8.1)</strong> — <strong>Root-caused + fixed cross-process spawn E2E</strong>: TWO ZMQ subscription-propagation races since R6 (announce outran child-topic propagation; per-request reply topics raced their own first use). Fixed via subscription-settle barrier before announce + stable per-transport reply prefix. 5/5 green on macOS AND Linux (docker-verified); design addendum in cross-process-spawn.md</td>
 <td>🔴 P0</td>
 <td><a href="https://github.com/civitas-io/python-civitas/issues/41">#41</a></td>
 </tr>
 <tr>
 <td>V4</td>
-<td><strong>Omit-list audit</strong> — delete 10 stale entries; test + un-omit ToolRegistry (<code>plugins/tools.py</code>), <code>plugins/model.py</code> (0%!), loader 84→90%</td>
+<td>✅ <strong>Done (dev/v0.8.1)</strong> — omit-list audit: 10 stale entries deleted; ToolRegistry + model.py 100% (were omitted / 0%); loader 96%</td>
 <td>🟡 P1</td>
 <td><a href="https://github.com/civitas-io/python-civitas/issues/42">#42</a></td>
 </tr>
 <tr>
 <td>V5</td>
-<td><strong>CLI unit tests</strong> via Typer CliRunner (<code>version/init/topology/state/security/run --help</code>); un-omit <code>cli/*</code> (~1,800 LOC into the gate)</td>
+<td>✅ <strong>Done (dev/v0.8.1)</strong> — 19 CliRunner tests; cli/* measured (except run.py live paths). CAUGHT: <code>civitas version</code> hardcoded '0.1.0' in every release since M3.1. Coverage 92→87.6% over ~900 newly-measured stmts (honest direction)</td>
 <td>🟡 P1</td>
 <td><a href="https://github.com/civitas-io/python-civitas/issues/42">#42</a></td>
 </tr>
 <tr>
 <td>V6</td>
-<td><strong>HTTP/3</strong>: test it (aioquic dev extra + lifecycle/smoke tests) or demote to experimental in docs</td>
+<td>✅ <strong>Done (dev/v0.8.1)</strong> — tested it, and the first test found that <strong>HTTP/3 had never worked</strong>: <code>StreamReset</code> imported from the wrong aioquic module → ImportError on first event (the #25 pattern). Fixed + first-ever QUIC loopback GET green; h3.py measured</td>
 <td>🟡 P2</td>
 <td><a href="https://github.com/civitas-io/python-civitas/issues/43">#43</a></td>
 </tr>

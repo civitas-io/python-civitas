@@ -3073,11 +3073,11 @@ inside this hook to authorize by the requesting agent's name.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>civitas/supervisor.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1225">1225</a></span>
-<span class="normal"><a href="#__codelineno-0-1226">1226</a></span>
-<span class="normal"><a href="#__codelineno-0-1227">1227</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-1225"><a id="__codelineno-0-1225" name="__codelineno-0-1225"></a><span class="k">def</span><span class="w"> </span><span class="nf">all_dynamic_agents</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">AgentProcess</span><span class="p">]:</span>
-</span><span id="__span-0-1226"><a id="__codelineno-0-1226" name="__codelineno-0-1226"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the currently live dynamic children.&quot;&quot;&quot;</span>
-</span><span id="__span-0-1227"><a id="__codelineno-0-1227" name="__codelineno-0-1227"></a>    <span class="k">return</span> <span class="p">[</span><span class="n">rec</span><span class="o">.</span><span class="n">agent</span> <span class="k">for</span> <span class="n">rec</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_dynamic_children</span><span class="o">.</span><span class="n">values</span><span class="p">()]</span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1246">1246</a></span>
+<span class="normal"><a href="#__codelineno-0-1247">1247</a></span>
+<span class="normal"><a href="#__codelineno-0-1248">1248</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-1246"><a id="__codelineno-0-1246" name="__codelineno-0-1246"></a><span class="k">def</span><span class="w"> </span><span class="nf">all_dynamic_agents</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">AgentProcess</span><span class="p">]:</span>
+</span><span id="__span-0-1247"><a id="__codelineno-0-1247" name="__codelineno-0-1247"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the currently live dynamic children.&quot;&quot;&quot;</span>
+</span><span id="__span-0-1248"><a id="__codelineno-0-1248" name="__codelineno-0-1248"></a>    <span class="k">return</span> <span class="p">[</span><span class="n">rec</span><span class="o">.</span><span class="n">agent</span> <span class="k">for</span> <span class="n">rec</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_dynamic_children</span><span class="o">.</span><span class="n">values</span><span class="p">()]</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -3104,35 +3104,35 @@ inside this hook to authorize by the requesting agent's name.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>civitas/supervisor.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1233">1233</a></span>
-<span class="normal"><a href="#__codelineno-0-1234">1234</a></span>
-<span class="normal"><a href="#__codelineno-0-1235">1235</a></span>
-<span class="normal"><a href="#__codelineno-0-1236">1236</a></span>
-<span class="normal"><a href="#__codelineno-0-1237">1237</a></span>
-<span class="normal"><a href="#__codelineno-0-1238">1238</a></span>
-<span class="normal"><a href="#__codelineno-0-1239">1239</a></span>
-<span class="normal"><a href="#__codelineno-0-1240">1240</a></span>
-<span class="normal"><a href="#__codelineno-0-1241">1241</a></span>
-<span class="normal"><a href="#__codelineno-0-1242">1242</a></span>
-<span class="normal"><a href="#__codelineno-0-1243">1243</a></span>
-<span class="normal"><a href="#__codelineno-0-1244">1244</a></span>
-<span class="normal"><a href="#__codelineno-0-1245">1245</a></span>
-<span class="normal"><a href="#__codelineno-0-1246">1246</a></span>
-<span class="normal"><a href="#__codelineno-0-1247">1247</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-1233"><a id="__codelineno-0-1233" name="__codelineno-0-1233"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_stop</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-0-1234"><a id="__codelineno-0-1234" name="__codelineno-0-1234"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Cancel all dynamic children on shutdown.&quot;&quot;&quot;</span>
-</span><span id="__span-0-1235"><a id="__codelineno-0-1235" name="__codelineno-0-1235"></a>    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">_rec</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_dynamic_children</span><span class="o">.</span><span class="n">items</span><span class="p">()):</span>
-</span><span id="__span-0-1236"><a id="__codelineno-0-1236" name="__codelineno-0-1236"></a>        <span class="n">task</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_child_tasks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
-</span><span id="__span-0-1237"><a id="__codelineno-0-1237" name="__codelineno-0-1237"></a>        <span class="k">if</span> <span class="n">task</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">task</span><span class="o">.</span><span class="n">done</span><span class="p">():</span>
-</span><span id="__span-0-1238"><a id="__codelineno-0-1238" name="__codelineno-0-1238"></a>            <span class="n">task</span><span class="o">.</span><span class="n">cancel</span><span class="p">()</span>
-</span><span id="__span-0-1239"><a id="__codelineno-0-1239" name="__codelineno-0-1239"></a>            <span class="k">try</span><span class="p">:</span>
-</span><span id="__span-0-1240"><a id="__codelineno-0-1240" name="__codelineno-0-1240"></a>                <span class="k">await</span> <span class="n">task</span>
-</span><span id="__span-0-1241"><a id="__codelineno-0-1241" name="__codelineno-0-1241"></a>            <span class="k">except</span> <span class="p">(</span><span class="n">asyncio</span><span class="o">.</span><span class="n">CancelledError</span><span class="p">,</span> <span class="ne">Exception</span><span class="p">):</span>
-</span><span id="__span-0-1242"><a id="__codelineno-0-1242" name="__codelineno-0-1242"></a>                <span class="k">pass</span>
-</span><span id="__span-0-1243"><a id="__codelineno-0-1243" name="__codelineno-0-1243"></a>
-</span><span id="__span-0-1244"><a id="__codelineno-0-1244" name="__codelineno-0-1244"></a>    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_pending_child_tasks</span><span class="p">):</span>
-</span><span id="__span-0-1245"><a id="__codelineno-0-1245" name="__codelineno-0-1245"></a>        <span class="n">t</span><span class="o">.</span><span class="n">cancel</span><span class="p">()</span>
-</span><span id="__span-0-1246"><a id="__codelineno-0-1246" name="__codelineno-0-1246"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pending_child_tasks</span><span class="p">:</span>
-</span><span id="__span-0-1247"><a id="__codelineno-0-1247" name="__codelineno-0-1247"></a>        <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">gather</span><span class="p">(</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">_pending_child_tasks</span><span class="p">,</span> <span class="n">return_exceptions</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1254">1254</a></span>
+<span class="normal"><a href="#__codelineno-0-1255">1255</a></span>
+<span class="normal"><a href="#__codelineno-0-1256">1256</a></span>
+<span class="normal"><a href="#__codelineno-0-1257">1257</a></span>
+<span class="normal"><a href="#__codelineno-0-1258">1258</a></span>
+<span class="normal"><a href="#__codelineno-0-1259">1259</a></span>
+<span class="normal"><a href="#__codelineno-0-1260">1260</a></span>
+<span class="normal"><a href="#__codelineno-0-1261">1261</a></span>
+<span class="normal"><a href="#__codelineno-0-1262">1262</a></span>
+<span class="normal"><a href="#__codelineno-0-1263">1263</a></span>
+<span class="normal"><a href="#__codelineno-0-1264">1264</a></span>
+<span class="normal"><a href="#__codelineno-0-1265">1265</a></span>
+<span class="normal"><a href="#__codelineno-0-1266">1266</a></span>
+<span class="normal"><a href="#__codelineno-0-1267">1267</a></span>
+<span class="normal"><a href="#__codelineno-0-1268">1268</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-1254"><a id="__codelineno-0-1254" name="__codelineno-0-1254"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_stop</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-1255"><a id="__codelineno-0-1255" name="__codelineno-0-1255"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Cancel all dynamic children on shutdown.&quot;&quot;&quot;</span>
+</span><span id="__span-0-1256"><a id="__codelineno-0-1256" name="__codelineno-0-1256"></a>    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">_rec</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_dynamic_children</span><span class="o">.</span><span class="n">items</span><span class="p">()):</span>
+</span><span id="__span-0-1257"><a id="__codelineno-0-1257" name="__codelineno-0-1257"></a>        <span class="n">task</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_child_tasks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+</span><span id="__span-0-1258"><a id="__codelineno-0-1258" name="__codelineno-0-1258"></a>        <span class="k">if</span> <span class="n">task</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">task</span><span class="o">.</span><span class="n">done</span><span class="p">():</span>
+</span><span id="__span-0-1259"><a id="__codelineno-0-1259" name="__codelineno-0-1259"></a>            <span class="n">task</span><span class="o">.</span><span class="n">cancel</span><span class="p">()</span>
+</span><span id="__span-0-1260"><a id="__codelineno-0-1260" name="__codelineno-0-1260"></a>            <span class="k">try</span><span class="p">:</span>
+</span><span id="__span-0-1261"><a id="__codelineno-0-1261" name="__codelineno-0-1261"></a>                <span class="k">await</span> <span class="n">task</span>
+</span><span id="__span-0-1262"><a id="__codelineno-0-1262" name="__codelineno-0-1262"></a>            <span class="k">except</span> <span class="p">(</span><span class="n">asyncio</span><span class="o">.</span><span class="n">CancelledError</span><span class="p">,</span> <span class="ne">Exception</span><span class="p">):</span>
+</span><span id="__span-0-1263"><a id="__codelineno-0-1263" name="__codelineno-0-1263"></a>                <span class="k">pass</span>
+</span><span id="__span-0-1264"><a id="__codelineno-0-1264" name="__codelineno-0-1264"></a>
+</span><span id="__span-0-1265"><a id="__codelineno-0-1265" name="__codelineno-0-1265"></a>    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_pending_child_tasks</span><span class="p">):</span>
+</span><span id="__span-0-1266"><a id="__codelineno-0-1266" name="__codelineno-0-1266"></a>        <span class="n">t</span><span class="o">.</span><span class="n">cancel</span><span class="p">()</span>
+</span><span id="__span-0-1267"><a id="__codelineno-0-1267" name="__codelineno-0-1267"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pending_child_tasks</span><span class="p">:</span>
+</span><span id="__span-0-1268"><a id="__codelineno-0-1268" name="__codelineno-0-1268"></a>        <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">gather</span><span class="p">(</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">_pending_child_tasks</span><span class="p">,</span> <span class="n">return_exceptions</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
