@@ -940,9 +940,9 @@ for the Medicus self-healing demo (restart-as-remediation needs trustworthy rest
 
 | # | Deliverable | Priority | Source |
 |---|-------------|----------|--------|
-| H1 | **Escalation restarts the escalated subtree** under ONE_FOR_ONE; budget window cleared on supervisor restart (fresh incarnation rule) | 🔴 P0 | [#28](https://github.com/civitas-io/python-civitas/issues/28) · design D2 |
-| H2 | **Serialized, observable crash handling** — per-supervisor crash queue; restart failures logged at ERROR + escalated, never swallowed; closes the `_running=False` crash-drop window | 🔴 P0 | [#30](https://github.com/civitas-io/python-civitas/issues/30) · design D4 |
-| H3 | **Registration snapshot preserved across restart** — capabilities/metadata/address survive crash-restart (Supervisor × 3 paths + Worker) | 🔴 P0 | [#29](https://github.com/civitas-io/python-civitas/issues/29) · design D3 |
+| H1 | ✅ **Done (dev/v0.8.0, `e758f72`)** — **Escalation restarts the escalated subtree** under ONE_FOR_ONE; budget window cleared on supervisor restart (fresh incarnation rule) | 🔴 P0 | [#28](https://github.com/civitas-io/python-civitas/issues/28) · design D2 |
+| H2 | ✅ **Done (dev/v0.8.0, `e758f72`)** — **Serialized, observable crash handling** — per-supervisor crash queue (strictly sequential, stale-incarnation skip); restart failures logged at ERROR + escalated via the parent's queue; crash-drop window closed | 🔴 P0 | [#30](https://github.com/civitas-io/python-civitas/issues/30) · design D4 |
+| H3 | ✅ **Done (dev/v0.8.0, `e758f72`)** — **Registration snapshot preserved across restart** — `reregister_preserving()` at 3 Supervisor paths + Worker | 🔴 P0 | [#29](https://github.com/civitas-io/python-civitas/issues/29) · design D3 |
 | H4 | **Priority heartbeats (stopgap)** — `_agency.heartbeat` at `priority=1`; restart backoff moved off the heartbeat loop | 🔴 P1 | [#31](https://github.com/civitas-io/python-civitas/issues/31) · design D5 |
 | H5 | **Fresh-start restart protocol** — restart re-instantiates from a child spec (fresh instance vars + `self.state`, checkpoint restore, mailbox carried over); AGENTS.md contract updated | 🔴 P1 | design D1 (A1) · xfail tests |
 | H6 | **Opt-in `handle_timeout` watchdog** — a hung local `handle()` becomes a visible crash instead of an undetectable stall | 🔴 P1 | design D5 (A7) |
