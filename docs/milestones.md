@@ -940,18 +940,18 @@ for the Medicus self-healing demo (restart-as-remediation needs trustworthy rest
 
 | # | Deliverable | Priority | Source |
 |---|-------------|----------|--------|
-| H1 | **Escalation restarts the escalated subtree** under ONE_FOR_ONE; budget window cleared on supervisor restart (fresh incarnation rule) | 🔴 P0 | [#28](https://github.com/civitas-io/python-civitas/issues/28) · design D2 |
-| H2 | **Serialized, observable crash handling** — per-supervisor crash queue; restart failures logged at ERROR + escalated, never swallowed; closes the `_running=False` crash-drop window | 🔴 P0 | [#30](https://github.com/civitas-io/python-civitas/issues/30) · design D4 |
-| H3 | **Registration snapshot preserved across restart** — capabilities/metadata/address survive crash-restart (Supervisor × 3 paths + Worker) | 🔴 P0 | [#29](https://github.com/civitas-io/python-civitas/issues/29) · design D3 |
-| H4 | **Priority heartbeats (stopgap)** — `_agency.heartbeat` at `priority=1`; restart backoff moved off the heartbeat loop | 🔴 P1 | [#31](https://github.com/civitas-io/python-civitas/issues/31) · design D5 |
-| H5 | **Fresh-start restart protocol** — restart re-instantiates from a child spec (fresh instance vars + `self.state`, checkpoint restore, mailbox carried over); AGENTS.md contract updated | 🔴 P1 | design D1 (A1) · xfail tests |
-| H6 | **Opt-in `handle_timeout` watchdog** — a hung local `handle()` becomes a visible crash instead of an undetectable stall | 🔴 P1 | design D5 (A7) |
-| H7 | **`on_stop()` exception containment** during normal shutdown | 🟡 P1 | [#27](https://github.com/civitas-io/python-civitas/issues/27) |
-| H8 | `ErrorAction.RETRY` ordering — retry in place or document reordering | 🟡 P2 | [#32](https://github.com/civitas-io/python-civitas/issues/32) · design D8 |
-| H9 | `_runtime` sender — register a sink or document non-routability | 🟡 P2 | [#33](https://github.com/civitas-io/python-civitas/issues/33) · design D8 |
-| H10 | Remove `register_b64` routing-table pollution (keys live in `KeyRegistry` only) | 🟡 P2 | [#34](https://github.com/civitas-io/python-civitas/issues/34) · design D8 |
-| H11 | README sweep — provider extras / adapter imports match AGENTS.md + pyproject | 🟡 P2 | [#35](https://github.com/civitas-io/python-civitas/issues/35) |
-| H12 | **Messaging-semantics doc** — at-most-once delivery, ask-cycle deadlock, backpressure deadlock, cooperative-scheduling bounds, restart/mailbox contract | 🟡 P2 | design D7 (A4/A5/A8/C8) |
+| H1 | ✅ **Done (dev/v0.8.0, `e758f72`)** — **Escalation restarts the escalated subtree** under ONE_FOR_ONE; budget window cleared on supervisor restart (fresh incarnation rule) | 🔴 P0 | [#28](https://github.com/civitas-io/python-civitas/issues/28) · design D2 |
+| H2 | ✅ **Done (dev/v0.8.0, `e758f72`)** — **Serialized, observable crash handling** — per-supervisor crash queue (strictly sequential, stale-incarnation skip); restart failures logged at ERROR + escalated via the parent's queue; crash-drop window closed | 🔴 P0 | [#30](https://github.com/civitas-io/python-civitas/issues/30) · design D4 |
+| H3 | ✅ **Done (dev/v0.8.0, `e758f72`)** — **Registration snapshot preserved across restart** — `reregister_preserving()` at 3 Supervisor paths + Worker | 🔴 P0 | [#29](https://github.com/civitas-io/python-civitas/issues/29) · design D3 |
+| H4 | ✅ **Done (dev/v0.8.0)** — **Priority heartbeats (stopgap)** — `_agency.heartbeat` at `priority=1` (busy agents ack between messages; suspended agents ack while staying suspended); threshold breaches enqueue on the crash queue so restart backoff no longer stalls the monitor loop | 🔴 P1 | [#31](https://github.com/civitas-io/python-civitas/issues/31) · design D5 |
+| H5 | ✅ **Done (dev/v0.8.0, staged (b) per §2.1)** — **Restart state reset**: `self.state` reset before checkpoint restore (only checkpointed state survives — suspend marker S7 intact); ctor-capture groundwork (`__new__` records the child spec) for v0.9 fresh-instance restart; AGENTS.md contract finalized | 🔴 P1 | design D1 (A1) · xfail tests |
+| H6 | ✅ **Done (dev/v0.8.0)** — **Opt-in `handle_timeout` watchdog** — a hung async `handle()` becomes a visible crash through the normal `on_error` path; YAML per-agent; span attr for hung-vs-buggy triage | 🔴 P1 | design D5 (A7) |
+| H7 | ✅ **Done (dev/v0.8.0)** — **`on_stop()` exception containment** during normal shutdown — contained + ERROR-logged, agent reaches STOPPED, shutdown completes | 🟡 P1 | [#27](https://github.com/civitas-io/python-civitas/issues/27) |
+| H8 | ✅ **Done (dev/v0.8.0)** — `ErrorAction.RETRY` retries **in place** — FIFO preserved, fresh `handle_timeout` per attempt, STOP aborts mid-retry; `RETRY_AFTER` delay-lane idea recorded as deferred (design §5) | 🟡 P2 | [#32](https://github.com/civitas-io/python-civitas/issues/32) · design D8 |
+| H9 | ✅ **Done (dev/v0.8.0)** — `_runtime` sink (bare subscription): WARNING + drop for send, fail-fast error reply for ask; glob patterns exclude `_`-prefixed system names (C6 slice of H13) | 🟡 P2 | [#33](https://github.com/civitas-io/python-civitas/issues/33) · design D8 |
+| H10 | ✅ **Done (dev/v0.8.0)** — `LocalRegistry.register_b64` deleted (zero callers; keys live in `KeyRegistry` only) | 🟡 P2 | [#34](https://github.com/civitas-io/python-civitas/issues/34) · design D8 |
+| H11 | ✅ **Done (dev/v0.8.0)** — Truth sweep: README + getting-started + index + plugins (extras/imports → civitas-contrib); 5 orphaned guide pages + security docs added to site nav | 🟡 P2 | [#35](https://github.com/civitas-io/python-civitas/issues/35) |
+| H12 | ✅ **Done (dev/v0.8.0)** — "Delivery semantics & hazards" in messaging.md; restart-contract + escalation + handle_timeout + suspension sections in supervision.md; NEW `recipes.md` (when-to-use decision guide) + `agents-guide.md` + `llms.txt` (coding-agent-consumable docs) | 🟡 P2 | design D7 (A4/A5/A8/C8) |
 | H13 | Hygiene batch — monotonic clocks for windows/TTL, broadcast glob excludes `_agency.*`, bus accessor methods (encapsulation) | 🟢 Stretch | design D8 (C2/C6/C7) |
 
 **Exit criteria:** all six strict-xfail tests in `tests/unit/test_actor_model_gaps.py` converted to

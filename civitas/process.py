@@ -237,12 +237,22 @@ class AgentProcess:
     # one atomic checkpoint() keeps it and any user pending_action from desyncing.
     _SUSPEND_STATE_KEY = "_civitas.suspended"
 
+    # Child spec captured by __new__ — (cls, args, kwargs) as passed at construction.
+    # Groundwork for v0.9 fresh-instance restart (design D1a); no consumer in v0.8.0.
+    _civitas_spec: tuple[type, tuple[Any, ...], dict[str, Any]]
+
+    def __new__(cls, *args: Any, **kwargs: Any) -> AgentProcess:
+        self = super().__new__(cls)
+        self._civitas_spec = (cls, args, kwargs)
+        return self
+
     def __init__(
         self,
         name: str,
         mailbox_size: int = 1000,
         max_retries: int = 3,
         shutdown_timeout: float = 30.0,
+        handle_timeout: float | None = None,
     ) -> None:
         self.name = name
         self.id: str = _uuid7()
@@ -252,6 +262,13 @@ class AgentProcess:
         self._task: asyncio.Task[None] | None = None
         self._max_retries = max_retries
         self._shutdown_timeout = shutdown_timeout
+        # H6: opt-in per-message watchdog. None (default) = no timeout. When set,
+        # a handle() exceeding it raises TimeoutError through the normal on_error
+        # path (default ESCALATE → visible crash) — a hung *async* handler stops
+        # being invisible to its supervisor. Limits: cancellation lands at the
+        # current await point (use `async with` for resources), and blocking code
+        # (time.sleep, busy loops) never yields, so it cannot be detected here.
+        self._handle_timeout = handle_timeout
 
         # Injected by Runtime/Worker during setup
         self._bus: MessageBus | None = None
@@ -1260,6 +1277,12 @@ class AgentProcess:
 
     async def _run(self) -> None:
         """Run the full start lifecycle inside the agent's own task (R1 · D1)."""
+        # H5b: a fresh incarnation starts with clean state — only checkpointed
+        # state survives a restart (the documented contract). The reset comes
+        # BEFORE _restore_state() so a checkpoint (including the durable suspend
+        # marker, S7) overwrites it; un-checkpointed leftovers — including
+        # whatever corruption caused a crash — die with the old incarnation.
+        self.state = {}
         await self._restore_state()
         self._start_phase = "on_start"
 
@@ -1414,7 +1437,16 @@ class AgentProcess:
                     },
                 )
 
-            await self.on_stop()
+            # H7 (#27): a raising on_stop() must not escape this finally — it
+            # would turn a graceful shutdown into a task exception, crash the
+            # supervisor awaiting _stop(), and take the whole shutdown sequence
+            # down. Mirrors the failed-on_start guard (D12) above.
+            try:
+                await self.on_stop()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("[%s] on_stop() raised during shutdown — contained", self.name)
 
             for _client in list(self._mcp_clients.values()):
                 try:
@@ -1430,7 +1462,15 @@ class AgentProcess:
                 self._status = ProcessStatus.STOPPED
 
     async def _dispatch(self, message: Message) -> None:
-        """Wrap a single handle() call in a span, apply error action."""
+        """Dispatch one delivery: run handle(), retrying IN PLACE on RETRY (H8, #32).
+
+        RETRY re-runs handle() with the same message immediately — no mailbox
+        round-trip — so per-sender FIFO order is preserved and a retry cannot
+        block on the agent's own full mailbox. Backoff between attempts is the
+        user's job: ``await asyncio.sleep(...)`` in ``on_error()`` before
+        returning RETRY. One handle span covers the delivery (final outcome);
+        each re-attempt additionally emits a ``civitas.agent.retry`` span.
+        """
         dispatch_start = time.time()
         # Start handle span
         handle_span: Span | None = None
@@ -1448,26 +1488,76 @@ class AgentProcess:
         self._current_handle_span = handle_span
 
         try:
-            if message.type == "civitas.eval.correction":
-                await self.on_correction(message)
-                if handle_span is not None:
-                    handle_span.set_attribute("civitas.handle.result", "success")
-                return
-            result = await self.handle(message)
-            if handle_span is not None:
-                handle_span.set_attribute("civitas.handle.result", "success")
-            if result is not None and message.correlation_id and self._bus is not None:
-                await self._bus.route(result)
-        except Exception as exc:
-            if handle_span is not None:
-                handle_span.set_error(exc)
-                handle_span.set_attribute("civitas.handle.result", "error")
-            if self._metrics is not None:
-                self._metrics.agent_error(self.name)
-            action = await self.on_error(exc, message)
-            if handle_span is not None:
-                handle_span.set_attribute("civitas.handle.result", f"error.{action.value.lower()}")
-            await self._apply_error_action(action, exc, message)
+            while True:
+                try:
+                    if message.type == "civitas.eval.correction":
+                        await self.on_correction(message)
+                        if handle_span is not None:
+                            handle_span.set_attribute("civitas.handle.result", "success")
+                        return
+                    if self._handle_timeout is not None:
+                        # H6: fresh budget per attempt — a retried handler gets the
+                        # full timeout, not the remnant of the previous attempt's.
+                        try:
+                            async with asyncio.timeout(self._handle_timeout):
+                                result = await self.handle(message)
+                        except TimeoutError:
+                            # H6: distinguish "hung" from "buggy" on the span, then
+                            # flow through the normal error machinery.
+                            if handle_span is not None:
+                                handle_span.set_attribute("civitas.handle.timeout", True)
+                            raise
+                    else:
+                        result = await self.handle(message)
+                    if handle_span is not None:
+                        handle_span.set_attribute("civitas.handle.result", "success")
+                    if result is not None and message.correlation_id and self._bus is not None:
+                        await self._bus.route(result)
+                    return
+                except Exception as exc:
+                    if handle_span is not None:
+                        handle_span.set_error(exc)
+                        handle_span.set_attribute("civitas.handle.result", "error")
+                    if self._metrics is not None:
+                        self._metrics.agent_error(self.name)
+                    action = await self.on_error(exc, message)
+                    if handle_span is not None:
+                        handle_span.set_attribute(
+                            "civitas.handle.result", f"error.{action.value.lower()}"
+                        )
+                    if action != ErrorAction.RETRY:
+                        await self._apply_error_action(action, exc, message)
+                        return
+                    # RETRY — in place (H8)
+                    message.attempt += 1
+                    if message.attempt > self._max_retries:
+                        # Max retries exceeded — escalate instead of looping forever
+                        self._status = ProcessStatus.CRASHED
+                        raise exc
+                    if self._status != ProcessStatus.RUNNING:
+                        # STOP/shutdown arrived mid-retry — don't delay it by up to
+                        # max_retries × handler time; drop the message (at-most-once).
+                        logger.info(
+                            "[%s] dropping message %r mid-retry: agent is %s",
+                            self.name,
+                            message.type,
+                            self._status.value,
+                        )
+                        return
+                    if self._tracer is not None:
+                        retry_span = self._tracer.start_span(
+                            "civitas.agent.retry",
+                            trace_id=message.trace_id,
+                            attributes={
+                                "civitas.agent.name": self.name,
+                                "civitas.message.type": message.type,
+                                "civitas.handle.attempt": message.attempt,
+                                "civitas.max_retries": self._max_retries,
+                                "error.type": type(exc).__name__,
+                            },
+                        )
+                        retry_span.end()
+                    # loop → immediate re-attempt with the same message
         finally:
             if self._metrics is not None:
                 self._metrics.message_handled(self.name, (time.time() - dispatch_start) * 1000)
@@ -1478,29 +1568,8 @@ class AgentProcess:
     async def _apply_error_action(
         self, action: ErrorAction, exc: Exception, message: Message
     ) -> None:
-        """Apply the error action returned by on_error()."""
-        if action == ErrorAction.RETRY:
-            message.attempt += 1
-            if message.attempt > self._max_retries:
-                # Max retries exceeded — escalate instead of looping forever
-                self._status = ProcessStatus.CRASHED
-                raise exc
-            # Emit retry span
-            if self._tracer is not None:
-                retry_span = self._tracer.start_span(
-                    "civitas.agent.retry",
-                    trace_id=message.trace_id,
-                    attributes={
-                        "civitas.agent.name": self.name,
-                        "civitas.message.type": message.type,
-                        "civitas.handle.attempt": message.attempt,
-                        "civitas.max_retries": self._max_retries,
-                        "error.type": type(exc).__name__,
-                    },
-                )
-                retry_span.end()
-            await self._mailbox.put(message)
-        elif action == ErrorAction.SKIP:
+        """Apply a non-RETRY error action (RETRY is handled in _dispatch, H8)."""
+        if action == ErrorAction.SKIP:
             pass  # discard message, continue
         elif action == ErrorAction.STOP:
             self._status = ProcessStatus.STOPPING

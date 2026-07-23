@@ -211,7 +211,7 @@ See [Messaging](messaging.md) for request-reply internals, backpressure, and tra
 Civitas's `ModelProvider` protocol abstracts LLM calls. Install the Anthropic provider:
 
 ```bash
-pip install civitas[anthropic]
+pip install civitas-contrib[anthropic]
 export ANTHROPIC_API_KEY=sk-...
 ```
 
@@ -221,7 +221,7 @@ Create `with_llm.py`:
 import asyncio
 from civitas import AgentProcess, Runtime, Supervisor
 from civitas.messages import Message
-from civitas.plugins.anthropic import AnthropicProvider
+from civitas_contrib.plugins.anthropic import AnthropicProvider
 
 class Assistant(AgentProcess):
     async def handle(self, message: Message) -> Message | None:

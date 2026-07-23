@@ -38,6 +38,7 @@ from civitas.errors import ConfigurationError
 from civitas.messages import Message
 from civitas.observability.otel_agent import run_otel_agent
 from civitas.process import DYNAMIC_SUPERVISOR_CAPABILITY, AgentProcess, ProcessStatus
+from civitas.registry import reregister_preserving
 from civitas.serializer import Serializer
 from civitas.supervisor import DynamicSupervisor
 
@@ -215,8 +216,7 @@ class Worker:
             await agent._stop()
             agent._status = ProcessStatus.INITIALIZING
             if self._registry is not None:
-                self._registry.deregister(agent.name)
-                self._registry.register(agent.name)
+                reregister_preserving(self._registry, agent.name)  # H3 (#29)
             if self._bus is not None:
                 await self._bus.setup_agent(agent)
             await agent._start()

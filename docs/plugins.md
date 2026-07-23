@@ -16,8 +16,8 @@ Plugins are injected by `Runtime` at startup. Agents access them via `self.llm`,
 
 ```bash
 pip install civitas                   # core only
-pip install civitas[anthropic]        # + Anthropic LLM provider
-pip install civitas[litellm]          # + 100+ models via LiteLLM
+pip install civitas-contrib[anthropic]  # + Anthropic LLM provider
+pip install civitas-contrib[litellm]    # + 100+ models via LiteLLM
 pip install civitas[otel]             # + OpenTelemetry tracing
 pip install civitas[zmq]              # + ZMQ multi-process transport
 pip install civitas[nats]             # + NATS distributed transport
@@ -56,12 +56,12 @@ class ModelResponse:
 ### AnthropicProvider
 
 ```bash
-pip install civitas[anthropic]
+pip install civitas-contrib[anthropic]
 export ANTHROPIC_API_KEY=sk-...
 ```
 
 ```python
-from civitas.plugins.anthropic import AnthropicProvider
+from civitas_contrib.plugins.anthropic import AnthropicProvider
 
 runtime = Runtime(
     supervisor=Supervisor("root", children=[...]),
@@ -107,7 +107,7 @@ For models not in the pricing table, `cost_usd` is `None`.
 Covers OpenAI, Google Gemini, AWS Bedrock, Azure, Cohere, Mistral, and 100+ other providers via [LiteLLM](https://docs.litellm.ai).
 
 ```bash
-pip install civitas[litellm]
+pip install civitas-contrib[litellm]
 ```
 
 ```python
@@ -441,7 +441,7 @@ If a plugin fails to load — missing dependency, wrong constructor args, bad im
 ```
 civitas.errors.PluginError: Failed to load model plugin 'anthropic':
   No module named 'anthropic'
-  Hint: pip install civitas[anthropic]
+  Hint: pip install civitas-contrib[anthropic]
 ```
 
 This fails fast at `Runtime.start()`, before any agents are started, so there's no ambiguity about what went wrong.

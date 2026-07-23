@@ -426,3 +426,91 @@ async def on_start(self):
 async def on_start(self):
     await self.send("coordinator", {"status": "ready"})
 ```
+
+## Delivery semantics & hazards
+
+Everything in this section is a deliberate, documented property of the runtime. Knowing these
+before production saves you from discovering them there.
+
+### Delivery is at-most-once
+
+`send()` is fire-and-forget: no delivery confirmation, no dead-letter queue, no automatic
+redelivery. The contract across failures:
+
+| Event | Queued messages (in mailbox) | In-flight message (being handled) |
+|---|---|---|
+| Crash + supervisor restart | **Survive** — the mailbox is retained | **Lost** — unless `on_error` returned `RETRY` before the crash |
+| Graceful stop | Drained per `drain=` policy (dynamic children) or dropped | Completed first |
+| Dynamic child teardown | Request-reply messages get an **error reply** (callers fail fast); fire-and-forget dropped with a log line | Lost |
+
+If a message must not be lost, make its *effect* durable: checkpoint after processing, and design
+senders to re-send on missing replies (idempotency via your own message IDs).
+
+### The restart state contract (v0.8.0)
+
+**Only checkpointed state survives a restart.** On every (re)start `self.state` is reset, then
+restored from the last `checkpoint()`. Un-checkpointed state — including whatever corruption
+caused the crash — dies with the old incarnation. Instance variables currently survive (the
+instance is reused; fresh-instance restart lands in v0.9) — treat them as undefined across
+restarts. The durable-suspension marker rides in the checkpoint, so suspended agents restart into
+`SUSPENDED`. Durable suspension across restarts therefore requires a StateStore (`Runtime` always
+injects one; default is in-memory).
+
+### Retry semantics: in place, ordered
+
+`ErrorAction.RETRY` re-runs `handle()` with the same message **immediately** — no mailbox
+round-trip, so per-sender FIFO order holds even across transient failures. Consequences:
+
+- Nothing else is processed between attempts (that *is* the ordering guarantee).
+- Backoff belongs in your hook: `await asyncio.sleep(...)` inside `on_error()` before returning
+  `RETRY`. The agent is blocked while sleeping — bounded by `max_retries`.
+- Need non-blocking deferral (e.g. a long rate-limit)? Return `SKIP` and re-send the work to
+  yourself — an **explicit** choice to reorder, instead of an accidental one.
+
+### The ask-cycle deadlock
+
+Agents process one message at a time, and `ask()` blocks the caller's loop. If A's handler asks B
+and B's handler (directly or transitively) asks A, **both stall until a timeout crashes one side**
+— A cannot answer B while awaiting B.
+
+```text
+A.handle() ── ask ──▶ B.handle() ── ask ──▶ A   (queued behind A's blocked loop) ⚠
+```
+
+Mitigations, in order of preference: keep your `ask` call-graph **acyclic** (draw it); use
+`send()` + a reply message for back-channels instead of nested asks; set short `ask` timeouts on
+anything that could cycle so the failure is fast and visible.
+
+### Bounded mailboxes: backpressure can deadlock too
+
+`send()` to a full mailbox **blocks the sender** until space frees — deliberate backpressure. A
+cycle of mutually-full mailboxes (A blocked sending to B, B blocked sending to A) deadlocks with
+no detection. Size mailboxes for your burst profile (`mailbox_size=`, default 1000), keep
+`handle()` fast relative to arrival rate, and prefer acyclic flow here too. Note the priority
+queue is small (100) and reserved for system traffic. A long-`SUSPENDED` agent buffers business
+messages until full, then back-propagates blocking to its senders — plan approval latency
+accordingly.
+
+### Cooperative scheduling: what Erlang has that we don't
+
+All agents share one event loop per process. One blocking call in `handle()` — `time.sleep()`,
+synchronous HTTP, a CPU-heavy loop — stalls **every agent, supervisor, heartbeat ack, and gateway
+in that process**. BEAM preempts; asyncio cannot. Rules: all I/O async; wrap unavoidable blocking
+work in `asyncio.to_thread()`; move CPU-bound agents to a Worker process (see
+[Transports](transports.md)).
+
+### `handle_timeout`: what it can and cannot catch
+
+The opt-in watchdog (`AgentProcess(..., handle_timeout=N)` or `agent: {handle_timeout: N}` in
+YAML) converts a hung handler into a normal crash via `on_error()`. Limits: it fires only at
+**await points** — a *blocking* hang (previous section) never yields and is undetectable; and on
+expiry your handler is **cancelled at its current await**, so hold resources with `async with`.
+Choose N per agent: generously above your slowest legitimate path (LLM chains included), or leave
+it off for streaming agents.
+
+### Liveness vs. load (remote agents)
+
+Heartbeats ride the priority channel: a busy remote agent acks between messages, and a
+`SUSPENDED` agent acks while staying suspended. A single very long `handle()` still delays acks
+until the next loop boundary — bound it with `handle_timeout`, and keep heartbeat thresholds
+(`interval × missed`) above your slowest legitimate handler.

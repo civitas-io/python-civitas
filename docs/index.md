@@ -117,14 +117,14 @@ asyncio.run(main())
 **With an LLM** — install the Anthropic provider and inject it via `Runtime`:
 
 ```bash
-pip install civitas[anthropic]
+pip install civitas-contrib[anthropic]
 export ANTHROPIC_API_KEY=sk-...
 ```
 
 ```python
 from civitas import AgentProcess, Runtime, Supervisor
 from civitas.messages import Message
-from civitas.plugins.anthropic import AnthropicProvider
+from civitas_contrib.plugins.anthropic import AnthropicProvider
 
 class Assistant(AgentProcess):
     async def handle(self, message: Message) -> Message | None:

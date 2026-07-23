@@ -97,15 +97,28 @@ nav:
 
   - Guides:
     - Core Concepts: concepts.md
+    - Choosing Your Configuration: recipes.md
     - Supervision: supervision.md
     - Messaging: messaging.md
+    - Streaming: streaming.md
+    - GenServer: genserver.md
     - Transports: transports.md
+    - HTTP Gateway: gateway.md
     - Observability: observability.md
+    - EvalLoop: evalloop.md
+    - MCP Tools: mcp.md
     - Plugins: plugins.md
     - Topology YAML: topology.md
     - CLI Reference: cli.md
     - Deployment: deployment.md
     - Adapters: adapters.md
+
+  - For Coding Agents: agents-guide.md
+
+  - Security:
+    - Architecture: security/architecture.md
+    - Threat Model: security/threat-model.md
+    - Enterprise Checklist: security/enterprise-checklist.md
 
   - Reference:
     - Architecture: architecture.md

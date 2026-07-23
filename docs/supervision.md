@@ -190,11 +190,49 @@ The window slides continuously — it's not a fixed interval that resets.
 
 ## Escalation chain
 
-When a supervisor exhausts its restart budget, it escalates to its own parent supervisor. The parent treats the child supervisor as if it were a crashed agent and applies its own restart strategy.
+When a supervisor exhausts its restart budget, it escalates to its own parent supervisor. The parent restarts the escalated child supervisor as a **subtree**: stop, clear its restart budget (a fresh incarnation gets a fresh intensity window), start — which restarts its children in turn. Repeated subtree failures then burn the *parent's* budget, and so on up the tree: blast radius grows one level at a time.
 
 ![Supervision Escalation](assets/supervision-escalation.svg)
 
-If the root supervisor also exhausts its budget, the process stops permanently and an error is logged. There is no escalation above the root.
+If the root supervisor also exhausts its budget, the child stays down permanently and an error is logged. There is no escalation above the root.
+
+Crash handling is **strictly serialized** per supervisor (one crash processed at a time, like OTP EXIT signals): simultaneous crashes under `ONE_FOR_ALL` produce exactly one restart cycle, and a restart that itself fails is logged at ERROR and escalated — never silently swallowed.
+
+## The restart contract — what survives, what doesn't
+
+**Only checkpointed state survives a restart.** On every (re)start, `self.state` is reset and then restored from the last `checkpoint()`:
+
+| | Survives restart? |
+|---|---|
+| `self.state` you checkpointed | ✅ restored from the store |
+| `self.state` you did NOT checkpoint | ❌ reset — including whatever corruption caused the crash (that's the point of "let it crash") |
+| Instance variables (`self.foo`) | ⚠️ survive today (instance reuse; fresh-instance restart planned) — **treat as undefined**, never rely on them |
+| Mailbox (queued messages) | ✅ retained; the in-flight message is lost |
+| Registration (name, capabilities, metadata) | ✅ preserved exactly |
+| Durable-suspension marker | ✅ rides in the checkpoint — a suspended agent restarts into `SUSPENDED` |
+
+Practical rules: initialize with `self.state.setdefault(...)` in `on_start()`; call `await self.checkpoint()` after each completed unit of work; and give distributed trees a persistent store (`sqlite`/`postgres`) — the default `InMemoryStateStore` dies with the process. See [Choosing your configuration](recipes.md#state-persistence-what-must-survive).
+
+## Detecting hung agents — `handle_timeout`
+
+A crash is visible; a *hang* (stuck await, dead socket) is not — the task never completes, so the supervisor sees a healthy child forever. The opt-in watchdog converts hangs into ordinary crashes:
+
+```python
+MyAgent("worker", handle_timeout=120.0)      # or agent: {handle_timeout: 120} in YAML
+```
+
+On expiry, `TimeoutError` flows through `on_error()` like any exception (default ESCALATE → restart; return `RETRY`/`SKIP` to override). Limits: catches **stuck awaits only** — blocking code never yields and is invisible; the handler is cancelled at its current await, so hold resources with `async with`. Sizing guidance: [recipes](recipes.md#handle_timeout-can-this-agent-hang).
+
+## Suspension — pausing without killing
+
+`suspend`/`resume` is the human-in-the-loop primitive: the agent pauses at its next message boundary, buffers business messages, keeps answering heartbeats (suspended ≠ crashed), and persists the marker so restarts stay suspended. `resume()` requires a named approver — your audit trail.
+
+```python
+await runtime.suspend("trader", reason="daily-loss-limit")
+await runtime.resume("trader", approver="risk-officer@example.com")
+```
+
+Override `on_suspend(reason)` / `on_resume(approver)` for resource release and pending-action pickup. `ask()` into a suspended agent times out by design — poll with `send()` for long approvals. When to reach for it: [recipes](recipes.md#suspension-when-do-humans-gate-the-loop).
 
 ---
 
@@ -287,6 +325,12 @@ supervisor.add_remote_child(
     missed_heartbeats_threshold=3, # restart after 3 consecutive misses
 )
 ```
+
+Heartbeats ride the **priority channel**: a busy agent acks between messages (liveness is not
+conflated with queue depth), and a `SUSPENDED` agent acks while staying suspended. One long
+`handle()` still delays the ack until the next message boundary — keep
+`interval × threshold` above your slowest legitimate handler, or bound it with
+[`handle_timeout`](#detecting-hung-agents-handle_timeout).
 
 In YAML topology:
 

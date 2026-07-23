@@ -13,7 +13,13 @@ import yaml
 
 from civitas.audit.sinks import sink_from_config
 from civitas.components import ComponentSet, build_component_set
-from civitas.errors import ConfigurationError, DeserializationError, SignatureError, SpawnError
+from civitas.errors import (
+    ConfigurationError,
+    DeserializationError,
+    MessageRoutingError,
+    SignatureError,
+    SpawnError,
+)
 from civitas.evalloop import EvalAgent, EvalExporter
 from civitas.gateway.core import GatewayConfig, HTTPGateway
 from civitas.genserver import GenServer
@@ -393,7 +399,12 @@ class Runtime:
             elif "agent" in node:
                 agent_cfg = node["agent"]
                 agent_cls = _resolve_class(agent_cfg["type"])
-                return agent_cls(name=agent_cfg["name"])
+                agent_kwargs: dict[str, Any] = {"name": agent_cfg["name"]}
+                # H6: opt-in per-message watchdog — only passed when configured, so
+                # subclasses with narrow __init__ signatures stay compatible.
+                if "handle_timeout" in agent_cfg:
+                    agent_kwargs["handle_timeout"] = float(agent_cfg["handle_timeout"])
+                return agent_cls(**agent_kwargs)
             elif (
                 node.get("type") in ("gen_server", "agent") and "module" in node and "class" in node
             ):
@@ -724,6 +735,16 @@ class Runtime:
         await self._transport.subscribe("_agency.register", self._on_remote_register)
         await self._transport.subscribe("_agency.deregister", self._on_remote_deregister)
 
+        # H9 (#33): '_runtime' sink. Runtime-initiated messages carry
+        # sender="_runtime", which is not an agent — an agent doing the natural
+        # `self.send(message.sender, ...)` used to crash on MessageRoutingError.
+        # The sink converts that into a logged drop (and a fail-fast error reply
+        # for ask()). Not an AgentProcess: bare subscription, no mailbox, no
+        # lifecycle, nothing to supervise. Glob broadcasts never reach it —
+        # underscore names are excluded from patterns (registry C6 rule).
+        self._registry.register("_runtime")
+        await self._transport.subscribe("_runtime", self._on_runtime_addressed)
+
         # Wait for subscriptions to propagate (ZMQ slow joiner mitigation)
         if hasattr(self._transport, "wait_ready"):
             await self._transport.wait_ready()
@@ -779,6 +800,8 @@ class Runtime:
         if self._audit_sink is not None:
             await self._audit_sink.close()
 
+        if self._registry is not None:
+            self._registry.deregister("_runtime")
         self._agents_by_name.clear()
         self._started = False
 
@@ -830,6 +853,47 @@ class Runtime:
                 self._key_registry.register_b64(name, pubkey)
             except (ValueError, TypeError):
                 logger.warning("Ignoring malformed announced public key for %r", name)
+
+    async def _on_runtime_addressed(self, data: bytes) -> None:
+        """Sink for messages addressed to '_runtime' (H9, #33).
+
+        WARNING-logs every occurrence (it is always a code smell — data meant
+        for the caller must travel via reply()/ask), and answers request-reply
+        messages with an error reply so ``ask("_runtime", ...)`` fails fast with
+        a reason instead of timing out.
+        """
+        if self._serializer is None:
+            return
+        try:
+            msg = self._serializer.deserialize(data)
+        except (DeserializationError, SignatureError):
+            return
+        logger.warning(
+            "Message %r from %r was addressed to '_runtime' and dropped — "
+            "Runtime-initiated messages have no routable sender; use reply() / "
+            "the ask() reply path to return data to the caller.",
+            msg.type,
+            msg.sender or "<unknown>",
+        )
+        if msg.correlation_id and (msg.reply_to or msg.sender) and self._bus is not None:
+            error_reply = Message(
+                type="reply",
+                sender="_runtime",
+                recipient=msg.reply_to or msg.sender,
+                payload={
+                    "status": "error",
+                    "error": "'_runtime' is not an agent — Runtime-initiated messages "
+                    "have no routable sender; use reply()/ask to return data to the caller",
+                },
+                correlation_id=msg.correlation_id,
+                trace_id=msg.trace_id,
+                span_id=_new_span_id(),
+                parent_span_id=msg.span_id,
+            )
+            try:
+                await self._bus.route(error_reply)
+            except MessageRoutingError:
+                logger.debug("error reply from '_runtime' sink undeliverable")
 
     async def _on_remote_deregister(self, data: bytes) -> None:
         """Verify and apply an ``_agency.deregister`` announcement (R6 · D13)."""
