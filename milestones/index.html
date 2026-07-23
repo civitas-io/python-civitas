@@ -4944,12 +4944,6 @@ at the v0.9 fresh-instance restart (design D1a).</p>
 </thead>
 <tbody>
 <tr>
-<td>~~Supervision hardening D1/D5-watchdog/D7/D8~~ → scheduled into <a href="#v080--supervision-core-hardening-planned">v0.8.0</a> (H5, H6, H12, H8–H10, H13)</td>
-<td>—</td>
-<td>⏳ scheduled</td>
-<td>design/supervision-hardening.md</td>
-</tr>
-<tr>
 <td><strong>Supervision hardening D5 (structural) — per-process out-of-band liveness</strong> (beyond the v0.8.0 <code>handle_timeout</code> watchdog)</td>
 <td>🔴 High</td>
 <td>⏸️ deferred to v0.9+</td>
@@ -4960,6 +4954,12 @@ at the v0.9 fresh-instance restart (design D1a).</p>
 <td>🟡 Medium</td>
 <td>💡 needs own plan (v0.9+)</td>
 <td>design/supervision-hardening.md D6 (B1)</td>
+</tr>
+<tr>
+<td><strong>Supervision hardening D1(a) — fresh-instance restart</strong> (child-spec capture shipped in v0.8.0; consumes it; flips the last xfail tracker)</td>
+<td>🔴 High</td>
+<td>💡 needs own plan (v0.9, with D6)</td>
+<td>design/supervision-hardening.md D1</td>
 </tr>
 <tr>
 <td>DynamicSupervisor: move <code>wait=True</code> readiness wait off the message loop (head-of-line blocking)</td>
