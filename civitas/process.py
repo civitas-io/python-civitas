@@ -42,6 +42,12 @@ _STREAM_CANCEL = "civitas.stream.cancel"
 # target. Injected at registration so a YAML capabilities: override cannot strip it.
 DYNAMIC_SUPERVISOR_CAPABILITY = "_agency.dynamic_supervisor"
 
+# Reserved marker capability (v0.9.0 E4/D6): static Supervisor instances are
+# now addressable actors too (design supervision-endgame.md §6). Lets peers
+# (Presidium, introspection tooling) distinguish a supervisor's registry entry
+# from a plain agent's without a type check across the wire.
+SUPERVISOR_CAPABILITY = "_agency.supervisor"
+
 # Backstops the marker check: a SUSPENDED target passes the marker check but buffers
 # non-priority messages and never replies, so bound the wait instead of hanging (§8).
 _SPAWN_ASK_TIMEOUT = 30.0
@@ -75,9 +81,14 @@ class Mailbox:
     mailbox is full — the sender awaits until space is available.
     """
 
-    def __init__(self, maxsize: int = 1000) -> None:
+    def __init__(self, maxsize: int = 1000, priority_maxsize: int = 100) -> None:
         self._queue: asyncio.Queue[Message] = asyncio.Queue(maxsize=maxsize)
-        self._priority_queue: asyncio.Queue[Message] = asyncio.Queue(maxsize=100)
+        # priority_maxsize=0 means unbounded (asyncio.Queue convention) — used by
+        # Supervisor (v0.9.0 E4/D-E4-2): its crash self-messages are enqueued from
+        # a SYNC task-done callback that cannot await a bounded put(), and a
+        # bounded put_nowait() would reintroduce the crash-drop bug class H2
+        # removed. Agents keep the default bounded 100.
+        self._priority_queue: asyncio.Queue[Message] = asyncio.Queue(maxsize=priority_maxsize)
         self._notify: asyncio.Event = asyncio.Event()
 
     async def put(self, message: Message) -> None:
@@ -88,6 +99,15 @@ class Mailbox:
         else:
             await self._queue.put(message)
             self._notify.set()
+
+    def put_nowait(self, message: Message) -> None:
+        """Synchronous enqueue for callers that cannot await (D-E4-2) — e.g. an
+        ``asyncio.Task`` done-callback. Priority messages only; raises
+        ``asyncio.QueueFull`` on a bounded queue at capacity (agents' normal
+        queue backpressure is unaffected — this bypasses `put()` entirely).
+        """
+        self._priority_queue.put_nowait(message)
+        self._notify.set()
 
     def _drop_if_expired(self, message: Message) -> bool:
         """Return True (logging a warning) if the message has exceeded its ttl (F01-3)."""

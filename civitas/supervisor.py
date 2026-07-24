@@ -9,11 +9,16 @@ from collections import deque
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 from civitas.errors import ConfigurationError
 from civitas.messages import Message, _new_span_id, _uuid7
-from civitas.process import DYNAMIC_SUPERVISOR_CAPABILITY, AgentProcess, ProcessStatus
+from civitas.process import (
+    DYNAMIC_SUPERVISOR_CAPABILITY,
+    AgentProcess,
+    Mailbox,
+    ProcessStatus,
+)
 from civitas.registry import reregister_preserving
 from civitas.security.identity import AgentIdentity
 from civitas.security.signing import SigningSerializer
@@ -53,12 +58,6 @@ async def _transfer_mailbox(old: AgentProcess, new: AgentProcess) -> None:
         await new._mailbox.put(message)
 
 
-if TYPE_CHECKING:
-    from civitas.bus import MessageBus
-    from civitas.observability.tracer import Tracer
-    from civitas.registry import Registry
-
-
 class HeartbeatTimeout(Exception):
     """Raised when a remote agent fails to respond to heartbeat pings."""
 
@@ -76,12 +75,20 @@ class RestartStrategy(Enum):
     REST_FOR_ONE = "REST_FOR_ONE"
 
 
-class Supervisor:
+class Supervisor(AgentProcess):
     """Manages child processes with restart strategies.
 
     When a child crashes, the supervisor applies the configured restart
     strategy. If max_restarts is exceeded within restart_window, the
     supervisor escalates to its parent or stops permanently.
+
+    v0.9.0 E4 (D6, design supervision-endgame.md §6): a Supervisor is now
+    itself an actor — addressable, registered (``SUPERVISOR_CAPABILITY``),
+    with its own mailbox and message loop. Phase A (this constructor + the
+    start/stop ordering below) is a zero-behavior-change skeleton: crash
+    events still flow through the pre-E4 queue/drain-task mechanism until
+    Phase B swaps the control plane onto the mailbox. Public constructor
+    signature is unchanged — the actorization is purely internal.
     """
 
     def __init__(
@@ -95,7 +102,14 @@ class Supervisor:
         backoff_base: float = 1.0,
         backoff_max: float = 60.0,
     ) -> None:
-        self.name = name
+        super().__init__(name)
+        # D-E4-2: supervisors' priority queue is UNBOUNDED (0) — crash
+        # self-messages are enqueued from a sync task-done callback (Phase B)
+        # that cannot await a bounded put(); a bounded put_nowait() would
+        # reintroduce the crash-drop bug class H2 removed. Volume is bounded
+        # by child count in practice (the same judgment call H2 made for the
+        # queue this replaces).
+        self._mailbox = Mailbox(maxsize=1000, priority_maxsize=0)
         self.children: list[AgentProcess | Supervisor] = children or []
         self.strategy = RestartStrategy(strategy)
         # E1 (v0.9.0): budgets/window/backoff live in ONE engine shared with
@@ -141,11 +155,9 @@ class Supervisor:
         # Runtime updates its O(1) map and TopologyServer references here (Q1:
         # user-held references go stale by design; route by name).
         self._child_replaced_callbacks: list[Callable[[str, AgentProcess], None]] = []
-
-        # Injected by Runtime
-        self._bus: MessageBus | None = None
-        self._registry: Registry | None = None
-        self._tracer: Tracer | None = None
+        # _bus/_registry/_tracer already initialized to None by AgentProcess.__init__
+        # above; Runtime injects the real values (agent path) or the dedicated
+        # supervisor-wiring block (Runtime.start) before the tree starts.
 
         # Heartbeat monitoring for remote agents
         self._remote_children: set[str] = set()
@@ -210,6 +222,13 @@ class Supervisor:
         """Start all children and begin monitoring them."""
         self._running = True
 
+        # D-E4-3 (v0.9.0, Phase A): start the supervisor's OWN message loop
+        # first — it must be live before any child can crash-report through it
+        # (Phase B wires crash delivery onto this loop; harmless no-op until
+        # then, since nothing addresses a supervisor by name yet). Callable
+        # again after stop() — same pattern H1 subtree-restart already uses.
+        await self._start()
+
         # Start (or restart, after an H1 subtree restart) the crash drain task.
         if self._crash_drain_task is None or self._crash_drain_task.done():
             self._crash_drain_task = asyncio.create_task(
@@ -231,8 +250,21 @@ class Supervisor:
         # Start heartbeat monitoring for remote children
         await self._start_heartbeat_monitor()
 
-    async def stop(self) -> None:
-        """Stop all children gracefully."""
+    async def stop(self) -> None:  # type: ignore[override]  # D-E4-6: see docstring
+        """Stop all children gracefully.
+
+        v0.9.0 E4 (D-E4-6, found during Phase A implementation): this
+        INTENTIONALLY shadows ``AgentProcess.stop(name, drain, timeout)`` (the
+        soft-stop-a-dynamic-child API). The two are unrelated operations that
+        happen to share a name now that Supervisor is an AgentProcess. This is
+        safe: the inherited method requires ``self._dynamic_supervisor_name``
+        to be wired, and Runtime's ``_wire_dyn_sup`` never sets it on a
+        Supervisor node (only recurses through its children) — so the
+        shadowed method could only ever have raised ``SpawnError`` on a
+        Supervisor instance. Pre-existing public API (``sup.stop()``, no args)
+        takes precedence over the newly-inherited one; renaming either public
+        method would be the breaking change, not keeping this override.
+        """
         self._running = False
 
         # Cancel the crash drain BEFORE tearing down children so a restart that is
@@ -253,6 +285,11 @@ class Supervisor:
                 await child.stop()
             else:
                 await child._stop()
+
+        # D-E4-3: stop the supervisor's OWN loop LAST — after heartbeat
+        # monitoring and every child, mirroring the crash-drain-then-children
+        # ordering above (a live loop outlives its children's shutdown).
+        await self._stop()
 
     def add_crash_callback(self, callback: Callable[[str, Exception], Awaitable[None]]) -> None:
         """Register a callback invoked with (child_name, exception) on every crash.

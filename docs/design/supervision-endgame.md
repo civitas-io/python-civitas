@@ -221,6 +221,19 @@ migrations to the mailbox/side-table surface, each justified per the regression 
 outright: `_crash_queue`, `_crash_drain_task`, `_drain_crashes` (~60 lines) — H2's hand-built
 mailbox replaced by the real one it anticipated.
 
+**D-E4-6 — `Supervisor.stop()` intentionally shadows `AgentProcess.stop(name, drain, timeout)`
+(found during Phase A implementation, not anticipated pre-implementation).** Inheriting from
+`AgentProcess` pulls in a public `stop(name, drain, timeout)` method (soft-stop a dynamically
+spawned child) that collides by name with the pre-existing public `Supervisor.stop()` (shut down
+this supervisor and its children) — unrelated operations, same name, now the same namespace.
+Verified safe rather than papered over: the inherited method requires
+`self._dynamic_supervisor_name` to be wired, and Runtime's `_wire_dyn_sup` never sets it on a
+`Supervisor` node (only recurses through its children) — so on any `Supervisor` instance the
+shadowed method could only ever have raised `SpawnError`. Resolution: keep the pre-existing
+public `stop()` (renaming it would be the actual breaking change), with a `# type:
+ignore[override]` carrying this justification. Zero test impact (1130/1130 unit, full integration,
+both macOS and Linux) — Halt-Check A criteria met; Phase A proceeds.
+
 ## 7. Compatibility & behavior-change ledger
 
 | Change | Kind | Notes |

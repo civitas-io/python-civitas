@@ -27,7 +27,7 @@ from civitas.mcp.types import MCPServerConfig
 from civitas.messages import Message, _new_span_id, _uuid7
 from civitas.observability.otel_agent import run_otel_agent
 from civitas.plugins.loader import load_plugins_from_config
-from civitas.process import DYNAMIC_SUPERVISOR_CAPABILITY, AgentProcess
+from civitas.process import DYNAMIC_SUPERVISOR_CAPABILITY, SUPERVISOR_CAPABILITY, AgentProcess
 from civitas.sandbox.config import SandboxConfig
 from civitas.secrets.substitution import substitute_vars
 from civitas.security.config import GatewayAuthConfig, SecurityConfig
@@ -780,6 +780,15 @@ class Runtime:
                             mcp_cfg.name,
                             exc,
                         )
+
+        # D6 (v0.9.0 E4 Phase A): supervisors are now addressable actors too
+        # (design supervision-endgame.md §6) — register + wire their transport
+        # subscription before the tree starts, exactly like agents. Own-loop-
+        # first ordering (D-E4-3) is enforced inside Supervisor.start() itself.
+        all_supervisors = self._root_supervisor.all_supervisors()
+        for sup in all_supervisors:
+            self._registry.register(sup.name, capabilities=[SUPERVISOR_CAPABILITY])
+            await self._bus.setup_agent(sup)
 
         # 11-12. Start supervision tree (supervisors start their children)
         await self._root_supervisor.start()
