@@ -77,6 +77,17 @@ full integration, verified on BOTH macOS and Linux (docker). Proceeding to Phase
 3. Runtime: register + setup_agent for supervisors; startup-order audit test.
 
 ### B — Control-plane swap
+
+**Pre-resolved before coding (design §6.1 D-E4-7, 2026-07-24 walkthrough) — no open judgment
+calls remain:**
+- **Test-authoring heuristic for the 47-ref migration:** tests asserting HANDLING logic (strategy
+  dispatch, budget/backoff verdicts, restart calls) keep calling `_handle_crash` directly — its
+  body doesn't change. Only tests whose subject IS the delivery path itself (crash-queue/
+  drain-task internals, stale-incarnation skip, post-stop discard) migrate or get superseded by
+  the two named proofs below. Expect the ~47 references to split roughly: majority unchanged
+  (they call `_handle_crash` already), a smaller set migrated to mailbox/side-table assertions,
+  and the drain-task-specific tests replaced outright by items 6–7.
+
 1. Side-table (`_pending_crash_events`) + `_agency.child_crashed` in SYSTEM_MESSAGE_TYPES.
 2. `_on_child_done` → side-table + `put_nowait` self-trigger; `handle()` routes to the (renamed)
    `_process_crash_event` = old drain body minus the dequeue loop.
@@ -84,13 +95,18 @@ full integration, verified on BOTH macOS and Linux (docker). Proceeding to Phase
    put_nowait when bus is None — bare-Supervisor tests).
 4. DELETE `_crash_queue`/`_crash_drain_task`/`_drain_crashes`; start/stop drop drain lifecycle,
    adopt own-loop-first ordering.
-5. Migrate the 47 test refs (mechanical: enqueue→side-table+message or direct
-   `_process_crash_event` calls; each justified).
-   **HALT-CHECK B:** if stop()-ordering or bare-Supervisor (no bus) crash-delivery cannot
-   preserve the H2 test suite's semantics without weakening a guarantee — halt per Q4.
-   (Bare-Supervisor note: with no bus, self-messages need no transport — `setup_agent` absent
-   means the loop reads its own mailbox directly; verify `_start()`-without-bus works — agents
-   already support it in unit tests.)
+5. Migrate test refs per the heuristic above (each migration justified in the PR body).
+6. **NEW test (Halt-Check B proof #1):** `test_bare_supervisor_crash_delivery_without_bus` — a
+   `Supervisor` with `_bus=None` still delivers a real child crash through `_on_child_done` →
+   side-table → `put_nowait` → own mailbox → `handle()`, with no transport involved (self-
+   delivery is local `Mailbox` traffic — confirmed safe by Phase A's standalone-loop finding).
+7. **NEW test (Halt-Check B proof #2):** `test_no_resurrection_after_stop_during_backoff` —
+   crash a child with a long backoff, call `stop()` mid-sleep, assert no restart and no task
+   leak. Turns the candidate mechanism ("own `_stop()`, already last per Phase A, halts further
+   crash-message consumption") into a verified fact.
+   **HALT-CHECK B:** if proof #1 or #2 cannot hold without weakening a guarantee — halt per Q4:
+   ship E1–E3 as v0.9.0, re-plan E4 for v0.9.1 with the specific failure recorded in the design
+   doc's §6.1.
 
 ### C — Introspection + Q3 + registration polish
 `civitas.supervision.status` handler + test · suspend hard-reject (method + `_agency.suspend`

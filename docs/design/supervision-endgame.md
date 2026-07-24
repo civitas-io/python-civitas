@@ -234,6 +234,36 @@ public `stop()` (renaming it would be the actual breaking change), with a `# typ
 ignore[override]` carrying this justification. Zero test impact (1130/1130 unit, full integration,
 both macOS and Linux) — Halt-Check A criteria met; Phase A proceeds.
 
+**D-E4-7 — Phase B test-authoring heuristic + the two named Halt-Check B proofs (recorded
+before Phase B code, 2026-07-24 walkthrough).** Two refinements the pre-implementation review
+left as "decide per-test" / "needs proof, not assumption" — resolved concretely so Phase B has
+no open judgment calls left when coding starts:
+
+- **Bare-Supervisor test-authoring heuristic.** Dozens of existing tests construct a
+  `Supervisor` directly (no `Runtime`, no bus) and call `_handle_crash(name, exc)` directly,
+  bypassing crash *delivery* to unit-test crash *handling* (strategy dispatch, budget/backoff
+  verdicts, restart calls). Rule for migration: **tests that assert on handling logic keep
+  calling `_handle_crash` directly** (its body doesn't change in Phase B — only what calls it
+  does); **only the tests whose subject IS the delivery path itself** (crash-queue/drain-task
+  internals, stale-incarnation skip, post-stop discard) migrate to asserting through the mailbox/
+  side-table or get superseded by the two named proofs below. This keeps the ~47-reference
+  migration from being uniformly rewritten when only a subset actually tests delivery.
+- **Two Halt-Check B proofs, named explicitly (not left as "needs proof"):**
+  1. `test_bare_supervisor_crash_delivery_without_bus` — a `Supervisor` with `_bus=None`
+     (today's common test pattern) still delivers a real child crash through `_on_child_done` →
+     side-table → `put_nowait` → own mailbox → `handle()`, with NO bus involved (self-delivery
+     is local `Mailbox` traffic, not transport traffic — confirmed by Phase A: the loop runs
+     standalone). This is the direct evidence for the heuristic above being safe.
+  2. `test_no_resurrection_after_stop_during_backoff` — crash a child with a deliberately long
+     backoff, call `stop()` while the restart is still sleeping, and assert the child is not
+     restarted and no task leaks. Today's guarantee comes from cancelling `_crash_drain_task`
+     before touching children; Phase B's candidate mechanism is "the supervisor's own `_stop()`
+     (already last, from Phase A) stops the loop from consuming any further crash messages" —
+     this test is what turns that candidate mechanism into a verified fact instead of an analogy.
+
+  **If either proof fails to hold without weakening a guarantee, Q4 triggers**: halt Phase B,
+  ship E1–E3 as v0.9.0, re-plan E4 for v0.9.1 with the specific failure recorded here.
+
 ## 7. Compatibility & behavior-change ledger
 
 | Change | Kind | Notes |
