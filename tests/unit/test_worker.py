@@ -10,7 +10,7 @@ import pytest
 
 from civitas.errors import ConfigurationError
 from civitas.messages import Message
-from civitas.process import AgentProcess
+from civitas.process import AgentProcess, ProcessStatus
 from civitas.serializer import MsgpackSerializer
 from civitas.worker import Worker
 
@@ -221,3 +221,73 @@ async def test_wait_until_stopped_unblocks_after_stop() -> None:
     await worker.wait_until_stopped()
     await stop_task
     assert worker._started is False
+
+
+# ---------------------------------------------------------------------------
+# D5 (v0.9.0 E3) — process-level health responder
+# ---------------------------------------------------------------------------
+
+
+class TestHealthProbe:
+    def _worker_with_bus(self) -> tuple[Worker, NullAgent, AsyncMock]:
+        agent = NullAgent("bot")
+        worker = Worker(agents=[agent])
+        worker._serializer = MsgpackSerializer()
+        worker._bus = MagicMock()
+        worker._bus.route = AsyncMock()
+        return worker, agent, worker._bus.route
+
+    async def test_snapshot_reports_status_task_and_depth(self) -> None:
+        worker, agent, route = self._worker_with_bus()
+        agent._status = ProcessStatus.RUNNING
+        agent._task = MagicMock()
+        agent._task.done.return_value = False
+        await agent._mailbox.put(Message(type="x", recipient="bot"))
+        await agent._mailbox.put(Message(type="y", recipient="bot", priority=1))
+
+        probe = Message(
+            type="_agency.health_probe",
+            sender="sup",
+            recipient=worker._health_channel,
+            correlation_id="c1",
+            reply_to="_reply.abc",
+        )
+        await worker._on_health_probe(worker._serializer.serialize(probe))
+
+        route.assert_awaited_once()
+        ack = route.call_args.args[0]
+        assert ack.type == "_agency.health_ack"
+        assert ack.recipient == "_reply.abc"
+        assert ack.correlation_id == "c1"
+        snap = ack.payload["agents"]["bot"]
+        assert snap == {"status": "RUNNING", "task_alive": True, "mailbox_depth": 2}
+        assert ack.payload["worker_id"] == worker.id
+
+    async def test_dead_task_reported(self) -> None:
+        worker, agent, route = self._worker_with_bus()
+        agent._status = ProcessStatus.CRASHED
+        agent._task = MagicMock()
+        agent._task.done.return_value = True
+
+        probe = Message(
+            type="_agency.health_probe",
+            sender="sup",
+            recipient=worker._health_channel,
+            correlation_id="c2",
+        )
+        await worker._on_health_probe(worker._serializer.serialize(probe))
+        snap = route.call_args.args[0].payload["agents"]["bot"]
+        assert snap["status"] == "CRASHED" and snap["task_alive"] is False
+
+    async def test_malformed_probe_is_dropped(self, caplog: pytest.LogCaptureFixture) -> None:
+        worker, _, route = self._worker_with_bus()
+        with caplog.at_level(logging.WARNING):
+            await worker._on_health_probe(b"\x00garbage")
+        route.assert_not_awaited()
+
+    async def test_health_channel_announced_with_agents(self) -> None:
+        """The announce payload carries the channel — peers' supervisors group
+        remote children by it (skew: absence means legacy pings)."""
+        agent = NullAgent("bot")
+        worker = Worker(agents=[agent])
+        assert worker._health_channel == f"_agency.worker.{worker.id}.health"

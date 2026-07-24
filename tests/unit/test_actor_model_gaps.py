@@ -21,7 +21,7 @@ from typing import Any
 from civitas.messages import Message
 from civitas.process import AgentProcess, ProcessStatus
 from civitas.runtime import Runtime
-from civitas.supervisor import Supervisor
+from civitas.supervisor import HeartbeatTimeout, Supervisor
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -903,3 +903,136 @@ async def test_dynamic_child_fresh_restart_preserves_config():
         assert reply.payload["job"] == 42  # spawn-time config carried over
     finally:
         await runtime.stop()
+
+
+# ---------------------------------------------------------------------------
+# D5 (v0.9.0 E3) — per-process liveness: A6's false-positive finally dies
+# ---------------------------------------------------------------------------
+
+
+def _channel_registry(mapping: dict[str, str]):
+    from civitas.registry import LocalRegistry
+
+    registry = LocalRegistry()
+    for agent_name, channel in mapping.items():
+        registry.register_remote(agent_name, health_channel=channel)
+    return registry
+
+
+async def test_busy_remote_agent_is_not_restarted():
+    """THE A6 VICTORY TEST. A remote agent stuck in a long handle() cannot ack
+    per-agent pings — but the PROCESS answers the health probe with a snapshot
+    showing it RUNNING with a live task. No crash, no restart. Under the
+    pre-v0.9 per-agent scheme this exact configuration force-restarted a
+    healthy agent after interval x threshold."""
+    sup = Supervisor("sup")
+    sup.add_remote_child(
+        "busy", heartbeat_interval=0.01, heartbeat_timeout=0.05, missed_heartbeats_threshold=3
+    )
+    sup._registry = _channel_registry({"busy": "_agency.worker.w1.health"})
+    sup._running = True
+
+    probes: list[Message] = []
+
+    class BusStub:
+        async def request(self, message: Message, timeout: float) -> Message:
+            probes.append(message)
+            if message.recipient == "busy":
+                raise TimeoutError  # the agent itself would NEVER answer — it's busy
+            return Message(
+                type="_agency.health_ack",
+                sender=message.recipient,
+                recipient=sup.name,
+                payload={
+                    "worker_id": "w1",
+                    "agents": {
+                        "busy": {"status": "RUNNING", "task_alive": True, "mailbox_depth": 7}
+                    },
+                },
+            )
+
+    sup._bus = BusStub()  # type: ignore[assignment]
+    await sup._start_heartbeat_monitor()
+    await asyncio.sleep(0.15)  # >> interval x threshold — old scheme would have fired
+    sup._running = False
+    await sup._stop_heartbeat_monitor()
+
+    assert all(p.recipient == "_agency.worker.w1.health" for p in probes)  # process, not agent
+    assert sup._crash_queue.qsize() == 0, "healthy-but-busy agent was declared crashed"
+
+
+async def test_dead_remote_task_detected_in_one_probe():
+    """Fast remote crash detection: process healthy, THIS child's task dead —
+    crash enqueued from a single ack, no starvation cycle."""
+    sup = Supervisor("sup")
+    sup.add_remote_child("victim", heartbeat_interval=0.01, heartbeat_timeout=0.05)
+    sup.add_remote_child("fine", heartbeat_interval=0.01, heartbeat_timeout=0.05)
+    channel = "_agency.worker.w1.health"
+    sup._registry = _channel_registry({"victim": channel, "fine": channel})
+
+    class BusStub:
+        async def request(self, message: Message, timeout: float) -> Message:
+            return Message(
+                type="_agency.health_ack",
+                sender=channel,
+                recipient=sup.name,
+                payload={
+                    "worker_id": "w1",
+                    "agents": {
+                        "victim": {"status": "CRASHED", "task_alive": False, "mailbox_depth": 0},
+                        "fine": {"status": "RUNNING", "task_alive": True, "mailbox_depth": 0},
+                    },
+                },
+            )
+
+    sup._bus = BusStub()  # type: ignore[assignment]
+    await sup._probe_health_channel(channel, ["victim", "fine"])
+
+    assert sup._crash_queue.qsize() == 1
+    name, exc, task = sup._crash_queue.get_nowait()
+    assert name == "victim" and isinstance(exc, HeartbeatTimeout)
+
+
+async def test_unreachable_process_crashes_all_its_children():
+    sup = Supervisor("sup")
+    channel = "_agency.worker.w1.health"
+    for n in ("a", "b"):
+        sup.add_remote_child(n, heartbeat_timeout=0.01, missed_heartbeats_threshold=2)
+    sup._registry = _channel_registry({"a": channel, "b": channel})
+
+    class DeadBus:
+        async def request(self, message: Message, timeout: float) -> Message:
+            raise TimeoutError
+
+    sup._bus = DeadBus()  # type: ignore[assignment]
+    await sup._probe_health_channel(channel, ["a", "b"])  # miss 1
+    assert sup._crash_queue.qsize() == 0
+    await sup._probe_health_channel(channel, ["a", "b"])  # miss 2 = threshold
+    crashed = {sup._crash_queue.get_nowait()[0] for _ in range(sup._crash_queue.qsize())}
+    assert crashed == {"a", "b"}
+
+
+async def test_legacy_worker_falls_back_to_per_agent_pings():
+    """Q2 skew: no announced channel -> the pre-v0.9 per-agent path, verbatim."""
+    sup = Supervisor("sup")
+    sup.add_remote_child("old_style", heartbeat_interval=0.01, heartbeat_timeout=0.05)
+    sup._registry = _channel_registry({})  # registered nowhere / no channel
+    sup._running = True
+
+    seen: list[Message] = []
+
+    class BusStub:
+        async def request(self, message: Message, timeout: float) -> Message:
+            seen.append(message)
+            return Message(type="_agency.heartbeat_ack", sender="old_style", recipient=sup.name)
+
+    sup._bus = BusStub()  # type: ignore[assignment]
+    await sup._start_heartbeat_monitor()
+    await asyncio.sleep(0.05)
+    sup._running = False
+    await sup._stop_heartbeat_monitor()
+
+    assert seen and all(
+        m.recipient == "old_style" and m.type == "_agency.heartbeat" and m.priority == 1
+        for m in seen
+    )

@@ -405,8 +405,77 @@ class Supervisor:
             return
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
 
+    def _group_by_health_channel(self) -> tuple[dict[str, list[str]], list[str]]:
+        """Group remote children by their Worker's health channel (D5, v0.9.0).
+
+        Looked up per tick so workers coming/going are tracked naturally.
+        Children whose registry entry carries no channel (pre-v0.9 workers, or
+        no registry at all) fall back to legacy per-agent pings — the Q2 skew
+        tolerance, which also preserves bare-Supervisor test setups.
+        """
+        by_channel: dict[str, list[str]] = {}
+        legacy: list[str] = []
+        for name in list(self._remote_children):
+            entry = self._registry.lookup(name) if self._registry is not None else None
+            channel = entry.health_channel if entry is not None else ""
+            if channel:
+                by_channel.setdefault(channel, []).append(name)
+            else:
+                legacy.append(name)
+        return by_channel, legacy
+
+    async def _probe_health_channel(self, channel: str, children: list[str]) -> None:
+        """One process-level probe covering every child hosted on that Worker (D5).
+
+        Splits the two questions A6 conflated: the PROBE answers "is the
+        process alive?" off-mailbox; the ACK's per-agent snapshot answers "is
+        this child healthy?" — so a busy agent (long handle()) never looks
+        dead, and a dead task is detected in ONE interval instead of a full
+        heartbeat-starvation cycle. Per-channel config derives conservatively
+        from the hosted children: max timeout, min threshold.
+        """
+        if self._bus is None:
+            return
+        cfgs = [self._remote_child_config.get(n, {}) for n in children]
+        timeout = max((float(c.get("timeout", 2.0)) for c in cfgs), default=2.0)
+        threshold = min((int(c.get("threshold", 3)) for c in cfgs), default=3)
+        probe = Message(
+            type="_agency.health_probe",
+            sender=self.name,
+            recipient=channel,
+            correlation_id=_uuid7(),
+            span_id=_new_span_id(),
+        )
+        try:
+            ack = await self._bus.request(probe, timeout=timeout)
+        except TimeoutError:
+            self._missed_heartbeats[channel] = self._missed_heartbeats.get(channel, 0) + 1
+            missed = self._missed_heartbeats[channel]
+            if missed >= threshold:
+                # Process presumed dead — every child hosted there crashed.
+                for name in children:
+                    self._crash_queue.put_nowait((name, HeartbeatTimeout(name, missed), None))
+                self._missed_heartbeats[channel] = 0
+            return
+
+        self._missed_heartbeats[channel] = 0
+        agents = ack.payload.get("agents", {})
+        for name in children:
+            snap = agents.get(name)
+            if snap is None:
+                continue  # not hosted there anymore — registry will catch up
+            if snap.get("task_alive") is False or snap.get("status") == "CRASHED":
+                # Fast remote crash detection: the process is fine, THIS child
+                # is not — restart it now, no starvation cycle needed.
+                self._crash_queue.put_nowait((name, HeartbeatTimeout(name, 0), None))
+
     async def _heartbeat_loop(self) -> None:
-        """Periodically ping remote children and detect crashes."""
+        """Periodically probe remote children's liveness and detect crashes.
+
+        D5 (v0.9.0): children on v0.9+ workers are covered by ONE process-level
+        probe per worker per tick (see _probe_health_channel); children without
+        an announced channel use the legacy per-agent ping below (Q2 skew).
+        """
         while self._running:
             # Compute sleep interval before the loop — minimum across all children
             sleep_interval = min(
@@ -414,7 +483,19 @@ class Supervisor:
                 default=5.0,
             )
 
-            for name in list(self._remote_children):
+            by_channel, legacy = self._group_by_health_channel()
+
+            for channel, children in by_channel.items():
+                if not self._running:
+                    break
+                try:
+                    await self._probe_health_channel(channel, children)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:  # F03-7: never crash the monitor loop
+                    logger.warning("[%s] health probe error for %s: %s", self.name, channel, exc)
+
+            for name in legacy:
                 if not self._running:
                     break
                 cfg = self._remote_child_config.get(name, {})

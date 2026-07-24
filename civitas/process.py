@@ -155,6 +155,11 @@ class Mailbox:
         """Return True if both priority and normal queues are empty."""
         return self._priority_queue.empty() and self._queue.empty()
 
+    def depth(self) -> int:
+        """Total buffered messages (both queues). Sync-safe — used by the
+        Worker health responder's snapshot (D5, report-only)."""
+        return self._priority_queue.qsize() + self._queue.qsize()
+
     def drain(self) -> list[Message]:
         """Remove and return all buffered messages, priority queue first."""
         drained: list[Message] = []

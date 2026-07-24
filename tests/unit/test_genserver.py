@@ -10,7 +10,7 @@ import pytest
 from civitas import GenServer, Runtime, Supervisor
 from civitas.messages import Message
 from civitas.process import ProcessStatus
-from tests.conftest import wait_for, wait_for_status
+from tests.conftest import wait_for
 
 # ---------------------------------------------------------------------------
 # Concrete GenServer implementations for testing

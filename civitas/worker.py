@@ -35,7 +35,7 @@ from typing import Any
 
 from civitas.components import ComponentSet, build_component_set
 from civitas.errors import ConfigurationError
-from civitas.messages import Message
+from civitas.messages import Message, _uuid7
 from civitas.observability.otel_agent import run_otel_agent
 from civitas.process import DYNAMIC_SUPERVISOR_CAPABILITY, AgentProcess
 from civitas.registry import reregister_preserving
@@ -90,6 +90,12 @@ class Worker:
         # O(1) agent lookup by name (F02-8)
         self._agents: dict[str, AgentProcess] = {a.name: a for a in agents}
         self._restart_counts: dict[str, int] = {a.name: 0 for a in agents}
+
+        # D5 (v0.9.0): per-process liveness identity + channel. Answered at the
+        # TRANSPORT level (no mailbox, no agent) so liveness is never conflated
+        # with any agent's dispatch latency — the A6 structural fix.
+        self.id: str = _uuid7()
+        self._health_channel = f"_agency.worker.{self.id}.health"
 
         # Set during start()
         self._serializer: Serializer | None = None
@@ -169,6 +175,11 @@ class Worker:
         await self._transport.subscribe("_agency.worker.restart", self._on_restart_command)
         self._registry.register("_agency.worker.restart")
 
+        # D5: process-level health responder — inline at the transport layer
+        # (the H9 sink pattern; precedent: _agency.worker.restart above).
+        await self._transport.subscribe(self._health_channel, self._on_health_probe)
+        self._registry.register(self._health_channel)
+
         # Start agent message loops
         for agent in self._agents.values():
             await agent._start()
@@ -177,13 +188,16 @@ class Worker:
         # cross-process routing. Published AFTER wait_ready so the PUB socket
         # connection is stable. The brief sleep gives the runtime's receiver loop
         # time to process the announcements before worker.start() returns.
-        announce_names = list(self._agents) + ["_agency.worker.restart"]
+        announce_names = list(self._agents) + ["_agency.worker.restart", self._health_channel]
         for name in announce_names:
             maybe_agent: AgentProcess | None = self._agents.get(name)
             payload: dict[str, Any] = {"name": name}
             if maybe_agent is not None:
                 payload["capabilities"] = self._agent_capabilities(maybe_agent) or []
                 payload["capability_metadata"] = dict(maybe_agent.capability_metadata)
+                # D5: peers' supervisors group their remote children by this
+                # channel and probe the PROCESS once, not each agent's mailbox.
+                payload["health_channel"] = self._health_channel
             await self._transport.publish(
                 "_agency.register",
                 self._serializer.serialize(Message(type="_agency.register", payload=payload)),
@@ -191,6 +205,41 @@ class Worker:
         await asyncio.sleep(0.1)
 
         self._started = True
+
+    async def _on_health_probe(self, data: bytes) -> None:
+        """Answer a process-level health probe with a per-agent snapshot (D5).
+
+        Runs inline on the transport receive task — every read here is
+        synchronous and mailbox-free by design (plan constraint 5): liveness
+        must never be distorted by agent dispatch latency. ``mailbox_depth``
+        is report-only (backlog policy belongs to governance, not the runtime).
+        """
+        if self._serializer is None or self._bus is None:
+            return
+        try:
+            probe = self._serializer.deserialize(data)
+        except Exception:  # noqa: BLE001 — malformed probe: drop, never crash the receiver
+            logger.warning("Worker %s: dropping malformed health probe", self.id)
+            return
+        snapshot: dict[str, Any] = {}
+        for name, agent in self._agents.items():
+            task = agent._task
+            snapshot[name] = {
+                "status": agent.status.value,
+                "task_alive": task is not None and not task.done(),
+                "mailbox_depth": agent._mailbox.depth(),
+            }
+        reply = Message(
+            type="_agency.health_ack",
+            sender=self._health_channel,
+            recipient=probe.reply_to or probe.sender,
+            payload={"worker_id": self.id, "agents": snapshot},
+            correlation_id=probe.correlation_id,
+        )
+        try:
+            await self._bus.route(reply)
+        except Exception:  # noqa: BLE001 — prober may be gone; never crash the receiver
+            logger.debug("Worker %s: health ack undeliverable", self.id)
 
     async def _on_restart_command(self, data: bytes) -> None:
         """Handle restart commands from the supervisor."""

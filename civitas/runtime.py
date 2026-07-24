@@ -861,6 +861,7 @@ class Runtime:
                 owner=msg.sender,
                 pubkey=pubkey,
                 epoch=epoch,
+                health_channel=str(msg.payload.get("health_channel", "") or ""),
             )
         except ValueError as exc:
             logger.warning("Rejecting remote registration for %r: %s", name, exc)

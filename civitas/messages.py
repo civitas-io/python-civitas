@@ -127,6 +127,8 @@ SYSTEM_MESSAGE_TYPES: frozenset[str] = frozenset(
     {
         "_agency.heartbeat",
         "_agency.heartbeat_ack",
+        "_agency.health_probe",
+        "_agency.health_ack",
         "_agency.shutdown",
         "_agency.restart",
         "_agency.register",
