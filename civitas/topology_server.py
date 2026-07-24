@@ -148,17 +148,31 @@ class TopologyServer(GenServer):
             return {"error": "runtime not available"}
         return self._serialize_node(self._root_supervisor)
 
-    def _serialize_node(self, node: Any) -> dict[str, Any]:
+    def _serialize_node(self, node: Any, restart_count: int = 0) -> dict[str, Any]:
+        """Serialize one tree node. ``restart_count`` is supplied by the PARENT
+        (v0.9.1, D-DASH-1) — a node cannot know its own restart count, only the
+        supervisor tracking it can; the root (no parent) defaults to 0, matching
+        §6.1's ``_status_snapshot()`` convention of tracking restarts per CHILD.
+        """
         if isinstance(node, DynamicSupervisor):
             return {
                 "name": node.name,
                 "type": "dynamic_supervisor",
                 "status": node.status.value,
+                "restart_count": restart_count,
                 "max_children": node.max_children,
                 "max_total_spawns": node.max_total_spawns,
                 "live_count": len(node._dynamic_children),
                 "children": [
-                    {"name": n, "type": "agent", "status": rec.agent.status.value}
+                    {
+                        "name": n,
+                        "type": "agent",
+                        "status": rec.agent.status.value,
+                        "restart_count": node._child_restart_counts.get(n, 0),
+                        "capabilities": list(rec.agent.capabilities),
+                        "capability_metadata": dict(rec.agent.capability_metadata),
+                        "uptime_seconds": rec.agent.uptime_seconds,
+                    }
                     for n, rec in node._dynamic_children.items()
                 ],
             }
@@ -167,18 +181,44 @@ class TopologyServer(GenServer):
                 "name": node.name,
                 "type": "supervisor",
                 "strategy": node.strategy.value,
-                "children": [self._serialize_node(c) for c in node.children],
+                "restart_count": restart_count,
+                # v0.9.1 (D-DASH-1): this supervisor's OWN restart-window occupancy
+                # — reuses the same v0.9.0 D6 introspection data
+                # Supervisor.handle()'s civitas.supervision.status already computes
+                # (_status_snapshot()) — same-process attribute read, no bus hop.
+                "crashes_in_window": len(node._engine.window),
+                "children": [
+                    self._serialize_node(c, node._restart_counts.get(c.name, 0))
+                    for c in node.children
+                ],
             }
         # Generic AgentProcess
         return {
             "name": node.name,
             "type": "agent",
             "status": node.status.value,
+            "restart_count": restart_count,
+            "capabilities": list(node.capabilities),
+            "capability_metadata": dict(node.capability_metadata),
+            "uptime_seconds": node.uptime_seconds,
         }
 
     def _build_agents_list(self) -> list[dict[str, Any]]:
+        # v0.9.1 (D-DASH-1): capabilities/capability_metadata/uptime_seconds for
+        # every static agent — the "agent description" from the dashboard PRD.
+        # restart_count for static agents isn't included here (it lives on the
+        # /topology tree, attributed to the correct parent supervisor); dynamic
+        # children DO carry it below, since their parent DynSup is directly at
+        # hand while walking the tree.
         result: list[dict[str, Any]] = [
-            {"name": name, "status": agent.status.value} for name, agent in self._agents.items()
+            {
+                "name": name,
+                "status": agent.status.value,
+                "capabilities": list(agent.capabilities),
+                "capability_metadata": dict(agent.capability_metadata),
+                "uptime_seconds": agent.uptime_seconds,
+            }
+            for name, agent in self._agents.items()
         ]
         # Include live dynamic children (not in the static _agents map)
         if self._root_supervisor is not None:
@@ -188,7 +228,16 @@ class TopologyServer(GenServer):
     def _collect_dynamic_children(self, node: Any, result: list[dict[str, Any]]) -> None:
         if isinstance(node, DynamicSupervisor):
             for n, rec in node._dynamic_children.items():
-                result.append({"name": n, "status": rec.agent.status.value})
+                result.append(
+                    {
+                        "name": n,
+                        "status": rec.agent.status.value,
+                        "restart_count": node._child_restart_counts.get(n, 0),
+                        "capabilities": list(rec.agent.capabilities),
+                        "capability_metadata": dict(rec.agent.capability_metadata),
+                        "uptime_seconds": rec.agent.uptime_seconds,
+                    }
+                )
         elif isinstance(node, Supervisor):
             for child in node.children:
                 self._collect_dynamic_children(child, result)
@@ -199,7 +248,13 @@ class TopologyServer(GenServer):
             agent = self._find_dynamic_agent(name)
         if agent is None:
             return None
-        return {"name": name, "status": agent.status.value}
+        return {
+            "name": name,
+            "status": agent.status.value,
+            "capabilities": list(agent.capabilities),
+            "capability_metadata": dict(agent.capability_metadata),
+            "uptime_seconds": agent.uptime_seconds,
+        }
 
     def _find_dynamic_agent(self, name: str) -> Any | None:
         if self._root_supervisor is None:

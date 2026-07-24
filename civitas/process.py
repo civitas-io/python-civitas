@@ -285,6 +285,10 @@ class AgentProcess:
         self._status = ProcessStatus.INITIALIZING
         self._mailbox = Mailbox(maxsize=mailbox_size)
         self._task: asyncio.Task[None] | None = None
+        # v0.9.1 (dashboard-v2, D-DASH-1): set fresh in _start_nowait() on every
+        # incarnation, including restarts (D1a) — "uptime" means THIS
+        # incarnation's age, matching the fresh-instance restart semantic.
+        self._incarnation_started_at: float = time.monotonic()
         self._max_retries = max_retries
         self._shutdown_timeout = shutdown_timeout
         # H6: opt-in per-message watchdog. None (default) = no timeout. When set,
@@ -1321,8 +1325,19 @@ class AgentProcess:
         self._running_event = asyncio.Event()
         self._reached_loop = False
         self._start_phase = "restore"
+        self._incarnation_started_at = time.monotonic()
         self._task = asyncio.create_task(self._run(), name=self.name)
         return self._task
+
+    @property
+    def uptime_seconds(self) -> float:
+        """Seconds since THIS incarnation started (v0.9.1, D-DASH-1).
+
+        Resets on every restart (D1a fresh-instance semantics) — a restarted
+        agent is a new object, so its uptime is naturally the new incarnation's
+        age, not the child's lifetime across restarts (that's ``restart_count``).
+        """
+        return time.monotonic() - self._incarnation_started_at
 
     async def _run(self) -> None:
         """Run the full start lifecycle inside the agent's own task (R1 · D1)."""

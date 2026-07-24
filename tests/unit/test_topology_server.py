@@ -17,10 +17,18 @@ from civitas import DynamicSupervisor, Runtime, Supervisor, TopologyServer
 
 
 def _make_mock_agent(name: str, status: str = "RUNNING") -> MagicMock:
+    """v0.9.1 (D-DASH-1): sets real, JSON-serializable values for the fields
+    TopologyServer's serializers now read (capabilities/capability_metadata/
+    uptime_seconds) — a bare MagicMock() auto-vivifies those as further
+    MagicMocks, which json.dumps() cannot serialize.
+    """
     agent = MagicMock()
     agent.name = name
     agent.status = MagicMock()
     agent.status.value = status
+    agent.capabilities = []
+    agent.capability_metadata = {}
+    agent.uptime_seconds = 0.0
     return agent
 
 
@@ -35,12 +43,19 @@ def _make_mock_supervisor(
     name: str,
     strategy: str = "ONE_FOR_ONE",
     children: list[Any] | None = None,
+    restart_counts: dict[str, int] | None = None,
+    crashes_in_window: int = 0,
 ) -> MagicMock:
     sup = MagicMock(spec=Supervisor)
     sup.name = name
     sup.strategy = MagicMock()
     sup.strategy.value = strategy
     sup.children = children or []
+    # v0.9.1 (D-DASH-1): _restart_counts/_engine.window are real instance
+    # attributes TopologyServer now reads directly (same-process, no bus hop).
+    sup._restart_counts = restart_counts or {}
+    sup._engine = MagicMock()
+    sup._engine.window = [0.0] * crashes_in_window
     return sup
 
 
@@ -59,6 +74,7 @@ def _make_mock_dyn(
     dyn._dynamic_children = {
         n: _make_mock_child_rec(a) for n, a in (dynamic_children or {}).items()
     }
+    dyn._child_restart_counts = {}  # v0.9.1 (D-DASH-1)
     return dyn
 
 
@@ -110,7 +126,17 @@ class TestSerializers:
     def test_serialize_agent(self) -> None:
         agent = _make_mock_agent("worker-1", "RUNNING")
         result = self.ts._serialize_node(agent)
-        assert result == {"name": "worker-1", "type": "agent", "status": "RUNNING"}
+        # v0.9.1 (D-DASH-1): capabilities/capability_metadata/uptime_seconds/
+        # restart_count are new fields on every serialized agent node.
+        assert result == {
+            "name": "worker-1",
+            "type": "agent",
+            "status": "RUNNING",
+            "restart_count": 0,
+            "capabilities": [],
+            "capability_metadata": {},
+            "uptime_seconds": 0.0,
+        }
 
     def test_serialize_supervisor(self) -> None:
         child = _make_mock_agent("child-a")
@@ -120,6 +146,38 @@ class TestSerializers:
         assert result["type"] == "supervisor"
         assert result["strategy"] == "ONE_FOR_ONE"
         assert len(result["children"]) == 1
+
+    def test_serialize_supervisor_children_get_own_restart_count(self) -> None:
+        """v0.9.1 (D-DASH-1): restart_count is attributed by the PARENT to each
+        child individually — a supervisor with two children and only one
+        crashed must not conflate their counts (the bug the naive "sum at the
+        parent" approach would have introduced).
+        """
+        flaky = _make_mock_agent("flaky")
+        stable = _make_mock_agent("stable")
+        sup = _make_mock_supervisor("root", children=[flaky, stable], restart_counts={"flaky": 3})
+        result = self.ts._serialize_node(sup)
+        children_by_name = {c["name"]: c for c in result["children"]}
+        assert children_by_name["flaky"]["restart_count"] == 3
+        assert children_by_name["stable"]["restart_count"] == 0
+
+    def test_serialize_supervisor_reports_own_crashes_in_window(self) -> None:
+        """crashes_in_window is the SUPERVISOR's own restart-window occupancy
+        (v0.9.1, D-DASH-1) — same field civitas.supervision.status already
+        computes (v0.9.0 Phase C), now also on /topology."""
+        sup = _make_mock_supervisor("root", crashes_in_window=2)
+        result = self.ts._serialize_node(sup)
+        assert result["crashes_in_window"] == 2
+
+    def test_serialize_nested_supervisor_restart_count_attributed_correctly(self) -> None:
+        """A child SUPERVISOR's own restart_count (as tracked by ITS parent) is
+        distinct from its crashes_in_window (its own escalation budget) —
+        v0.9.1 (D-DASH-1) exercises both together in one nested tree."""
+        inner = _make_mock_supervisor("inner", crashes_in_window=1)
+        root = _make_mock_supervisor("root", children=[inner], restart_counts={"inner": 2})
+        result = self.ts._serialize_node(root)
+        assert result["children"][0]["restart_count"] == 2  # from root's tracking
+        assert result["children"][0]["crashes_in_window"] == 1  # inner's own window
 
     def test_serialize_dynamic_supervisor(self) -> None:
         dyn_child = _make_mock_agent("dyn-1")
@@ -159,7 +217,15 @@ class TestSerializers:
         agent = _make_mock_agent("svc", "RUNNING")
         self.ts._agents = {"svc": agent}
         result = self.ts._build_agent_detail("svc")
-        assert result == {"name": "svc", "status": "RUNNING"}
+        # v0.9.1 (D-DASH-1): capabilities/capability_metadata/uptime_seconds
+        # are new fields on every agent-detail response.
+        assert result == {
+            "name": "svc",
+            "status": "RUNNING",
+            "capabilities": [],
+            "capability_metadata": {},
+            "uptime_seconds": 0.0,
+        }
 
     def test_build_agent_detail_not_found(self) -> None:
         assert self.ts._build_agent_detail("ghost") is None
@@ -295,6 +361,49 @@ async def test_topology_server_http_agent_detail() -> None:
 
         code404, body404 = await _http_get("http://127.0.0.1:16792/agents/ghost")
         assert code404 == 404
+    finally:
+        await runtime.stop()
+
+
+@pytest.mark.asyncio
+async def test_topology_server_http_uptime_resets_after_restart() -> None:
+    """v0.9.1 (D-DASH-1) end-to-end: uptime_seconds is per-INCARNATION, not
+    per-child-lifetime — a crash-restart (D1a fresh instance) resets it,
+    exactly like the fresh-instance restart semantics uptime is meant to
+    reflect. Real Supervisor + real crashing agent, not a mock."""
+    from civitas.messages import Message
+    from civitas.process import AgentProcess
+
+    class _CrashOnce(AgentProcess):
+        async def handle(self, message: Message) -> Message | None:
+            if message.payload.get("cmd") == "boom":
+                raise RuntimeError("boom")
+            return None
+
+    ts = TopologyServer(name="topo", port=16793)
+    worker = _CrashOnce("worker")
+    root = Supervisor("root", children=[ts, worker], max_restarts=3, backoff_base=0.01)
+    runtime = Runtime(supervisor=root)
+    await runtime.start()
+    try:
+        # Give the FIRST incarnation a long, unambiguous uptime before crashing
+        # it, so "did it reset" has a wide, non-flaky margin to check against.
+        await asyncio.sleep(1.0)
+        code, body = await _http_get("http://127.0.0.1:16793/agents/worker")
+        assert code == 200
+        first_uptime = json.loads(body)["uptime_seconds"]
+        assert first_uptime > 0.8
+
+        await runtime.send("worker", {"cmd": "boom"})
+        await asyncio.sleep(0.2)  # crash + backoff (0.01s) + fresh-incarnation restart
+
+        code2, body2 = await _http_get("http://127.0.0.1:16793/agents/worker")
+        assert code2 == 200
+        second_uptime = json.loads(body2)["uptime_seconds"]
+        # A NOT-reset uptime would be >= first_uptime (it would have kept
+        # accumulating from the original start, now over 1.2s); a reset one is
+        # a small fraction of it, well under a second.
+        assert second_uptime < 0.5
     finally:
         await runtime.stop()
 
@@ -538,8 +647,11 @@ class TestTopologyShowCommand:
         runner = CliRunner()
         result = runner.invoke(app, ["topology", "show", str(topo_file)])
         assert result.exit_code == 0
-        # Falls back to static with annotation
-        assert "runtime not running" in result.output
+        # Falls back to static with annotation. Rich word-wraps to the
+        # terminal width, which is narrower in some CI/container environments
+        # (the exact V1 class of bug, v0.8.1) — normalize whitespace before
+        # the substring check so a mid-phrase wrap doesn't break the match.
+        assert "runtime not running" in " ".join(result.output.split())
 
     def test_show_live_when_runtime_available(self, tmp_path: Any) -> None:
         from unittest.mock import patch
