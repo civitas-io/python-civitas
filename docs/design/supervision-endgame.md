@@ -167,6 +167,60 @@ sends the reply from the child's readiness event (the announce-after-start D13 p
 does exactly this dance for announcements). Head-of-line blocking ends; `_SPAWN_ASK_TIMEOUT`
 semantics unchanged for callers.
 
+### 6.1 P4 implementation decisions (pre-implementation review, 2026-07-24)
+
+Settled before code, after the E1–E3 ground truth made P4's edges concrete:
+
+**D-E4-1 — Crash events use a side-table; the mailbox carries only the trigger.**
+The naive "crash event = self-message" collides with a core invariant: `Message.payload` is
+JSON-primitives-only (enforced at construction), but a crash event carries an **Exception
+object** (the public `add_crash_callback(name, exc)` contract) and an **asyncio.Task** (the
+stale-incarnation marker). Resolution: `_on_child_done` stores `(name, exc, task)` in a
+supervisor-local side-table keyed by event-id and self-sends a priority
+`_agency.child_crashed {event_id}` message; the handler pops and processes. The mailbox provides
+ordering/serialization (the actor property we want); the side-table preserves the object-graph
+(the Python reality). Escalation to the parent works the same way: the supervision tree is
+always in-process relative to its parent (remote children are agents, never supervisors), so the
+escalating supervisor writes the parent's side-table directly via `self._parent` and sends the
+trigger message to the parent's *name* — the data hop is direct, the control hop rides the bus
+(ordered, traced).
+
+**D-E4-2 — Enqueue must be sync and unbounded for supervisors.** `_on_child_done` is a sync
+task-callback: it cannot `await Mailbox.put()`, and the priority queue's hardcoded `maxsize=100`
+would make `put_nowait` raise under a mass-crash burst — re-creating the crash-drop bug class H2
+killed. Resolution: `Mailbox` gains a `priority_maxsize` parameter (default 100, unchanged for
+agents) and a `put_nowait()`; supervisors construct their mailbox with an unbounded priority
+queue (crash volume is bounded by child count in practice, and "unbounded on purpose" is the
+same deliberate choice H2 made for the queue this replaces).
+
+**D-E4-3 — Startup/shutdown ordering.** `Supervisor.start()` becomes: start OWN loop first
+(`_start()` — the mailbox must be live before any child can crash-report) → set child parents →
+start children → heartbeat monitor. `stop()` reverses: heartbeat → children → own loop. Late
+crash messages after children stop die with the mailbox — the exact analog of H2's
+dequeue-after-stop discard. Runtime must `setup_agent()` + register every supervisor (with a
+`SUPERVISOR_CAPABILITY` marker) before `root.start()`; the explicit startup-order test from plan
+constraint 7 gates this.
+
+**D-E4-4 — `Supervisor.handle()` dispatch table.** `_agency.child_crashed` → crash processing
+(E1 engine verdict → E2 fresh-incarnation restart — both untouched); `civitas.supervision.status`
+→ introspection reply (children, states, window occupancy, restart counts); anything else →
+error reply when ask, WARNING drop otherwise. `suspend()` and `_agency.suspend` → hard reject
+(Q3). `_agency.child_crashed` joins `SYSTEM_MESSAGE_TYPES` — and per the E3 lesson (a missing
+entry produced a vacuous-pass failure shape), the E4 suite asserts the crash path end-to-end
+through the bus, not just unit-level.
+
+**D-E4-5 — B4 deferred replies.** `_handle_spawn` `wait=True` stops blocking the loop: stash the
+reply envelope, attach a continuation to the child's readiness event (the `_announce_after_start`
+plumbing, generalized), route the reply from the continuation. Caller semantics and
+`_SPAWN_ASK_TIMEOUT` unchanged; the DynSup serves concurrent spawn/despawn/status during a slow
+`on_start()`.
+
+**Migration sizing (measured):** ~47 direct references to `_crash_queue`/`_drain_crashes`/
+`_handle_crash`/`_escalate` across 5 test files (36 in `test_supervisor.py`) — mechanical
+migrations to the mailbox/side-table surface, each justified per the regression law. Deleted
+outright: `_crash_queue`, `_crash_drain_task`, `_drain_crashes` (~60 lines) — H2's hand-built
+mailbox replaced by the real one it anticipated.
+
 ## 7. Compatibility & behavior-change ledger
 
 | Change | Kind | Notes |
