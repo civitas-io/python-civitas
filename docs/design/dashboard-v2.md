@@ -220,6 +220,7 @@ models for one command. `--refresh` (seconds) is kept, now meaning "poll interva
 | Change | Kind | Notes |
 |---|---|---|
 | `MetricsSink.llm_call()` | **Additive protocol change** | external sink implementers need this method now |
+| `MetricsCollector.message_handled()`/`message_sent()`/`agent_error()`/`agent_restarted()`/`llm_call()` | **Behavior change** | previously silently ignored an unregistered agent name; now self-register lazily on first event — fixes dynamically-spawned children, has no effect on any existing caller that already registered first |
 | `TopologyServer` `/topology`/`/agents` response shape | Additive | new fields, existing fields unchanged |
 | New `/metrics`, `/processes` endpoints | Additive | |
 | `_agency.health_ack` payload | Additive | new `cpu_percent`/`rss_bytes` fields, existing fields unchanged |
@@ -257,12 +258,25 @@ models for one command. `--refresh` (seconds) is kept, now meaning "poll interva
   `register_agent()` manually for every static agent at startup; `Runtime`'s new auto-provisioning
   reproduces this loop. Caught by a real end-to-end test (not assumed) — the first draft of
   `test_topology_server_http_metrics_shape` failed with an empty `agents` dict until this was added.
-- **Documented gap, not silently solved**: dynamically-spawned children (via `DynamicSupervisor`)
-  are NOT auto-registered with the collector — `all_agents()` only sees statically-declared
-  children at `Runtime.start()` time. A dynamically-spawned agent's messages/tokens/cost will not
-  appear in `/metrics` until a follow-up wires a spawn-time registration hook. Not blocking for
-  v0.9.1 (the PRD's P0 scope is topology + status + LLM-metrics for the common case); tracked here
-  rather than silently left as a surprise.
+- **Resolved, same session** (was briefly a documented gap): dynamically-spawned children (via
+  `DynamicSupervisor`) aren't known to `all_agents()`'s static snapshot, so a spawn-time
+  registration hook looked like the obvious fix — but that chases a moving target for every
+  future spawn mechanism too. The actual fix is structural: `MetricsCollector`'s recording methods
+  (`message_handled`/`message_sent`/`agent_error`/`agent_restarted`/`llm_call`) now self-register
+  via a shared `_agent()` helper (`dict.setdefault`) instead of silently no-op'ing for an unknown
+  name. A dynamically-spawned agent is tracked correctly from its FIRST reported event, no matter
+  how or when it came to exist — zero new coupling between `DynamicSupervisor` and the collector.
+  `register_agent()` is kept as a still-useful *explicit* call for agents you want visible with
+  all-zero metrics before their first activity (what the static-registration loop does) — no
+  longer a *requirement* for correctness. Deliberate behavior change from the pre-v0.9.1
+  "operations on an unregistered agent are silently ignored" contract, verified end-to-end
+  (`test_topology_server_http_metrics_includes_dynamically_spawned_agent`: real `DynamicSupervisor`,
+  real spawn, real `/metrics` response) — not just at the unit level.
+  **Status was never actually part of this gap** — confirmed by tracing every call site of
+  `agent_status_changed()`: it was ONLY ever called from the old CLI `dashboard.py`'s manual
+  polling loop, never from `Runtime`/`AgentProcess`/`Supervisor`. `TopologyServer`'s `/topology`
+  and `/agents` (Phase A) read `agent.status.value` directly off the LIVE tree on every request —
+  status for dynamic children was already correct with zero `MetricsCollector` involvement.
 - `build_component_set()` captures `self._metrics` **by value**, so the auto-provisioning block
   must run strictly before it — placed at the very top of `start()`, before the `ComponentSet`
   branch, not alongside the later `TopologyServer` reference-injection block (which was the first,

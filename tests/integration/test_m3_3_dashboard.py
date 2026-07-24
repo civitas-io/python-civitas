@@ -115,14 +115,28 @@ def test_collector_reset():
     assert collector.snapshot.total_messages == 0
 
 
-def test_collector_unknown_agent_ignored():
-    """Operations on unregistered agents are silently ignored."""
+def test_collector_never_registered_agent_self_registers_lazily():
+    """v0.9.1 (dashboard-v2 D-DASH addendum): an agent that was NEVER
+    explicitly register_agent()'d is tracked correctly from its first
+    reported event — this is what makes dynamically-spawned children (never
+    known to Runtime's static registration loop) show up in /metrics without
+    any spawn-time hook. Deliberate behavior change from the pre-v0.9.1
+    'operations on unregistered agents are silently ignored' contract —
+    that silent-drop was itself the bug making dynamic children invisible.
+    """
     collector = MetricsCollector()
-    collector.message_handled("ghost", 10.0)
-    collector.message_sent("ghost")
-    collector.agent_error("ghost")
-    collector.llm_call("ghost", 100, 50, 0.01)
-    # total_messages still increments (it's a global counter)
+    collector.message_handled("dyn-child", 10.0)
+    collector.message_sent("dyn-child")
+    collector.agent_error("dyn-child")
+    collector.llm_call("dyn-child", 100, 50, 0.01)
+
+    metrics = collector.snapshot.agents["dyn-child"]
+    assert metrics.messages_handled == 1
+    assert metrics.messages_sent == 1
+    assert metrics.errors == 1
+    assert metrics.tokens_in == 100
+    assert metrics.tokens_out == 50
+    assert metrics.cost_usd == 0.01
     assert collector.snapshot.total_messages == 1
 
 

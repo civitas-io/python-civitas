@@ -482,6 +482,33 @@ async def test_topology_server_http_metrics_shape() -> None:
         await runtime.stop()
 
 
+@pytest.mark.asyncio
+async def test_topology_server_http_metrics_includes_dynamically_spawned_agent() -> None:
+    """v0.9.1 (dashboard-v2 D-DASH addendum): a DynamicSupervisor-spawned
+    child — never known to Runtime's static all_agents() registration loop —
+    still shows up in /metrics with real numbers, via MetricsCollector's lazy
+    self-registration. This is the actual fix for the gap Phase B's design
+    addendum flagged as a documented limitation; it is no longer one.
+    """
+    from tests.conftest import EchoAgent
+
+    ts = TopologyServer(name="topo", port=16797)
+    dyn = DynamicSupervisor("workers")
+    runtime = Runtime(supervisor=Supervisor("root", children=[ts, dyn]))
+    await runtime.start()
+    try:
+        await runtime.spawn("workers", EchoAgent, "spawned-1")
+        await runtime.ask("spawned-1", {"msg": "hi"})
+
+        code, body = await _http_get("http://127.0.0.1:16797/metrics")
+        assert code == 200
+        data = json.loads(body)
+        assert "spawned-1" in data["agents"]
+        assert data["agents"]["spawned-1"]["messages_handled"] == 1
+    finally:
+        await runtime.stop()
+
+
 # ---------------------------------------------------------------------------
 # Unit: CLI helpers — _find_topology_server, _try_live_topology,
 #         _build_rich_tree_from_live, _add_children dynamic branches
