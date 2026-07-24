@@ -919,9 +919,7 @@ class TestR1ReplyTiming:
         await rt.start()
         try:
             _START_GATES["gw"] = asyncio.Event()
-            gated = asyncio.create_task(
-                _spawn_via_ask(rt, "gw", wait=True, config={"gate": True})
-            )
+            gated = asyncio.create_task(_spawn_via_ask(rt, "gw", wait=True, config={"gate": True}))
             await asyncio.sleep(0.02)  # let 'gw' actually reach the gate
             assert not gated.done(), "gated spawn finished without its gate being opened"
 
@@ -952,9 +950,7 @@ class TestR1ReplyTiming:
         await rt.start()
         try:
             _START_GATES["gw"] = asyncio.Event()
-            gated = asyncio.create_task(
-                _spawn_via_ask(rt, "gw", wait=True, config={"gate": True})
-            )
+            gated = asyncio.create_task(_spawn_via_ask(rt, "gw", wait=True, config={"gate": True}))
             await wait_for(lambda: "gw" in dyn._dynamic_children, timeout=2.0)
 
             despawn_reply = await rt.ask(

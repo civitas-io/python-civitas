@@ -144,9 +144,7 @@ class Supervisor(AgentProcess):
         # task is no longer the child's current task is stale (the child was
         # already restarted by an earlier cycle) and is skipped, mirroring OTP's
         # EXIT-pid matching.
-        self._pending_crash_events: dict[
-            str, tuple[str, Exception, asyncio.Task[None] | None]
-        ] = {}
+        self._pending_crash_events: dict[str, tuple[str, Exception, asyncio.Task[None] | None]] = {}
         self._running = False
         self._parent: Supervisor | None = None
         self._crash_callbacks: list[Callable[[str, Exception], Awaitable[None]]] = []
