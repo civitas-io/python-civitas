@@ -68,7 +68,7 @@ async def test_busy_remote_agent_survives_tight_heartbeats(zmq_addrs, caplog):
         assert worker._restart_counts.get("sleepy", 0) == 0, (
             "healthy-but-busy remote agent was force-restarted (A6 regression)"
         )
-        assert root._crash_queue.qsize() == 0
+        assert not root._pending_crash_events
         # Guard against a vacuous pass: probes must actually be SUCCEEDING —
         # a broken probe path also produces "no crashes" (seen during E3 dev
         # when _agency.health_probe was missing from SYSTEM_MESSAGE_TYPES).

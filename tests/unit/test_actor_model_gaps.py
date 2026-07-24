@@ -404,7 +404,7 @@ async def test_on_stop_exception_contained_during_shutdown():
 
     assert faulty.status == ProcessStatus.STOPPED
     assert healthy.status == ProcessStatus.STOPPED  # shutdown sequence completed
-    assert root._crash_queue.qsize() == 0  # graceful stop produced no crash event
+    assert not root._pending_crash_events  # graceful stop produced no crash event
 
 
 # ---------------------------------------------------------------------------
@@ -614,8 +614,8 @@ async def test_simultaneous_crash_events_one_restart_cycle():
         # Enqueue both events in the same tick, before the drain task wakes —
         # deterministically modelling "both children crashed simultaneously".
         exc = RuntimeError("burst")
-        root._crash_queue.put_nowait(("cc_a", exc, root._child_tasks["cc_a"]))
-        root._crash_queue.put_nowait(("cc_b", exc, root._child_tasks["cc_b"]))
+        root._enqueue_crash_event("cc_a", exc, root._child_tasks["cc_a"])
+        root._enqueue_crash_event("cc_b", exc, root._child_tasks["cc_b"])
 
         assert await _wait_for(lambda: CountingCrasher.starts.get("cc_a", 0) >= 2)
         await asyncio.sleep(0.1)  # allow a (buggy) second cycle to happen
@@ -671,7 +671,9 @@ async def test_stop_during_crash_drain_no_zombie():
         await runtime.stop()
 
     assert worker.status != ProcessStatus.RUNNING, "child resurrected after stop()"
-    assert root._crash_drain_task is None
+    # D-E4-8: the supervisor's OWN loop (crash-processing now rides it) is
+    # what gets torn down cleanly, replacing the old drain-task check.
+    assert root._task is not None and root._task.done()
 
 
 # ---------------------------------------------------------------------------
@@ -958,7 +960,7 @@ async def test_busy_remote_agent_is_not_restarted():
     await sup._stop_heartbeat_monitor()
 
     assert all(p.recipient == "_agency.worker.w1.health" for p in probes)  # process, not agent
-    assert sup._crash_queue.qsize() == 0, "healthy-but-busy agent was declared crashed"
+    assert not sup._pending_crash_events, "healthy-but-busy agent was declared crashed"
 
 
 async def test_dead_remote_task_detected_in_one_probe():
@@ -988,8 +990,8 @@ async def test_dead_remote_task_detected_in_one_probe():
     sup._bus = BusStub()  # type: ignore[assignment]
     await sup._probe_health_channel(channel, ["victim", "fine"])
 
-    assert sup._crash_queue.qsize() == 1
-    name, exc, task = sup._crash_queue.get_nowait()
+    assert len(sup._pending_crash_events) == 1
+    name, exc, task = next(iter(sup._pending_crash_events.values()))
     assert name == "victim" and isinstance(exc, HeartbeatTimeout)
 
 
@@ -1006,9 +1008,9 @@ async def test_unreachable_process_crashes_all_its_children():
 
     sup._bus = DeadBus()  # type: ignore[assignment]
     await sup._probe_health_channel(channel, ["a", "b"])  # miss 1
-    assert sup._crash_queue.qsize() == 0
+    assert not sup._pending_crash_events
     await sup._probe_health_channel(channel, ["a", "b"])  # miss 2 = threshold
-    crashed = {sup._crash_queue.get_nowait()[0] for _ in range(sup._crash_queue.qsize())}
+    crashed = {v[0] for v in sup._pending_crash_events.values()}
     assert crashed == {"a", "b"}
 
 
@@ -1036,3 +1038,66 @@ async def test_legacy_worker_falls_back_to_per_agent_pings():
         m.recipient == "old_style" and m.type == "_agency.heartbeat" and m.priority == 1
         for m in seen
     )
+
+
+# ---------------------------------------------------------------------------
+# D6 / v0.9.0 E4 Phase B — Supervisor actorization, Halt-Check B named proofs
+# (design supervision-endgame.md §6.1 D-E4-7)
+# ---------------------------------------------------------------------------
+
+
+async def test_bare_supervisor_crash_delivery_without_bus():
+    """Halt-Check B proof #1 (D-E4-7): a bare Supervisor (no bus, no Runtime)
+    still delivers a real child crash end-to-end through its OWN mailbox —
+    _on_child_done -> side-table -> put_nowait -> own message loop -> handle()
+    -> _process_crash_event -> _handle_crash -> restart. Self-delivery is
+    local Mailbox traffic, not transport traffic (confirmed safe by Phase A's
+    standalone-loop finding) — this is the direct evidence, and it grounds
+    the D-E4-7 test-authoring heuristic: bare-Supervisor tests that only
+    assert on handling logic can keep calling ``_handle_crash`` directly,
+    because THIS test proves the delivery path around it works without a bus.
+    """
+    worker = CrashOnCommand("bare_worker")
+    sup = Supervisor("sup", children=[worker], max_restarts=3, backoff_base=0.01)
+    assert sup._bus is None  # bare — no Runtime, no bus wiring
+    await sup.start()
+    try:
+        await worker._mailbox.put(
+            Message(
+                type="test.crash", sender="test", recipient="bare_worker", payload={"cmd": "boom"}
+            )
+        )
+        assert await _wait_for(lambda: sup._restart_counts.get("bare_worker", 0) >= 1)
+        assert await _wait_for(lambda: sup._children_by_name["bare_worker"] is not worker)
+        fresh = sup._children_by_name["bare_worker"]
+        assert await _wait_for(lambda: fresh.status == ProcessStatus.RUNNING)
+    finally:
+        await sup.stop()
+
+
+async def test_no_resurrection_after_stop_during_backoff():
+    """Halt-Check B proof #2 (D-E4-8): stop() during an in-flight restart's
+    backoff sleep must not let that restart complete afterwards. Only
+    cancelling the Supervisor's own loop (self._stop()'s timeout-then-cancel
+    fallback) can abort a sleep already in progress — a flag check cannot,
+    which is why stop() reorders to stop its own loop FIRST (D-E4-8), not
+    last as Phase A had it. ``_shutdown_timeout`` is shortened so the
+    cancel-on-timeout fallback fires quickly instead of waiting out the
+    (deliberately much longer) backoff sleep.
+    """
+    worker = CrashOnCommand("zombie")
+    sup = Supervisor("sup", children=[worker], max_restarts=5, backoff_base=5.0)
+    sup._shutdown_timeout = 0.05
+    assert sup._bus is None
+    await sup.start()
+    try:
+        await worker._mailbox.put(
+            Message(type="test.crash", sender="test", recipient="zombie", payload={"cmd": "boom"})
+        )
+        # Restart count bumps before the 5s backoff sleep — mid-restart now.
+        assert await _wait_for(lambda: sup._restart_counts.get("zombie", 0) >= 1)
+    finally:
+        await sup.stop()
+
+    assert sup._children_by_name["zombie"] is worker, "child resurrected after stop()"
+    assert sup._task is not None and sup._task.done()

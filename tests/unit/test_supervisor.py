@@ -152,10 +152,12 @@ class TestEscalate:
         assert agent.status == ProcessStatus.CRASHED
 
     @pytest.mark.asyncio
-    async def test_escalate_with_parent_enqueues_on_parent_crash_queue(self):
-        """Escalation hands off to the parent's crash queue (H2) — never an inline
-        call, which would let the parent's restart cancel the very drain task
-        performing the escalation."""
+    async def test_escalate_with_parent_enqueues_crash_event(self):
+        """Escalation hands off to the parent via a crash event (H2, D-E4-1) —
+        never an inline call, which would let the parent's restart tear down
+        the very message dispatch performing the escalation. No bus wired
+        (bare-Supervisor test): the trigger lands directly on the parent's
+        mailbox (D-E4-7 fallback)."""
         child_sup = Supervisor("child", max_restarts=1)
         parent_sup = Supervisor("root", children=[child_sup], max_restarts=5)
         child_sup._parent = parent_sup
@@ -163,11 +165,12 @@ class TestEscalate:
         exc = ValueError("cascade")
         await child_sup._escalate("child", exc)
 
-        assert parent_sup._crash_queue.qsize() == 1
-        name, queued_exc, task = parent_sup._crash_queue.get_nowait()
+        assert len(parent_sup._pending_crash_events) == 1
+        name, queued_exc, task = next(iter(parent_sup._pending_crash_events.values()))
         assert name == "child"  # the escalating supervisor itself
         assert queued_exc is exc
         assert task is None  # supervisors have no incarnation task
+        assert parent_sup._mailbox.depth() == 1  # the trigger message itself
 
 
 # ---------------------------------------------------------------------------
@@ -431,7 +434,7 @@ class TestOnChildDone:
         task.exception.return_value = ValueError("boom")
 
         sup._on_child_done("worker", task)
-        assert sup._crash_queue.qsize() == 1
+        assert len(sup._pending_crash_events) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -581,8 +584,8 @@ class TestHeartbeatMonitor:
             await sup._heartbeat_loop()
 
         sup._handle_crash.assert_not_called()
-        assert sup._crash_queue.qsize() == 1
-        name, exc, task = sup._crash_queue.get_nowait()
+        assert len(sup._pending_crash_events) == 1
+        name, exc, task = next(iter(sup._pending_crash_events.values()))
         assert name == "remote_a"
         assert isinstance(exc, HeartbeatTimeout)
         assert task is None  # remote children have no incarnation task
@@ -649,8 +652,8 @@ class TestHeartbeatMonitor:
         first_breach = pings.index("dead_a")
         pings_to_b_after = pings[first_breach:].count("live_b")
         assert pings_to_b_after >= 2, "monitoring of siblings stalled after a breach"
-        sup._handle_crash.assert_not_called()  # queued for the drain, not inline
-        assert sup._crash_queue.qsize() >= 1
+        sup._handle_crash.assert_not_called()  # queued as a crash event, not inline
+        assert len(sup._pending_crash_events) >= 1
 
     @pytest.mark.asyncio
     async def test_heartbeat_loop_continues_on_generic_exception(

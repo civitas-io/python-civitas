@@ -264,6 +264,41 @@ no open judgment calls left when coding starts:
   **If either proof fails to hold without weakening a guarantee, Q4 triggers**: halt Phase B,
   ship E1–E3 as v0.9.0, re-plan E4 for v0.9.1 with the specific failure recorded here.
 
+**D-E4-8 — `Supervisor.stop()`'s own-loop-LAST ordering (D-E4-3) does not survive Phase B;
+corrected to own-loop-FIRST (found via mechanical trace before Phase B code, not by running the
+proof test).** D-E4-3 chose "start own loop first / stop own loop last" for symmetry ("a live
+loop outlives its children's shutdown"). That was safe in Phase A because the mailbox was inert
+— nothing sent a Supervisor a message yet. Phase B puts crash-triggered restarts (including the
+backoff `asyncio.sleep`) onto that same loop, and the old code's actual protection against
+"resurrection after stop" was never the `if not self._running` flag check (that only catches
+events still *queued*, not one already past the check and asleep in backoff) — it was
+**`self._crash_drain_task.cancel()`**, which aborts an in-flight `asyncio.sleep()` immediately
+regardless of what it's doing. A flag can't interrupt a sleep already in progress; only
+cancellation can.
+
+With crash-processing merged onto the Supervisor's own loop, the equivalent cancellation is
+`self._stop()`'s own timeout-then-cancel fallback (`_shutdown_timeout`, default 30s — shorter
+than `backoff_max`'s default 60s, so a long backoff sleep WILL be interrupted, not outlasted).
+But that fallback only fires if `self._stop()` runs *before* the cumulative time spent stopping
+sibling children could exceed a crash's backoff delay — which "stop own loop last" guarantees
+CANNOT happen (children finish stopping first, by definition, before `self._stop()` is ever
+reached). Concretely: with N children each taking close to their own `_shutdown_timeout`, a
+crash's backoff sleep can complete and call `_restart_child` mid-teardown, resurrecting a child
+the supervisor is in the process of shutting down.
+
+**Correction: `Supervisor.stop()` reorders to stop its OWN loop FIRST** (`self._running = False`
+→ `await self._stop()` → stop heartbeat monitor → stop children), restoring exact parity with
+the pre-E4 "cancel crash-drain before touching children" guarantee, via a mechanism the base
+class already provides for every other `AgentProcess`. `start()`'s own-loop-FIRST ordering is
+UNAFFECTED (still correct — the mailbox must be live before anything can crash-report into it).
+This is not a Q4 trigger: it is a resolvable, well-understood correction discovered by tracing
+the mechanism before writing Phase B code (rather than by the halt-check test failing after the
+fact) — and it makes `Supervisor` MORE consistent with every other `AgentProcess`, not less (no
+agent subtype answers messages during its own shutdown; a Supervisor should not be a special
+case). D-E4-3's *stop*-ordering clause is superseded by this entry; its *start*-ordering clause
+stands. `test_no_resurrection_after_stop_during_backoff` (Halt-Check B proof #2) is written
+against this corrected ordering.
+
 ## 7. Compatibility & behavior-change ledger
 
 | Change | Kind | Notes |
