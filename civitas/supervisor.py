@@ -403,14 +403,62 @@ class Supervisor(AgentProcess):
     async def handle(self, message: Message) -> Message | None:
         """Route control-plane messages delivered to this Supervisor's mailbox.
 
-        v0.9.0 E4 Phase B (D6, D-E4-4): the only message type today is the
-        crash-processing self-trigger; Phase C adds introspection
-        (``civitas.supervision.status``) and Q3's suspend hard-rejection here.
+        v0.9.0 E4 (D6, D-E4-4): crash-processing self-trigger (Phase B) and
+        introspection (Phase C). Q3's suspend hard-rejection is NOT handled
+        here — ``_agency.suspend`` is intercepted earlier, inline in the
+        shared ``_message_loop``, before ``handle()`` ever runs (see
+        ``_suspend_allowed()`` / D-E4-9).
         """
         if message.type == "_agency.child_crashed":
             await self._process_crash_event(message.payload.get("event_id", ""))
             return None
+        if message.type == "civitas.supervision.status":
+            return self.reply(self._status_snapshot())
         return await super().handle(message)
+
+    def _status_snapshot(self) -> dict[str, Any]:
+        """Introspection payload for ``civitas.supervision.status`` (v0.9.0 E4
+        Phase C, D-E4-4): children, their states, restart-window occupancy,
+        and lifetime restart counts (observability-only per B3).
+        """
+        return {
+            "name": self.name,
+            "strategy": self.strategy.value,
+            "max_restarts": self.max_restarts,
+            "restart_window": self.restart_window,
+            "crashes_in_window": len(self._engine.window),
+            "children": [
+                {
+                    "name": c.name,
+                    "kind": "supervisor" if isinstance(c, Supervisor) else "agent",
+                    "status": c._status.value,
+                    "restart_count": self._restart_counts.get(c.name, 0),
+                }
+                for c in self.children
+            ],
+        }
+
+    async def suspend(self, reason: str = "") -> None:
+        """Rejected — a Supervisor cannot be suspended (Q3, D-E4-9).
+
+        Hard reject for the direct-call path: raises immediately (on await)
+        rather than accepting and silently no-op'ing, so a caller cannot
+        mistake this for a successful suspend. Stays ``async def`` — every
+        call site does ``await sup.suspend(...)``; a plain ``def`` override
+        would not be awaitable and would break that calling convention. The
+        ``_agency.suspend`` MESSAGE path is a separate mechanism
+        (``_suspend_allowed()``, checked in the shared ``_message_loop``
+        before ``handle()`` even runs) — see D-E4-9 for why these are two
+        mechanisms, not one.
+        """
+        raise RuntimeError(
+            f"Supervisor {self.name!r} cannot be suspended — a paused subtree manager is a "
+            "footgun (Q3). Suspend the individual agents instead."
+        )
+
+    def _suspend_allowed(self) -> bool:
+        """Reject the ``_agency.suspend`` MESSAGE path too (Q3, D-E4-9)."""
+        return False
 
     async def _process_crash_event(self, event_id: str) -> None:
         """Process one crash event popped from the side-table (D-E4-1).

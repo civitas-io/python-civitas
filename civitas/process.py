@@ -501,6 +501,17 @@ class AgentProcess:
     # Durable suspension — suspend / resume (Presidium HITL primitive)
     # ------------------------------------------------------------------
 
+    def _suspend_allowed(self) -> bool:
+        """Whether this process accepts suspend requests. Default: True.
+
+        Override to hard-reject (v0.9.0 E4 Phase C, D-E4-9: Supervisor returns
+        False — a suspended subtree manager is a footgun, Q3). Checked by
+        ``_message_loop`` for the ``_agency.suspend`` message path; the direct
+        ``suspend()`` method call is rejected separately by overriding
+        ``suspend()`` itself (two call paths, two mechanisms — see D-E4-9).
+        """
+        return True
+
     async def suspend(self, reason: str = "") -> None:
         """Request suspension of this agent. Non-blocking (S2).
 
@@ -1417,6 +1428,17 @@ class AgentProcess:
                         await self._bus.route(ack)
                     continue
                 if message.type == "_agency.suspend":
+                    if not self._suspend_allowed():
+                        # v0.9.0 E4 Phase C (Q3, D-E4-9): rejected process types (Supervisor)
+                        # warn and drop — matching this message's pre-existing fire-and-forget
+                        # contract (it has never been request-reply; self.reply() isn't even
+                        # callable at this point in the loop, before _current_message is set).
+                        logger.warning(
+                            "[%s] rejecting _agency.suspend — suspension is not supported for "
+                            "this process type",
+                            self.name,
+                        )
+                        continue
                     reason = message.payload.get("reason", "")
                     if self._status == ProcessStatus.SUSPENDED:
                         await self._update_suspend_reason(reason)

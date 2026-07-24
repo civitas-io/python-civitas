@@ -852,3 +852,153 @@ class TestRestartRestForOne:
         assert "second" in deregister_calls
         assert "first" in register_calls
         assert "second" in register_calls
+
+
+# ---------------------------------------------------------------------------
+# v0.9.0 E4 Phase C — introspection + Q3 suspend hard-rejection (D-E4-4, D-E4-9)
+# ---------------------------------------------------------------------------
+
+
+class TestSupervisionStatus:
+    @pytest.mark.asyncio
+    async def test_status_snapshot_reports_children_and_window(self):
+        a = NullAgent("a")
+        a._status = ProcessStatus.RUNNING
+        b = NullAgent("b")
+        b._status = ProcessStatus.CRASHED
+        sup = Supervisor("root", children=[a, b], strategy="ONE_FOR_ALL", max_restarts=7)
+        sup._restart_counts["b"] = 2
+        sup._engine.window.append(time.monotonic())
+
+        snapshot = sup._status_snapshot()
+
+        assert snapshot["name"] == "root"
+        assert snapshot["strategy"] == "ONE_FOR_ALL"
+        assert snapshot["max_restarts"] == 7
+        assert snapshot["crashes_in_window"] == 1
+        by_name = {c["name"]: c for c in snapshot["children"]}
+        assert by_name["a"] == {
+            "name": "a",
+            "kind": "agent",
+            "status": "RUNNING",
+            "restart_count": 0,
+        }
+        assert by_name["b"]["status"] == "CRASHED"
+        assert by_name["b"]["restart_count"] == 2
+
+    @pytest.mark.asyncio
+    async def test_status_snapshot_reports_child_supervisor_kind(self):
+        child_sup = Supervisor("child")
+        sup = Supervisor("root", children=[child_sup])
+
+        snapshot = sup._status_snapshot()
+
+        assert snapshot["children"][0] == {
+            "name": "child",
+            "kind": "supervisor",
+            "status": child_sup._status.value,
+            "restart_count": 0,
+        }
+
+    @pytest.mark.asyncio
+    async def test_handle_routes_status_message_via_reply(self):
+        sup = Supervisor("root")
+        request = Message(
+            type="civitas.supervision.status",
+            sender="caller",
+            recipient="root",
+            correlation_id="cid-1",
+        )
+        sup._current_message = request
+
+        reply = await sup.handle(request)
+
+        assert reply is not None
+        assert reply.recipient == "caller"
+        assert reply.correlation_id == "cid-1"
+        assert reply.payload["name"] == "root"
+
+    @pytest.mark.asyncio
+    async def test_handle_unknown_message_falls_through_to_base(self):
+        """Unrecognized message types still reach AgentProcess.handle() (None, fire-and-forget)."""
+        sup = Supervisor("root")
+        message = Message(type="not.a.real.type", sender="x", recipient="root")
+
+        assert await sup.handle(message) is None
+
+
+class TestSuspendHardRejection:
+    @pytest.mark.asyncio
+    async def test_suspend_raises_immediately(self):
+        """Q3/D-E4-9: the direct-call path is a genuine hard reject."""
+        sup = Supervisor("root")
+        with pytest.raises(RuntimeError, match="cannot be suspended"):
+            await sup.suspend("testing")
+        # No half-effect: no suspend intent was recorded.
+        assert sup._suspend_requested is False
+
+    def test_suspend_allowed_is_false_on_supervisor(self):
+        sup = Supervisor("root")
+        assert sup._suspend_allowed() is False
+
+    def test_suspend_allowed_defaults_true_on_plain_agent(self):
+        """Regression guard: the new hook must not change behavior for every
+        existing AgentProcess subclass (default-preserving, D-E4-9)."""
+        agent = NullAgent("plain")
+        assert agent._suspend_allowed() is True
+
+    @pytest.mark.asyncio
+    async def test_agency_suspend_message_dropped_with_warning(self, caplog):
+        """Q3/D-E4-9: the message path never reaches handle() — it's intercepted
+        inline in _message_loop, before _current_message is even set, so a
+        reply is not the mechanism here; a loud WARNING + drop is."""
+        sup = Supervisor("root")
+        await sup._start()
+        try:
+            with caplog.at_level(logging.WARNING):
+                await sup._mailbox.put(
+                    Message(
+                        type="_agency.suspend",
+                        sender="_runtime",
+                        recipient="root",
+                        payload={"reason": "test"},
+                        priority=1,
+                    )
+                )
+                assert await _wait_until(
+                    lambda: any("rejecting _agency.suspend" in r.message for r in caplog.records)
+                )
+            assert sup._status != ProcessStatus.SUSPENDED
+            assert sup._suspend_requested is False
+        finally:
+            await sup._stop()
+
+    @pytest.mark.asyncio
+    async def test_plain_agent_suspend_message_unaffected_by_new_hook(self):
+        """Regression guard: a plain agent's _agency.suspend still works exactly
+        as before — the new hook must be a true no-op on the default path."""
+        agent = NullAgent("plain")
+        await agent._start()
+        try:
+            await agent._mailbox.put(
+                Message(
+                    type="_agency.suspend",
+                    sender="_runtime",
+                    recipient="plain",
+                    payload={"reason": "test"},
+                    priority=1,
+                )
+            )
+            assert await _wait_until(lambda: agent._status == ProcessStatus.SUSPENDED)
+        finally:
+            await agent._stop()
+
+
+async def _wait_until(predicate, timeout: float = 2.0, interval: float = 0.01) -> bool:
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while loop.time() < deadline:
+        if predicate():
+            return True
+        await asyncio.sleep(interval)
+    return predicate()

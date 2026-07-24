@@ -299,6 +299,35 @@ case). D-E4-3's *stop*-ordering clause is superseded by this entry; its *start*-
 stands. `test_no_resurrection_after_stop_during_backoff` (Halt-Check B proof #2) is written
 against this corrected ordering.
 
+**D-E4-9 — Q3 enforcement mechanism, and a precision refinement to its "error reply" phrasing
+(found via trace before Phase C code, 2026-07-24).** Q3 was ratified as "hard-reject supervisor
+suspension (error reply + WARNING)". Implementing it exactly as worded runs into a real
+structural fact: `_agency.suspend` has **never been a request-reply message type** in this
+codebase. `Runtime.suspend()` sends it via `bus.route()` (fire-and-forget, no correlation
+tracking) and its own docstring states the resulting timeout-on-ask is intentional. At the exact
+point `_message_loop` intercepts `_agency.suspend` — inline, before `handle()` runs —
+`self._current_message` is not yet set, so `self.reply()` would itself raise. A constructed reply
+message would have nowhere established to arrive: `Runtime.suspend()`'s caller is not polling a
+correlation id.
+
+Q3 is therefore enforced as **two separate mechanisms**, matching the two separate ways
+suspension can be requested, not one:
+
+1. **Direct API call — `Supervisor.suspend()` override raises immediately.** This IS a genuine
+   hard reject: synchronous, catchable, for any caller holding a `Supervisor` reference.
+2. **Message path — `_agency.suspend` logs a loud WARNING and drops.** This matches, rather than
+   invents, the existing fire-and-forget contract every other `AgentProcess` already has for
+   this exact message type — it is not a weaker guarantee than Q3 intended, it is the accurate
+   description of the one that was actually implementable given the pre-existing wire contract.
+
+**Mechanism for (2):** a new one-boolean hook on `AgentProcess`, `_suspend_allowed() -> bool`
+(default `True`), checked by the shared `_message_loop` immediately before its existing
+`_agency.suspend` branch. `Supervisor` overrides it to `False`. This is deliberately NOT a
+`Supervisor`-only override of `_message_loop` itself (~90 lines, high drift risk over time) — one
+hook, default-preserving for every existing subclass, checked in exactly one place. `resume()` is
+left unmodified: since suspend is rejected outright, a `Supervisor` can never reach SUSPENDED, so
+the base `resume()`'s existing no-op-when-not-suspended guard already covers it.
+
 ## 7. Compatibility & behavior-change ledger
 
 | Change | Kind | Notes |
