@@ -3038,11 +3038,19 @@
 <tbody>
 <tr>
 <td><code>_agency.heartbeat</code></td>
-<td>Supervisor pings remote agents</td>
+<td>Supervisor pings a remote agent (legacy per-agent path, pre-v0.9 skew fallback)</td>
 </tr>
 <tr>
 <td><code>_agency.heartbeat_ack</code></td>
 <td>Remote agent confirms it is alive</td>
+</tr>
+<tr>
+<td><code>_agency.health_probe</code></td>
+<td>Supervisor pings a Worker's process-level health channel (v0.9.0 D5)</td>
+</tr>
+<tr>
+<td><code>_agency.health_ack</code></td>
+<td>Worker replies with a per-agent status/task_alive/mailbox_depth snapshot</td>
 </tr>
 <tr>
 <td><code>_agency.shutdown</code></td>
@@ -3059,6 +3067,18 @@
 <tr>
 <td><code>_agency.deregister</code></td>
 <td>Cross-process agent deregistration</td>
+</tr>
+<tr>
+<td><code>_agency.suspend</code></td>
+<td>Request an agent pause at its next message boundary (rejected on a <code>Supervisor</code>, v0.9.0)</td>
+</tr>
+<tr>
+<td><code>_agency.resume</code></td>
+<td>Resume a suspended agent, carrying the approver identity</td>
+</tr>
+<tr>
+<td><code>_agency.child_crashed</code></td>
+<td>A supervisor's internal crash-processing trigger (v0.9.0 — its own mailbox now carries this instead of a bespoke queue)</td>
 </tr>
 </tbody>
 </table>
@@ -3234,11 +3254,12 @@ redelivery. The contract across failures:</p>
 <p>If a message must not be lost, make its <em>effect</em> durable: checkpoint after processing, and design
 senders to re-send on missing replies (idempotency via your own message IDs).</p>
 <h3 id="the-restart-state-contract-v080">The restart state contract (v0.8.0)<a class="headerlink" href="#the-restart-state-contract-v080" title="Permanent link">&para;</a></h3>
-<p><strong>Only checkpointed state survives a restart.</strong> On every (re)start <code>self.state</code> is reset, then
-restored from the last <code>checkpoint()</code>. Un-checkpointed state — including whatever corruption
-caused the crash — dies with the old incarnation. Instance variables currently survive (the
-instance is reused; fresh-instance restart lands in v0.9) — treat them as undefined across
-restarts. The durable-suspension marker rides in the checkpoint, so suspended agents restart into
+<p><strong>A restart is a fresh incarnation</strong> (v0.9.0): a new object is built from your constructor
+call — <code>__init__</code> re-runs, instance variables reset, and <code>self.state</code> is restored from the last
+<code>checkpoint()</code>. Un-checkpointed anything — including whatever corruption caused the crash — dies
+with the old incarnation. Queued mailbox messages carry over in order. Object references held
+across a restart go stale (route by name — <code>runtime.get_agent()</code> always returns the current
+incarnation). The durable-suspension marker rides in the checkpoint, so suspended agents restart into
 <code>SUSPENDED</code>. Durable suspension across restarts therefore requires a StateStore (<code>Runtime</code> always
 injects one; default is in-memory).</p>
 <h3 id="retry-semantics-in-place-ordered">Retry semantics: in place, ordered<a class="headerlink" href="#retry-semantics-in-place-ordered" title="Permanent link">&para;</a></h3>
