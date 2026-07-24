@@ -1247,7 +1247,58 @@ class DynamicSupervisor(AgentProcess):
                 {"status": "ok", "name": child_name, "ready": False, "state": agent._status.value}
             )
 
-        # wait=True — race readiness against task-completion, then inspect status (D4).
+        # wait=True — v0.9.0 E4 Phase D (B4, D-E4-5): don't block THIS DynSup's
+        # own loop on a slow on_start(). Generalizes the wait=False announce-
+        # after-start pattern: a background continuation races readiness
+        # exactly as the old inline code did, then builds and routes the
+        # reply itself (reply_to() — self.reply() requires self._current_
+        # message, only valid during this synchronous dispatch, which is
+        # about to return). Caller semantics/_SPAWN_ASK_TIMEOUT are untouched:
+        # both are enforced client-side by bus.request(timeout=...), fully
+        # decoupled from which coroutine sends the reply or when.
+        cont = asyncio.create_task(
+            self._await_spawn_readiness_and_reply(
+                message,
+                child_name,
+                agent,
+                task,
+                rec,
+                distributed,
+                announce_caps,
+                announce_meta,
+                child_pubkey,
+                epoch,
+            )
+        )
+        self._pending_child_tasks.add(cont)
+        cont.add_done_callback(self._pending_child_tasks.discard)
+        return None
+
+    async def _await_spawn_readiness_and_reply(
+        self,
+        message: Message,
+        child_name: str,
+        agent: AgentProcess,
+        task: asyncio.Task[None],
+        rec: _ChildRec,
+        distributed: bool,
+        announce_caps: list[str],
+        announce_meta: dict[str, Any],
+        child_pubkey: str,
+        epoch: int,
+    ) -> None:
+        """The wait=True continuation (v0.9.0 E4 Phase D, B4/D-E4-5).
+
+        Identical race-then-inspect-status outcome as the old inline code (same
+        reply shape) — the only change is WHERE it runs (off the dispatch path)
+        and HOW the reply is delivered (built + routed here, not returned).
+
+        A concurrent despawn/stop for this same child can now interleave with
+        this continuation — newly REACHABLE for wait=True, but not new ground:
+        wait=False's ``_announce_after_start`` has run concurrently with
+        despawn/stop since it was introduced, protected by the same idempotent
+        primitives used below (``_terminal_cleanup``, ``_remove_child``).
+        """
         running = agent._running_event
         if running is not None:
             ready = asyncio.ensure_future(running.wait())
@@ -1263,18 +1314,31 @@ class DynamicSupervisor(AgentProcess):
                     child_name, announce_caps, announce_meta, child_pubkey, epoch
                 )
                 rec.announced = True
-            return self.reply(
-                {"status": "ok", "name": child_name, "ready": True, "state": agent._status.value}
+            reply = self.reply_to(
+                message,
+                {"status": "ok", "name": child_name, "ready": True, "state": agent._status.value},
             )
-
-        # Start failed — clean up inline before replying so the post-state is
-        # deterministic (B2); idempotent with the done-callback path (D7).
-        phase = agent._start_phase
-        err = None if task.cancelled() else task.exception()
-        await self._terminal_cleanup(child_name)
-        return self.reply(
-            {"status": "error", "name": child_name, "phase": phase, "error": repr(err)}
-        )
+        else:
+            # Start failed — clean up before replying so the post-state is
+            # deterministic (B2); idempotent with the done-callback path (D7)
+            # AND with a concurrent despawn/stop that already tore this down.
+            phase = agent._start_phase
+            err = None if task.cancelled() else task.exception()
+            await self._terminal_cleanup(child_name)
+            reply = self.reply_to(
+                message, {"status": "error", "name": child_name, "phase": phase, "error": repr(err)}
+            )
+        if self._bus is not None:
+            try:
+                await self._bus.route(reply)
+            except Exception:
+                # F03-7-style containment: a reply that can't be routed (e.g. the
+                # spawner's own mailbox is gone) must not vanish silently inside
+                # an unawaited background task — log it so the caller's eventual
+                # _SPAWN_ASK_TIMEOUT has a server-side explanation on record.
+                logger.exception(
+                    "[%s] could not deliver deferred spawn reply for %r", self.name, child_name
+                )
 
     async def _handle_despawn(self, message: Message) -> Message | None:
         name = message.payload.get("name", "")

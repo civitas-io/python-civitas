@@ -328,6 +328,30 @@ hook, default-preserving for every existing subclass, checked in exactly one pla
 left unmodified: since suspend is rejected outright, a `Supervisor` can never reach SUSPENDED, so
 the base `resume()`'s existing no-op-when-not-suspended guard already covers it.
 
+**D-E4-10 — Phase D implementation notes (found while implementing, both resolved cleanly, no
+addendum-worthy deviation from D-E4-5).** Two things surfaced that the design didn't spell out
+at the line level:
+
+1. **A caller invoking `_handle_spawn`/`handle()` directly with no bus wired, for `wait=True`,
+   no longer receives its reply at all** — the continuation's `if self._bus is not None:` guard
+   drops it silently. Checked: no code path in this repository does this. Every real caller goes
+   through `spawn()`/`spawn_into()`, which requires `self.ask(...)`, which requires a bus. Five
+   existing unit tests (`test_cross_process_spawn.py`) called `handle()` directly WITH a real bus
+   wired but bypassing `ask()`'s correlation tracking, expecting the return value to be the reply
+   synchronously — these were migrated to capture the reply via subscription (the same idiom the
+   file already used for capturing announce/deregister messages), not weakened: every existing
+   assertion on the reply payload is unchanged, only how the test obtains the message.
+2. **A reply that fails to route (e.g., the spawner's own agent already exited) would otherwise
+   vanish inside an unawaited background task**, becoming an opaque "Task exception was never
+   retrieved" asyncio warning instead of an actionable log line — the caller's eventual
+   `_SPAWN_ASK_TIMEOUT` would have no server-side explanation. Wrapped the route call in a
+   try/except that logs (matching this codebase's existing F03-7 containment convention for
+   background loops).
+
+Both were found and fixed before considering Phase D done, not deferred. Neither changes the
+intended behavior described in D-E4-5 — they are hardening details a line-level design pass
+couldn't have anticipated without touching the code.
+
 ## 7. Compatibility & behavior-change ledger
 
 | Change | Kind | Notes |

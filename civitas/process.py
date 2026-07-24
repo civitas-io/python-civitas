@@ -970,16 +970,29 @@ class AgentProcess:
         """Create a reply message. Return this from handle() for request-reply."""
         if self._current_message is None:
             raise RuntimeError("reply() called outside of handle()")
-        msg = self._current_message
+        return self.reply_to(self._current_message, payload)
+
+    def reply_to(self, original: Message, payload: dict[str, Any]) -> Message:
+        """Build a reply to ``original`` from OUTSIDE the synchronous dispatch of
+        that message (v0.9.0 E4 Phase D, B4/D-E4-5).
+
+        ``reply()`` only works while ``original`` is ``self._current_message`` —
+        true during ``handle()``'s own call stack, false once dispatch has moved
+        on. A deferred-reply continuation (e.g. a spawn's ``wait=True`` racing
+        the child's readiness in the background) captures ``original`` itself
+        and calls this instead. Route the result with ``self._bus.route(...)`` —
+        the transport's request/reply correlation is keyed on ``correlation_id``
+        and does not care which coroutine sends the reply or when.
+        """
         return Message(
             type=payload.get("type", "reply"),
             sender=self.name,
-            recipient=msg.reply_to or msg.sender,
+            recipient=original.reply_to or original.sender,
             payload=payload,
-            correlation_id=msg.correlation_id,
-            trace_id=msg.trace_id,
+            correlation_id=original.correlation_id,
+            trace_id=original.trace_id,
             span_id=_new_span_id(),
-            parent_span_id=msg.span_id,
+            parent_span_id=original.span_id,
         )
 
     async def emit(self, payload: dict[str, Any]) -> None:
