@@ -9,7 +9,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ---
 
-## [Unreleased]
+## [0.9.0] — 2026-07-24
+
+Supervision Endgame — closes the entire 2026-07 architecture review (zero xfails remain), makes
+remote liveness a per-process concern instead of a per-mailbox one, and makes every Supervisor a
+first-class addressable actor.
 
 ### Added
 
