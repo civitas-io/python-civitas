@@ -9,6 +9,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **Coverage top-ups: `process.py` (88%→92%) and `runtime.py` (87%→91%)** — deferred until after v0.9.0's D6/D1a rewiring settled in these exact regions (would have been wasted motion earlier). 22 new tests: `llm_span()`/`tool_span()`'s tracer-present path (span attributes, parent-span resolution, exception-sets-error — previously only the no-tracer branch was tested), `connect_mcp()`'s idempotent-reconnect and fabrica-absent `ConfigurationError` paths, `emit()`/`end_stream()`'s outside-handle guards, `spawn_into()`'s five validation/error paths (self-target, unknown supervisor, non-DynamicSupervisor target, routing/timeout wrapping, error-reply), `AgentProcess.stop()`'s error-reply path, four suspend/resume/despawn checkpoint-failure degraded-durability branches, and `Runtime.start()`'s message-signing wiring for non-InProcess transports (identity load, `KeyRegistry`, `MessageSigner`/`SigningSerializer` swap — previously only YAML parsing into `SecurityConfig` was tested, never the actual wiring). One block documented as an accepted, contrib-gated ceiling matching the `cli/state.py` precedent (v0.8.2 G3): `_build_exporters`' per-kind bodies (arize/langfuse/braintrust/langsmith/fiddler) require `civitas_contrib`, not a core dependency — only the `ConfigurationError` guard is testable in core CI.
+
 ## [0.9.0] — 2026-07-24
 
 Supervision Endgame — closes the entire 2026-07 architecture review (zero xfails remain), makes

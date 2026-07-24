@@ -401,6 +401,31 @@ class TestFromConfigDict:
         rt = Runtime.from_config_dict(config)
         assert rt._root_supervisor.name == "root"
 
+    def test_eval_agent_exporters_require_civitas_contrib(self):
+        """v0.9.1 top-up: an eval_agent's exporters: list is built by importing
+        civitas_contrib.eval.exporters, which is NOT a core dependency (the
+        model-provider split, v0.4.0). This is the only branch of
+        _build_exporters testable in core CI without installing contrib — the
+        per-kind bodies (arize/langfuse/braintrust/langsmith/fiddler) are
+        unreachable in this environment: the import happens before the kind
+        dispatch, so every kind hits this same ImportError first. Documented
+        ceiling, matching the cli/state.py precedent (v0.8.2 G3).
+        """
+        config = {
+            "supervision": {
+                "name": "root",
+                "children": [
+                    {
+                        "type": "eval_agent",
+                        "name": "evaluator",
+                        "exporters": [{"type": "arize"}],
+                    }
+                ],
+            }
+        }
+        with pytest.raises(AgencyConfigError, match="civitas-contrib"):
+            Runtime.from_config_dict(config)
+
 
 # ---------------------------------------------------------------------------
 # F12-9 — Example YAML topology files are valid against the config schema

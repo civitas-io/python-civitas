@@ -1030,12 +1030,12 @@ Owner column: `core` = python-civitas, else the target repo.
 > closed by [v0.9.0](#v090-supervision-endgame-released) — zero xfail trackers remain in
 > `tests/unit/test_actor_model_gaps.py`.
 
-### v0.9.1 — Post-endgame polish (Planned, after v0.9.0)
+### v0.9.1 — Post-endgame polish (In progress)
 
-| Item | Priority | Why after v0.9.0 |
-|------|----------|------------------|
-| process.py / runtime.py coverage miss-range top-ups (streaming internals, MCP connect, exporter/signing blocks) | 🟢 Low | the D6/D1a rewiring churns exactly these regions — topping up first is wasted motion |
-| Textual dashboard rebuild on `TopologyServer` endpoints | 🟡 Medium | topology data model stabilizes in v0.9.0 |
+| Item | Priority | Status |
+|------|----------|--------|
+| process.py / runtime.py coverage miss-range top-ups (streaming internals, MCP connect, exporter/signing blocks) | Low | ✅ **Done (dev/v0.9.1)** — process.py 88%→92%, runtime.py 87%→91%; 22 new tests; one block (eval exporter per-kind bodies) documented as an accepted civitas_contrib-gated ceiling |
+| Textual dashboard rebuild on `TopologyServer` endpoints | Medium | Not started — topology data model stabilized in v0.9.0, ready to pick up |
 
 ### v0.10.0 — HITL & Streaming polish (Planned — the Medicus runway)
 
