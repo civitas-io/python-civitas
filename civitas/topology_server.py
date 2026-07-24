@@ -46,6 +46,11 @@ class TopologyServer(GenServer):
         # Injected by Runtime before on_start() is called
         self._root_supervisor: Supervisor | None = None
         self._agents: dict[str, Any] = {}  # name → AgentProcess
+        # v0.9.1 (dashboard-v2, D-DASH-2/D-DASH-4): injected by Runtime.start()
+        # alongside _root_supervisor/_agents — None when the caller supplied a
+        # non-MetricsCollector metrics= sink of their own (documented, not silently
+        # empty; see /metrics's "not available" response).
+        self._metrics_collector: Any = None
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -137,6 +142,9 @@ class TopologyServer(GenServer):
             if data is None:
                 return json.dumps({"error": f"agent '{name}' not found"}), 404
             return json.dumps(data), 200
+        if path == "/metrics":
+            data, code = self._build_metrics()
+            return json.dumps(data), code
         return json.dumps({"error": "not found"}), 404
 
     # ------------------------------------------------------------------
@@ -255,6 +263,36 @@ class TopologyServer(GenServer):
             "capability_metadata": dict(agent.capability_metadata),
             "uptime_seconds": agent.uptime_seconds,
         }
+
+    def _build_metrics(self) -> tuple[dict[str, Any], int]:
+        """v0.9.1 (dashboard-v2, D-DASH-2): live MetricsCollector snapshot.
+
+        Returns a documented "not available" body (not a silent empty
+        snapshot) when no MetricsCollector was wired — e.g. a Runtime
+        constructed with a custom, non-MetricsCollector metrics= sink.
+        """
+        if self._metrics_collector is None:
+            return {"error": "metrics not available"}, 404
+        snapshot = self._metrics_collector.snapshot
+        return {
+            "agents": {
+                name: {
+                    "messages_handled": m.messages_handled,
+                    "messages_sent": m.messages_sent,
+                    "avg_latency_ms": m.avg_latency_ms,
+                    "restarts": m.restarts,
+                    "errors": m.errors,
+                    "tokens_in": m.tokens_in,
+                    "tokens_out": m.tokens_out,
+                    "cost_usd": m.cost_usd,
+                    "last_model": m.last_model,
+                }
+                for name, m in snapshot.agents.items()
+            },
+            "total_messages": snapshot.total_messages,
+            "total_cost_usd": snapshot.total_cost_usd,
+            "uptime_seconds": snapshot.uptime_seconds,
+        }, 200
 
     def _find_dynamic_agent(self, name: str) -> Any | None:
         if self._root_supervisor is None:

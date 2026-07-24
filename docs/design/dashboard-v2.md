@@ -248,3 +248,23 @@ models for one command. `--refresh` (seconds) is kept, now meaning "poll interva
   width wraps the phrase mid-string). Same class of bug as V1 (v0.8.1, Rich help-text width).
   Confirmed pre-existing (reproduces identically without any Phase A changes) before fixing;
   normalized whitespace before the substring check.
+
+### Phase B implementation notes (D-DASH-2/D-DASH-4, done)
+
+- **`MetricsCollector.register_agent()` is required before any metric records anything** —
+  `message_handled()`/`message_sent()`/etc. all silently no-op for an unregistered name (a
+  pre-existing `MetricsCollector` behavior, not new). The old CLI `dashboard.py` called
+  `register_agent()` manually for every static agent at startup; `Runtime`'s new auto-provisioning
+  reproduces this loop. Caught by a real end-to-end test (not assumed) — the first draft of
+  `test_topology_server_http_metrics_shape` failed with an empty `agents` dict until this was added.
+- **Documented gap, not silently solved**: dynamically-spawned children (via `DynamicSupervisor`)
+  are NOT auto-registered with the collector — `all_agents()` only sees statically-declared
+  children at `Runtime.start()` time. A dynamically-spawned agent's messages/tokens/cost will not
+  appear in `/metrics` until a follow-up wires a spawn-time registration hook. Not blocking for
+  v0.9.1 (the PRD's P0 scope is topology + status + LLM-metrics for the common case); tracked here
+  rather than silently left as a surprise.
+- `build_component_set()` captures `self._metrics` **by value**, so the auto-provisioning block
+  must run strictly before it — placed at the very top of `start()`, before the `ComponentSet`
+  branch, not alongside the later `TopologyServer` reference-injection block (which was the first,
+  wrong, instinct — caught by re-reading the existing code path before writing code, not by a
+  failing test).

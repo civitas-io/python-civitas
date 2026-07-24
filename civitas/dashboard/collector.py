@@ -26,6 +26,9 @@ class AgentMetrics:
     tokens_out: int = 0
     cost_usd: float = 0.0
     last_active: float | None = None
+    # v0.9.1 (dashboard-v2, D-DASH-5): written by llm_call() once llm_span()
+    # feeds it (FD-01 close-out) — empty until an LLM call actually reports one.
+    last_model: str = ""
 
     @property
     def avg_latency_ms(self) -> float:

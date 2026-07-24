@@ -408,6 +408,80 @@ async def test_topology_server_http_uptime_resets_after_restart() -> None:
         await runtime.stop()
 
 
+@pytest.mark.asyncio
+async def test_runtime_auto_provisions_metrics_collector_for_topology_server() -> None:
+    """v0.9.1 (D-DASH-4): a Runtime with a TopologyServer and no explicit
+    metrics= gets a real MetricsCollector for free — /metrics has something
+    to read without any extra caller wiring."""
+    from civitas.dashboard.collector import MetricsCollector
+
+    ts = TopologyServer(name="topo", port=16794)
+    runtime = Runtime(supervisor=Supervisor("root", children=[ts]))
+    await runtime.start()
+    try:
+        assert isinstance(runtime._metrics, MetricsCollector)
+        assert ts._metrics_collector is runtime._metrics
+    finally:
+        await runtime.stop()
+
+
+@pytest.mark.asyncio
+async def test_runtime_respects_explicit_custom_metrics_sink() -> None:
+    """v0.9.1 (D-DASH-4): a caller's own metrics= sink is never overridden —
+    auto-provisioning only fires when metrics is None. A non-MetricsCollector
+    sink means /metrics reports 'not available', not a silent empty snapshot."""
+
+    class _CustomSink:
+        def message_handled(self, agent_name: str, latency_ms: float) -> None: ...
+        def message_sent(self, agent_name: str) -> None: ...
+        def agent_error(self, agent_name: str) -> None: ...
+        def agent_restarted(self, agent_name: str, reason: str = "") -> None: ...
+
+    custom = _CustomSink()
+    ts = TopologyServer(name="topo", port=16795)
+    runtime = Runtime(supervisor=Supervisor("root", children=[ts]), metrics=custom)
+    await runtime.start()
+    try:
+        assert runtime._metrics is custom  # never overridden
+        assert ts._metrics_collector is None  # not a MetricsCollector
+        code, body = await _http_get("http://127.0.0.1:16795/metrics")
+        assert code == 404
+        assert json.loads(body) == {"error": "metrics not available"}
+    finally:
+        await runtime.stop()
+
+
+@pytest.mark.asyncio
+async def test_topology_server_http_metrics_shape() -> None:
+    """v0.9.1 (D-DASH-2): /metrics returns the documented shape, reflecting
+    real message-handling activity end-to-end (no mocks)."""
+    from civitas.messages import Message
+    from civitas.process import AgentProcess
+
+    class _Echo(AgentProcess):
+        async def handle(self, message: Message) -> Message | None:
+            return self.reply({"ok": True})
+
+    ts = TopologyServer(name="topo", port=16796)
+    echo = _Echo("echo")
+    runtime = Runtime(supervisor=Supervisor("root", children=[ts, echo]))
+    await runtime.start()
+    try:
+        await runtime.ask("echo", {"q": 1})
+        code, body = await _http_get("http://127.0.0.1:16796/metrics")
+        assert code == 200
+        data = json.loads(body)
+        assert "echo" in data["agents"]
+        echo_metrics = data["agents"]["echo"]
+        assert echo_metrics["messages_handled"] == 1
+        assert echo_metrics["avg_latency_ms"] >= 0.0
+        assert echo_metrics["last_model"] == ""  # nothing reported an LLM call yet
+        assert data["total_messages"] >= 1
+        assert data["uptime_seconds"] >= 0.0
+    finally:
+        await runtime.stop()
+
+
 # ---------------------------------------------------------------------------
 # Unit: CLI helpers — _find_topology_server, _try_live_topology,
 #         _build_rich_tree_from_live, _add_children dynamic branches

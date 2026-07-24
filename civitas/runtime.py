@@ -13,6 +13,7 @@ import yaml
 
 from civitas.audit.sinks import sink_from_config
 from civitas.components import ComponentSet, build_component_set
+from civitas.dashboard.collector import MetricsCollector
 from civitas.errors import (
     ConfigurationError,
     DeserializationError,
@@ -588,6 +589,29 @@ class Runtime:
         if self._started:
             return
 
+        # v0.9.1 (dashboard-v2, D-DASH-4): auto-provide a MetricsCollector when a
+        # TopologyServer is present and the caller didn't already attach their own
+        # sink via set_metrics()/metrics= — the dashboard needs SOMETHING to read
+        # via /metrics. Must happen before build_component_set() below, which
+        # captures self._metrics by value; Runtime(metrics=my_sink) callers are
+        # unaffected (self._metrics is already set, this block is a no-op for them).
+        if (
+            self._metrics is None
+            and self._components is None
+            and self._root_supervisor is not None
+            and any(isinstance(a, TopologyServer) for a in self._root_supervisor.all_agents())
+        ):
+            self._metrics = MetricsCollector()
+            self._metrics.runtime_started()
+            # register_agent() is required before message_handled()/message_sent()
+            # will record anything for a name (MetricsCollector no-ops for an
+            # unregistered agent) — matches what the old CLI dashboard.py did
+            # manually. Dynamically-spawned children are NOT covered by this loop
+            # (all_agents() only sees statically-declared children) — documented
+            # gap, not a spawn-time hook (design dashboard-v2.md addendum).
+            for agent in self._root_supervisor.all_agents():
+                self._metrics.register_agent(agent.name)
+
         # Steps 2–6: build or use provided ComponentSet.
         # Note: if a pre-built ComponentSet is provided, its transport must support
         # being started by this call — transport.start() is always called below. (F04-11)
@@ -692,6 +716,9 @@ class Runtime:
             if isinstance(new_agent, TopologyServer):
                 new_agent._root_supervisor = self._root_supervisor
                 new_agent._agents = self._agents_by_name
+                new_agent._metrics_collector = (
+                    self._metrics if isinstance(self._metrics, MetricsCollector) else None
+                )
 
         for sup in self._root_supervisor.all_supervisors():
             sup._bus = cs.bus
@@ -739,6 +766,13 @@ class Runtime:
             if isinstance(agent, TopologyServer):
                 agent._root_supervisor = self._root_supervisor
                 agent._agents = self._agents_by_name
+                # v0.9.1 (D-DASH-2/D-DASH-4): only a MetricsCollector has the
+                # .snapshot the /metrics endpoint reads — a custom MetricsSink
+                # (message_handled/message_sent/... only) leaves this None,
+                # which /metrics reports explicitly rather than guessing.
+                agent._metrics_collector = (
+                    self._metrics if isinstance(self._metrics, MetricsCollector) else None
+                )
 
         # 10. Start Transport
         await self._transport.start()
