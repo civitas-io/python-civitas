@@ -23,15 +23,20 @@ class AlwaysCrashAgent(AgentProcess):
 
 
 class CrashOnceAgent(AgentProcess):
-    """Crashes on the first message, works after restart."""
+    """Crashes on the first message EVER (per name), works after restart.
 
-    def __init__(self, name: str) -> None:
-        super().__init__(name)
-        self._crashed = False
+    v0.9.0 D1a: restart builds a FRESH incarnation, so instance variables
+    reset — "crashed once" must live outside the instance (class-level, per
+    name) to survive the restart. The original instance-flag version was
+    depending on the exact undocumented behavior D1a removed. Tests reset
+    `CrashOnceAgent.crashed` explicitly.
+    """
+
+    crashed: dict[str, bool] = {}
 
     async def handle(self, message: Message) -> Message | None:
-        if not self._crashed:
-            self._crashed = True
+        if not type(self).crashed.get(self.name):
+            type(self).crashed[self.name] = True
             raise ValueError("first-time crash")
         return self.reply({"status": "ok", "msg": message.payload.get("text", "")})
 
@@ -49,17 +54,16 @@ class CountingAgent(AgentProcess):
 
 
 class TrackingAgent(AgentProcess):
-    """Records start count to detect restarts."""
+    """Records start count ACROSS incarnations to detect restarts (D1a-safe:
+    class-level per-name counter; tests reset `TrackingAgent.starts`)."""
 
-    def __init__(self, name: str) -> None:
-        super().__init__(name)
-        self.start_count = 0
+    starts: dict[str, int] = {}
 
     async def on_start(self) -> None:
-        self.start_count += 1
+        type(self).starts[self.name] = type(self).starts.get(self.name, 0) + 1
 
     async def handle(self, message: Message) -> Message | None:
-        return self.reply({"starts": self.start_count})
+        return self.reply({"starts": type(self).starts.get(self.name, 0)})
 
 
 # ------------------------------------------------------------------
@@ -69,6 +73,7 @@ class TrackingAgent(AgentProcess):
 
 async def test_supervisor_detects_agent_crash():
     """Supervisor detects agent crash (unhandled exception in handle())."""
+    CrashOnceAgent.crashed = {}
     agent = CrashOnceAgent("crasher")
     runtime = Runtime(
         supervisor=Supervisor(
@@ -83,17 +88,19 @@ async def test_supervisor_detects_agent_crash():
     try:
         # Send a message that triggers the crash
         await runtime.send("crasher", {"text": "trigger"})
-        await wait_for_status(agent, ProcessStatus.CRASHED)
-        await wait_for_status(agent, ProcessStatus.RUNNING)
-        assert agent.status == ProcessStatus.RUNNING
-        assert agent._crashed is True  # confirms it did crash
+        await wait_for_status(agent, ProcessStatus.CRASHED)  # old ref stays CRASHED
+        # Q1/D1a: RUNNING is observable only on the CURRENT incarnation.
+        await wait_for(lambda: runtime.get_agent("crasher").status == ProcessStatus.RUNNING)
+        assert CrashOnceAgent.crashed["crasher"] is True  # confirms it did crash
     finally:
         await runtime.stop()
 
 
 async def test_one_for_one_restarts_only_failed_agent():
     """ONE_FOR_ONE strategy restarts only the failed agent."""
+    CrashOnceAgent.crashed = {}
     crasher = CrashOnceAgent("crasher")
+    TrackingAgent.starts = {}
     healthy = TrackingAgent("healthy")
 
     runtime = Runtime(
@@ -115,10 +122,12 @@ async def test_one_for_one_restarts_only_failed_agent():
         # Trigger crash in crasher
         await runtime.send("crasher", {"text": "trigger"})
         await wait_for_status(crasher, ProcessStatus.CRASHED)
-        await wait_for_status(crasher, ProcessStatus.RUNNING)
+        await wait_for(  # Q1: current incarnation
+            lambda: runtime.get_agent("crasher").status == ProcessStatus.RUNNING
+        )
 
-        # Crasher restarted, healthy still only started once
-        assert crasher.status == ProcessStatus.RUNNING
+        # Crasher restarted (fresh incarnation), healthy still only started once
+        assert runtime.get_agent("crasher").status == ProcessStatus.RUNNING
         r = await runtime.ask("healthy", {})
         assert r.payload["starts"] == 1
     finally:
@@ -127,7 +136,9 @@ async def test_one_for_one_restarts_only_failed_agent():
 
 async def test_one_for_all_restarts_all_siblings():
     """ONE_FOR_ALL strategy restarts all siblings."""
+    CrashOnceAgent.crashed = {}
     crasher = CrashOnceAgent("crasher")
+    TrackingAgent.starts = {}
     sibling = TrackingAgent("sibling")
 
     runtime = Runtime(
@@ -147,7 +158,9 @@ async def test_one_for_all_restarts_all_siblings():
 
         # Trigger crash — should restart ALL children
         await runtime.send("crasher", {"text": "trigger"})
-        await wait_for(lambda: sibling.start_count == 2, msg="sibling.start_count == 2")
+        await wait_for(
+            lambda: TrackingAgent.starts.get("sibling", 0) == 2, msg="sibling starts == 2"
+        )
 
         # Sibling should have been restarted (start_count == 2)
         r = await runtime.ask("sibling", {})
@@ -158,7 +171,9 @@ async def test_one_for_all_restarts_all_siblings():
 
 async def test_rest_for_one_restarts_failed_and_downstream():
     """REST_FOR_ONE strategy restarts the failed agent and downstream siblings."""
+    TrackingAgent.starts = {}
     upstream = TrackingAgent("upstream")
+    CrashOnceAgent.crashed = {}
     crasher = CrashOnceAgent("crasher")
     downstream = TrackingAgent("downstream")
 
@@ -181,7 +196,9 @@ async def test_rest_for_one_restarts_failed_and_downstream():
 
         # Crash the middle agent — downstream should restart, upstream should not
         await runtime.send("crasher", {"text": "trigger"})
-        await wait_for(lambda: downstream.start_count == 2, msg="downstream.start_count == 2")
+        await wait_for(
+            lambda: TrackingAgent.starts.get("downstream", 0) == 2, msg="downstream starts == 2"
+        )
 
         r_up = await runtime.ask("upstream", {})
         r_down = await runtime.ask("downstream", {})
@@ -206,10 +223,12 @@ async def test_restart_counter_increments():
     await runtime.start()
     try:
         # Trigger 3 crashes — wait for each restart cycle before sending next
-        for _ in range(3):
+        for i in range(3):
             await runtime.send("crasher", {"text": "trigger"})
-            await wait_for_status(agent, ProcessStatus.CRASHED)
-            await wait_for_status(agent, ProcessStatus.RUNNING)
+            await wait_for(  # Q1: each cycle produces a new incarnation
+                lambda n=i: sup._restart_counts.get("crasher", 0) >= n + 1
+            )
+            await wait_for(lambda: runtime.get_agent("crasher").status == ProcessStatus.RUNNING)
 
         assert sup._restart_counts.get("crasher", 0) >= 3
     finally:
@@ -235,19 +254,22 @@ async def test_max_restarts_triggers_escalation():
         for _ in range(4):
             await runtime.send("crasher", {"text": "trigger"})
             try:
-                await wait_for_status(agent, ProcessStatus.RUNNING, timeout=2.0)
+                await wait_for(
+                    lambda: runtime.get_agent("crasher").status == ProcessStatus.RUNNING,
+                    timeout=2.0,
+                )
             except TimeoutError:
                 break  # agent hit max_restarts and stopped — expected
 
-        # After exceeding max_restarts, agent stays CRASHED (no more restarts)
-        await wait_for_status(agent, ProcessStatus.CRASHED)
-        assert agent.status == ProcessStatus.CRASHED
+        # After exceeding max_restarts, the current incarnation stays CRASHED
+        await wait_for(lambda: runtime.get_agent("crasher").status == ProcessStatus.CRASHED)
     finally:
         await runtime.stop()
 
 
 async def test_backoff_delay_applied():
     """Backoff delay is applied between restarts."""
+    CrashOnceAgent.crashed = {}
     agent = CrashOnceAgent("crasher")
     runtime = Runtime(
         supervisor=Supervisor(
@@ -264,19 +286,21 @@ async def test_backoff_delay_applied():
         await runtime.send("crasher", {"text": "trigger"})
         # Phase 1: wait for the agent to leave RUNNING (crash)
         await wait_for(lambda: agent.status != ProcessStatus.RUNNING, timeout=2.0)
-        # Phase 2: wait for the supervisor to restart with backoff delay applied
-        await wait_for_status(agent, ProcessStatus.RUNNING, timeout=3.0)
+        # Phase 2: the fresh incarnation comes up after the backoff delay (Q1)
+        await wait_for(
+            lambda: runtime.get_agent("crasher").status == ProcessStatus.RUNNING, timeout=3.0
+        )
         elapsed = time.monotonic() - t0
 
         # Restart should have taken at least the backoff delay
         assert elapsed >= 0.2
-        assert agent.status == ProcessStatus.RUNNING
     finally:
         await runtime.stop()
 
 
 async def test_restarted_agent_receives_subsequent_messages():
     """Restarted agent receives subsequent messages normally."""
+    CrashOnceAgent.crashed = {}
     agent = CrashOnceAgent("crasher")
     runtime = Runtime(
         supervisor=Supervisor(
@@ -291,7 +315,9 @@ async def test_restarted_agent_receives_subsequent_messages():
     try:
         # Trigger crash
         await runtime.send("crasher", {"text": "trigger"})
-        await wait_for_status(agent, ProcessStatus.RUNNING)
+        await wait_for(  # Q1: current incarnation
+            lambda: runtime.get_agent("crasher").status == ProcessStatus.RUNNING
+        )
 
         # Agent should be back and functional
         result = await runtime.ask("crasher", {"text": "hello after restart"})

@@ -229,12 +229,17 @@ Message types prefixed with `_agency.` are reserved for runtime internals:
 
 | Type | Purpose |
 |---|---|
-| `_agency.heartbeat` | Supervisor pings remote agents |
+| `_agency.heartbeat` | Supervisor pings a remote agent (legacy per-agent path, pre-v0.9 skew fallback) |
 | `_agency.heartbeat_ack` | Remote agent confirms it is alive |
+| `_agency.health_probe` | Supervisor pings a Worker's process-level health channel (v0.9.0 D5) |
+| `_agency.health_ack` | Worker replies with a per-agent status/task_alive/mailbox_depth snapshot |
 | `_agency.shutdown` | Runtime signals an agent to stop |
 | `_agency.restart` | Supervisor tells a Worker to restart an agent |
 | `_agency.register` | Cross-process agent registration |
 | `_agency.deregister` | Cross-process agent deregistration |
+| `_agency.suspend` | Request an agent pause at its next message boundary (rejected on a `Supervisor`, v0.9.0) |
+| `_agency.resume` | Resume a suspended agent, carrying the approver identity |
+| `_agency.child_crashed` | A supervisor's internal crash-processing trigger (v0.9.0 — its own mailbox now carries this instead of a bespoke queue) |
 
 Application code must never send messages with these types. The bus will raise `MessageValidationError` immediately:
 
@@ -448,11 +453,12 @@ senders to re-send on missing replies (idempotency via your own message IDs).
 
 ### The restart state contract (v0.8.0)
 
-**Only checkpointed state survives a restart.** On every (re)start `self.state` is reset, then
-restored from the last `checkpoint()`. Un-checkpointed state — including whatever corruption
-caused the crash — dies with the old incarnation. Instance variables currently survive (the
-instance is reused; fresh-instance restart lands in v0.9) — treat them as undefined across
-restarts. The durable-suspension marker rides in the checkpoint, so suspended agents restart into
+**A restart is a fresh incarnation** (v0.9.0): a new object is built from your constructor
+call — `__init__` re-runs, instance variables reset, and `self.state` is restored from the last
+`checkpoint()`. Un-checkpointed anything — including whatever corruption caused the crash — dies
+with the old incarnation. Queued mailbox messages carry over in order. Object references held
+across a restart go stale (route by name — `runtime.get_agent()` always returns the current
+incarnation). The durable-suspension marker rides in the checkpoint, so suspended agents restart into
 `SUSPENDED`. Durable suspension across restarts therefore requires a StateStore (`Runtime` always
 injects one; default is in-memory).
 

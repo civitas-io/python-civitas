@@ -27,7 +27,7 @@ from civitas.mcp.types import MCPServerConfig
 from civitas.messages import Message, _new_span_id, _uuid7
 from civitas.observability.otel_agent import run_otel_agent
 from civitas.plugins.loader import load_plugins_from_config
-from civitas.process import DYNAMIC_SUPERVISOR_CAPABILITY, AgentProcess
+from civitas.process import DYNAMIC_SUPERVISOR_CAPABILITY, SUPERVISOR_CAPABILITY, AgentProcess
 from civitas.sandbox.config import SandboxConfig
 from civitas.secrets.substitution import substitute_vars
 from civitas.security.config import GatewayAuthConfig, SecurityConfig
@@ -677,10 +677,28 @@ class Runtime:
                 agent._credentials = self._agent_credentials.get(agent.name, {})
 
         # Inject into supervisors (supervisor-specific wiring, not via ComponentSet)
+        # D1a (v0.9.0): also hand every supervisor a RE-INVOKABLE wiring callback
+        # (fresh incarnations must be wired exactly like startup wiring) and a
+        # replaced-callback that keeps Runtime's O(1) map + TopologyServer
+        # references fresh. User-held object references go stale by design (Q1:
+        # route by name, never by object).
+        def _wire_child(agent: AgentProcess) -> None:
+            cs.inject(agent)
+            if self._agent_credentials:
+                agent._credentials = self._agent_credentials.get(agent.name, {})
+
+        def _on_child_replaced(name: str, new_agent: AgentProcess) -> None:
+            self._agents_by_name[name] = new_agent
+            if isinstance(new_agent, TopologyServer):
+                new_agent._root_supervisor = self._root_supervisor
+                new_agent._agents = self._agents_by_name
+
         for sup in self._root_supervisor.all_supervisors():
             sup._bus = cs.bus
             sup._registry = cs.registry
             sup._tracer = cs.tracer
+            sup._wire_child = _wire_child
+            sup.add_child_replaced_callback(_on_child_replaced)
 
         # Wire _dynamic_supervisor_name for all agents based on the static topology.
         # Each agent receives the name of the nearest DynamicSupervisor in its
@@ -763,6 +781,15 @@ class Runtime:
                             exc,
                         )
 
+        # D6 (v0.9.0 E4 Phase A): supervisors are now addressable actors too
+        # (design supervision-endgame.md §6) — register + wire their transport
+        # subscription before the tree starts, exactly like agents. Own-loop-
+        # first ordering (D-E4-3) is enforced inside Supervisor.start() itself.
+        all_supervisors = self._root_supervisor.all_supervisors()
+        for sup in all_supervisors:
+            self._registry.register(sup.name, capabilities=[SUPERVISOR_CAPABILITY])
+            await self._bus.setup_agent(sup)
+
         # 11-12. Start supervision tree (supervisors start their children)
         await self._root_supervisor.start()
 
@@ -843,6 +870,7 @@ class Runtime:
                 owner=msg.sender,
                 pubkey=pubkey,
                 epoch=epoch,
+                health_channel=str(msg.payload.get("health_channel", "") or ""),
             )
         except ValueError as exc:
             logger.warning("Rejecting remote registration for %r: %s", name, exc)

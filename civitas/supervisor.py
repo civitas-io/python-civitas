@@ -5,28 +5,57 @@ from __future__ import annotations
 import asyncio
 import importlib
 import logging
-import random
-import time
 from collections import deque
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any
+from typing import Any, cast
 
 from civitas.errors import ConfigurationError
 from civitas.messages import Message, _new_span_id, _uuid7
-from civitas.process import DYNAMIC_SUPERVISOR_CAPABILITY, AgentProcess, ProcessStatus
+from civitas.process import (
+    DYNAMIC_SUPERVISOR_CAPABILITY,
+    AgentProcess,
+    Mailbox,
+    ProcessStatus,
+)
 from civitas.registry import reregister_preserving
 from civitas.security.identity import AgentIdentity
 from civitas.security.signing import SigningSerializer
+from civitas.supervision.engine import BackoffPolicy, RestartEngine
 from civitas.transport.inprocess import InProcessTransport
 
 logger = logging.getLogger(__name__)
 
-if TYPE_CHECKING:
-    from civitas.bus import MessageBus
-    from civitas.observability.tracer import Tracer
-    from civitas.registry import Registry
+
+def _fresh_incarnation(old: AgentProcess) -> AgentProcess:
+    """Build a NEW instance from the child spec captured at construction (D1a).
+
+    ``_civitas_spec`` holds ``(cls, args, kwargs)`` exactly as the user called
+    the constructor — re-instantiation re-runs ``__init__`` (that is the fresh
+    heap). Two things are not constructor state and carry over from the old
+    incarnation: spawn-time ``config`` (assigned post-construction by
+    DynamicSupervisor) and the wired ``_dynamic_supervisor_name``. Note the
+    spec holds *references* to ctor args (e.g. a GatewayConfig) — deliberately
+    shared, not deep-copied (design supervision-endgame.md §4 constraint 3).
+    """
+    cls, args, kwargs = old._civitas_spec
+    fresh = cast(AgentProcess, cls(*args, **kwargs))
+    fresh.config = old.config
+    fresh._dynamic_supervisor_name = old._dynamic_supervisor_name
+    return fresh
+
+
+async def _transfer_mailbox(old: AgentProcess, new: AgentProcess) -> None:
+    """Carry queued messages to the new incarnation, in order (D1a).
+
+    ``drain()`` yields priority-first then FIFO; ``put()`` re-classifies by
+    ``priority``, so ordering within each class is preserved. The message that
+    was IN FLIGHT when the old incarnation died is not here — it was lost with
+    the crash (documented at-most-once).
+    """
+    for message in old._mailbox.drain():
+        await new._mailbox.put(message)
 
 
 class HeartbeatTimeout(Exception):
@@ -46,20 +75,20 @@ class RestartStrategy(Enum):
     REST_FOR_ONE = "REST_FOR_ONE"
 
 
-class BackoffPolicy(Enum):
-    """Delay strategy applied between successive restart attempts."""
-
-    CONSTANT = "CONSTANT"
-    LINEAR = "LINEAR"
-    EXPONENTIAL = "EXPONENTIAL"
-
-
-class Supervisor:
+class Supervisor(AgentProcess):
     """Manages child processes with restart strategies.
 
     When a child crashes, the supervisor applies the configured restart
     strategy. If max_restarts is exceeded within restart_window, the
     supervisor escalates to its parent or stops permanently.
+
+    v0.9.0 E4 (D6, design supervision-endgame.md §6): a Supervisor is now
+    itself an actor — addressable, registered (``SUPERVISOR_CAPABILITY``),
+    with its own mailbox and message loop. Phase A (this constructor + the
+    start/stop ordering below) is a zero-behavior-change skeleton: crash
+    events still flow through the pre-E4 queue/drain-task mechanism until
+    Phase B swaps the control plane onto the mailbox. Public constructor
+    signature is unchanged — the actorization is purely internal.
     """
 
     def __init__(
@@ -73,48 +102,119 @@ class Supervisor:
         backoff_base: float = 1.0,
         backoff_max: float = 60.0,
     ) -> None:
-        self.name = name
+        super().__init__(name)
+        # D-E4-2: supervisors' priority queue is UNBOUNDED (0) — crash
+        # self-messages are enqueued from a sync task-done callback (Phase B)
+        # that cannot await a bounded put(); a bounded put_nowait() would
+        # reintroduce the crash-drop bug class H2 removed. Volume is bounded
+        # by child count in practice (the same judgment call H2 made for the
+        # queue this replaces).
+        self._mailbox = Mailbox(maxsize=1000, priority_maxsize=0)
         self.children: list[AgentProcess | Supervisor] = children or []
         self.strategy = RestartStrategy(strategy)
-        self.max_restarts = max_restarts
-        self.restart_window = restart_window
-        self.backoff = BackoffPolicy(backoff)
-        self.backoff_base = backoff_base
-        self.backoff_max = backoff_max
+        # E1 (v0.9.0): budgets/window/backoff live in ONE engine shared with
+        # DynamicSupervisor's per-child engines (design supervision-endgame §3).
+        # The five knobs remain public attributes via properties below.
+        self._engine = RestartEngine(
+            max_restarts=max_restarts,
+            restart_window=restart_window,
+            backoff=BackoffPolicy(backoff),
+            backoff_base=backoff_base,
+            backoff_max=backoff_max,
+        )
 
         # Internal state
-        self._restart_timestamps: deque[float] = deque()  # F03-10: deque for O(1) sliding window
+        # Lifetime crash counters — OBSERVABILITY ONLY since B3 (logs/spans);
+        # never a backoff input (backoff derives from window occupancy).
         self._restart_counts: dict[str, int] = {}
         self._child_tasks: dict[str, asyncio.Task[None]] = {}
         self._children_by_name: dict[str, AgentProcess | Supervisor] = {  # F03-11: O(1) lookup
             c.name: c for c in self.children
         }
-        # H2 (#30): crash events are queued and processed strictly sequentially by
-        # one drain task per supervisor — OTP supervisors handle EXIT signals one at
-        # a time. The queue is unbounded on purpose: a bounded queue would
-        # reintroduce a silent crash-drop path, the exact bug class this removes.
-        # Items: (child_name, exception, task-at-crash-time | None). The task is the
-        # child's incarnation marker — a queued event whose task is no longer the
-        # child's current task is stale (the child was already restarted by an
-        # earlier cycle) and is skipped, mirroring OTP's EXIT-pid matching.
-        self._crash_queue: asyncio.Queue[tuple[str, Exception, asyncio.Task[None] | None]] = (
-            asyncio.Queue()
-        )
-        self._crash_drain_task: asyncio.Task[None] | None = None
+        # H2 (#30) / v0.9.0 E4 Phase B (D-E4-1, D6): crash events are processed
+        # strictly sequentially through the Supervisor's OWN mailbox/message-loop
+        # (this supervisor is now an AgentProcess) — OTP supervisors handle EXIT
+        # signals one at a time. Message.payload is JSON-primitives-only, but a
+        # crash event carries a real Exception object (add_crash_callback's public
+        # contract) and an asyncio.Task (the stale-incarnation marker); neither can
+        # ride the mailbox directly. Resolution: the mailbox carries only an
+        # event-id trigger (_agency.child_crashed); the real objects live here,
+        # keyed by event-id. Items: (child_name, exception, task-at-crash-time |
+        # None). The task is the child's incarnation marker — a queued event whose
+        # task is no longer the child's current task is stale (the child was
+        # already restarted by an earlier cycle) and is skipped, mirroring OTP's
+        # EXIT-pid matching.
+        self._pending_crash_events: dict[str, tuple[str, Exception, asyncio.Task[None] | None]] = {}
         self._running = False
         self._parent: Supervisor | None = None
         self._crash_callbacks: list[Callable[[str, Exception], Awaitable[None]]] = []
 
-        # Injected by Runtime
-        self._bus: MessageBus | None = None
-        self._registry: Registry | None = None
-        self._tracer: Tracer | None = None
+        # D1a (v0.9.0): re-invokable wiring for fresh incarnations. Runtime
+        # registers this at start (ComponentSet.inject + credentials); a fresh
+        # instance must be FULLY wired before its task starts (constraint 1).
+        self._wire_child: Callable[[AgentProcess], None] | None = None
+        # Notified with (name, new_agent) after a child object is replaced —
+        # Runtime updates its O(1) map and TopologyServer references here (Q1:
+        # user-held references go stale by design; route by name).
+        self._child_replaced_callbacks: list[Callable[[str, AgentProcess], None]] = []
+        # _bus/_registry/_tracer already initialized to None by AgentProcess.__init__
+        # above; Runtime injects the real values (agent path) or the dedicated
+        # supervisor-wiring block (Runtime.start) before the tree starts.
 
         # Heartbeat monitoring for remote agents
         self._remote_children: set[str] = set()
         self._heartbeat_task: asyncio.Task[None] | None = None
         self._missed_heartbeats: dict[str, int] = {}
         self._remote_child_config: dict[str, dict[str, float | int]] = {}  # F03-3: per-child config
+
+    # ------------------------------------------------------------------
+    # Engine facade — the knobs stay public attributes (tests + user code)
+    # ------------------------------------------------------------------
+
+    @property
+    def max_restarts(self) -> int:
+        return self._engine.max_restarts
+
+    @max_restarts.setter
+    def max_restarts(self, value: int) -> None:
+        self._engine.max_restarts = value
+
+    @property
+    def restart_window(self) -> float:
+        return self._engine.restart_window
+
+    @restart_window.setter
+    def restart_window(self, value: float) -> None:
+        self._engine.restart_window = value
+
+    @property
+    def backoff(self) -> BackoffPolicy | None:
+        return self._engine.backoff
+
+    @backoff.setter
+    def backoff(self, value: BackoffPolicy | None) -> None:
+        self._engine.backoff = value
+
+    @property
+    def backoff_base(self) -> float:
+        return self._engine.backoff_base
+
+    @backoff_base.setter
+    def backoff_base(self, value: float) -> None:
+        self._engine.backoff_base = value
+
+    @property
+    def backoff_max(self) -> float:
+        return self._engine.backoff_max
+
+    @backoff_max.setter
+    def backoff_max(self, value: float) -> None:
+        self._engine.backoff_max = value
+
+    @property
+    def _restart_timestamps(self) -> deque[float]:
+        """The engine's intensity window (kept for tests/introspection)."""
+        return self._engine.window
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -124,11 +224,11 @@ class Supervisor:
         """Start all children and begin monitoring them."""
         self._running = True
 
-        # Start (or restart, after an H1 subtree restart) the crash drain task.
-        if self._crash_drain_task is None or self._crash_drain_task.done():
-            self._crash_drain_task = asyncio.create_task(
-                self._drain_crashes(), name=f"{self.name}-crash-drain"
-            )
+        # D-E4-3 (v0.9.0, Phase A): start the supervisor's OWN message loop
+        # first — it must be live before any child can crash-report through it
+        # (Phase B/D6: crash events self-trigger onto this loop). Callable again
+        # after stop() — same pattern H1 subtree-restart already uses.
+        await self._start()
 
         # Set parent references for child supervisors
         for child in self.children:
@@ -145,22 +245,35 @@ class Supervisor:
         # Start heartbeat monitoring for remote children
         await self._start_heartbeat_monitor()
 
-    async def stop(self) -> None:
-        """Stop all children gracefully."""
+    async def stop(self) -> None:  # type: ignore[override]  # D-E4-6: see docstring
+        """Stop all children gracefully.
+
+        v0.9.0 E4 (D-E4-6, found during Phase A implementation): this
+        INTENTIONALLY shadows ``AgentProcess.stop(name, drain, timeout)`` (the
+        soft-stop-a-dynamic-child API). The two are unrelated operations that
+        happen to share a name now that Supervisor is an AgentProcess. This is
+        safe: the inherited method requires ``self._dynamic_supervisor_name``
+        to be wired, and Runtime's ``_wire_dyn_sup`` never sets it on a
+        Supervisor node (only recurses through its children) — so the
+        shadowed method could only ever have raised ``SpawnError`` on a
+        Supervisor instance. Pre-existing public API (``sup.stop()``, no args)
+        takes precedence over the newly-inherited one; renaming either public
+        method would be the breaking change, not keeping this override.
+
+        D-E4-8 (v0.9.0 E4 Phase B, correcting D-E4-3): the own loop stops
+        FIRST here, not last. Crash-triggered restarts (including the backoff
+        ``asyncio.sleep``) now run on this same loop; only cancelling it —
+        which ``self._stop()``'s own timeout-then-cancel fallback does — can
+        abort a restart already asleep in backoff. Stopping it last (as Phase
+        A did, safely, while the mailbox was inert) would let a crash's
+        backoff complete and resurrect a child mid-teardown, once cumulative
+        child-stop time exceeds the backoff delay. This restores exact parity
+        with the pre-E4 "cancel crash-drain before touching children"
+        guarantee, via the mechanism every other AgentProcess already gets.
+        """
         self._running = False
 
-        # Cancel the crash drain BEFORE tearing down children so a restart that is
-        # mid-flight (e.g. sleeping in backoff) cannot resurrect a child after this
-        # supervisor has stopped. Queued events survive in the queue; a later
-        # start() resumes draining (stale events are skipped by incarnation check).
-        if self._crash_drain_task is not None:
-            self._crash_drain_task.cancel()
-            try:
-                await self._crash_drain_task
-            except asyncio.CancelledError:
-                pass
-            self._crash_drain_task = None
-
+        await self._stop()
         await self._stop_heartbeat_monitor()
         for child in reversed(self.children):
             if isinstance(child, Supervisor):
@@ -175,6 +288,56 @@ class Supervisor:
         is logged and does not prevent the restart strategy from running.
         """
         self._crash_callbacks.append(callback)
+
+    def add_child_replaced_callback(self, callback: Callable[[str, AgentProcess], None]) -> None:
+        """Register a callback invoked with (name, new_agent) after a restart
+        replaces a child object with a fresh incarnation (D1a)."""
+        self._child_replaced_callbacks.append(callback)
+
+    async def _restart_agent_child(self, old: AgentProcess) -> None:
+        """Restart an agent child as a FRESH INCARNATION (D1a, v0.9.0).
+
+        Order is load-bearing (design §4 constraints 1–2): instantiate → wire
+        fully → re-register → re-subscribe (handler closures capture the agent
+        object) → carry the mailbox over → only then start. A failure at ANY
+        step raises — the H2 drain wrapper makes it loud and escalates; there
+        is never a half-wired child with a live task. The old incarnation's
+        task is already done on every path that reaches here.
+        """
+        name = old.name
+        fresh = _fresh_incarnation(old)
+        if self._wire_child is not None:
+            self._wire_child(fresh)
+        else:
+            # Bare-Supervisor usage (tests, embedded): preserve the old wiring.
+            fresh._bus = old._bus
+            fresh._tracer = old._tracer
+            fresh._registry = old._registry
+            fresh.llm = old.llm
+            fresh.tools = old.tools
+            fresh.store = old.store
+            fresh._audit_sink = old._audit_sink
+            fresh._metrics = old._metrics
+            fresh._credentials = old._credentials
+        if self._registry is not None:
+            reregister_preserving(self._registry, name)
+        if self._bus is not None:
+            await self._bus.setup_agent(fresh)
+        await _transfer_mailbox(old, fresh)
+
+        # Swap the object everywhere the supervisor tracks it.
+        for i, c in enumerate(self.children):
+            if c.name == name:
+                self.children[i] = fresh
+                break
+        self._children_by_name[name] = fresh
+        for replaced_cb in self._child_replaced_callbacks:
+            try:
+                replaced_cb(name, fresh)
+            except Exception:
+                logger.exception("Supervisor %r: child-replaced callback raised", self.name)
+
+        await self._start_child(fresh)
 
     async def _start_child(self, agent: AgentProcess) -> None:
         """Start a single child agent and monitor its task."""
@@ -193,50 +356,167 @@ class Supervisor:
     def _on_child_done(self, name: str, task: asyncio.Task[None]) -> None:
         """Callback when a child task completes (crash or normal exit).
 
-        Enqueues unconditionally — no ``_running`` check here (H2). Crashes that
-        land while this supervisor is being stopped/restarted by its parent wait
-        in the queue instead of being dropped; the drain loop decides their fate
-        (stale-incarnation skip, or discard after a final stop).
+        Enqueues unconditionally — no ``_running`` check here (H2); the check
+        happens in ``_process_crash_event`` instead (D-E4-8). Crashes that land
+        while this supervisor is being stopped/restarted by its parent wait in
+        the mailbox instead of being dropped; the message loop decides their
+        fate (stale-incarnation skip, or discard after a final stop).
         """
         if task.cancelled():
             return
         exc = task.exception()
         if exc is not None:
-            self._crash_queue.put_nowait(
-                (name, exc if isinstance(exc, Exception) else RuntimeError(str(exc)), task)
+            self._enqueue_crash_event(
+                name, exc if isinstance(exc, Exception) else RuntimeError(str(exc)), task
             )
 
-    async def _drain_crashes(self) -> None:
-        """Process crash events strictly sequentially (H2, #30).
+    def _enqueue_crash_event(
+        self, name: str, exc: Exception, task: asyncio.Task[None] | None
+    ) -> None:
+        """Self-trigger crash processing through this Supervisor's own mailbox
+        (v0.9.0 E4 Phase B, D-E4-1).
 
-        Serialization removes the concurrent-restart races by construction; the
-        try/except makes a *failed restart* loud and escalates it — a supervisor
-        that cannot restart its child is itself failing.
+        ``Message.payload`` is JSON-primitives-only, but a crash event carries
+        a real Exception and an asyncio.Task (the stale-incarnation marker) —
+        neither can ride the mailbox directly. Resolution: stash the real
+        objects in ``_pending_crash_events`` keyed by event-id, and self-send
+        only the trigger. This is always local self-delivery (a Supervisor is
+        never remote from itself) — no bus involved, sync ``put_nowait`` per
+        D-E4-2 (this is called from a sync task-done callback and from async
+        heartbeat/health-probe code alike; using the same sync path for both
+        keeps self-triggering uniform).
         """
-        while True:
-            name, exc, task = await self._crash_queue.get()
-            if not self._running:
-                continue  # final-stop window — discard; task is about to be cancelled
-            # Stale incarnation (OTP EXIT-pid analog): an earlier cycle (e.g.
-            # ONE_FOR_ALL from a sibling's simultaneous crash) already replaced
-            # this child's task — the failure was handled; skip.
-            if task is not None and self._child_tasks.get(name) is not task:
-                continue
-            try:
-                await self._handle_crash(name, exc)
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                logger.exception("[%s] restart of child %r failed — escalating", self.name, name)
-                if self._parent is not None:
-                    self._parent._crash_queue.put_nowait((self.name, exc, None))
-                else:
-                    logger.error(
-                        "[%s] child %r is DOWN and could not be restarted "
-                        "(top-level supervisor; no parent to escalate to)",
-                        self.name,
-                        name,
-                    )
+        event_id = _uuid7()
+        self._pending_crash_events[event_id] = (name, exc, task)
+        self._mailbox.put_nowait(
+            Message(
+                type="_agency.child_crashed",
+                sender=self.name,
+                recipient=self.name,
+                payload={"event_id": event_id},
+                priority=1,
+            )
+        )
+
+    async def handle(self, message: Message) -> Message | None:
+        """Route control-plane messages delivered to this Supervisor's mailbox.
+
+        v0.9.0 E4 (D6, D-E4-4): crash-processing self-trigger (Phase B) and
+        introspection (Phase C). Q3's suspend hard-rejection is NOT handled
+        here — ``_agency.suspend`` is intercepted earlier, inline in the
+        shared ``_message_loop``, before ``handle()`` ever runs (see
+        ``_suspend_allowed()`` / D-E4-9).
+        """
+        if message.type == "_agency.child_crashed":
+            await self._process_crash_event(message.payload.get("event_id", ""))
+            return None
+        if message.type == "civitas.supervision.status":
+            return self.reply(self._status_snapshot())
+        return await super().handle(message)
+
+    def _status_snapshot(self) -> dict[str, Any]:
+        """Introspection payload for ``civitas.supervision.status`` (v0.9.0 E4
+        Phase C, D-E4-4): children, their states, restart-window occupancy,
+        and lifetime restart counts (observability-only per B3).
+        """
+        return {
+            "name": self.name,
+            "strategy": self.strategy.value,
+            "max_restarts": self.max_restarts,
+            "restart_window": self.restart_window,
+            "crashes_in_window": len(self._engine.window),
+            "children": [
+                {
+                    "name": c.name,
+                    "kind": "supervisor" if isinstance(c, Supervisor) else "agent",
+                    "status": c._status.value,
+                    "restart_count": self._restart_counts.get(c.name, 0),
+                }
+                for c in self.children
+            ],
+        }
+
+    async def suspend(self, reason: str = "") -> None:
+        """Rejected — a Supervisor cannot be suspended (Q3, D-E4-9).
+
+        Hard reject for the direct-call path: raises immediately (on await)
+        rather than accepting and silently no-op'ing, so a caller cannot
+        mistake this for a successful suspend. Stays ``async def`` — every
+        call site does ``await sup.suspend(...)``; a plain ``def`` override
+        would not be awaitable and would break that calling convention. The
+        ``_agency.suspend`` MESSAGE path is a separate mechanism
+        (``_suspend_allowed()``, checked in the shared ``_message_loop``
+        before ``handle()`` even runs) — see D-E4-9 for why these are two
+        mechanisms, not one.
+        """
+        raise RuntimeError(
+            f"Supervisor {self.name!r} cannot be suspended — a paused subtree manager is a "
+            "footgun (Q3). Suspend the individual agents instead."
+        )
+
+    def _suspend_allowed(self) -> bool:
+        """Reject the ``_agency.suspend`` MESSAGE path too (Q3, D-E4-9)."""
+        return False
+
+    async def _process_crash_event(self, event_id: str) -> None:
+        """Process one crash event popped from the side-table (D-E4-1).
+
+        Replaces the old ``_drain_crashes`` dequeue-loop body — the mailbox's
+        own message loop now provides the "wait for the next event" and
+        strict-serialization properties (H2, #30); this method handles exactly
+        one event per call, dispatched by ``handle()``.
+        """
+        event = self._pending_crash_events.pop(event_id, None)
+        if event is None:
+            return  # unknown/already-processed id — defensive, should not happen
+        name, exc, task = event
+        if not self._running:
+            return  # final-stop window (D-E4-8): discard, matches old drain-loop behavior
+        # Stale incarnation (OTP EXIT-pid analog): an earlier cycle (e.g.
+        # ONE_FOR_ALL from a sibling's simultaneous crash) already replaced
+        # this child's task — the failure was handled; skip.
+        if task is not None and self._child_tasks.get(name) is not task:
+            return
+        try:
+            await self._handle_crash(name, exc)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("[%s] restart of child %r failed — escalating", self.name, name)
+            await self._escalate_to_parent(name, exc)
+
+    async def _escalate_to_parent(self, name: str, exc: Exception) -> None:
+        """Hand a crash event to the parent supervisor (v0.9.0 E4 Phase B, D-E4-1).
+
+        The supervision tree is always in-process relative to its parent (only
+        agents, never supervisors, run remotely) — so the side-table write is
+        direct. The trigger message rides the bus when one is wired (ordered,
+        traced, consistent with all other supervisor-to-supervisor traffic);
+        falls back to a direct put onto the parent's mailbox when there is no
+        bus (bare-Supervisor tests, per the D-E4-7 heuristic).
+        """
+        parent = self._parent
+        if parent is None:
+            logger.error(
+                "[%s] child %r is DOWN and could not be restarted "
+                "(top-level supervisor; no parent to escalate to)",
+                self.name,
+                name,
+            )
+            return
+        event_id = _uuid7()
+        parent._pending_crash_events[event_id] = (self.name, exc, None)
+        trigger = Message(
+            type="_agency.child_crashed",
+            sender=self.name,
+            recipient=parent.name,
+            payload={"event_id": event_id},
+            priority=1,
+        )
+        if self._bus is not None:
+            await self._bus.route(trigger)
+        else:
+            parent._mailbox.put_nowait(trigger)
 
     # ------------------------------------------------------------------
     # Remote child / heartbeat support
@@ -269,8 +549,77 @@ class Supervisor:
             return
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
 
+    def _group_by_health_channel(self) -> tuple[dict[str, list[str]], list[str]]:
+        """Group remote children by their Worker's health channel (D5, v0.9.0).
+
+        Looked up per tick so workers coming/going are tracked naturally.
+        Children whose registry entry carries no channel (pre-v0.9 workers, or
+        no registry at all) fall back to legacy per-agent pings — the Q2 skew
+        tolerance, which also preserves bare-Supervisor test setups.
+        """
+        by_channel: dict[str, list[str]] = {}
+        legacy: list[str] = []
+        for name in list(self._remote_children):
+            entry = self._registry.lookup(name) if self._registry is not None else None
+            channel = entry.health_channel if entry is not None else ""
+            if channel:
+                by_channel.setdefault(channel, []).append(name)
+            else:
+                legacy.append(name)
+        return by_channel, legacy
+
+    async def _probe_health_channel(self, channel: str, children: list[str]) -> None:
+        """One process-level probe covering every child hosted on that Worker (D5).
+
+        Splits the two questions A6 conflated: the PROBE answers "is the
+        process alive?" off-mailbox; the ACK's per-agent snapshot answers "is
+        this child healthy?" — so a busy agent (long handle()) never looks
+        dead, and a dead task is detected in ONE interval instead of a full
+        heartbeat-starvation cycle. Per-channel config derives conservatively
+        from the hosted children: max timeout, min threshold.
+        """
+        if self._bus is None:
+            return
+        cfgs = [self._remote_child_config.get(n, {}) for n in children]
+        timeout = max((float(c.get("timeout", 2.0)) for c in cfgs), default=2.0)
+        threshold = min((int(c.get("threshold", 3)) for c in cfgs), default=3)
+        probe = Message(
+            type="_agency.health_probe",
+            sender=self.name,
+            recipient=channel,
+            correlation_id=_uuid7(),
+            span_id=_new_span_id(),
+        )
+        try:
+            ack = await self._bus.request(probe, timeout=timeout)
+        except TimeoutError:
+            self._missed_heartbeats[channel] = self._missed_heartbeats.get(channel, 0) + 1
+            missed = self._missed_heartbeats[channel]
+            if missed >= threshold:
+                # Process presumed dead — every child hosted there crashed.
+                for name in children:
+                    self._enqueue_crash_event(name, HeartbeatTimeout(name, missed), None)
+                self._missed_heartbeats[channel] = 0
+            return
+
+        self._missed_heartbeats[channel] = 0
+        agents = ack.payload.get("agents", {})
+        for name in children:
+            snap = agents.get(name)
+            if snap is None:
+                continue  # not hosted there anymore — registry will catch up
+            if snap.get("task_alive") is False or snap.get("status") == "CRASHED":
+                # Fast remote crash detection: the process is fine, THIS child
+                # is not — restart it now, no starvation cycle needed.
+                self._enqueue_crash_event(name, HeartbeatTimeout(name, 0), None)
+
     async def _heartbeat_loop(self) -> None:
-        """Periodically ping remote children and detect crashes."""
+        """Periodically probe remote children's liveness and detect crashes.
+
+        D5 (v0.9.0): children on v0.9+ workers are covered by ONE process-level
+        probe per worker per tick (see _probe_health_channel); children without
+        an announced channel use the legacy per-agent ping below (Q2 skew).
+        """
         while self._running:
             # Compute sleep interval before the loop — minimum across all children
             sleep_interval = min(
@@ -278,7 +627,19 @@ class Supervisor:
                 default=5.0,
             )
 
-            for name in list(self._remote_children):
+            by_channel, legacy = self._group_by_health_channel()
+
+            for channel, children in by_channel.items():
+                if not self._running:
+                    break
+                try:
+                    await self._probe_health_channel(channel, children)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:  # F03-7: never crash the monitor loop
+                    logger.warning("[%s] health probe error for %s: %s", self.name, channel, exc)
+
+            for name in legacy:
                 if not self._running:
                     break
                 cfg = self._remote_child_config.get(name, {})
@@ -316,7 +677,7 @@ class Supervisor:
                         # restarting inline — the restart (incl. its backoff sleep)
                         # must not stall heartbeat monitoring of the other remote
                         # children, and it serializes with all other crash work.
-                        self._crash_queue.put_nowait((name, HeartbeatTimeout(name, missed), None))
+                        self._enqueue_crash_event(name, HeartbeatTimeout(name, missed), None)
                         self._missed_heartbeats[name] = 0
                 except asyncio.CancelledError:
                     raise  # propagate to stop the task cleanly (F03-7)
@@ -343,17 +704,12 @@ class Supervisor:
 
     async def _handle_crash(self, name: str, exc: Exception) -> None:
         """Apply the restart strategy after a child crash."""
-        now = time.time()
-
-        # Update crash log for the child
+        # Lifetime counter — observability only (B3); the engine rules on the
+        # window and computes backoff from its occupancy.
         self._restart_counts.setdefault(name, 0)
         self._restart_counts[name] += 1
 
-        # F03-10: deque-based sliding window — O(1) append and popleft
-        cutoff = now - self.restart_window
-        self._restart_timestamps.append(now)
-        while self._restart_timestamps and self._restart_timestamps[0] <= cutoff:
-            self._restart_timestamps.popleft()
+        verdict = self._engine.record_crash()
 
         for callback in self._crash_callbacks:
             try:
@@ -361,8 +717,7 @@ class Supervisor:
             except Exception:
                 logger.exception("Supervisor %r: crash callback raised", self.name)
 
-        # Check if we've exceeded max restarts
-        if len(self._restart_timestamps) > self.max_restarts:
+        if verdict.action == "exhausted":
             await self._escalate(name, exc)
             return
 
@@ -375,6 +730,7 @@ class Supervisor:
                     "civitas.supervisor": self.name,
                     "civitas.child": name,
                     "civitas.restart_count": restart_num,
+                    "civitas.crashes_in_window": verdict.crashes_in_window,
                     "civitas.strategy": self.strategy.value,
                     "civitas.error": str(exc),
                 },
@@ -390,10 +746,9 @@ class Supervisor:
                 exc,
             )
 
-        # Apply backoff delay
-        delay = self._compute_backoff(restart_num)
-        if delay > 0:
-            await asyncio.sleep(delay)
+        # Apply backoff delay (B3: derived from window occupancy)
+        if verdict.delay > 0:
+            await asyncio.sleep(verdict.delay)
 
         # Apply restart strategy
         if self.strategy == RestartStrategy.ONE_FOR_ONE:
@@ -420,16 +775,13 @@ class Supervisor:
         # this any later crash instantly re-escalates), then start.
         if isinstance(child, Supervisor):
             await child.stop()
-            child._restart_timestamps.clear()
+            child._engine.reset()  # fresh incarnation, fresh budget (H1)
             child._restart_counts.clear()
             await child.start()
             return
 
-        # Re-initialize the agent
-        child._status = ProcessStatus.INITIALIZING
-        if self._registry is not None:
-            reregister_preserving(self._registry, name)
-        await self._start_child(child)
+        # D1a: restart = fresh incarnation from the child spec.
+        await self._restart_agent_child(child)
 
     async def _restart_remote_child(self, name: str) -> None:
         """Send a restart command to a remote worker via ZMQ."""
@@ -456,17 +808,15 @@ class Supervisor:
             ):
                 await child._stop()
 
-        # Restart all
-        for child in self.children:
+        # Restart all — iterate over a snapshot: _restart_agent_child mutates
+        # self.children in place when swapping incarnations.
+        for child in list(self.children):
             if isinstance(child, Supervisor):
-                child._restart_timestamps.clear()  # fresh incarnation, fresh budget (H1)
+                child._engine.reset()  # fresh incarnation, fresh budget (H1)
                 child._restart_counts.clear()
                 await child.start()
             else:
-                child._status = ProcessStatus.INITIALIZING
-                if self._registry is not None:
-                    reregister_preserving(self._registry, child.name)
-                await self._start_child(child)
+                await self._restart_agent_child(child)  # D1a fresh incarnation
 
     async def _restart_rest_for_one(self, name: str) -> None:
         """Restart the crashed child and all children after it (REST_FOR_ONE)."""
@@ -491,17 +841,14 @@ class Supervisor:
             ):
                 await child._stop()
 
-        # Restart in order
+        # Restart in order (to_restart is already a snapshot list)
         for child in to_restart:
             if isinstance(child, Supervisor):
-                child._restart_timestamps.clear()  # fresh incarnation, fresh budget (H1)
+                child._engine.reset()  # fresh incarnation, fresh budget (H1)
                 child._restart_counts.clear()
                 await child.start()
             else:
-                child._status = ProcessStatus.INITIALIZING
-                if self._registry is not None:
-                    reregister_preserving(self._registry, child.name)
-                await self._start_child(child)
+                await self._restart_agent_child(child)  # D1a fresh incarnation
 
     async def _escalate(self, name: str, exc: Exception) -> None:
         """Max restarts exceeded — escalate to parent or stop permanently."""
@@ -512,13 +859,14 @@ class Supervisor:
             name,
         )
         if self._parent is not None:
-            # Escalate: hand the event to the parent's crash queue rather than
-            # calling into the parent inline (H2). The inline call would run the
-            # parent's restart of *this* supervisor from inside this supervisor's
-            # own drain task — and that restart cancels this drain task, i.e. the
-            # task would cancel itself mid-restart. The queue hand-off also
-            # serializes the escalation with the parent's other crash work.
-            self._parent._crash_queue.put_nowait((self.name, exc, None))
+            # Escalate via _escalate_to_parent (v0.9.0 E4 Phase B, D-E4-1) rather
+            # than calling into the parent inline (H2). The inline call would run
+            # the parent's restart of *this* supervisor from inside this
+            # supervisor's own message-loop dispatch — and that restart stops
+            # (and per D-E4-8, may cancel) this supervisor, i.e. the dispatch
+            # would tear down its own caller mid-restart. The message hand-off
+            # also serializes the escalation with the parent's other crash work.
+            await self._escalate_to_parent(name, exc)
         else:
             # F03-6: agent is already CRASHED (task done); don't mutate status directly.
             # Log the permanent failure — agent stays CRASHED, no further restarts.
@@ -537,19 +885,8 @@ class Supervisor:
     # ------------------------------------------------------------------
 
     def _compute_backoff(self, restart_count: int) -> float:
-        """Compute the delay before restarting, based on backoff policy."""
-        if self.backoff == BackoffPolicy.CONSTANT:
-            delay = self.backoff_base
-        elif self.backoff == BackoffPolicy.LINEAR:
-            delay = self.backoff_base * restart_count
-        elif self.backoff == BackoffPolicy.EXPONENTIAL:
-            delay = self.backoff_base * (2 ** (restart_count - 1))
-            # Add jitter (up to 25%)
-            delay += delay * random.random() * 0.25
-        else:
-            delay = self.backoff_base
-
-        return min(delay, self.backoff_max)
+        """Delegate to the engine (kept for compatibility/introspection)."""
+        return self._engine.compute_backoff(restart_count)
 
     # ------------------------------------------------------------------
     # Helpers
@@ -658,7 +995,9 @@ class DynamicSupervisor(AgentProcess):
         self._child_tasks: dict[str, asyncio.Task[None]] = {}
         self._spawner_names: dict[str, str] = {}
         self._child_restart_counts: dict[str, int] = {}
-        self._child_restart_timestamps: dict[str, deque[float]] = {}
+        # E1: one RestartEngine per dynamic child (per-child budgets — the
+        # pre-existing DynSup semantics; backoff=None — DynSup never delayed).
+        self._child_engines: dict[str, RestartEngine] = {}
         self._total_spawns: int = 0
         self._spawner_total_counts: dict[str, int] = {}
         self._pending_child_tasks: set[asyncio.Task[None]] = set()
@@ -906,7 +1245,58 @@ class DynamicSupervisor(AgentProcess):
                 {"status": "ok", "name": child_name, "ready": False, "state": agent._status.value}
             )
 
-        # wait=True — race readiness against task-completion, then inspect status (D4).
+        # wait=True — v0.9.0 E4 Phase D (B4, D-E4-5): don't block THIS DynSup's
+        # own loop on a slow on_start(). Generalizes the wait=False announce-
+        # after-start pattern: a background continuation races readiness
+        # exactly as the old inline code did, then builds and routes the
+        # reply itself (reply_to() — self.reply() requires self._current_
+        # message, only valid during this synchronous dispatch, which is
+        # about to return). Caller semantics/_SPAWN_ASK_TIMEOUT are untouched:
+        # both are enforced client-side by bus.request(timeout=...), fully
+        # decoupled from which coroutine sends the reply or when.
+        cont = asyncio.create_task(
+            self._await_spawn_readiness_and_reply(
+                message,
+                child_name,
+                agent,
+                task,
+                rec,
+                distributed,
+                announce_caps,
+                announce_meta,
+                child_pubkey,
+                epoch,
+            )
+        )
+        self._pending_child_tasks.add(cont)
+        cont.add_done_callback(self._pending_child_tasks.discard)
+        return None
+
+    async def _await_spawn_readiness_and_reply(
+        self,
+        message: Message,
+        child_name: str,
+        agent: AgentProcess,
+        task: asyncio.Task[None],
+        rec: _ChildRec,
+        distributed: bool,
+        announce_caps: list[str],
+        announce_meta: dict[str, Any],
+        child_pubkey: str,
+        epoch: int,
+    ) -> None:
+        """The wait=True continuation (v0.9.0 E4 Phase D, B4/D-E4-5).
+
+        Identical race-then-inspect-status outcome as the old inline code (same
+        reply shape) — the only change is WHERE it runs (off the dispatch path)
+        and HOW the reply is delivered (built + routed here, not returned).
+
+        A concurrent despawn/stop for this same child can now interleave with
+        this continuation — newly REACHABLE for wait=True, but not new ground:
+        wait=False's ``_announce_after_start`` has run concurrently with
+        despawn/stop since it was introduced, protected by the same idempotent
+        primitives used below (``_terminal_cleanup``, ``_remove_child``).
+        """
         running = agent._running_event
         if running is not None:
             ready = asyncio.ensure_future(running.wait())
@@ -922,18 +1312,31 @@ class DynamicSupervisor(AgentProcess):
                     child_name, announce_caps, announce_meta, child_pubkey, epoch
                 )
                 rec.announced = True
-            return self.reply(
-                {"status": "ok", "name": child_name, "ready": True, "state": agent._status.value}
+            reply = self.reply_to(
+                message,
+                {"status": "ok", "name": child_name, "ready": True, "state": agent._status.value},
             )
-
-        # Start failed — clean up inline before replying so the post-state is
-        # deterministic (B2); idempotent with the done-callback path (D7).
-        phase = agent._start_phase
-        err = None if task.cancelled() else task.exception()
-        await self._terminal_cleanup(child_name)
-        return self.reply(
-            {"status": "error", "name": child_name, "phase": phase, "error": repr(err)}
-        )
+        else:
+            # Start failed — clean up before replying so the post-state is
+            # deterministic (B2); idempotent with the done-callback path (D7)
+            # AND with a concurrent despawn/stop that already tore this down.
+            phase = agent._start_phase
+            err = None if task.cancelled() else task.exception()
+            await self._terminal_cleanup(child_name)
+            reply = self.reply_to(
+                message, {"status": "error", "name": child_name, "phase": phase, "error": repr(err)}
+            )
+        if self._bus is not None:
+            try:
+                await self._bus.route(reply)
+            except Exception:
+                # F03-7-style containment: a reply that can't be routed (e.g. the
+                # spawner's own mailbox is gone) must not vanish silently inside
+                # an unawaited background task — log it so the caller's eventual
+                # _SPAWN_ASK_TIMEOUT has a server-side explanation on record.
+                logger.exception(
+                    "[%s] could not deliver deferred spawn reply for %r", self.name, child_name
+                )
 
     async def _handle_despawn(self, message: Message) -> Message | None:
         name = message.payload.get("name", "")
@@ -1045,18 +1448,20 @@ class DynamicSupervisor(AgentProcess):
             return
 
         # permanent or transient+crashed: attempt restart
-        now = time.time()
         self._child_restart_counts.setdefault(name, 0)
-        self._child_restart_counts[name] += 1
+        self._child_restart_counts[name] += 1  # observability only (B3)
 
-        self._child_restart_timestamps.setdefault(name, deque())
-        ts = self._child_restart_timestamps[name]
-        cutoff = now - self._ds_restart_window
-        ts.append(now)
-        while ts and ts[0] <= cutoff:
-            ts.popleft()
+        engine = self._child_engines.setdefault(
+            name,
+            RestartEngine(
+                max_restarts=self._ds_max_restarts,
+                restart_window=self._ds_restart_window,
+                backoff=None,
+            ),
+        )
+        verdict = engine.record_crash()
 
-        if len(ts) > self._ds_max_restarts:
+        if verdict.action == "exhausted":
             # Exhausted — remove and notify spawner; do NOT escalate to parent supervisor
             await self._clear_child_marker(name)
             self._remove_child(name)
@@ -1070,7 +1475,7 @@ class DynamicSupervisor(AgentProcess):
             )
             return
 
-        agent = rec.agent
+        old = rec.agent
 
         logger.info(
             "[%s] restarting '%s' (attempt %d/%d)",
@@ -1079,16 +1484,41 @@ class DynamicSupervisor(AgentProcess):
             self._child_restart_counts[name],
             self._ds_max_restarts,
         )
-        # A child crashed while SUSPENDED restarts back into SUSPENDED (its marker
-        # survives in self.state) and consumes a restart; budget exemption (S8
-        # finding #5) is deferred for v1.
-        agent._status = ProcessStatus.INITIALIZING
-        await agent._start()
+        # D1a (v0.9.0): restart = fresh incarnation from the child spec. Wire
+        # exactly as _handle_spawn does (the target supervisor equips its
+        # children), re-subscribe the bus to the NEW object, carry the mailbox.
+        # A child crashed while SUSPENDED restarts back into SUSPENDED (its
+        # marker rides the checkpoint); budget exemption (S8 #5) deferred to v1.
+        try:
+            fresh = _fresh_incarnation(old)
+            fresh._bus = self._bus
+            fresh._tracer = self._tracer
+            fresh._registry = self._registry
+            fresh._dynamic_supervisor_name = self.name
+            fresh.llm = self.llm
+            fresh.tools = self.tools
+            fresh.store = self.store
+            fresh._audit_sink = self._audit_sink
+            fresh._metrics = self._metrics
+            if self._bus is not None:
+                await self._bus.setup_agent(fresh)
+            await _transfer_mailbox(old, fresh)
+        except Exception:
+            # A restart we cannot even construct/wire is terminal for this child
+            # — loud, cleaned up, spawner notified (never a half-wired zombie).
+            logger.exception("[%s] fresh-incarnation restart of '%s' failed", self.name, name)
+            await self._clear_child_marker(name)
+            await self._terminal_cleanup(name)
+            await self._notify_spawner(name, "restarts_exhausted")
+            return
 
-        if agent._task is not None:
-            rec.task = agent._task
-            self._child_tasks[name] = agent._task
-            agent._task.add_done_callback(lambda t: self._on_child_done(name, t))
+        rec.agent = fresh
+        await fresh._start()
+
+        if fresh._task is not None:
+            rec.task = fresh._task
+            self._child_tasks[name] = fresh._task
+            fresh._task.add_done_callback(lambda t: self._on_child_done(name, t))
 
     def _remove_child(self, name: str) -> None:
         self._dynamic_children.pop(name, None)

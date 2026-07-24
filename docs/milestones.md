@@ -47,9 +47,10 @@ Everything in this part is done.
 | — | [v0.5.0 — Released](#v050--released) | Jul 2026 |
 | — | [v0.6.0 — Gateway Completion](#v060--gateway-completion-released) | Jul 2026 |
 | — | [v0.7.0 / v0.7.1 / v0.7.2 / v0.7.3 / v0.7.4 — Spawn Maturation, Gateway Auth & Bus-Native Streaming](#v070--spawn-maturation--gateway-auth-released) | Jul 2026 |
-| — | [v0.8.0 — Supervision Core Hardening](#v080--supervision-core-hardening-released) | Jul 2026 |
-| — | [v0.8.1 — Verification Perimeter](#v081--verification-perimeter-released) | Jul 2026 |
-| — | [v0.8.2 — Hygiene](#v082--hygiene-released) | Jul 2026 |
+| — | [v0.8.0 — Supervision Core Hardening](#v080-supervision-core-hardening-released) | Jul 2026 |
+| — | [v0.8.1 — Verification Perimeter](#v081-verification-perimeter-released) | Jul 2026 |
+| — | [v0.8.2 — Hygiene](#v082-hygiene-released) | Jul 2026 |
+| — | [v0.9.0 — Supervision Endgame](#v090-supervision-endgame-released) | Jul 2026 |
 
 ---
 
@@ -986,6 +987,32 @@ accumulating release PR (v0.8.0 model). Closes #39–#42 (+#43 if V6 tests; else
 
 ---
 
+## v0.9.0 — Supervision Endgame (Released)
+
+**Status: ✅ Released 2026-07-24.** The full close-out of the 2026-07-23 architecture review —
+**the regression harness (`tests/unit/test_actor_model_gaps.py`) now has zero expected
+failures.** Design: [`supervision-endgame.md`](design/supervision-endgame.md) — ✅ ACCEPTED
+(Q1–Q4 ratified). Plan: `.sisyphus/plans/supervision-endgame-v0.9.0.md` (E1–E5); E4 (the
+largest package) had its own dedicated plan with two explicit halt-checks — neither ever
+triggered, so all four packages shipped together as planned rather than splitting into v0.9.1.
+
+| # | Deliverable | Priority |
+|---|-------------|----------|
+| E1 | ✅ **Done** — extracted `RestartEngine`, one restart-accounting engine shared by `Supervisor` and `DynamicSupervisor` (previously two divergent implementations). **B3**: backoff now derives from restart-window occupancy, decaying naturally once the window empties, not from a lifetime counter that never forgot | High |
+| E2 | ✅ **Done** — **D1a, fresh-instance restart**: a restart now builds a NEW object from the original constructor call — flips the LAST strict-xfail tracker, closing finding A1. Behavior change: object references held across a restart go stale by design (route by name) | High |
+| E3 | ✅ **Done** — **D5, per-process liveness**: supervisors probe a Worker's process-level health channel instead of pinging every agent's mailbox. The A6 false-positive (a busy-but-healthy remote agent force-restarted) is now a green end-to-end test over real ZMQ; dead-task detection dropped from a full starvation cycle to ~1 probe interval | High |
+| E4 | ✅ **Done** — **D6, supervisor actorization + B4**: every `Supervisor` is now an addressable actor with its own mailbox (crash processing rides it, not a bespoke queue); new `civitas.supervision.status` introspection query; suspending a supervisor is hard-rejected (a paused subtree manager is a footgun); `DynamicSupervisor` `wait=True` spawns no longer block the supervisor's other traffic while a child's `on_start()` is slow | Medium |
+
+**Sequencing:** E1 → E2 → E3 → E4 (Phases A–D, each with its own verification pass) → E5
+(this entry). Branch `dev/v0.9.0`. Two structural findings surfaced and were resolved *before*
+code landed in each case (documented as design-doc addenda, not retrofitted): D-E4-6
+(`Supervisor.stop()` vs. an inherited method name collision) and D-E4-8 (`stop()`'s shutdown
+ordering had to reverse once crash-processing moved onto the supervisor's own loop, to preserve
+the pre-existing "no resurrection after stop" guarantee).
+
+
+---
+
 ## Part 2 — Backlog
 
 **Status: 🗂️ Tracked** — the active todo list: everything not yet done. New work lands here first
@@ -998,24 +1025,10 @@ Owner column: `core` = python-civitas, else the target repo.
 |---|-------|----------|------|
 | [#26](https://github.com/civitas-io/python-civitas/issues/26) | MCP client lacks Streamable HTTP transport | — | mcp / fabrica (blocked on fabrica) |
 
-> #27–#35 closed by [v0.8.0](#v080--supervision-core-hardening-released); #39–#43 closed by
-> [v0.8.1](#v081--verification-perimeter-released). One strict-xfail tracker remains in
-> `tests/unit/test_actor_model_gaps.py` (instance-variable reset → v0.9 fresh-instance restart).
-
-### v0.9.0 — Supervision Endgame (Proposed next)
-
-The three coupled items below are the natural v0.9: they share the Runtime↔Supervisor re-wiring,
-finish what the 2026-07 architecture review started, flip the last xfail tracker, and fully
-unblock the Medicus track. **Requires the full design ceremony** (design doc → review → plan →
-implementation), per the v0.8.0 §2.1 ratification.
-
-| Item | Priority | Source |
-|------|----------|--------|
-| **D6 — unify static Supervisor + DynamicSupervisor** into one actor-based engine | 🟡 Medium | design/supervision-hardening.md (B1) |
-| **D1(a) — fresh-instance restart** (child-spec capture shipped v0.8.0; flips the last xfail) | 🔴 High | design/supervision-hardening.md D1 |
-| **D5 (structural) — per-process out-of-band liveness** (beyond `handle_timeout`) | 🔴 High | design/supervision-hardening.md D5 (A6/A7) |
-| Fold-in (decide inside the design): DynSup `wait=True` head-of-line blocking (B4) | 🟡 Medium | design/dynamic-spawning.md addendum |
-| Fold-in (decide inside the design): restart accounting reconciliation (B3) | 🟢 Low | design/supervision-hardening.md B3 |
+> #27–#35 closed by [v0.8.0](#v080-supervision-core-hardening-released); #39–#43 closed by
+> [v0.8.1](#v081-verification-perimeter-released). The 2026-07 architecture review is fully
+> closed by [v0.9.0](#v090-supervision-endgame-released) — zero xfail trackers remain in
+> `tests/unit/test_actor_model_gaps.py`.
 
 ### v0.9.1 — Post-endgame polish (Planned, after v0.9.0)
 

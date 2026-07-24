@@ -6,9 +6,10 @@ while the bug exists, and a fix flips the test to XPASS — failing the run and
 forcing the marker's removal, so the tracking can never go stale.
 
 Findings catalog: docs/design/supervision-hardening.md
-Still open here: #31 (A6, heartbeat priority — PR2) and A1 (restart
-semantics — PR3 flips the state test; the instance-var test waits for the
-v0.9 fresh-instance restart).
+As of v0.9.0 E2 every tracker is a plain regression — ZERO xfails remain:
+the 2026-07 architecture review is fully closed in code. Waits observe the
+CURRENT incarnation via runtime.get_agent (Q1: object refs go stale across
+restarts by design — route by name).
 """
 
 from __future__ import annotations
@@ -17,12 +18,10 @@ import asyncio
 import logging
 from typing import Any
 
-import pytest
-
 from civitas.messages import Message
 from civitas.process import AgentProcess, ProcessStatus
 from civitas.runtime import Runtime
-from civitas.supervisor import Supervisor
+from civitas.supervisor import HeartbeatTimeout, Supervisor
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -80,12 +79,6 @@ class DirtyStateAgent(AgentProcess):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    reason="A1 / design D1(a): restart reuses the same AgentProcess instance — "
-    "instance variables survive the crash. Scheduled for the v0.9 fresh-instance "
-    "restart (child spec is already captured by __new__ since v0.8.0 PR3)",
-    strict=True,
-)
 async def test_restart_resets_instance_variables():
     agent = DirtyInstanceAgent("dirty")
     root = Supervisor("root", children=[agent], max_restarts=3, backoff_base=0.01)
@@ -96,7 +89,9 @@ async def test_restart_resets_instance_variables():
         # Wait until the supervisor has observed the crash, then for recovery —
         # checking RUNNING alone races the crash and passes spuriously.
         assert await _wait_for(lambda: root._restart_counts.get("dirty", 0) >= 1)
-        assert await _wait_for(lambda: agent.status == ProcessStatus.RUNNING)
+        # Q1 (v0.9.0): observe the CURRENT incarnation — the old ref is stale.
+        assert await _wait_for(lambda: runtime.get_agent("dirty").status == ProcessStatus.RUNNING)
+        assert runtime.get_agent("dirty") is not agent  # fresh incarnation
         reply = await runtime.ask("dirty", {"cmd": "check"}, timeout=2.0)
         # OTP semantics: a restarted actor is a fresh actor — corrupted
         # in-memory state must not survive the crash that it caused.
@@ -113,7 +108,10 @@ async def test_restart_resets_uncheckpointed_state():
     try:
         await runtime.send("dirty_state", {"cmd": "poison"})
         assert await _wait_for(lambda: root._restart_counts.get("dirty_state", 0) >= 1)
-        assert await _wait_for(lambda: agent.status == ProcessStatus.RUNNING)
+        # Q1: current incarnation, not the stale pre-crash ref
+        assert await _wait_for(
+            lambda: runtime.get_agent("dirty_state").status == ProcessStatus.RUNNING
+        )
         reply = await runtime.ask("dirty_state", {"cmd": "check"}, timeout=2.0)
         assert reply.payload["corrupt"] is False
     finally:
@@ -176,7 +174,9 @@ async def test_capabilities_survive_restart():
         # Wait for the supervisor to observe the crash and complete the restart —
         # checking capabilities before the restart races and passes spuriously.
         assert await _wait_for(lambda: root._restart_counts.get("cap_worker", 0) >= 1)
-        assert await _wait_for(lambda: worker.status == ProcessStatus.RUNNING)
+        assert await _wait_for(  # Q1: current incarnation
+            lambda: runtime.get_agent("cap_worker").status == ProcessStatus.RUNNING
+        )
 
         found = runtime._registry.find_by_capability("gap.probe")
         assert [e.name for e in found] == ["cap_worker"], (
@@ -254,7 +254,9 @@ async def test_checkpointed_state_survives_reset_and_restart():
         await runtime.ask("saver", {"cmd": "save", "value": 42}, timeout=2.0)
         await runtime.send("saver", {"cmd": "boom"})
         assert await _wait_for(lambda: root._restart_counts.get("saver", 0) >= 1)
-        assert await _wait_for(lambda: agent.status == ProcessStatus.RUNNING)
+        assert await _wait_for(  # Q1: current incarnation
+            lambda: runtime.get_agent("saver").status == ProcessStatus.RUNNING
+        )
         reply = await runtime.ask("saver", {"cmd": "check"}, timeout=2.0)
         assert reply.payload["saved"] == 42
     finally:
@@ -321,7 +323,9 @@ async def test_handle_timeout_turns_hang_into_visible_crash():
     try:
         await runtime.send("hanger", {"cmd": "hang"})
         assert await _wait_for(lambda: root._restart_counts.get("hanger", 0) >= 1)
-        assert await _wait_for(lambda: agent.status == ProcessStatus.RUNNING)
+        assert await _wait_for(  # Q1: current incarnation
+            lambda: runtime.get_agent("hanger").status == ProcessStatus.RUNNING
+        )
         reply = await runtime.ask("hanger", {"cmd": "work"}, timeout=2.0)
         assert reply.payload["ok"] is True  # recovered and serving
     finally:
@@ -400,7 +404,7 @@ async def test_on_stop_exception_contained_during_shutdown():
 
     assert faulty.status == ProcessStatus.STOPPED
     assert healthy.status == ProcessStatus.STOPPED  # shutdown sequence completed
-    assert root._crash_queue.qsize() == 0  # graceful stop produced no crash event
+    assert not root._pending_crash_events  # graceful stop produced no crash event
 
 
 # ---------------------------------------------------------------------------
@@ -610,15 +614,16 @@ async def test_simultaneous_crash_events_one_restart_cycle():
         # Enqueue both events in the same tick, before the drain task wakes —
         # deterministically modelling "both children crashed simultaneously".
         exc = RuntimeError("burst")
-        root._crash_queue.put_nowait(("cc_a", exc, root._child_tasks["cc_a"]))
-        root._crash_queue.put_nowait(("cc_b", exc, root._child_tasks["cc_b"]))
+        root._enqueue_crash_event("cc_a", exc, root._child_tasks["cc_a"])
+        root._enqueue_crash_event("cc_b", exc, root._child_tasks["cc_b"])
 
         assert await _wait_for(lambda: CountingCrasher.starts.get("cc_a", 0) >= 2)
         await asyncio.sleep(0.1)  # allow a (buggy) second cycle to happen
         # Exactly one ONE_FOR_ALL cycle: initial start + one restart each.
         assert CountingCrasher.starts == {"cc_a": 2, "cc_b": 2}
-        assert a.status == ProcessStatus.RUNNING
-        assert b.status == ProcessStatus.RUNNING
+        # Q1: fresh incarnations — check the current objects
+        assert runtime.get_agent("cc_a").status == ProcessStatus.RUNNING
+        assert runtime.get_agent("cc_b").status == ProcessStatus.RUNNING
     finally:
         await runtime.stop()
 
@@ -640,8 +645,11 @@ async def test_two_independent_crashes_both_recover():
                 and root._restart_counts.get("ind_b", 0) >= 1
             )
         )
-        assert await _wait_for(
-            lambda: a.status == ProcessStatus.RUNNING and b.status == ProcessStatus.RUNNING
+        assert await _wait_for(  # Q1: current incarnations
+            lambda: (
+                runtime.get_agent("ind_a").status == ProcessStatus.RUNNING
+                and runtime.get_agent("ind_b").status == ProcessStatus.RUNNING
+            )
         )
     finally:
         await runtime.stop()
@@ -663,7 +671,9 @@ async def test_stop_during_crash_drain_no_zombie():
         await runtime.stop()
 
     assert worker.status != ProcessStatus.RUNNING, "child resurrected after stop()"
-    assert root._crash_drain_task is None
+    # D-E4-8: the supervisor's OWN loop (crash-processing now rides it) is
+    # what gets torn down cleanly, replacing the old drain-task check.
+    assert root._task is not None and root._task.done()
 
 
 # ---------------------------------------------------------------------------
@@ -727,3 +737,367 @@ async def test_suspended_agent_acks_priority_heartbeat():
         assert worker.status == ProcessStatus.SUSPENDED  # still paused — ack ≠ resume
     finally:
         await runtime.stop()
+
+
+# ---------------------------------------------------------------------------
+# D1a (v0.9.0 E2) — fresh-incarnation restart edge inventory
+# ---------------------------------------------------------------------------
+
+
+async def test_fresh_incarnation_is_fully_rewired():
+    """The new incarnation carries every injected dependency (llm/tools/store/
+    credentials/metrics) — wire-fully-before-start, design §4 constraint 1."""
+    from civitas.plugins.tools import ToolRegistry
+
+    llm, tools = object(), ToolRegistry()
+    agent = CrashOnCommand("wired")
+    root = Supervisor("root", children=[agent], max_restarts=3, backoff_base=0.01)
+    runtime = Runtime(supervisor=root, model_provider=llm, tool_registry=tools)
+    runtime._agent_credentials = {"wired": {"anthropic": "sk-test"}}
+    await runtime.start()
+    try:
+        assert agent.llm is llm and agent._credentials == {"anthropic": "sk-test"}
+        await runtime.send("wired", {"cmd": "boom"})
+        assert await _wait_for(
+            lambda: (
+                runtime.get_agent("wired") is not agent
+                and runtime.get_agent("wired").status == ProcessStatus.RUNNING
+            )
+        )
+        fresh = runtime.get_agent("wired")
+        assert fresh.llm is llm
+        assert fresh.tools is tools
+        assert fresh.store is not None
+        assert fresh._credentials == {"anthropic": "sk-test"}
+        assert fresh._metrics is agent._metrics and fresh._audit_sink is agent._audit_sink
+    finally:
+        await runtime.stop()
+
+
+async def test_mailbox_carries_over_in_order():
+    """Messages queued behind the poison one are processed by the FRESH
+    incarnation, in order (design §4 constraint 2)."""
+    CountingCrasher.starts = {}
+
+    class OrderRecorder(AgentProcess):
+        seen: list[str] = []  # class-level: survives incarnations
+
+        async def handle(self, message: Message) -> Message | None:
+            if message.payload.get("cmd") == "boom":
+                raise RuntimeError("boom")
+            type(self).seen.append(message.payload.get("tag", ""))
+            return None
+
+    OrderRecorder.seen = []
+    agent = OrderRecorder("keeper")
+    root = Supervisor("root", children=[agent], max_restarts=3, backoff_base=0.05)
+    runtime = Runtime(supervisor=root)
+    await runtime.start()
+    try:
+        await runtime.send("keeper", {"cmd": "boom"})
+        for tag in ("a", "b", "c"):  # these land while the crash/backoff runs
+            await runtime.send("keeper", {"tag": tag})
+        assert await _wait_for(lambda: len(OrderRecorder.seen) >= 3)
+        assert OrderRecorder.seen == ["a", "b", "c"]
+        assert runtime.get_agent("keeper") is not agent  # processed by the fresh one
+    finally:
+        await runtime.stop()
+
+
+async def test_suspended_child_restarts_into_suspended_fresh_instance():
+    """S7 × D1a: the checkpointed marker restores SUSPENDED on a NEW object."""
+    worker = CrashOnCommand("paused_fresh")
+    root = Supervisor("root", children=[worker], max_restarts=3, backoff_base=0.01)
+    runtime = Runtime(supervisor=root)
+    await runtime.start()
+    try:
+        await runtime.suspend("paused_fresh", reason="gate")
+        assert await _wait_for(lambda: worker.status == ProcessStatus.SUSPENDED)
+        # White-box: drive the restart machinery directly (a suspended agent
+        # processes no business messages, so we can't crash it organically).
+        await root._restart_agent_child(worker)
+        fresh = runtime.get_agent("paused_fresh")
+        assert fresh is not worker
+        assert await _wait_for(lambda: fresh.status == ProcessStatus.SUSPENDED)
+    finally:
+        await runtime.stop()
+
+
+async def test_wire_failure_is_loud_restart_failure(caplog):
+    """A wiring failure escalates through the H2 loud path — never a
+    half-wired child with a live task (design §4 constraint 1)."""
+    import logging as _logging
+
+    worker = CrashOnCommand("unwirable")
+    root = Supervisor("root", children=[worker], max_restarts=3, backoff_base=0.01)
+    runtime = Runtime(supervisor=root)
+    await runtime.start()
+    try:
+
+        def bad_wire(agent):
+            raise RuntimeError("injection infrastructure down")
+
+        root._wire_child = bad_wire
+        with caplog.at_level(_logging.WARNING):
+            await runtime.send("unwirable", {"cmd": "boom"})
+            await asyncio.sleep(0.3)
+        assert any(
+            "unwirable" in r.getMessage() and r.levelno >= _logging.WARNING for r in caplog.records
+        )
+        assert runtime.get_agent("unwirable").status != ProcessStatus.RUNNING
+    finally:
+        await runtime.stop()
+
+
+async def test_restart_of_restart_works():
+    """The fresh incarnation re-captures its own spec — crash twice, recover twice."""
+    agent = CrashOnCommand("phoenix")
+    root = Supervisor("root", children=[agent], max_restarts=5, backoff_base=0.01)
+    runtime = Runtime(supervisor=root)
+    await runtime.start()
+    try:
+        for expected in (1, 2):
+            await runtime.send("phoenix", {"cmd": "boom"})
+            assert await _wait_for(lambda n=expected: root._restart_counts.get("phoenix", 0) >= n)
+            assert await _wait_for(
+                lambda: runtime.get_agent("phoenix").status == ProcessStatus.RUNNING
+            )
+        second = runtime.get_agent("phoenix")
+        assert second is not agent
+        cls, args, kwargs = second._civitas_spec  # re-captured on the incarnation
+        assert cls is CrashOnCommand and args == ("phoenix",)
+        reply = await runtime.ask("phoenix", {"cmd": "work"}, timeout=2.0)
+        assert reply.payload["ok"] is True
+    finally:
+        await runtime.stop()
+
+
+class SpawnedJob(AgentProcess):
+    """Module-level: spawn() resolves classes by dotted import path."""
+
+    instances = 0
+
+    def __init__(self, name: str, **kwargs: Any) -> None:
+        super().__init__(name, **kwargs)
+        type(self).instances += 1
+
+    async def handle(self, message: Message) -> Message | None:
+        if message.payload.get("cmd") == "boom":
+            raise RuntimeError("boom")
+        return self.reply({"job": self.config.get("job_id")})
+
+
+async def test_dynamic_child_fresh_restart_preserves_config():
+    """DynSup restart path: fresh incarnation, spawn-time config carried over."""
+    from civitas import DynamicSupervisor
+
+    Job = SpawnedJob
+    Job.instances = 0
+    dyn = DynamicSupervisor("pool", restart="permanent", max_restarts=3)
+    runtime = Runtime(supervisor=Supervisor("root", children=[dyn]))
+    await runtime.start()
+    try:
+        await runtime.spawn("pool", Job, "job-1", config={"job_id": 42})
+        assert Job.instances == 1
+        await runtime.send("job-1", {"cmd": "boom"})
+        assert await _wait_for(lambda: Job.instances >= 2)  # fresh incarnation built
+        reply = await runtime.ask("job-1", {"cmd": "check"}, timeout=2.0)
+        assert reply.payload["job"] == 42  # spawn-time config carried over
+    finally:
+        await runtime.stop()
+
+
+# ---------------------------------------------------------------------------
+# D5 (v0.9.0 E3) — per-process liveness: A6's false-positive finally dies
+# ---------------------------------------------------------------------------
+
+
+def _channel_registry(mapping: dict[str, str]):
+    from civitas.registry import LocalRegistry
+
+    registry = LocalRegistry()
+    for agent_name, channel in mapping.items():
+        registry.register_remote(agent_name, health_channel=channel)
+    return registry
+
+
+async def test_busy_remote_agent_is_not_restarted():
+    """THE A6 VICTORY TEST. A remote agent stuck in a long handle() cannot ack
+    per-agent pings — but the PROCESS answers the health probe with a snapshot
+    showing it RUNNING with a live task. No crash, no restart. Under the
+    pre-v0.9 per-agent scheme this exact configuration force-restarted a
+    healthy agent after interval x threshold."""
+    sup = Supervisor("sup")
+    sup.add_remote_child(
+        "busy", heartbeat_interval=0.01, heartbeat_timeout=0.05, missed_heartbeats_threshold=3
+    )
+    sup._registry = _channel_registry({"busy": "_agency.worker.w1.health"})
+    sup._running = True
+
+    probes: list[Message] = []
+
+    class BusStub:
+        async def request(self, message: Message, timeout: float) -> Message:
+            probes.append(message)
+            if message.recipient == "busy":
+                raise TimeoutError  # the agent itself would NEVER answer — it's busy
+            return Message(
+                type="_agency.health_ack",
+                sender=message.recipient,
+                recipient=sup.name,
+                payload={
+                    "worker_id": "w1",
+                    "agents": {
+                        "busy": {"status": "RUNNING", "task_alive": True, "mailbox_depth": 7}
+                    },
+                },
+            )
+
+    sup._bus = BusStub()  # type: ignore[assignment]
+    await sup._start_heartbeat_monitor()
+    await asyncio.sleep(0.15)  # >> interval x threshold — old scheme would have fired
+    sup._running = False
+    await sup._stop_heartbeat_monitor()
+
+    assert all(p.recipient == "_agency.worker.w1.health" for p in probes)  # process, not agent
+    assert not sup._pending_crash_events, "healthy-but-busy agent was declared crashed"
+
+
+async def test_dead_remote_task_detected_in_one_probe():
+    """Fast remote crash detection: process healthy, THIS child's task dead —
+    crash enqueued from a single ack, no starvation cycle."""
+    sup = Supervisor("sup")
+    sup.add_remote_child("victim", heartbeat_interval=0.01, heartbeat_timeout=0.05)
+    sup.add_remote_child("fine", heartbeat_interval=0.01, heartbeat_timeout=0.05)
+    channel = "_agency.worker.w1.health"
+    sup._registry = _channel_registry({"victim": channel, "fine": channel})
+
+    class BusStub:
+        async def request(self, message: Message, timeout: float) -> Message:
+            return Message(
+                type="_agency.health_ack",
+                sender=channel,
+                recipient=sup.name,
+                payload={
+                    "worker_id": "w1",
+                    "agents": {
+                        "victim": {"status": "CRASHED", "task_alive": False, "mailbox_depth": 0},
+                        "fine": {"status": "RUNNING", "task_alive": True, "mailbox_depth": 0},
+                    },
+                },
+            )
+
+    sup._bus = BusStub()  # type: ignore[assignment]
+    await sup._probe_health_channel(channel, ["victim", "fine"])
+
+    assert len(sup._pending_crash_events) == 1
+    name, exc, task = next(iter(sup._pending_crash_events.values()))
+    assert name == "victim" and isinstance(exc, HeartbeatTimeout)
+
+
+async def test_unreachable_process_crashes_all_its_children():
+    sup = Supervisor("sup")
+    channel = "_agency.worker.w1.health"
+    for n in ("a", "b"):
+        sup.add_remote_child(n, heartbeat_timeout=0.01, missed_heartbeats_threshold=2)
+    sup._registry = _channel_registry({"a": channel, "b": channel})
+
+    class DeadBus:
+        async def request(self, message: Message, timeout: float) -> Message:
+            raise TimeoutError
+
+    sup._bus = DeadBus()  # type: ignore[assignment]
+    await sup._probe_health_channel(channel, ["a", "b"])  # miss 1
+    assert not sup._pending_crash_events
+    await sup._probe_health_channel(channel, ["a", "b"])  # miss 2 = threshold
+    crashed = {v[0] for v in sup._pending_crash_events.values()}
+    assert crashed == {"a", "b"}
+
+
+async def test_legacy_worker_falls_back_to_per_agent_pings():
+    """Q2 skew: no announced channel -> the pre-v0.9 per-agent path, verbatim."""
+    sup = Supervisor("sup")
+    sup.add_remote_child("old_style", heartbeat_interval=0.01, heartbeat_timeout=0.05)
+    sup._registry = _channel_registry({})  # registered nowhere / no channel
+    sup._running = True
+
+    seen: list[Message] = []
+
+    class BusStub:
+        async def request(self, message: Message, timeout: float) -> Message:
+            seen.append(message)
+            return Message(type="_agency.heartbeat_ack", sender="old_style", recipient=sup.name)
+
+    sup._bus = BusStub()  # type: ignore[assignment]
+    await sup._start_heartbeat_monitor()
+    await asyncio.sleep(0.05)
+    sup._running = False
+    await sup._stop_heartbeat_monitor()
+
+    assert seen and all(
+        m.recipient == "old_style" and m.type == "_agency.heartbeat" and m.priority == 1
+        for m in seen
+    )
+
+
+# ---------------------------------------------------------------------------
+# D6 / v0.9.0 E4 Phase B — Supervisor actorization, Halt-Check B named proofs
+# (design supervision-endgame.md §6.1 D-E4-7)
+# ---------------------------------------------------------------------------
+
+
+async def test_bare_supervisor_crash_delivery_without_bus():
+    """Halt-Check B proof #1 (D-E4-7): a bare Supervisor (no bus, no Runtime)
+    still delivers a real child crash end-to-end through its OWN mailbox —
+    _on_child_done -> side-table -> put_nowait -> own message loop -> handle()
+    -> _process_crash_event -> _handle_crash -> restart. Self-delivery is
+    local Mailbox traffic, not transport traffic (confirmed safe by Phase A's
+    standalone-loop finding) — this is the direct evidence, and it grounds
+    the D-E4-7 test-authoring heuristic: bare-Supervisor tests that only
+    assert on handling logic can keep calling ``_handle_crash`` directly,
+    because THIS test proves the delivery path around it works without a bus.
+    """
+    worker = CrashOnCommand("bare_worker")
+    sup = Supervisor("sup", children=[worker], max_restarts=3, backoff_base=0.01)
+    assert sup._bus is None  # bare — no Runtime, no bus wiring
+    await sup.start()
+    try:
+        await worker._mailbox.put(
+            Message(
+                type="test.crash", sender="test", recipient="bare_worker", payload={"cmd": "boom"}
+            )
+        )
+        assert await _wait_for(lambda: sup._restart_counts.get("bare_worker", 0) >= 1)
+        assert await _wait_for(lambda: sup._children_by_name["bare_worker"] is not worker)
+        fresh = sup._children_by_name["bare_worker"]
+        assert await _wait_for(lambda: fresh.status == ProcessStatus.RUNNING)
+    finally:
+        await sup.stop()
+
+
+async def test_no_resurrection_after_stop_during_backoff():
+    """Halt-Check B proof #2 (D-E4-8): stop() during an in-flight restart's
+    backoff sleep must not let that restart complete afterwards. Only
+    cancelling the Supervisor's own loop (self._stop()'s timeout-then-cancel
+    fallback) can abort a sleep already in progress — a flag check cannot,
+    which is why stop() reorders to stop its own loop FIRST (D-E4-8), not
+    last as Phase A had it. ``_shutdown_timeout`` is shortened so the
+    cancel-on-timeout fallback fires quickly instead of waiting out the
+    (deliberately much longer) backoff sleep.
+    """
+    worker = CrashOnCommand("zombie")
+    sup = Supervisor("sup", children=[worker], max_restarts=5, backoff_base=5.0)
+    sup._shutdown_timeout = 0.05
+    assert sup._bus is None
+    await sup.start()
+    try:
+        await worker._mailbox.put(
+            Message(type="test.crash", sender="test", recipient="zombie", payload={"cmd": "boom"})
+        )
+        # Restart count bumps before the 5s backoff sleep — mid-restart now.
+        assert await _wait_for(lambda: sup._restart_counts.get("zombie", 0) >= 1)
+    finally:
+        await sup.stop()
+
+    assert sup._children_by_name["zombie"] is worker, "child resurrected after stop()"
+    assert sup._task is not None and sup._task.done()

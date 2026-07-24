@@ -53,14 +53,14 @@ class TestComputeBackoff:
     def test_exponential_doubles_each_restart(self):
         sup = make_supervisor(backoff="EXPONENTIAL", backoff_base=1.0)
         # base * 2^(n-1), ignoring jitter
-        with patch("civitas.supervisor.random.random", return_value=0.0):
+        with patch("civitas.supervision.engine.random.random", return_value=0.0):
             assert sup._compute_backoff(1) == 1.0  # 1 * 2^0
             assert sup._compute_backoff(2) == 2.0  # 1 * 2^1
             assert sup._compute_backoff(3) == 4.0  # 1 * 2^2
 
     def test_exponential_applies_jitter(self):
         sup = make_supervisor(backoff="EXPONENTIAL", backoff_base=1.0)
-        with patch("civitas.supervisor.random.random", return_value=1.0):
+        with patch("civitas.supervision.engine.random.random", return_value=1.0):
             # delay = base * 2^0 = 1.0, jitter = 1.0 * 1.0 * 0.25 = 0.25
             assert sup._compute_backoff(1) == pytest.approx(1.25)
 
@@ -152,10 +152,12 @@ class TestEscalate:
         assert agent.status == ProcessStatus.CRASHED
 
     @pytest.mark.asyncio
-    async def test_escalate_with_parent_enqueues_on_parent_crash_queue(self):
-        """Escalation hands off to the parent's crash queue (H2) — never an inline
-        call, which would let the parent's restart cancel the very drain task
-        performing the escalation."""
+    async def test_escalate_with_parent_enqueues_crash_event(self):
+        """Escalation hands off to the parent via a crash event (H2, D-E4-1) —
+        never an inline call, which would let the parent's restart tear down
+        the very message dispatch performing the escalation. No bus wired
+        (bare-Supervisor test): the trigger lands directly on the parent's
+        mailbox (D-E4-7 fallback)."""
         child_sup = Supervisor("child", max_restarts=1)
         parent_sup = Supervisor("root", children=[child_sup], max_restarts=5)
         child_sup._parent = parent_sup
@@ -163,11 +165,12 @@ class TestEscalate:
         exc = ValueError("cascade")
         await child_sup._escalate("child", exc)
 
-        assert parent_sup._crash_queue.qsize() == 1
-        name, queued_exc, task = parent_sup._crash_queue.get_nowait()
+        assert len(parent_sup._pending_crash_events) == 1
+        name, queued_exc, task = next(iter(parent_sup._pending_crash_events.values()))
         assert name == "child"  # the escalating supervisor itself
         assert queued_exc is exc
         assert task is None  # supervisors have no incarnation task
+        assert parent_sup._mailbox.depth() == 1  # the trigger message itself
 
 
 # ---------------------------------------------------------------------------
@@ -431,7 +434,7 @@ class TestOnChildDone:
         task.exception.return_value = ValueError("boom")
 
         sup._on_child_done("worker", task)
-        assert sup._crash_queue.qsize() == 1
+        assert len(sup._pending_crash_events) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -581,8 +584,8 @@ class TestHeartbeatMonitor:
             await sup._heartbeat_loop()
 
         sup._handle_crash.assert_not_called()
-        assert sup._crash_queue.qsize() == 1
-        name, exc, task = sup._crash_queue.get_nowait()
+        assert len(sup._pending_crash_events) == 1
+        name, exc, task = next(iter(sup._pending_crash_events.values()))
         assert name == "remote_a"
         assert isinstance(exc, HeartbeatTimeout)
         assert task is None  # remote children have no incarnation task
@@ -649,8 +652,8 @@ class TestHeartbeatMonitor:
         first_breach = pings.index("dead_a")
         pings_to_b_after = pings[first_breach:].count("live_b")
         assert pings_to_b_after >= 2, "monitoring of siblings stalled after a breach"
-        sup._handle_crash.assert_not_called()  # queued for the drain, not inline
-        assert sup._crash_queue.qsize() >= 1
+        sup._handle_crash.assert_not_called()  # queued as a crash event, not inline
+        assert len(sup._pending_crash_events) >= 1
 
     @pytest.mark.asyncio
     async def test_heartbeat_loop_continues_on_generic_exception(
@@ -849,3 +852,153 @@ class TestRestartRestForOne:
         assert "second" in deregister_calls
         assert "first" in register_calls
         assert "second" in register_calls
+
+
+# ---------------------------------------------------------------------------
+# v0.9.0 E4 Phase C — introspection + Q3 suspend hard-rejection (D-E4-4, D-E4-9)
+# ---------------------------------------------------------------------------
+
+
+class TestSupervisionStatus:
+    @pytest.mark.asyncio
+    async def test_status_snapshot_reports_children_and_window(self):
+        a = NullAgent("a")
+        a._status = ProcessStatus.RUNNING
+        b = NullAgent("b")
+        b._status = ProcessStatus.CRASHED
+        sup = Supervisor("root", children=[a, b], strategy="ONE_FOR_ALL", max_restarts=7)
+        sup._restart_counts["b"] = 2
+        sup._engine.window.append(time.monotonic())
+
+        snapshot = sup._status_snapshot()
+
+        assert snapshot["name"] == "root"
+        assert snapshot["strategy"] == "ONE_FOR_ALL"
+        assert snapshot["max_restarts"] == 7
+        assert snapshot["crashes_in_window"] == 1
+        by_name = {c["name"]: c for c in snapshot["children"]}
+        assert by_name["a"] == {
+            "name": "a",
+            "kind": "agent",
+            "status": "RUNNING",
+            "restart_count": 0,
+        }
+        assert by_name["b"]["status"] == "CRASHED"
+        assert by_name["b"]["restart_count"] == 2
+
+    @pytest.mark.asyncio
+    async def test_status_snapshot_reports_child_supervisor_kind(self):
+        child_sup = Supervisor("child")
+        sup = Supervisor("root", children=[child_sup])
+
+        snapshot = sup._status_snapshot()
+
+        assert snapshot["children"][0] == {
+            "name": "child",
+            "kind": "supervisor",
+            "status": child_sup._status.value,
+            "restart_count": 0,
+        }
+
+    @pytest.mark.asyncio
+    async def test_handle_routes_status_message_via_reply(self):
+        sup = Supervisor("root")
+        request = Message(
+            type="civitas.supervision.status",
+            sender="caller",
+            recipient="root",
+            correlation_id="cid-1",
+        )
+        sup._current_message = request
+
+        reply = await sup.handle(request)
+
+        assert reply is not None
+        assert reply.recipient == "caller"
+        assert reply.correlation_id == "cid-1"
+        assert reply.payload["name"] == "root"
+
+    @pytest.mark.asyncio
+    async def test_handle_unknown_message_falls_through_to_base(self):
+        """Unrecognized message types still reach AgentProcess.handle() (None, fire-and-forget)."""
+        sup = Supervisor("root")
+        message = Message(type="not.a.real.type", sender="x", recipient="root")
+
+        assert await sup.handle(message) is None
+
+
+class TestSuspendHardRejection:
+    @pytest.mark.asyncio
+    async def test_suspend_raises_immediately(self):
+        """Q3/D-E4-9: the direct-call path is a genuine hard reject."""
+        sup = Supervisor("root")
+        with pytest.raises(RuntimeError, match="cannot be suspended"):
+            await sup.suspend("testing")
+        # No half-effect: no suspend intent was recorded.
+        assert sup._suspend_requested is False
+
+    def test_suspend_allowed_is_false_on_supervisor(self):
+        sup = Supervisor("root")
+        assert sup._suspend_allowed() is False
+
+    def test_suspend_allowed_defaults_true_on_plain_agent(self):
+        """Regression guard: the new hook must not change behavior for every
+        existing AgentProcess subclass (default-preserving, D-E4-9)."""
+        agent = NullAgent("plain")
+        assert agent._suspend_allowed() is True
+
+    @pytest.mark.asyncio
+    async def test_agency_suspend_message_dropped_with_warning(self, caplog):
+        """Q3/D-E4-9: the message path never reaches handle() — it's intercepted
+        inline in _message_loop, before _current_message is even set, so a
+        reply is not the mechanism here; a loud WARNING + drop is."""
+        sup = Supervisor("root")
+        await sup._start()
+        try:
+            with caplog.at_level(logging.WARNING):
+                await sup._mailbox.put(
+                    Message(
+                        type="_agency.suspend",
+                        sender="_runtime",
+                        recipient="root",
+                        payload={"reason": "test"},
+                        priority=1,
+                    )
+                )
+                assert await _wait_until(
+                    lambda: any("rejecting _agency.suspend" in r.message for r in caplog.records)
+                )
+            assert sup._status != ProcessStatus.SUSPENDED
+            assert sup._suspend_requested is False
+        finally:
+            await sup._stop()
+
+    @pytest.mark.asyncio
+    async def test_plain_agent_suspend_message_unaffected_by_new_hook(self):
+        """Regression guard: a plain agent's _agency.suspend still works exactly
+        as before — the new hook must be a true no-op on the default path."""
+        agent = NullAgent("plain")
+        await agent._start()
+        try:
+            await agent._mailbox.put(
+                Message(
+                    type="_agency.suspend",
+                    sender="_runtime",
+                    recipient="plain",
+                    payload={"reason": "test"},
+                    priority=1,
+                )
+            )
+            assert await _wait_until(lambda: agent._status == ProcessStatus.SUSPENDED)
+        finally:
+            await agent._stop()
+
+
+async def _wait_until(predicate, timeout: float = 2.0, interval: float = 0.01) -> bool:
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while loop.time() < deadline:
+        if predicate():
+            return True
+        await asyncio.sleep(interval)
+    return predicate()

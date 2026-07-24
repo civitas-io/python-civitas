@@ -21,7 +21,7 @@ from __future__ import annotations
 import asyncio
 import importlib
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, cast
 
 import msgpack
 import pytest
@@ -251,7 +251,38 @@ async def _spawn(
             "spawn_id": spawn_id,
         },
     )
-    return await _dispatch(sup, msg)
+    if not wait:
+        return await _dispatch(sup, msg)
+
+    # v0.9.0 E4 Phase D (B4, D-E4-5): wait=True replies are now delivered by a
+    # background continuation (Supervisor._await_spawn_readiness_and_reply),
+    # not handle()'s direct return value, because blocking THIS DynSup's own
+    # loop on a slow on_start() was the exact bug B4 fixes. Capture it the
+    # same way this file already captures announce/deregister messages
+    # (subscribe + wait_for) rather than relying on a synchronous return —
+    # this is a mechanism update, not a weakened assertion: every existing
+    # check on `reply.payload`/`.type` below is unchanged.
+    registry = sup._registry
+    transport = sup._bus._transport  # type: ignore[union-attr]
+    if registry is not None and registry.lookup(spawner) is None:
+        registry.register(spawner)
+    replies: list[bytes] = []
+
+    async def _cap_reply(data: bytes) -> None:
+        replies.append(data)
+
+    await transport.subscribe(spawner, _cap_reply)
+    try:
+        early = await _dispatch(sup, msg)
+        if early is not None:
+            return early  # an early-rejection branch replied synchronously, as before
+        await wait_for(
+            lambda: len(replies) >= 1, timeout=3.0, msg=f"deferred spawn reply for {name!r}"
+        )
+        serializer = sup._bus._serializer  # type: ignore[union-attr]
+        return cast(Message, serializer.deserialize(replies[0]))
+    finally:
+        await transport.unsubscribe(spawner)
 
 
 async def _despawn(sup: DynamicSupervisor, name: str) -> Message | None:

@@ -127,12 +127,15 @@ SYSTEM_MESSAGE_TYPES: frozenset[str] = frozenset(
     {
         "_agency.heartbeat",
         "_agency.heartbeat_ack",
+        "_agency.health_probe",
+        "_agency.health_ack",
         "_agency.shutdown",
         "_agency.restart",
         "_agency.register",
         "_agency.deregister",
         "_agency.suspend",
         "_agency.resume",
+        "_agency.child_crashed",  # v0.9.0 E4 Phase B (D6): supervisor crash self-trigger
     }
 )
 

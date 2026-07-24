@@ -10,7 +10,7 @@ import pytest
 from civitas import GenServer, Runtime, Supervisor
 from civitas.messages import Message
 from civitas.process import ProcessStatus
-from tests.conftest import wait_for, wait_for_status
+from tests.conftest import wait_for
 
 # ---------------------------------------------------------------------------
 # Concrete GenServer implementations for testing
@@ -241,8 +241,11 @@ async def test_restart_triggers_init():
         # First call crashes the server
         with pytest.raises((RuntimeError, TimeoutError, asyncio.TimeoutError)):
             await runtime.call("crashing", {}, timeout=1.0)
-        # Wait for restart
-        await wait_for_status(server, ProcessStatus.RUNNING, timeout=2.0)
+        # Wait for restart — observe the CURRENT incarnation (D1a/Q1: the old
+        # object reference is stale after a fresh-instance restart).
+        await wait_for(
+            lambda: runtime.get_agent("crashing").status == ProcessStatus.RUNNING, timeout=2.0
+        )
         # After restart, init() has reset count to 0
         result = await runtime.call("crashing", {})
         assert result["count"] == 0

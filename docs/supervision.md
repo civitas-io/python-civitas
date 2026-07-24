@@ -198,15 +198,17 @@ If the root supervisor also exhausts its budget, the child stays down permanentl
 
 Crash handling is **strictly serialized** per supervisor (one crash processed at a time, like OTP EXIT signals): simultaneous crashes under `ONE_FOR_ALL` produce exactly one restart cycle, and a restart that itself fails is logged at ERROR and escalated — never silently swallowed.
 
+Since v0.9.0, every supervisor is itself an addressable actor (see [Introspection](#introspection-querying-a-supervisors-state) below) — escalation rides the same message-based delivery as everything else in the tree, not a private internal queue. The observable behavior above is unchanged; only the delivery mechanism is now the real thing the rest of this page describes.
+
 ## The restart contract — what survives, what doesn't
 
-**Only checkpointed state survives a restart.** On every (re)start, `self.state` is reset and then restored from the last `checkpoint()`:
+**A restart is a fresh incarnation** (v0.9.0): a new object is built from your constructor call, and only checkpointed state is restored:
 
 | | Survives restart? |
 |---|---|
 | `self.state` you checkpointed | ✅ restored from the store |
 | `self.state` you did NOT checkpoint | ❌ reset — including whatever corruption caused the crash (that's the point of "let it crash") |
-| Instance variables (`self.foo`) | ⚠️ survive today (instance reuse; fresh-instance restart planned) — **treat as undefined**, never rely on them |
+| Instance variables (`self.foo`) | ❌ reset — a restart builds a **fresh instance** from your constructor call (`__init__` re-runs) |
 | Mailbox (queued messages) | ✅ retained; the in-flight message is lost |
 | Registration (name, capabilities, metadata) | ✅ preserved exactly |
 | Durable-suspension marker | ✅ rides in the checkpoint — a suspended agent restarts into `SUSPENDED` |
@@ -233,6 +235,32 @@ await runtime.resume("trader", approver="risk-officer@example.com")
 ```
 
 Override `on_suspend(reason)` / `on_resume(approver)` for resource release and pending-action pickup. `ask()` into a suspended agent times out by design — poll with `send()` for long approvals. When to reach for it: [recipes](recipes.md#suspension-when-do-humans-gate-the-loop).
+
+**Supervisors cannot be suspended** (since v0.9.0) — a paused subtree manager would stop reacting to crashes while still holding its children hostage, so `suspend()` on a `Supervisor` raises immediately rather than silently doing something unsafe. Suspend the individual agents in the subtree instead.
+
+---
+
+## Introspection — querying a supervisor's state
+
+Since v0.9.0, every supervisor is an addressable actor — query one for a live snapshot the same way you'd `ask()` any agent:
+
+```python
+reply = await runtime.ask("root", {}, message_type="civitas.supervision.status")
+reply.payload
+# {
+#     "name": "root",
+#     "strategy": "ONE_FOR_ONE",
+#     "max_restarts": 3,
+#     "restart_window": 60.0,
+#     "crashes_in_window": 1,
+#     "children": [
+#         {"name": "worker", "kind": "agent", "status": "RUNNING", "restart_count": 1},
+#         {"name": "child-sup", "kind": "supervisor", "status": "RUNNING", "restart_count": 0},
+#     ],
+# }
+```
+
+`crashes_in_window` is the engine's current intensity-window occupancy (what backoff is actually derived from, per B3 above); `restart_count` per child is the lifetime counter (observability only). Useful for a governance dashboard, a health-check endpoint, or a quick `runtime.ask(...)` from a REPL while debugging a tree.
 
 ---
 
@@ -311,9 +339,11 @@ supervision:
 
 ## Heartbeat monitoring for remote agents
 
-When agents run in separate OS processes (ZMQ or NATS transport), the supervisor cannot monitor them via asyncio task callbacks — the tasks are in a different process. Instead, it uses periodic heartbeats.
+When agents run in separate OS processes (ZMQ or NATS transport), the supervisor cannot monitor them via asyncio task callbacks — the tasks are in a different process. Instead, it uses periodic liveness checks.
 
 ![Heartbeat Monitoring Sequence](assets/heartbeat-sequence.svg)
+
+**Since v0.9.0, liveness is checked per Worker process, not per agent mailbox.** A supervisor sends ONE probe per interval to each Worker's process-level health channel — off that Worker's own agent mailboxes entirely — and the ack carries a snapshot for every agent hosted there (`status`, `task_alive`, `mailbox_depth`). This splits two questions the old per-agent scheme conflated: *is the process alive* (answered by the probe reaching the Worker at all) and *is this specific agent healthy* (answered by its entry in the snapshot). The practical result: **an agent legitimately busy in a long `handle()` is never falsely declared crashed** — the probe doesn't compete with its mailbox for attention — and **a genuinely dead task is detected within one probe interval**, not a full miss-threshold starvation cycle. Workers on v0.9.0+ advertise their health channel automatically; children of pre-v0.9 workers fall back to the legacy per-agent pings below (one-minor-version skew tolerance) — no configuration changes needed either way.
 
 Heartbeat monitoring is configured per remote child via `add_remote_child()`, or automatically when loading a topology YAML with `process: worker` entries:
 
@@ -326,11 +356,13 @@ supervisor.add_remote_child(
 )
 ```
 
-Heartbeats ride the **priority channel**: a busy agent acks between messages (liveness is not
-conflated with queue depth), and a `SUSPENDED` agent acks while staying suspended. One long
+These same settings drive the per-process probe above when the child's Worker supports it, and the settings below describe the legacy per-agent path used for the skew fallback.
+
+Legacy per-agent pings ride the **priority channel**: a busy agent acks between messages (liveness is not
+conflated with queue depth), and a `SUSPENDED` agent acks while staying suspended. On this path only, one long
 `handle()` still delays the ack until the next message boundary — keep
 `interval × threshold` above your slowest legitimate handler, or bound it with
-[`handle_timeout`](#detecting-hung-agents-handle_timeout).
+[`handle_timeout`](#detecting-hung-agents-handle_timeout). Children on v0.9.0+ workers are immune to this limitation (per-process probing is off-mailbox by construction).
 
 In YAML topology:
 

@@ -46,6 +46,11 @@ class RoutingEntry:
     child (R6 · D3/D11); empty when signing is disabled. ``epoch`` is the
     monotonic incarnation counter carried by the announcement, used to reject
     stale/reordered register/deregister messages (R6 · D13).
+
+    ``health_channel`` (D5, v0.9.0) is the hosting Worker's process-level
+    health topic (``_agency.worker.<id>.health``) carried by the announcement;
+    empty for local entries and pre-v0.9 workers (supervisors fall back to
+    per-agent heartbeats — the Q2 skew tolerance).
     """
 
     name: str
@@ -56,6 +61,7 @@ class RoutingEntry:
     owner: str = ""
     pubkey: str = ""
     epoch: int = 0
+    health_channel: str = ""
 
 
 @runtime_checkable
@@ -216,6 +222,7 @@ class LocalRegistry:
         owner: str = "",
         pubkey: str = "",
         epoch: int = 0,
+        health_channel: str = "",
     ) -> None:
         """Register a remote agent for cross-process pattern matching.
 
@@ -264,6 +271,7 @@ class LocalRegistry:
             owner=owner,
             pubkey=pubkey,
             epoch=epoch,
+            health_channel=health_channel,
         )
         self._entries[name] = entry
         self._remote_epochs[name] = epoch if last_epoch is None else max(epoch, last_epoch)

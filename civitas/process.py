@@ -42,6 +42,12 @@ _STREAM_CANCEL = "civitas.stream.cancel"
 # target. Injected at registration so a YAML capabilities: override cannot strip it.
 DYNAMIC_SUPERVISOR_CAPABILITY = "_agency.dynamic_supervisor"
 
+# Reserved marker capability (v0.9.0 E4/D6): static Supervisor instances are
+# now addressable actors too (design supervision-endgame.md §6). Lets peers
+# (Presidium, introspection tooling) distinguish a supervisor's registry entry
+# from a plain agent's without a type check across the wire.
+SUPERVISOR_CAPABILITY = "_agency.supervisor"
+
 # Backstops the marker check: a SUSPENDED target passes the marker check but buffers
 # non-priority messages and never replies, so bound the wait instead of hanging (§8).
 _SPAWN_ASK_TIMEOUT = 30.0
@@ -75,9 +81,14 @@ class Mailbox:
     mailbox is full — the sender awaits until space is available.
     """
 
-    def __init__(self, maxsize: int = 1000) -> None:
+    def __init__(self, maxsize: int = 1000, priority_maxsize: int = 100) -> None:
         self._queue: asyncio.Queue[Message] = asyncio.Queue(maxsize=maxsize)
-        self._priority_queue: asyncio.Queue[Message] = asyncio.Queue(maxsize=100)
+        # priority_maxsize=0 means unbounded (asyncio.Queue convention) — used by
+        # Supervisor (v0.9.0 E4/D-E4-2): its crash self-messages are enqueued from
+        # a SYNC task-done callback that cannot await a bounded put(), and a
+        # bounded put_nowait() would reintroduce the crash-drop bug class H2
+        # removed. Agents keep the default bounded 100.
+        self._priority_queue: asyncio.Queue[Message] = asyncio.Queue(maxsize=priority_maxsize)
         self._notify: asyncio.Event = asyncio.Event()
 
     async def put(self, message: Message) -> None:
@@ -88,6 +99,15 @@ class Mailbox:
         else:
             await self._queue.put(message)
             self._notify.set()
+
+    def put_nowait(self, message: Message) -> None:
+        """Synchronous enqueue for callers that cannot await (D-E4-2) — e.g. an
+        ``asyncio.Task`` done-callback. Priority messages only; raises
+        ``asyncio.QueueFull`` on a bounded queue at capacity (agents' normal
+        queue backpressure is unaffected — this bypasses `put()` entirely).
+        """
+        self._priority_queue.put_nowait(message)
+        self._notify.set()
 
     def _drop_if_expired(self, message: Message) -> bool:
         """Return True (logging a warning) if the message has exceeded its ttl (F01-3)."""
@@ -154,6 +174,11 @@ class Mailbox:
     def empty(self) -> bool:
         """Return True if both priority and normal queues are empty."""
         return self._priority_queue.empty() and self._queue.empty()
+
+    def depth(self) -> int:
+        """Total buffered messages (both queues). Sync-safe — used by the
+        Worker health responder's snapshot (D5, report-only)."""
+        return self._priority_queue.qsize() + self._queue.qsize()
 
     def drain(self) -> list[Message]:
         """Remove and return all buffered messages, priority queue first."""
@@ -475,6 +500,17 @@ class AgentProcess:
     # ------------------------------------------------------------------
     # Durable suspension — suspend / resume (Presidium HITL primitive)
     # ------------------------------------------------------------------
+
+    def _suspend_allowed(self) -> bool:
+        """Whether this process accepts suspend requests. Default: True.
+
+        Override to hard-reject (v0.9.0 E4 Phase C, D-E4-9: Supervisor returns
+        False — a suspended subtree manager is a footgun, Q3). Checked by
+        ``_message_loop`` for the ``_agency.suspend`` message path; the direct
+        ``suspend()`` method call is rejected separately by overriding
+        ``suspend()`` itself (two call paths, two mechanisms — see D-E4-9).
+        """
+        return True
 
     async def suspend(self, reason: str = "") -> None:
         """Request suspension of this agent. Non-blocking (S2).
@@ -934,16 +970,29 @@ class AgentProcess:
         """Create a reply message. Return this from handle() for request-reply."""
         if self._current_message is None:
             raise RuntimeError("reply() called outside of handle()")
-        msg = self._current_message
+        return self.reply_to(self._current_message, payload)
+
+    def reply_to(self, original: Message, payload: dict[str, Any]) -> Message:
+        """Build a reply to ``original`` from OUTSIDE the synchronous dispatch of
+        that message (v0.9.0 E4 Phase D, B4/D-E4-5).
+
+        ``reply()`` only works while ``original`` is ``self._current_message`` —
+        true during ``handle()``'s own call stack, false once dispatch has moved
+        on. A deferred-reply continuation (e.g. a spawn's ``wait=True`` racing
+        the child's readiness in the background) captures ``original`` itself
+        and calls this instead. Route the result with ``self._bus.route(...)`` —
+        the transport's request/reply correlation is keyed on ``correlation_id``
+        and does not care which coroutine sends the reply or when.
+        """
         return Message(
             type=payload.get("type", "reply"),
             sender=self.name,
-            recipient=msg.reply_to or msg.sender,
+            recipient=original.reply_to or original.sender,
             payload=payload,
-            correlation_id=msg.correlation_id,
-            trace_id=msg.trace_id,
+            correlation_id=original.correlation_id,
+            trace_id=original.trace_id,
             span_id=_new_span_id(),
-            parent_span_id=msg.span_id,
+            parent_span_id=original.span_id,
         )
 
     async def emit(self, payload: dict[str, Any]) -> None:
@@ -1392,6 +1441,17 @@ class AgentProcess:
                         await self._bus.route(ack)
                     continue
                 if message.type == "_agency.suspend":
+                    if not self._suspend_allowed():
+                        # v0.9.0 E4 Phase C (Q3, D-E4-9): rejected process types (Supervisor)
+                        # warn and drop — matching this message's pre-existing fire-and-forget
+                        # contract (it has never been request-reply; self.reply() isn't even
+                        # callable at this point in the loop, before _current_message is set).
+                        logger.warning(
+                            "[%s] rejecting _agency.suspend — suspension is not supported for "
+                            "this process type",
+                            self.name,
+                        )
+                        continue
                     reason = message.payload.get("reason", "")
                     if self._status == ProcessStatus.SUSPENDED:
                         await self._update_suspend_reason(reason)

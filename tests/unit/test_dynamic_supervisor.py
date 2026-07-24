@@ -908,6 +908,64 @@ class TestR1ReplyTiming:
             await rt.stop()
 
     @pytest.mark.asyncio
+    async def test_wait_true_does_not_block_concurrent_spawn(self):
+        """v0.9.0 E4 Phase D (B4, D-E4-5): the actual bug this phase fixes. A
+        wait=True spawn gated deep in on_start() must not head-of-line every
+        other spawn this DynSup is asked to serve — pre-Phase-D this awaited
+        inline on the DynSup's own loop, so 'w2' below could not even start
+        until 'gw' finished (or the test's own timeout fired)."""
+        dyn = _make_dyn()
+        rt = _build_runtime(dyn)
+        await rt.start()
+        try:
+            _START_GATES["gw"] = asyncio.Event()
+            gated = asyncio.create_task(_spawn_via_ask(rt, "gw", wait=True, config={"gate": True}))
+            await asyncio.sleep(0.02)  # let 'gw' actually reach the gate
+            assert not gated.done(), "gated spawn finished without its gate being opened"
+
+            # The concurrent request that would have been head-of-lined before
+            # Phase D: a completely unrelated wait=True spawn.
+            other = await asyncio.wait_for(
+                _spawn_via_ask(rt, "w2", wait=True, class_path="tests.conftest.EchoAgent"),
+                timeout=1.0,
+            )
+            assert other.payload["status"] == "ok" and other.payload["ready"] is True
+            assert not gated.done(), "gate still shouldn't be open"
+
+            _START_GATES["gw"].set()
+            reply = await asyncio.wait_for(gated, timeout=3.0)
+            assert reply.payload["status"] == "ok" and reply.payload["ready"] is True
+        finally:
+            await rt.stop()
+
+    @pytest.mark.asyncio
+    async def test_despawn_during_wait_true_spawn_reports_error_not_hang(self):
+        """v0.9.0 E4 Phase D: a concurrent despawn racing an in-flight wait=True
+        spawn is newly REACHABLE (the DynSup's loop is free during the wait),
+        but not new ground — the same idempotent _terminal_cleanup/_remove_child
+        already protect wait=False's identical race. The original spawn caller
+        must get a well-formed error reply, never a hang."""
+        dyn = _make_dyn()
+        rt = _build_runtime(dyn)
+        await rt.start()
+        try:
+            _START_GATES["gw"] = asyncio.Event()
+            gated = asyncio.create_task(_spawn_via_ask(rt, "gw", wait=True, config={"gate": True}))
+            await wait_for(lambda: "gw" in dyn._dynamic_children, timeout=2.0)
+
+            despawn_reply = await rt.ask(
+                "workers", {"name": "gw"}, message_type="civitas.dynamic.despawn", timeout=3.0
+            )
+            assert despawn_reply.payload["status"] == "ok"
+
+            reply = await asyncio.wait_for(gated, timeout=3.0)
+            assert reply.payload["status"] == "error"
+            assert "gw" not in dyn._dynamic_children
+        finally:
+            _START_GATES["gw"].set()  # unblock in case anything is still gated
+            await rt.stop()
+
+    @pytest.mark.asyncio
     async def test_wait_true_suspended_marker_reply_state_suspended(self):
         dyn = _make_dyn()
         rt = _build_runtime(dyn)
