@@ -1032,10 +1032,28 @@ Owner column: `core` = python-civitas, else the target repo.
 
 ### v0.9.1 — Post-endgame polish (In progress)
 
+**Design:** [`dashboard-v2.md`](design/dashboard-v2.md) — DRAFT, PRD agreed in conversation
+(topology + status + LLM-metrics + per-process resources is P0/v0.9.1; network I/O, historical
+charts, write actions, and a distinct HITL-vs-suspended signal are explicitly P1/P2, deferred to
+v0.9.2 below — not silently dropped).
+
 | Item | Priority | Status |
 |------|----------|--------|
 | process.py / runtime.py coverage miss-range top-ups (streaming internals, MCP connect, exporter/signing blocks) | Low | ✅ **Done (dev/v0.9.1)** — process.py 88%→92%, runtime.py 87%→91%; 22 new tests; one block (eval exporter per-kind bodies) documented as an accepted civitas_contrib-gated ceiling |
-| Textual dashboard rebuild on `TopologyServer` endpoints | Medium | Not started — topology data model stabilized in v0.9.0, ready to pick up |
+| Textual dashboard rebuild on `TopologyServer` endpoints ("civitas top") | Medium | 🚧 **In progress (dev/v0.9.1)** — Phase A (topology/status/restart enrichment) ✅, Phase B (`/metrics` + auto-provisioned `MetricsCollector`, including a same-session fix for dynamically-spawned children) ✅, Phase C (closes FD-01 — `llm_span()` now actually feeds tokens/cost/model) ✅. Remaining: Phase D (`/processes` — psutil resource stats), E (the Textual app itself), F (CLI rewrite), G (release). Plan: `.sisyphus/plans/dashboard-v2.md` |
+
+### v0.9.2 — Dashboard P1/P2 + cross-platform CI (Planned, after v0.9.1)
+
+| Item | Priority | Source |
+|------|----------|--------|
+| CI matrix: macOS + Windows runners (today: Ubuntu only) | Medium | found during dashboard-v2 Phase D planning (2026-07-24) — production ZMQ defaults are already Windows-safe (`tcp://`), but 4 test files use `ipc://` (Unix-only) and nothing has ever been CI-verified outside Linux |
+| Dashboard: network I/O per process | Low | design/dashboard-v2.md P1 |
+| Dashboard: "session length" (LLM conversation turns/duration) | Low | design/dashboard-v2.md P1 |
+| Dashboard: historical charts/sparklines (message-rate, cost-over-time) | Low | design/dashboard-v2.md P1 |
+| Dashboard: write actions (restart/suspend/resume from the TUI) | Low | design/dashboard-v2.md P1 |
+| Dashboard: distinct HITL-wait vs. governance-suspend visual signal | Low | design/dashboard-v2.md §6 option B — needs a real HITL flow to design against first |
+| Dashboard: log tail panel per agent | Low | design/dashboard-v2.md P2 |
+| Dashboard: multi-cluster / multi-topology view | Low | design/dashboard-v2.md P2 |
 
 ### v0.10.0 — HITL & Streaming polish (Planned — the Medicus runway)
 

@@ -234,6 +234,15 @@ models for one command. `--refresh` (seconds) is kept, now meaning "poll interva
   confirmed no existing per-incarnation timestamp existed; added `AgentProcess._incarnation_started_at`
   (set fresh in `_start_nowait()`, so D1a's fresh-instance restart resets it automatically — zero
   special-casing needed) + a public `uptime_seconds` property.
+- **Cross-platform scope, raised mid-Phase-D-planning (2026-07-24)**: the product targets macOS
+  and Windows in addition to Linux, but CI has only ever run `ubuntu-latest` and this whole arc's
+  manual verification has only ever covered macOS + Linux (Docker). Fixing full CI coverage is out
+  of scope for this design (tracked as its own backlog item, `docs/milestones.md` v0.9.2). What IS
+  in scope here: not making it WORSE — Phase D's new tests use `tcp://127.0.0.1:<port>` rather than
+  the `ipc://` (Unix-only) pattern 4 existing test files use, and its `psutil` usage is written
+  defensively rather than assuming Linux-only behavior. None of this is Windows-VERIFIED (no
+  Windows runner available in this environment) — it's Windows-AWARE, which is a real, honest
+  distinction worth keeping straight.
 
 ### Phase A implementation notes (D-DASH-1, done)
 
