@@ -12,7 +12,10 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
+from civitas.dashboard.resources import sample_process, try_start_process_sampler
+from civitas.errors import MessageRoutingError
 from civitas.genserver import GenServer
+from civitas.messages import Message, _new_span_id, _uuid7
 from civitas.supervisor import DynamicSupervisor, Supervisor
 
 logger = logging.getLogger(__name__)
@@ -51,6 +54,10 @@ class TopologyServer(GenServer):
         # non-MetricsCollector metrics= sink of their own (documented, not silently
         # empty; see /metrics's "not available" response).
         self._metrics_collector: Any = None
+        # v0.9.1 (D-DASH-3): primed ONCE at construction, reused for every
+        # /processes request — see try_start_process_sampler()'s docstring
+        # for why a fresh handle per-request would be a real bug, not style.
+        self._runtime_resource_sampler = try_start_process_sampler()
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -108,7 +115,7 @@ class TopologyServer(GenServer):
                 if header_line in (b"\r\n", b"\n", b""):
                     break
 
-            body_str, status_code = self._route_http(path)
+            body_str, status_code = await self._route_http(path)
             body_bytes = body_str.encode()
             status_text = "200 OK" if status_code == 200 else f"{status_code} Not Found"
             header = (
@@ -129,7 +136,12 @@ class TopologyServer(GenServer):
             except Exception:
                 pass
 
-    def _route_http(self, path: str) -> tuple[str, int]:
+    async def _route_http(self, path: str) -> tuple[str, int]:
+        """Async (v0.9.1, D-DASH-3) — ``/processes`` is the first route that
+        needs real I/O (probing remote Worker health channels over the bus);
+        every other route below stays a plain synchronous call, awaiting
+        nothing — this signature change doesn't alter their behavior.
+        """
         if path == "/health":
             return json.dumps({"status": "ok"}), 200
         if path == "/topology":
@@ -145,6 +157,8 @@ class TopologyServer(GenServer):
         if path == "/metrics":
             data, code = self._build_metrics()
             return json.dumps(data), code
+        if path == "/processes":
+            return json.dumps(await self._build_processes()), 200
         return json.dumps({"error": "not found"}), 404
 
     # ------------------------------------------------------------------
@@ -293,6 +307,74 @@ class TopologyServer(GenServer):
             "total_cost_usd": snapshot.total_cost_usd,
             "uptime_seconds": snapshot.uptime_seconds,
         }, 200
+
+    async def _build_processes(self) -> dict[str, Any]:
+        """v0.9.1 (dashboard-v2, D-DASH-3): one row per OS process (the
+        Runtime itself + every distinct Worker health channel known to the
+        registry) — reuses the D5 ``_agency.health_probe`` wire protocol
+        rather than inventing a new one; Workers already answer these.
+        """
+        processes: list[dict[str, Any]] = []
+
+        runtime_sample = sample_process(self._runtime_resource_sampler)
+        if runtime_sample is not None:
+            processes.append({"kind": "runtime", "id": self.name, **runtime_sample})
+
+        for channel in self._distinct_health_channels():
+            worker_sample = await self._probe_worker_process(channel)
+            if worker_sample is not None:
+                processes.append({"kind": "worker", "id": channel, **worker_sample})
+
+        return {"processes": processes}
+
+    def _distinct_health_channels(self) -> set[str]:
+        """Every distinct Worker health channel currently known to the
+        registry (v0.9.1, D-DASH-3). TopologyServer has no ``_remote_children``
+        set of its own (unlike Supervisor's D5 probing) — it scans every
+        registered entry instead, since it needs every Worker in the whole
+        tree, not just one supervisor's remote children.
+        """
+        if self._registry is None:
+            return set()
+        channels: set[str] = set()
+        for name in self._registry.all_names():
+            entry = self._registry.lookup(name)
+            if entry is not None and entry.health_channel:
+                channels.add(entry.health_channel)
+        return channels
+
+    async def _probe_worker_process(self, channel: str) -> dict[str, Any] | None:
+        """Send one ``_agency.health_probe`` to a Worker's channel and read
+        back its ``process`` field — the exact message shape
+        ``Supervisor._probe_health_channel`` already sends (D5, v0.9.0);
+        TopologyServer independently probes here rather than piggybacking on
+        any one supervisor's own heartbeat loop, since it needs a live
+        snapshot on-demand (one HTTP request), not a periodic background one.
+        """
+        if self._bus is None:
+            return None
+        probe = Message(
+            type="_agency.health_probe",
+            sender=self.name,
+            recipient=channel,
+            correlation_id=_uuid7(),
+            span_id=_new_span_id(),
+        )
+        try:
+            ack = await self._bus.request(probe, timeout=2.0)
+        except (TimeoutError, MessageRoutingError):
+            # Unreachable OR not-yet-routable (e.g. announced moments after the
+            # agent it hosts — a real, observed startup race, not theoretical):
+            # simply absent from /processes, never an exception that would
+            # otherwise propagate through _build_processes() and silently kill
+            # the WHOLE endpoint's response via _handle_connection's catch-all
+            # (F03-7-style containment — one bad channel must not take down
+            # every other process's data in the same response).
+            return None
+        except Exception:
+            logger.warning("[%s] health probe to %r failed unexpectedly", self.name, channel)
+            return None
+        return ack.payload.get("process")
 
     def _find_dynamic_agent(self, name: str) -> Any | None:
         if self._root_supervisor is None:

@@ -312,3 +312,33 @@ models for one command. `--refresh` (seconds) is kept, now meaning "poll interva
 - `MetricsCollector.llm_call()`'s `model` parameter only overwrites `last_model` when non-empty —
   a later call that doesn't report a model (or an agent using multiple providers where one call
   doesn't tag it) shouldn't blank out the last known-real value.
+
+### Phase D implementation notes (D-DASH-3, done)
+
+- **`_route_http` had to become `async`** — it was a plain sync dispatch table (no route needed
+  real I/O before this phase); `/processes` needs to `await` bus round-trips to remote Workers.
+  Every other route stays a synchronous call within the now-async method — unaffected behavior,
+  just a signature change (`tests/unit/test_topology_server.py`'s direct `_route_http(...)` calls
+  needed `await` added, mechanical).
+- **A real deadlock, caught by actually running the integration test, not by review**: the first
+  draft of the real-ZMQ end-to-end test used `urllib.request.urlopen()` inside an `async def` test
+  — a BLOCKING call that starves the very event loop the `TopologyServer` (client and server share
+  one process/loop in this test) needs to run on to answer the request. The test hung until its
+  own socket timeout fired, with no useful error pointing at the cause. Root-caused by testing
+  `_build_processes()` directly first (proved it returns correctly in milliseconds, ruling out the
+  new endpoint logic) before suspecting the HTTP client. Fixed by using the same async
+  `asyncio.open_connection()`-based helper `test_topology_server.py`'s own tests already use —
+  this codebase had already solved this exact problem once; the fix was to reuse it, not invent a
+  second one.
+- **A real routing race, also caught by the same test, not assumed away**: `_probe_worker_process`
+  only caught `TimeoutError`, but a Worker's health channel can be announced moments AFTER the
+  agent it hosts (same startup loop, separate messages) — probing in that narrow window raises
+  `MessageRoutingError`, which propagated uncaught through `_build_processes()` and
+  `_handle_connection`'s top-level `except Exception: pass`, silently killing the ENTIRE
+  `/processes` response (not just the one racing Worker's entry). Fixed by catching
+  `MessageRoutingError` alongside `TimeoutError` (both mean "not answerable right now, omit this
+  one entry") plus a broad final `except Exception` so one bad channel can never take down every
+  other process's data in the same response (F03-7 containment, matching this codebase's existing
+  convention for background/reporting paths).
+- `psutil` needed a `[[tool.mypy.overrides]] ignore_missing_imports` entry (no bundled type
+  stubs), added to the same override list `zmq`/`nats`/etc. already share.

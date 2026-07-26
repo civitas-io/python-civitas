@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from civitas import DynamicSupervisor, Runtime, Supervisor, TopologyServer
+from civitas.messages import Message
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -87,29 +88,29 @@ class TestRouteHttp:
     def setup_method(self) -> None:
         self.ts = TopologyServer(name="ts", port=0)
 
-    def test_health(self) -> None:
-        body, code = self.ts._route_http("/health")
+    async def test_health(self) -> None:
+        body, code = await self.ts._route_http("/health")
         assert code == 200
         assert json.loads(body) == {"status": "ok"}
 
-    def test_unknown_path(self) -> None:
-        body, code = self.ts._route_http("/notexist")
+    async def test_unknown_path(self) -> None:
+        body, code = await self.ts._route_http("/notexist")
         assert code == 404
         assert "error" in json.loads(body)
 
-    def test_topology_no_runtime(self) -> None:
-        body, code = self.ts._route_http("/topology")
+    async def test_topology_no_runtime(self) -> None:
+        body, code = await self.ts._route_http("/topology")
         assert code == 200
         data = json.loads(body)
         assert "error" in data
 
-    def test_agents_no_runtime(self) -> None:
-        body, code = self.ts._route_http("/agents")
+    async def test_agents_no_runtime(self) -> None:
+        body, code = await self.ts._route_http("/agents")
         assert code == 200
         assert isinstance(json.loads(body), list)
 
-    def test_agent_detail_not_found(self) -> None:
-        body, code = self.ts._route_http("/agents/missing")
+    async def test_agent_detail_not_found(self) -> None:
+        body, code = await self.ts._route_http("/agents/missing")
         assert code == 404
         assert "not found" in json.loads(body)["error"]
 
@@ -188,12 +189,12 @@ class TestSerializers:
         assert result["max_children"] == 5
         assert result["children"][0]["name"] == "dyn-1"
 
-    def test_serialize_nested_supervisor(self) -> None:
+    async def test_serialize_nested_supervisor(self) -> None:
         leaf = _make_mock_agent("leaf")
         inner = _make_mock_supervisor("inner", children=[leaf])
         root = _make_mock_supervisor("root", children=[inner])
         self.ts._root_supervisor = root
-        body, code = self.ts._route_http("/topology")
+        body, code = await self.ts._route_http("/topology")
         assert code == 200
         data = json.loads(body)
         assert data["name"] == "root"
@@ -239,10 +240,10 @@ class TestSerializers:
         assert result is not None
         assert result["name"] == "dyn-2"
 
-    def test_agents_endpoint_returns_agent_detail(self) -> None:
+    async def test_agents_endpoint_returns_agent_detail(self) -> None:
         agent = _make_mock_agent("svc", "RUNNING")
         self.ts._agents = {"svc": agent}
-        body, code = self.ts._route_http("/agents/svc")
+        body, code = await self.ts._route_http("/agents/svc")
         assert code == 200
         assert json.loads(body)["name"] == "svc"
 
@@ -371,7 +372,6 @@ async def test_topology_server_http_uptime_resets_after_restart() -> None:
     per-child-lifetime — a crash-restart (D1a fresh instance) resets it,
     exactly like the fresh-instance restart semantics uptime is meant to
     reflect. Real Supervisor + real crashing agent, not a mock."""
-    from civitas.messages import Message
     from civitas.process import AgentProcess
 
     class _CrashOnce(AgentProcess):
@@ -455,7 +455,6 @@ async def test_runtime_respects_explicit_custom_metrics_sink() -> None:
 async def test_topology_server_http_metrics_shape() -> None:
     """v0.9.1 (D-DASH-2): /metrics returns the documented shape, reflecting
     real message-handling activity end-to-end (no mocks)."""
-    from civitas.messages import Message
     from civitas.process import AgentProcess
 
     class _Echo(AgentProcess):
@@ -507,6 +506,73 @@ async def test_topology_server_http_metrics_includes_dynamically_spawned_agent()
         assert data["agents"]["spawned-1"]["messages_handled"] == 1
     finally:
         await runtime.stop()
+
+
+@pytest.mark.asyncio
+async def test_topology_server_http_processes_includes_runtime_self_sample() -> None:
+    """v0.9.1 (D-DASH-3): /processes always includes at least the Runtime's
+    own self-measured process — no Worker/remote channel needed for this
+    part. Uses tcp:// (not ipc://) so this test stays Windows-compatible
+    (design dashboard-v2.md §12 cross-platform note).
+    """
+    ts = TopologyServer(name="topo", port=16798)
+    runtime = Runtime(supervisor=Supervisor("root", children=[ts]))
+    await runtime.start()
+    try:
+        code, body = await _http_get("http://127.0.0.1:16798/processes")
+        assert code == 200
+        data = json.loads(body)
+        runtime_entries = [p for p in data["processes"] if p["kind"] == "runtime"]
+        assert len(runtime_entries) == 1
+        entry = runtime_entries[0]
+        assert entry["id"] == "topo"
+        assert entry["pid"] > 0
+        assert entry["cpu_percent"] >= 0.0
+        assert entry["rss_bytes"] > 0
+    finally:
+        await runtime.stop()
+
+
+def _fake_registry_with_channels(channels: dict[str, str]) -> MagicMock:
+    """A minimal fake Registry: all_names() + lookup(name).health_channel,
+    the only two members _distinct_health_channels() touches."""
+    registry = MagicMock()
+    registry.all_names.return_value = list(channels)
+
+    def _lookup(name: str) -> MagicMock | None:
+        channel = channels.get(name)
+        if channel is None:
+            return None
+        entry = MagicMock()
+        entry.health_channel = channel
+        return entry
+
+    registry.lookup.side_effect = _lookup
+    return registry
+
+
+async def test_topology_server_distinct_health_channels_deduplicates() -> None:
+    """v0.9.1 (D-DASH-3): two agents hosted on the SAME Worker (one health
+    channel) must probe that Worker exactly once, not twice."""
+    ts = TopologyServer(name="topo", port=0)
+    ts._registry = _fake_registry_with_channels(
+        {"agent-a": "chan-1", "agent-b": "chan-1", "agent-c": "chan-2"}
+    )
+    assert ts._distinct_health_channels() == {"chan-1", "chan-2"}
+
+
+async def test_topology_server_probe_worker_process_timeout_returns_none() -> None:
+    """v0.9.1 (D-DASH-3): an unreachable Worker is simply absent from
+    /processes, not an error response for the whole endpoint."""
+    ts = TopologyServer(name="topo", port=0)
+
+    class _DeadBus:
+        async def request(self, message: Message, timeout: float) -> Message:
+            raise TimeoutError
+
+    ts._bus = _DeadBus()  # type: ignore[assignment]
+    result = await ts._probe_worker_process("chan-1")
+    assert result is None
 
 
 # ---------------------------------------------------------------------------
