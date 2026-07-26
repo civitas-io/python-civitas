@@ -140,12 +140,21 @@ class MetricsCollector:
         """Record an agent error."""
         self._agent(name).errors += 1
 
-    def llm_call(self, agent_name: str, tokens_in: int, tokens_out: int, cost_usd: float) -> None:
-        """Record an LLM call with token usage and cost."""
+    def llm_call(
+        self,
+        agent_name: str,
+        tokens_in: int,
+        tokens_out: int,
+        cost_usd: float,
+        model: str = "",
+    ) -> None:
+        """Record an LLM call with token usage, cost, and model (v0.9.1, FD-01)."""
         metrics = self._agent(agent_name)
         metrics.tokens_in += tokens_in
         metrics.tokens_out += tokens_out
         metrics.cost_usd += cost_usd
+        if model:
+            metrics.last_model = model
         self._snapshot.total_cost_usd += cost_usd
 
     def reset(self) -> None:

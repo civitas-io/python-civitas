@@ -1252,30 +1252,59 @@ class AgentProcess:
             with self.llm_span("claude-sonnet", tokens_in=1200) as span:
                 response = await self.llm.chat(...)
                 span.set_attribute("civitas.llm.tokens_out", ...)
-        """
-        if self._tracer is None:
-            yield Span(name="llm", trace_id="", span_id="")
-            return
 
-        parent_span_id = (
-            self._current_handle_span.span_id
-            if self._current_handle_span is not None
-            else (self._current_message.span_id if self._current_message else None)
-        )
-        trace_id = self._current_message.trace_id if self._current_message else ""
-        span = self._tracer.start_span(
-            "civitas.llm.chat",
-            trace_id=trace_id,
-            parent_span_id=parent_span_id,
-            attributes={"civitas.llm.model": model, **attributes},
-        )
+        v0.9.1 (dashboard-v2, D-DASH-5, closes FD-01): on exit, whatever the
+        caller reported via ``span.set_attribute("civitas.llm.tokens_in"/
+        "tokens_out"/"cost_usd", ...)`` is forwarded to the metrics sink (if
+        any) as one ``llm_call()`` — independent of whether a tracer is
+        attached (metrics and tracing are separate concerns; a span that
+        never reports usage costs nothing, not a spurious zero-cost entry).
+        """
+        has_tracer = self._tracer is not None
+        if has_tracer:
+            assert self._tracer is not None  # narrows for mypy after the check above
+            parent_span_id = (
+                self._current_handle_span.span_id
+                if self._current_handle_span is not None
+                else (self._current_message.span_id if self._current_message else None)
+            )
+            trace_id = self._current_message.trace_id if self._current_message else ""
+            span = self._tracer.start_span(
+                "civitas.llm.chat",
+                trace_id=trace_id,
+                parent_span_id=parent_span_id,
+                attributes={"civitas.llm.model": model, **attributes},
+            )
+        else:
+            span = Span(
+                name="llm",
+                trace_id="",
+                span_id="",
+                attributes={"civitas.llm.model": model, **attributes},
+            )
         try:
             yield span
         except Exception as exc:
             span.set_error(exc)
             raise
         finally:
-            span.end()
+            if has_tracer:
+                span.end()
+            self._report_llm_metrics(model, span)
+
+    def _report_llm_metrics(self, model: str, span: Span) -> None:
+        """v0.9.1 (dashboard-v2, D-DASH-5): forward llm_span()'s reported usage
+        to the metrics sink, if any was actually reported."""
+        if self._metrics is None:
+            return
+        tokens_in = span.attributes.get("civitas.llm.tokens_in")
+        tokens_out = span.attributes.get("civitas.llm.tokens_out")
+        cost_usd = span.attributes.get("civitas.llm.cost_usd")
+        if tokens_in is None and tokens_out is None and cost_usd is None:
+            return  # nothing reported — no spurious zero-cost entry
+        self._metrics.llm_call(
+            self.name, tokens_in or 0, tokens_out or 0, cost_usd or 0.0, model=model
+        )
 
     @contextmanager
     def tool_span(self, tool_name: str, **attributes: Any) -> Iterator[Span]:

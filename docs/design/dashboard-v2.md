@@ -282,3 +282,24 @@ models for one command. `--refresh` (seconds) is kept, now meaning "poll interva
   branch, not alongside the later `TopologyServer` reference-injection block (which was the first,
   wrong, instinct — caught by re-reading the existing code path before writing code, not by a
   failing test).
+
+### Phase C implementation notes (D-DASH-5, closes FD-01, done)
+
+- **Metrics reporting had to move OUTSIDE the `if self._tracer is not None:` branch** — the
+  original `llm_span()` returned early for the no-tracer case, meaning a dashboard-only setup
+  (metrics attached, no OTEL tracer configured) would have silently gotten zero cost/token
+  tracking even after this phase, an easy trap to fall into if the restructure had been a
+  minimal patch rather than a real look at the control flow. Restructured so both branches
+  (tracer / no-tracer) build a real `Span` (the class already "works with or without OTEL" per
+  its own docstring) and share one `finally:` block that reports to the metrics sink regardless.
+- `has_tracer: bool` is a separate local from `self._tracer is not None` specifically so mypy can
+  be told, via one `assert`, that `self._tracer` is non-`None` inside that branch — checking a
+  boolean alias doesn't narrow the original attribute's type on its own.
+- Considered a defensive `getattr(self._metrics, "llm_call", None)` guard for callers with an old
+  custom `MetricsSink` that predates this protocol addition, then rejected it — every other
+  `MetricsSink` call site in this file (`message_handled`/`message_sent`/`agent_error`) calls
+  directly, trusting the Protocol contract with no such guard. Matching that convention rather
+  than introducing a one-off exception for this call site.
+- `MetricsCollector.llm_call()`'s `model` parameter only overwrites `last_model` when non-empty —
+  a later call that doesn't report a model (or an agent using multiple providers where one call
+  doesn't tag it) shouldn't blank out the last known-real value.
