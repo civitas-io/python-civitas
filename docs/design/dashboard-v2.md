@@ -1,6 +1,9 @@
 # Dashboard v2 — "civitas top" (v0.9.1)
 
-**Status: DRAFT** — pending sign-off before implementation.
+**Status: ✅ ACCEPTED, fully implemented (Phases A–G).** PRD + design ratified in conversation
+(2026-07); Mockup B (dense three-pane grid) chosen over Mockup A after building and comparing both
+as real, runnable Textual apps (§7.0); auth/write-actions/telemetry-dashboard deliberately deferred
+to v0.9.2 (§12, `docs/milestones.md`). Implementation plan: `.sisyphus/plans/dashboard-v2.md`.
 
 ## 1. Problem
 

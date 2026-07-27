@@ -1030,7 +1030,7 @@ Owner column: `core` = python-civitas, else the target repo.
 > closed by [v0.9.0](#v090-supervision-endgame-released) — zero xfail trackers remain in
 > `tests/unit/test_actor_model_gaps.py`.
 
-### v0.9.1 — Post-endgame polish (In progress)
+### v0.9.1 — Post-endgame polish (Implementation complete, pending release)
 
 **Design:** [`dashboard-v2.md`](design/dashboard-v2.md) — DRAFT, PRD agreed in conversation
 (topology + status + LLM-metrics + per-process resources is P0/v0.9.1; network I/O, historical
@@ -1040,7 +1040,7 @@ v0.9.2 below — not silently dropped).
 | Item | Priority | Status |
 |------|----------|--------|
 | process.py / runtime.py coverage miss-range top-ups (streaming internals, MCP connect, exporter/signing blocks) | Low | ✅ **Done (dev/v0.9.1)** — process.py 88%→92%, runtime.py 87%→91%; 22 new tests; one block (eval exporter per-kind bodies) documented as an accepted civitas_contrib-gated ceiling |
-| Textual dashboard rebuild on `TopologyServer` endpoints ("civitas top") | Medium | 🚧 **In progress (dev/v0.9.1)** — Phase A (topology/status/restart enrichment) ✅, Phase B (`/metrics` + auto-provisioned `MetricsCollector`, including a same-session fix for dynamically-spawned children) ✅, Phase C (closes FD-01 — `llm_span()` now actually feeds tokens/cost/model) ✅, Phase D (`/processes` — psutil resource stats) ✅, Phase E (the Textual app itself, Mockup B layout — folded in Phase F's CLI rewrite since deleting `renderer.py` broke the old CLI) ✅. Runnable demo: `examples/dashboard_demo/`. Remaining: Phase G (final verification sweep + docs + CHANGELOG + release). Plan: `.sisyphus/plans/dashboard-v2.md` |
+| Textual dashboard rebuild on `TopologyServer` endpoints ("civitas top") | Medium | ✅ **Done (dev/v0.9.1)** — all phases (A–G) complete, awaiting release — Phase A (topology/status/restart enrichment) ✅, Phase B (`/metrics` + auto-provisioned `MetricsCollector`, including a same-session fix for dynamically-spawned children) ✅, Phase C (closes FD-01 — `llm_span()` now actually feeds tokens/cost/model) ✅, Phase D (`/processes` — psutil resource stats) ✅, Phase E (the Textual app itself, Mockup B layout — folded in Phase F's CLI rewrite since deleting `renderer.py` broke the old CLI) ✅, Phase G (verification sweep + `docs/cli.md` rewrite + CHANGELOG entry) ✅. Runnable demo: `examples/dashboard_demo/`. 1373/1373 unit+integration green (macOS + Linux Docker), mypy/ruff/format clean. Awaiting release choreography (PR → CI → merge → tag → PyPI). Plan: `.sisyphus/plans/dashboard-v2.md` |
 
 ### v0.9.2 — Dashboard control-plane, observability, + cross-platform CI (Planned, after v0.9.1)
 
