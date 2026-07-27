@@ -1042,18 +1042,34 @@ v0.9.2 below — not silently dropped).
 | process.py / runtime.py coverage miss-range top-ups (streaming internals, MCP connect, exporter/signing blocks) | Low | ✅ **Done (dev/v0.9.1)** — process.py 88%→92%, runtime.py 87%→91%; 22 new tests; one block (eval exporter per-kind bodies) documented as an accepted civitas_contrib-gated ceiling |
 | Textual dashboard rebuild on `TopologyServer` endpoints ("civitas top") | Medium | 🚧 **In progress (dev/v0.9.1)** — Phase A (topology/status/restart enrichment) ✅, Phase B (`/metrics` + auto-provisioned `MetricsCollector`, including a same-session fix for dynamically-spawned children) ✅, Phase C (closes FD-01 — `llm_span()` now actually feeds tokens/cost/model) ✅. Remaining: Phase D (`/processes` — psutil resource stats), E (the Textual app itself), F (CLI rewrite), G (release). Plan: `.sisyphus/plans/dashboard-v2.md` |
 
-### v0.9.2 — Dashboard P1/P2 + cross-platform CI (Planned, after v0.9.1)
+### v0.9.2 — Dashboard control-plane, observability, + cross-platform CI (Planned, after v0.9.1)
+
+**Design-first, explicitly** — none of the control-plane items below get built until each has
+its own proper design conversation (2026-07 decision, in response to a "hold off on auth, don't
+knee-jerk it" instruction). `TopologyServer` has **zero authentication today** (verified by
+grep, not assumed) — everything it currently serves is read-only, which is why that's been an
+acceptable risk so far. The moment any write/control action ships, that risk tier changes
+completely, so an auth design is the prerequisite gate for the whole "control-plane" group below,
+not an afterthought bolted onto one endpoint.
 
 | Item | Priority | Source |
 |------|----------|--------|
+| **`TopologyServer` auth design** (prerequisite gate for every write/control item below) | High | found during dashboard-v2 capability discussion (2026-07-26) — zero auth exists today; every item below is blocked on this, by design |
+| Dashboard/API: suspend/resume an agent (write action) | Medium | 2026-07-26 discussion — safest write action to add first: `runtime.suspend()`/`resume()` already exist, already audited (`AuditEvent`), designed as this system's governed HITL pause primitive (not destructive, unlike kill) |
+| Dashboard/API: kill / force-restart an agent manually | Low | 2026-07-26 discussion — mechanically feasible (new "force crash" trigger + existing restart machinery) but real DoS surface without auth first |
+| Mailbox introspection (list/enumerate) | Low | 2026-07-26 discussion — **no non-destructive peek exists anywhere in `Mailbox` today** (only `get()`/consumes-one, `depth()`/count-only, `drain()`/consumes-everything); needs new `Mailbox` API, not just a new endpoint |
+| Mailbox: remove one specific in-flight message | Low | 2026-07-26 discussion — conflicts with the at-most-once/FIFO delivery guarantee this codebase is built around; a real design problem, not a small addition — needs its own conversation, may not be a good idea at all |
+| Mailbox: inject a message (add) | Low | 2026-07-26 discussion — mechanically `send()` exposed through a new surface, but payload content is a real data-exposure concern over an unauthenticated endpoint |
+| Per-agent process/container awareness beyond `process_id` (e.g. Docker) | Low | 2026-07-26 discussion — recommended AGAINST building container-awareness into civitas itself (couples the runtime to a deployment concern better owned by container-native tooling); revisit only if a concrete use case emerges |
+| **Telemetry dashboard**: logging + graphs/charts view, built on the OTEL/tracer infra already collected | Medium | 2026-07-26 — user's own framing: "we are already collecting telemetry — let's design that later"; distinct from the live-snapshot TUI (v0.9.1), this is historical/trend data (message-rate, cost-over-time, trace/span drill-down) — needs its own design round, likely its own surface (web UI?) not necessarily the terminal dashboard |
 | CI matrix: macOS + Windows runners (today: Ubuntu only) | Medium | found during dashboard-v2 Phase D planning (2026-07-24) — production ZMQ defaults are already Windows-safe (`tcp://`), but 4 test files use `ipc://` (Unix-only) and nothing has ever been CI-verified outside Linux |
 | Dashboard: network I/O per process | Low | design/dashboard-v2.md P1 |
 | Dashboard: "session length" (LLM conversation turns/duration) | Low | design/dashboard-v2.md P1 |
-| Dashboard: historical charts/sparklines (message-rate, cost-over-time) | Low | design/dashboard-v2.md P1 |
-| Dashboard: write actions (restart/suspend/resume from the TUI) | Low | design/dashboard-v2.md P1 |
+| Dashboard: historical charts/sparklines (message-rate, cost-over-time) | Low | design/dashboard-v2.md P1 — likely folds into the telemetry dashboard item above rather than the live TUI |
 | Dashboard: distinct HITL-wait vs. governance-suspend visual signal | Low | design/dashboard-v2.md §6 option B — needs a real HITL flow to design against first |
-| Dashboard: log tail panel per agent | Low | design/dashboard-v2.md P2 |
+| Dashboard: log tail panel per agent | Low | design/dashboard-v2.md P2 — likely folds into the telemetry dashboard item above |
 | Dashboard: multi-cluster / multi-topology view | Low | design/dashboard-v2.md P2 |
+| Dashboard layout: optional focus/expand mode for the detail pane (Mockup A's wide-detail idea) | Low | design/dashboard-v2.md §7.0 — Mockup B (dense three-pane grid) shipped as the default in v0.9.1; Mockup A's core idea kept as an opt-in mode, not discarded |
 
 ### v0.10.0 — HITL & Streaming polish (Planned — the Medicus runway)
 

@@ -134,16 +134,38 @@ New `civitas/dashboard/app.py` (Textual `App` subclass), replacing `renderer.py`
 rendering (the module is retired, not extended — this is a rebuild, not a patch, per the
 milestones item's own framing).
 
+### 7.0 Layout decision (ratified 2026-07): dense three-pane grid
+
+Two layouts were prototyped as real, runnable Textual apps with sample data (not just described)
+and compared as rendered screenshots before choosing — source scripts kept at
+`.sisyphus/mockups/dashboard-mockup-{a-split,b-grid}.py` (untracked, per `.sisyphus/` convention);
+rendered screenshots archived at `docs/assets/dashboard-mockup-{a-split,b-grid}.svg`.
+
+- **[Mockup A — Horizontal split](../assets/dashboard-mockup-a-split.svg)** (tree left ~38%, wide
+  detail panel right ~62%, resource stats as a thin footer strip). Pro: more horizontal room for
+  the detail table. Con: the resource footer reads as an afterthought, not a first-class panel,
+  and the wide detail panel leaves a lot of dead vertical space on a real terminal (height varies
+  far more than the 120×40 mockup size did).
+- **[Mockup B — Dense three-pane grid](../assets/dashboard-mockup-b-grid.svg)** (tree | detail |
+  resources, roughly equal thirds, all visible simultaneously). Closer to btop/dolphie's density;
+  treats topology, agent detail, and process resources as three EQUALLY first-class panels,
+  matching the PRD's own framing rather than making one the "main" view and the others secondary.
+
+**Ratified: Mockup B (dense three-pane grid) ships in v0.9.1.** Mockup A's core idea — a wider
+detail view — is not discarded: deferred to v0.9.2 as an optional **focus/expand mode** (e.g.
+pressing Enter on a tree node temporarily widens the detail pane), rather than the default
+layout. Tracked in `docs/milestones.md` v0.9.2.
+
 - **`TopologyTree`** (Textual `Tree` widget) — left pane, mouse-clickable nodes, click focuses
   the detail pane on that agent/supervisor.
-- **`AgentDetailPanel`** (Textual `DataTable`/`Static` composite) — right pane: status color,
+- **`AgentDetailPanel`** (Textual `DataTable`/`Static` composite) — middle pane: status color,
   capabilities, restart count, crash-window occupancy, uptime, messages/tokens/cost/last-model
   for the focused node.
-- **`ProcessResourcePanel`** — footer or side panel: one row per OS process (Runtime + Workers),
-  each with a proportional **colored gauge bar** for CPU% and RSS% (single-sample meter,
-  gradient green→amber→red as it fills) alongside the raw numbers — this is a *snapshot*
-  visualization, not a history chart (multi-sample time-series graphs stay P1/v0.9.2 per
-  the PRD; a proportional bar from one reading is in scope now).
+- **`ProcessResourcePanel`** — right pane (not a footer, per the layout decision above): one row
+  per OS process (Runtime + Workers), each with a proportional **colored gauge bar** for CPU%
+  and RSS% (single-sample meter, gradient green→amber→red as it fills) alongside the raw
+  numbers — this is a *snapshot* visualization, not a history chart (multi-sample time-series
+  graphs stay P1/v0.9.2 per the PRD; a proportional bar from one reading is in scope now).
 - **Polling worker**: a Textual `@work` background task per endpoint (`/topology`, `/metrics`,
   `/processes`), interval from the existing `--refresh` flag, each independently retried on
   failure with a visible "reconnecting…" banner instead of the whole app dying — mirrors
