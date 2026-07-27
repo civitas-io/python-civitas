@@ -388,3 +388,71 @@ the control-plane/auth-gated group entirely — these add no write surface, no n
   the (Phase F-removed) standalone CLI path. Caught by writing the real end-to-end test first
   (a genuine crash-restart, not a mock) and watching it fail with an empty list — not assumed
   correct because the field existed in the schema.
+
+### Phase E implementation notes (Textual app itself, done)
+
+`civitas/dashboard/{client.py,palette.py,widgets.py,app.py,app.tcss}`, replacing
+`civitas/dashboard/renderer.py` (deleted) and `civitas/cli/dashboard.py` (rewritten to §9's
+YAML-driven-discovery-only shape — folded into this phase rather than left broken, since deleting
+`renderer.py` made the old CLI non-functional; `_find_topology_server` moved to the shared
+`civitas/cli/_topology_discovery.py` §9 already specified). Mockup B's dense three-pane grid
+shipped as designed. Six real bugs found by actually running the app (Pilot-driven integration
+tests plus a manual smoke run against a live Runtime per §10's mandate), not by review:
+
+- **`$token` markup fails inside `Tree`/`DataTable` content.** Textual's theme-variable syntax
+  (`$accent`, `$success`, etc.) only resolves through Textual's own `Content` renderer, which
+  `Static.update()` uses — `Tree.add()`/`add_leaf()` and `DataTable`'s cell formatter both use
+  plain Rich `Text.from_markup()`, which raises `MarkupError` on an unrecognized `$name`. Fixed by
+  reverting `STATUS_COLORS` and the category-accent constants to plain, real Rich color names
+  (exactly what the retired `renderer.py` already used) for anything rendered into a Tree label or
+  DataTable cell; `$tokens` remain valid and used in `.tcss` and the one `Static`-only banner.
+- **`TopologyTree._add_node` silently shadowed `Tree`'s own private `_add_node`.** Same class of
+  bug as v0.9.0's D-E4-6 — crashed on construction of every `TopologyTree` with a signature
+  mismatch. Renamed to `_add_topology_node`.
+- **`ReconnectBanner`'s hidden-by-default state depended entirely on `app.tcss`'s `display: none`**
+  and had no Python-level default — correct in the full app, broken in an isolated widget test with
+  no app CSS loaded. Set `self.display = False` explicitly in `__init__` too (defense-in-depth, not
+  redundant: a widget's own default state shouldn't depend entirely on external CSS being present).
+- **A naive "clear the shared reconnect banner on any successful poll" is a real race** with three
+  concurrent pollers — a healthy `/metrics` fetch could silently mask an ongoing `/processes`
+  outage. Fixed with a `self._failing: set[str]` tracked across all three pollers; the banner only
+  clears when the set is empty, and names every currently-failing endpoint otherwise.
+- **`@work(exclusive=True)` with no explicit `group=` defaults every decorated method to the SAME
+  `"default"` group** — `exclusive=True` cancels the previous worker in a group when a new one
+  starts, so all three pollers fought over one group and only the last-called one
+  (`_poll_processes`) ever actually ran; `/topology` and `/metrics` silently never polled at all,
+  with no exception, nothing visible except a permanently-empty tree. Found by directly inspecting
+  `app.workers` in a live run, not by a test assertion (the failure produced no error to catch).
+  Fixed with an explicit distinct `group=` per poller.
+- **Polling `@work` tasks can outlive `run_test()`'s teardown** and resume into an already-unmounted
+  Screen, raising `NoMatches` and crashing the worker (which `run_test()` re-raises, failing the
+  test). Fixed with an `App.is_running` check (`_touch_dom()`) before every DOM query inside a
+  poller callback or the `_mark_ok`/`_mark_failed` helpers, closing the window instead of adding a
+  try/except at every call site.
+- **Manual smoke run (§10's mandatory look-at-it pass) against a real live Runtime** found two
+  more, non-crashing but real UX defects no automated test would catch: (1) `AgentDetailPanel` and
+  `ProcessResourcePanel` (both `Static` subclasses, default `height: auto`) didn't fill their
+  column the way `TopologyTree` (a `Tree`, which defaults to filling) did — fixed with explicit
+  `height: 1fr` on all three panes in `app.tcss`; (2) a 4th "uptime" column on the resource table
+  overflowed a 1/3-width pane at realistic sizes and truncated the mem column — dropped back to
+  Mockup B's original 3 columns (process/cpu/mem); uptime remains visible per-agent in the detail
+  panel, so no information is lost, just not duplicated.
+
+`civitas/cli/dashboard.py`'s import of the optional `dashboard` extra was moved from
+`civitas/cli/__init__.py`'s module-level guarded import into the command function itself, raising
+`ConfigurationError` with install instructions on invoke (matching `connect_mcp()`'s established
+pattern) — a real UX improvement over the old guard, which hid the whole `dashboard` command from
+`--help` if the extra wasn't installed; now the command always appears, only failing when actually
+run without the extra. `tests/integration/test_m3_3_dashboard.py::test_dashboard_command_registered`
+was updated for the new positional-argument CLI shape (§9's documented, intentional behavior
+change) and made robust to `typer`'s genuinely-unpinned (`>=0.12`) version range after a real
+Docker/Linux run resolved a newer typer that renders argument metavars differently.
+
+1373/1373 unit+integration green (macOS); all green on Linux (Docker, dashboard + full extras
+installed) except the one confirmed pre-existing `.venv`-path environmental failure. mypy/ruff
+check/format all clean. Manual smoke run against a real live Runtime confirmed correct rendering,
+live data, and click-to-focus end-to-end (screenshot on file, not committed — ephemeral smoke
+artifact, not a design record like the Mockup A/B comparison was).
+
+Proceeding to Phase F (CLI — already substantially done as part of this phase's renderer.py
+removal) and Phase G (final verification sweep + docs + CHANGELOG + release choreography).

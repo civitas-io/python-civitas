@@ -13,6 +13,7 @@ import yaml
 from rich.rule import Rule
 from rich.tree import Tree
 
+from civitas.cli._topology_discovery import find_topology_server
 from civitas.cli.app import console, err_console, error, section, success
 
 topology_app = typer.Typer(
@@ -401,26 +402,10 @@ def _count_supervisors(node: dict[str, Any]) -> int:
 # ---------------------------------------------------------------------------
 
 
-def _find_topology_server(config: dict[str, Any]) -> tuple[str, int] | None:
-    """Scan YAML for a topology_server node; return (host, port) or None."""
-    sup = config.get("supervision", config.get("supervisor", {}))
-
-    def _scan(node: dict[str, Any]) -> tuple[str, int] | None:
-        if node.get("type") == "topology_server":
-            cfg = node.get("config", {})
-            return cfg.get("host", "127.0.0.1"), cfg.get("port", 6789)
-        if "supervisor" in node:
-            for child in node["supervisor"].get("children", []):
-                hit = _scan(child)
-                if hit:
-                    return hit
-        return None
-
-    for child in sup.get("children", []):
-        hit = _scan(child)
-        if hit:
-            return hit
-    return None
+# v0.9.1 (Phase F): moved to _topology_discovery.py so civitas dashboard can
+# share it (design dashboard-v2.md §9); kept as a thin alias here since it's
+# imported directly by name (topology_show below, and existing tests).
+_find_topology_server = find_topology_server
 
 
 def _try_live_topology(host: str, port: int) -> dict[str, Any] | None:

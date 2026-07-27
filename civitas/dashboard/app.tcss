@@ -1,0 +1,61 @@
+/* civitas top — visual language (design doc §7.1, ratified "rich and colorful,
+   not excessive"). Every color here is a Textual theme token ($accent,
+   $secondary, $warning, $error, $success) — never a hardcoded hex — so the
+   built-in light/dark theme switcher (Ctrl+P) recolors this app correctly
+   too, not just Textual's own chrome. */
+
+Screen {
+    layout: vertical;
+}
+
+#main {
+    height: 1fr;
+}
+
+/* One accent color per data category (§7.1), applied as each pane's border +
+   title color: cyan/accent = topology, violet/secondary = LLM+cost detail,
+   amber/warning = resource gauges. Never mixed with the §6 health palette,
+   which lives on individual status dots/labels inside each pane instead.
+
+   height: 1fr on ALL THREE is load-bearing, not decorative -- found via the
+   Phase E manual smoke run (design §10's mandatory look-at-it pass): Tree
+   defaults to filling its container, but Static (which AgentDetailPanel and
+   ProcessResourcePanel subclass) defaults to height: auto -- without this,
+   only the tree pane reached full height and the other two panes' rounded
+   borders wrapped tightly around their content instead of being three equal
+   first-class panes (Mockup B's whole point, design \u00a77.0). */
+
+TopologyTree {
+    width: 1fr;
+    height: 1fr;
+    border: round $accent;
+    border-title-color: $accent;
+}
+
+AgentDetailPanel {
+    width: 1fr;
+    height: 1fr;
+    border: round $secondary;
+    border-title-color: $secondary;
+    padding: 0 1;
+}
+
+ProcessResourcePanel {
+    width: 1fr;
+    height: 1fr;
+    border: round $warning;
+    border-title-color: $warning;
+    padding: 0 1;
+}
+
+#detail-title,
+#resource-title {
+    padding: 0 0 1 0;
+}
+
+#reconnect-banner {
+    display: none;
+    height: auto;
+    padding: 0 1;
+    background: $error 20%;
+}

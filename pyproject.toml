@@ -66,8 +66,8 @@ encryption = ["cryptography>=41"]
 # Performance — drop-in Rust-backed JSON (accelerates JsonSerializer)
 fast      = ["orjson>=3.10"]
 # Dashboard ("civitas top") — Textual TUI + per-process resource stats.
-# Group created here with psutil (Phase D); textual joins it in Phase E/F.
-dashboard = ["psutil>=5.9"]
+# Group created here with psutil (Phase D); textual joins it in Phase E.
+dashboard = ["psutil>=5.9", "textual>=0.60"]
 # Model providers, state stores, eval exporters, MCP, and framework adapters
 # have moved to civitas-contrib:  pip install civitas-contrib[anthropic,openai,...]
 dev       = [

@@ -1,66 +1,59 @@
-"""civitas dashboard — live terminal dashboard for a running topology."""
+"""civitas dashboard — live Textual dashboard attached to a running topology.
+
+v0.9.1 (dashboard-v2 Phase F): YAML-driven discovery only (design §9, ratified) —
+no ``--url`` flag, no "spawn my own runtime" mode. The topology YAML must declare
+a ``topology_server`` node; this command finds it and attaches remotely, the same
+way ``civitas topology show`` already does for its one-shot live snapshot. Keeping
+both a spawn-my-own-runtime mode and a remote-attach mode would mean maintaining
+two mental models for one command — the PRD's whole point is remote attach.
+"""
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 
 import typer
-from rich.live import Live
+import yaml
 
-from civitas import Runtime
-from civitas.cli.app import app, console, err_console, register_shutdown, success
-from civitas.dashboard.collector import MetricsCollector
-from civitas.dashboard.renderer import render_dashboard
-
-
-async def _record_restart(collector: MetricsCollector, name: str, exc: Exception) -> None:
-    collector.agent_restarted(name, type(exc).__name__)
-
-
-async def _run_dashboard(
-    topology_path: Path,
-    refresh_rate: float,
-) -> None:
-    """Start the runtime with metrics collection and render a live dashboard."""
-    collector = MetricsCollector()
-    runtime = Runtime.from_config(str(topology_path))
-    runtime.set_metrics(collector)
-    runtime.on_crash(lambda name, exc: _record_restart(collector, name, exc))
-
-    await runtime.start()
-    collector.runtime_started()
-
-    # Register all agents and set initial status
-    for agent in runtime.all_agents():
-        collector.register_agent(agent.name)
-        collector.agent_status_changed(agent.name, agent.status.value)
-
-    stop_event = asyncio.Event()
-    register_shutdown(stop_event)
-
-    with Live(render_dashboard(collector), refresh_per_second=1 / refresh_rate, console=console):
-        while not stop_event.is_set():
-            # Update agent statuses
-            for agent in runtime.all_agents():
-                collector.agent_status_changed(agent.name, agent.status.value)
-
-            await asyncio.sleep(refresh_rate)
-
-    console.print("\n  [yellow]Shutting down...[/yellow]")
-    await runtime.stop()
-    success("Stopped")
+from civitas.cli._topology_discovery import find_topology_server
+from civitas.cli.app import app, err_console
+from civitas.errors import ConfigurationError
 
 
 @app.command()
 def dashboard(
-    topology: str = typer.Option("topology.yaml", "--topology", "-t", help="Topology YAML file"),
-    refresh: float = typer.Option(1.0, "--refresh", "-r", help="Refresh rate in seconds"),
+    topology: str = typer.Argument(help="Path to topology YAML file"),
+    refresh: float = typer.Option(1.0, "--refresh", "-r", help="Poll interval in seconds"),
 ) -> None:
-    """Launch a live terminal dashboard for a running topology."""
+    """Launch the live Textual dashboard for an already-running topology.
+
+    The topology YAML must declare a ``topology_server`` node — this command
+    attaches to it remotely and polls; it does not start a runtime of its own.
+    """
+    try:
+        from civitas.dashboard.app import CivitasDashboardApp
+    except ImportError as exc:
+        # Matches connect_mcp()'s pattern (civitas/process.py) for an optional
+        # extra that's missing — fail fast with a clear install instruction,
+        # not a raw ModuleNotFoundError traceback (design §8).
+        raise ConfigurationError(
+            "The dashboard requires the 'dashboard' extra. "
+            "Install it with: pip install 'civitas[dashboard]'"
+        ) from exc
+
     topology_path = Path(topology)
     if not topology_path.exists():
         err_console.print(f"[red]Error:[/red] Topology file '{topology}' not found.")
         raise typer.Exit(1)
 
-    asyncio.run(_run_dashboard(topology_path, refresh))
+    config = yaml.safe_load(topology_path.read_text())
+    topo_server = find_topology_server(config)
+    if topo_server is None:
+        err_console.print(
+            f"[red]Error:[/red] '{topology}' declares no 'topology_server' node — "
+            "the dashboard needs a running one to attach to."
+        )
+        raise typer.Exit(1)
+
+    host, port = topo_server
+    CivitasDashboardApp(host=host, port=port, refresh=refresh).run()
