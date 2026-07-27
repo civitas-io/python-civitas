@@ -1040,7 +1040,7 @@ v0.9.2 below — not silently dropped).
 | Item | Priority | Status |
 |------|----------|--------|
 | process.py / runtime.py coverage miss-range top-ups (streaming internals, MCP connect, exporter/signing blocks) | Low | ✅ **Done (dev/v0.9.1)** — process.py 88%→92%, runtime.py 87%→91%; 22 new tests; one block (eval exporter per-kind bodies) documented as an accepted civitas_contrib-gated ceiling |
-| Textual dashboard rebuild on `TopologyServer` endpoints ("civitas top") | Medium | 🚧 **In progress (dev/v0.9.1)** — Phase A (topology/status/restart enrichment) ✅, Phase B (`/metrics` + auto-provisioned `MetricsCollector`, including a same-session fix for dynamically-spawned children) ✅, Phase C (closes FD-01 — `llm_span()` now actually feeds tokens/cost/model) ✅. Remaining: Phase D (`/processes` — psutil resource stats), E (the Textual app itself), F (CLI rewrite), G (release). Plan: `.sisyphus/plans/dashboard-v2.md` |
+| Textual dashboard rebuild on `TopologyServer` endpoints ("civitas top") | Medium | 🚧 **In progress (dev/v0.9.1)** — Phase A (topology/status/restart enrichment) ✅, Phase B (`/metrics` + auto-provisioned `MetricsCollector`, including a same-session fix for dynamically-spawned children) ✅, Phase C (closes FD-01 — `llm_span()` now actually feeds tokens/cost/model) ✅, Phase D (`/processes` — psutil resource stats) ✅, Phase E (the Textual app itself, Mockup B layout — folded in Phase F's CLI rewrite since deleting `renderer.py` broke the old CLI) ✅. Runnable demo: `examples/dashboard_demo/`. Remaining: Phase G (final verification sweep + docs + CHANGELOG + release). Plan: `.sisyphus/plans/dashboard-v2.md` |
 
 ### v0.9.2 — Dashboard control-plane, observability, + cross-platform CI (Planned, after v0.9.1)
 
@@ -1070,6 +1070,27 @@ not an afterthought bolted onto one endpoint.
 | Dashboard: log tail panel per agent | Low | design/dashboard-v2.md P2 — likely folds into the telemetry dashboard item above |
 | Dashboard: multi-cluster / multi-topology view | Low | design/dashboard-v2.md P2 |
 | Dashboard layout: optional focus/expand mode for the detail pane (Mockup A's wide-detail idea) | Low | design/dashboard-v2.md §7.0 — Mockup B (dense three-pane grid) shipped as the default in v0.9.1; Mockup A's core idea kept as an opt-in mode, not discarded |
+
+### Examples & example-coverage gaps (found 2026-07-27, fixing `examples/dashboard_demo/`)
+
+While building the dashboard demo, `examples/dynamic_spawning.py` was found silently broken (three
+separate calls to real APIs with the wrong signature — `spawn()`'s argument order, `Runtime(dict)`
+instead of `Runtime.from_config_dict()`, a `Message` object passed where a plain payload dict was
+required) and fixed. It ran with **zero test coverage** — no example file in this repo is exercised
+by the test suite at all, which is the actual root cause: nothing would have caught it, or the next
+one, automatically.
+
+| Item | Priority | Source |
+|------|----------|--------|
+| **Examples smoke test** — run every `examples/*.py` that needs no external service, assert exit 0 | High | 2026-07-27 — the structural gap that let `dynamic_spawning.py` ship broken; would catch the next one automatically, not just this one |
+| Example: non-blocking spawn (`spawn_nowait()` / `spawn(..., wait=False)`) | Medium | 2026-07-27 — B4/v0.9.0 has a full design doc (`design/non-blocking-spawn.md`) and zero examples; every existing example uses default `wait=True` |
+| Example: streaming response (`StreamContext`, bus-native streaming) | Medium | 2026-07-27 — `docs/streaming.md` is a full page; nothing in `examples/` demonstrates it |
+| Example: message signing / secured transport (CURVE, TLS, `MessageSigner`) | Medium | 2026-07-27 — `SECURITY.md` + `design/security-hardening.md` + a dedicated `security` extras group (`pynacl`) exist; no example configures any of it |
+| Example: cross-process dynamic spawn (`DynamicSupervisor` hosted in a Worker) | Medium | 2026-07-27 — `design/cross-process-spawn.md` (R6) describes this specifically; `deployment/level2`/`level3` only show static multi-process topologies |
+| Example: gRPC gateway | Low | 2026-07-27 — `civitas/gateway/grpc_server.py` is real and substantial with its own extras group and design doc; only `http_gateway.py` exists as an example |
+| Example: gateway auth (JWT bearer, mTLS) | Low | 2026-07-27 — `gateway-auth.md`, `gateway-http-mtls-proxy.md`, `gateway-ws-grpc-auth.md` all exist; `http_gateway.py` doesn't configure auth |
+| Example: custom plugin (model provider / exporter / state store) | Low | 2026-07-27 — `docs/plugins.md` documents the extension points; every example only uses built-ins |
+| Example: supervision introspection (`civitas.supervision.status` query) | Low | 2026-07-27 — the v0.9.0 endgame's own introspection API has no standalone example outside the dashboard |
 
 ### v0.10.0 — HITL & Streaming polish (Planned — the Medicus runway)
 
