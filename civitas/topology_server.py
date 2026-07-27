@@ -170,6 +170,22 @@ class TopologyServer(GenServer):
             return {"error": "runtime not available"}
         return self._serialize_node(self._root_supervisor)
 
+    def _process_id_for(self, name: str) -> str:
+        """Which `/processes` entry hosts ``name`` (v0.9.1, D-DASH addendum).
+
+        Matches `/processes`' own "id" fields exactly, so a client can join the
+        two endpoints directly: a remote agent's registry entry carries the
+        Worker's health_channel (D5) — the same string `_build_processes()`
+        uses as a worker entry's "id". Everything else (no registry, no
+        channel — the common in-process case) runs in the SAME OS process as
+        this TopologyServer, whose "/processes" runtime entry's "id" is this
+        server's own name — so that's the fallback, not a placeholder.
+        """
+        entry = self._registry.lookup(name) if self._registry is not None else None
+        if entry is not None and entry.health_channel:
+            return entry.health_channel
+        return self.name
+
     def _serialize_node(self, node: Any, restart_count: int = 0) -> dict[str, Any]:
         """Serialize one tree node. ``restart_count`` is supplied by the PARENT
         (v0.9.1, D-DASH-1) — a node cannot know its own restart count, only the
@@ -182,6 +198,7 @@ class TopologyServer(GenServer):
                 "type": "dynamic_supervisor",
                 "status": node.status.value,
                 "restart_count": restart_count,
+                "process_id": self._process_id_for(node.name),
                 "max_children": node.max_children,
                 "max_total_spawns": node.max_total_spawns,
                 "live_count": len(node._dynamic_children),
@@ -191,6 +208,7 @@ class TopologyServer(GenServer):
                         "type": "agent",
                         "status": rec.agent.status.value,
                         "restart_count": node._child_restart_counts.get(n, 0),
+                        "process_id": self._process_id_for(n),
                         "capabilities": list(rec.agent.capabilities),
                         "capability_metadata": dict(rec.agent.capability_metadata),
                         "uptime_seconds": rec.agent.uptime_seconds,
@@ -209,6 +227,9 @@ class TopologyServer(GenServer):
                 # Supervisor.handle()'s civitas.supervision.status already computes
                 # (_status_snapshot()) — same-process attribute read, no bus hop.
                 "crashes_in_window": len(node._engine.window),
+                # A Supervisor is never remote (only the agents it manages can be
+                # Worker-hosted) — always the same process as this TopologyServer.
+                "process_id": self.name,
                 "children": [
                     self._serialize_node(c, node._restart_counts.get(c.name, 0))
                     for c in node.children
@@ -220,6 +241,7 @@ class TopologyServer(GenServer):
             "type": "agent",
             "status": node.status.value,
             "restart_count": restart_count,
+            "process_id": self._process_id_for(node.name),
             "capabilities": list(node.capabilities),
             "capability_metadata": dict(node.capability_metadata),
             "uptime_seconds": node.uptime_seconds,
@@ -236,6 +258,7 @@ class TopologyServer(GenServer):
             {
                 "name": name,
                 "status": agent.status.value,
+                "process_id": self._process_id_for(name),
                 "capabilities": list(agent.capabilities),
                 "capability_metadata": dict(agent.capability_metadata),
                 "uptime_seconds": agent.uptime_seconds,
@@ -255,6 +278,7 @@ class TopologyServer(GenServer):
                         "name": n,
                         "status": rec.agent.status.value,
                         "restart_count": node._child_restart_counts.get(n, 0),
+                        "process_id": self._process_id_for(n),
                         "capabilities": list(rec.agent.capabilities),
                         "capability_metadata": dict(rec.agent.capability_metadata),
                         "uptime_seconds": rec.agent.uptime_seconds,
@@ -273,6 +297,7 @@ class TopologyServer(GenServer):
         return {
             "name": name,
             "status": agent.status.value,
+            "process_id": self._process_id_for(name),
             "capabilities": list(agent.capabilities),
             "capability_metadata": dict(agent.capability_metadata),
             "uptime_seconds": agent.uptime_seconds,
@@ -306,6 +331,18 @@ class TopologyServer(GenServer):
             "total_messages": snapshot.total_messages,
             "total_cost_usd": snapshot.total_cost_usd,
             "uptime_seconds": snapshot.uptime_seconds,
+            # v0.9.1 (dashboard-v2 addendum, 2026-07-26): already collected by
+            # MetricsCollector since it was first written, never previously
+            # exposed via this endpoint — a real, safe, read-only timeline of
+            # every restart event (not just the current count), free to add.
+            "restart_history": [
+                {
+                    "agent_name": e.agent_name,
+                    "timestamp": e.timestamp,
+                    "reason": e.reason,
+                }
+                for e in snapshot.restart_history
+            ],
         }, 200
 
     async def _build_processes(self) -> dict[str, Any]:

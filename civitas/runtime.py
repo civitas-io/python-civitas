@@ -611,6 +611,19 @@ class Runtime:
             # gap, not a spawn-time hook (design dashboard-v2.md addendum).
             for agent in self._root_supervisor.all_agents():
                 self._metrics.register_agent(agent.name)
+            # v0.9.1 (D-DASH addendum, 2026-07-26): agent_restarted() existed on
+            # MetricsSink/MetricsCollector but was NEVER called from anywhere in
+            # civitas/ — the exact same class of gap FD-01 was for llm_call()
+            # (Phase C). The old CLI dashboard.py was the only caller, wired
+            # manually via on_crash(); reproduced here so restart_history and
+            # per-agent restart counts populate for ANY TopologyServer-having
+            # Runtime, not just the (now-removed, Phase F) standalone CLI path.
+            metrics_for_crash_callback = self._metrics
+
+            async def _record_restart_for_dashboard(name: str, exc: Exception) -> None:
+                metrics_for_crash_callback.agent_restarted(name, type(exc).__name__)
+
+            self.on_crash(_record_restart_for_dashboard)
 
         # Steps 2–6: build or use provided ComponentSet.
         # Note: if a pre-built ComponentSet is provided, its transport must support

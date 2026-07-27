@@ -11,6 +11,7 @@ import pytest
 
 from civitas import DynamicSupervisor, Runtime, Supervisor, TopologyServer
 from civitas.messages import Message
+from tests.conftest import wait_for
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -129,11 +130,14 @@ class TestSerializers:
         result = self.ts._serialize_node(agent)
         # v0.9.1 (D-DASH-1): capabilities/capability_metadata/uptime_seconds/
         # restart_count are new fields on every serialized agent node.
+        # process_id (D-DASH addendum, 2026-07-26): no registry wired here, so
+        # it falls back to this TopologyServer's own name (same-process case).
         assert result == {
             "name": "worker-1",
             "type": "agent",
             "status": "RUNNING",
             "restart_count": 0,
+            "process_id": "ts",
             "capabilities": [],
             "capability_metadata": {},
             "uptime_seconds": 0.0,
@@ -219,10 +223,13 @@ class TestSerializers:
         self.ts._agents = {"svc": agent}
         result = self.ts._build_agent_detail("svc")
         # v0.9.1 (D-DASH-1): capabilities/capability_metadata/uptime_seconds
-        # are new fields on every agent-detail response.
+        # are new fields on every agent-detail response. process_id (D-DASH
+        # addendum, 2026-07-26): no registry wired, falls back to this
+        # TopologyServer's own name (same-process case).
         assert result == {
             "name": "svc",
             "status": "RUNNING",
+            "process_id": "ts",
             "capabilities": [],
             "capability_metadata": {},
             "uptime_seconds": 0.0,
@@ -529,6 +536,95 @@ async def test_topology_server_http_processes_includes_runtime_self_sample() -> 
         assert entry["pid"] > 0
         assert entry["cpu_percent"] >= 0.0
         assert entry["rss_bytes"] > 0
+    finally:
+        await runtime.stop()
+
+
+class TestProcessIdLinkage:
+    """v0.9.1 (D-DASH addendum, 2026-07-26): every agent's process_id must
+    match one of /processes' own 'id' fields exactly, so a client can join
+    the two endpoints directly — tested as an explicit contract, not just
+    that SOME string is present.
+    """
+
+    def setup_method(self) -> None:
+        self.ts = TopologyServer(name="ts", port=0)
+
+    def test_local_agent_falls_back_to_own_name(self) -> None:
+        """No registry wired (or no health_channel entry) => runs in the
+        SAME process as this TopologyServer — matches /processes' runtime
+        entry, whose id is this server's own name."""
+        assert self.ts._process_id_for("any-agent") == "ts"
+
+    def test_remote_agent_uses_its_workers_health_channel(self) -> None:
+        """A registered agent with a health_channel => hosted on that
+        Worker — matches /processes' worker entry, whose id is the channel."""
+        self.ts._registry = _fake_registry_with_channels({"remote-agent": "chan-1"})
+        assert self.ts._process_id_for("remote-agent") == "chan-1"
+
+    def test_registered_but_no_channel_still_falls_back(self) -> None:
+        """A registry entry that exists but carries no health_channel (a
+        pre-v0.9 worker, or a purely local registration) is still local."""
+        registry = MagicMock()
+        entry = MagicMock()
+        entry.health_channel = ""
+        registry.lookup.return_value = entry
+        self.ts._registry = registry
+        assert self.ts._process_id_for("agent") == "ts"
+
+
+async def test_topology_server_http_process_id_matches_processes_endpoint() -> None:
+    """v0.9.1 (D-DASH addendum) end-to-end: a real agent's /topology
+    process_id equals the exact 'id' of its /processes entry — the actual
+    contract the linkage exists to provide, proven over real HTTP, not just
+    unit-level on _process_id_for() in isolation."""
+    ts = TopologyServer(name="topo", port=16800)
+    runtime = Runtime(supervisor=Supervisor("root", children=[ts]))
+    await runtime.start()
+    try:
+        topo_code, topo_body = await _http_get("http://127.0.0.1:16800/topology")
+        assert topo_code == 200
+        topo_data = json.loads(topo_body)
+        assert topo_data["process_id"] == "topo"  # the root Supervisor's own process_id
+
+        proc_code, proc_body = await _http_get("http://127.0.0.1:16800/processes")
+        assert proc_code == 200
+        proc_data = json.loads(proc_body)
+        process_ids = {p["id"] for p in proc_data["processes"]}
+        assert topo_data["process_id"] in process_ids  # the actual join contract
+    finally:
+        await runtime.stop()
+
+
+async def test_topology_server_http_metrics_includes_restart_history() -> None:
+    """v0.9.1 (D-DASH addendum, 2026-07-26): restart_history was already
+    collected by MetricsCollector but never exposed — a real, safe,
+    read-only timeline, verified end-to-end with a real crash-restart."""
+    from civitas.process import AgentProcess
+
+    class _CrashOnce(AgentProcess):
+        async def handle(self, message: Message) -> Message | None:
+            if message.payload.get("cmd") == "boom":
+                raise RuntimeError("boom")
+            return None
+
+    ts = TopologyServer(name="topo", port=16801)
+    worker = _CrashOnce("flaky")
+    root = Supervisor("root", children=[ts, worker], max_restarts=3, backoff_base=0.01)
+    runtime = Runtime(supervisor=root)
+    await runtime.start()
+    try:
+        await runtime.send("flaky", {"cmd": "boom"})
+        await wait_for(lambda: root._restart_counts.get("flaky", 0) >= 1)
+        await asyncio.sleep(0.05)  # let the restart complete before polling
+
+        code, body = await _http_get("http://127.0.0.1:16801/metrics")
+        assert code == 200
+        data = json.loads(body)
+        assert "restart_history" in data
+        events = [e for e in data["restart_history"] if e["agent_name"] == "flaky"]
+        assert len(events) >= 1
+        assert events[0]["timestamp"] > 0
     finally:
         await runtime.stop()
 

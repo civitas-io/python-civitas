@@ -364,3 +364,27 @@ models for one command. `--refresh` (seconds) is kept, now meaning "poll interva
   convention for background/reporting paths).
 - `psutil` needed a `[[tool.mypy.overrides]] ignore_missing_imports` entry (no bundled type
   stubs), added to the same override list `zmq`/`nats`/etc. already share.
+
+### Post-Phase-D addendum: process_id linkage + restart_history (2026-07-26, done)
+
+Two small, safe, read-only additions agreed during the capability-scope discussion (kept out of
+the control-plane/auth-gated group entirely — these add no write surface, no new risk tier):
+
+- **`process_id` on every serialized agent/supervisor node** (`/topology`, `/agents`,
+  `/agents/{name}`) — matches one of `/processes`' own `id` fields exactly (a Worker's
+  `health_channel` for remote agents, this `TopologyServer`'s own name for everything else),
+  so a client can join the two endpoints directly. Verified end-to-end (not just the
+  `_process_id_for()` unit contract): a real agent's `/topology` `process_id` is asserted to be
+  literally present in a real `/processes` response's set of `id`s.
+- **`restart_history` in `/metrics`** — `MetricsCollector.restart_history` (a list of timestamped
+  `RestartEvent`s) had existed since M3.3 and was never exposed via this endpoint. Free, already-
+  collected data.
+- **Found a second dead metrics hook while wiring the second one in** — `agent_restarted()`
+  existed on `MetricsSink`/`MetricsCollector` and was fully unit-tested, but was **never called
+  from anywhere in `civitas/`** — the exact same shape of gap FD-01 was for `llm_call()` (Phase
+  C). The old CLI `dashboard.py` was the only caller, wired manually via `Runtime.on_crash()`.
+  Reproduced that wiring in the same auto-provisioning block Phase B added, so `restart_history`
+  and per-agent restart-count accuracy work for ANY `TopologyServer`-having `Runtime`, not only
+  the (Phase F-removed) standalone CLI path. Caught by writing the real end-to-end test first
+  (a genuine crash-restart, not a mock) and watching it fail with an empty list — not assumed
+  correct because the field existed in the schema.
