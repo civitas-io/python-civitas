@@ -105,8 +105,17 @@ def _build_startup_tree(config: dict[str, Any]) -> Tree:
 
 
 async def _run_supervisor(config: dict[str, Any], topology_path: Path) -> None:
-    """Run the full runtime as the supervisor process."""
-    runtime = Runtime.from_config(str(topology_path))
+    """Run the full runtime as the supervisor process.
+
+    process_filter=None (v0.9.2.1 bugfix): build only nodes with NO
+    process: tag -- the coordinator's own agents. Before this fix, every
+    process:-tagged node (agent or dynamic_supervisor destined for a real
+    Worker process) was ALSO built here, duplicating whatever the actual
+    Worker process builds for itself. Topologies with no process: tags at
+    all (the overwhelming majority -- single-process deployments) are
+    completely unaffected: there is nothing to exclude.
+    """
+    runtime = Runtime.from_config(str(topology_path), process_filter=None)
 
     tree = _build_startup_tree(config)
     console.print()

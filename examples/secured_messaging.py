@@ -2,7 +2,7 @@
 
 Requires: pip install civitas civitas[zmq,security]
 
-Two parts:
+Three parts:
 
 1. Topology-level configuration — a real ``Runtime`` with a ``security:`` block
    over a ZMQ transport, proving the signing infrastructure actually activates
@@ -12,14 +12,20 @@ Two parts:
 
 2. The actual cryptographic guarantee, demonstrated directly against the public
    ``AgentIdentity`` / ``KeyRegistry`` / ``MessageSigner`` primitives — sign a
-   message, verify it (succeeds), tamper with it, verify again (fails). This is
-   deliberately NOT run through a live agent-to-agent ``ask()`` over ZMQ: doing so
-   surfaced a real, separate, previously-unexercised bug (a signed request/reply
-   round trip silently times out — tracked in docs/milestones.md, not solved here)
-   that no existing test had ever caught, because no test exercises signing over a
-   real transport end-to-end either. Part 2 demonstrates the exact same signing/
-   verification code Part 1's Runtime wires up internally, at the layer that is
-   actually proven correct by this repository's own test suite.
+   message, verify it (succeeds), tamper with it, verify again (fails).
+
+3. A real, live, signed agent-to-agent ``ask()`` over a real ZMQ transport —
+   until v0.9.2.1, this silently timed out with no exception anywhere
+   (``ZMQTransport``/``NATSTransport`` each held their own private serializer
+   reference, never updated when ``Runtime.start()`` activated signing, which
+   corrupted every ``ask()``'s internal reply_to round-trip into a blank
+   message). Fixed in v0.9.2.1 — see ``civitas/transport/__init__.py``'s
+   ``Transport.set_serializer`` docstring for the full root cause. Driven
+   from inside an agent's ``on_start()``, not from ``main()`` via
+   ``runtime.ask()`` directly: signing requires every sender to have a
+   keypair, and only real registered agents get one — ``runtime.ask()``'s
+   sender is the bare, non-agent ``"_runtime"`` sink (H9, #33), which never
+   has an identity by design.
 
 Usage:
     python examples/secured_messaging.py
@@ -44,6 +50,20 @@ from civitas.security.signing import MessageSigner
 class EchoAgent(AgentProcess):
     async def handle(self, message: Message) -> Message | None:
         return self.reply({"echo": message.payload.get("text", "")})
+
+
+class Driver(AgentProcess):
+    """Sends the demo's one signed message and prints the result itself —
+    see this file's module docstring (Part 3) for why main() can't drive
+    this directly on a signing-enabled topology."""
+
+    async def on_start(self) -> None:
+        # Both agents start concurrently; a brief pause lets "echo"'s own ZMQ
+        # subscription propagate through the PUB/SUB fanout before the first
+        # request is sent (the "slow joiner" pattern).
+        await asyncio.sleep(0.3)
+        reply = await self.ask("echo", {"text": "this message was Ed25519-signed"}, timeout=5.0)
+        print(f"Reply: {reply.payload['echo']!r}")
 
 
 def demonstrate_signing_and_tamper_detection() -> None:
@@ -89,8 +109,7 @@ def demonstrate_signing_and_tamper_detection() -> None:
 
 async def demonstrate_topology_wiring() -> None:
     """Part 1 — a real Runtime with security: configured over ZMQ, proving the
-    infrastructure activates (config parsing + key generation), without
-    driving an actual signed request/reply round trip (see module docstring)."""
+    infrastructure activates (config parsing + key generation)."""
     key_dir = tempfile.mkdtemp(prefix="civitas-secured-demo-")
     try:
         config = {
@@ -126,12 +145,47 @@ async def demonstrate_topology_wiring() -> None:
         shutil.rmtree(key_dir, ignore_errors=True)
 
 
+async def demonstrate_live_signed_ask() -> None:
+    """Part 3 — a real, live, signed agent-to-agent ask() over real ZMQ
+    (fixed in v0.9.2.1 — see module docstring)."""
+    key_dir = tempfile.mkdtemp(prefix="civitas-secured-demo-live-")
+    try:
+        config = {
+            "transport": {
+                "type": "zmq",
+                "pub_addr": "tcp://127.0.0.1:15561",
+                "sub_addr": "tcp://127.0.0.1:15562",
+                "start_proxy": True,
+            },
+            "security": {
+                "identity": {"mode": "auto", "key_dir": key_dir},
+                "signing": {"enabled": True, "algorithm": "ed25519", "require_verification": True},
+            },
+            "supervision": {
+                "name": "root",
+                "children": [
+                    {"type": "agent", "module": "__main__", "class": "EchoAgent", "name": "echo"},
+                    {"type": "agent", "module": "__main__", "class": "Driver", "name": "driver"},
+                ],
+            },
+        }
+        runtime = Runtime.from_config_dict(config)
+        await runtime.start()
+        await asyncio.sleep(1.0)  # let Driver.on_start()'s settle-wait + ask() complete and print
+        await runtime.stop()
+    finally:
+        shutil.rmtree(key_dir, ignore_errors=True)
+
+
 async def main() -> None:
     print("=== Part 1: topology-level configuration ===")
     await demonstrate_topology_wiring()
 
     print("\n=== Part 2: the actual signing guarantee ===")
     demonstrate_signing_and_tamper_detection()
+
+    print("\n=== Part 3: a real, live, signed ask() over real ZMQ ===")
+    await demonstrate_live_signed_ask()
 
 
 if __name__ == "__main__":

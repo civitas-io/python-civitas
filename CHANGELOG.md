@@ -11,6 +11,40 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+## [0.9.2.1] — 2026-07-28
+
+Bugfix release: two real product bugs found while building v0.9.2's examples, both fully
+root-caused and fixed, with real regression tests added for the exact gap that let each ship
+silently.
+
+### Fixed
+
+- **Message signing + ZMQ/NATS transport: an agent-to-agent `ask()` silently timed out when
+  `security.signing.enabled=True`**, even with `allow_unsigned=True`. Root cause: each transport
+  (`ZMQTransport`, `NATSTransport`, `InProcessTransport`) held its own private serializer
+  reference, captured once at construction; `Runtime.start()`'s signing-activation code only
+  swapped the Runtime's and the `MessageBus`'s serializer references, never the transport's own.
+  `request()`'s internal reply_to-injection round-trip then deserialized a signed v2 envelope with
+  the STALE, non-signing serializer, silently reconstructing a blank message (empty
+  `sender`/`correlation_id`) that the receiving agent's reply-routing check then silently
+  dropped — no exception anywhere, just a generic 30s timeout. Fixed with a new
+  `Transport.set_serializer()` method, called from `Runtime.start()`'s signing-wiring. New
+  `tests/integration/test_signed_transport.py` proves a real signed `ask()` completes over both
+  real ZMQ and real NATS — the exact gap that let this ship (no existing test had ever exercised
+  signing over a real transport with an actual message round trip).
+- **`Runtime.from_config()` / `civitas run --topology` (supervisor mode) did not filter
+  `process:`-tagged nodes** — it built every node locally regardless, duplicating agents a real
+  Worker process also builds for itself (confirmed on
+  `deployment/level2_multi_process/run_supervisor.py`). Fixed with a new `process_filter` keyword
+  argument on `Runtime.from_config()`/`from_config_dict()` (default `"*"` — build everything,
+  completely unchanged behavior for every existing caller; `None` — build only untagged nodes, the
+  new correct behavior for `civitas run --topology` without `--process`; a named string — build
+  only nodes tagged for that process, matching `Worker`'s own filtering). `civitas/cli/run.py`'s
+  supervisor role now uses `process_filter=None`.
+- `examples/secured_messaging.py` gained a real, live, signed `ask()` demo (Part 3) now that it
+  actually works; `examples/deployment/level2_multi_process/run_supervisor.py` now uses
+  `process_filter=None`, matching the fix.
+
 ## [0.9.2] — 2026-07-28
 
 Examples completeness: a smoke test proving every example actually runs, 8 new examples for

@@ -53,6 +53,7 @@ Everything in this part is done.
 | — | [v0.9.0 — Supervision Endgame](#v090-supervision-endgame-released) | Jul 2026 |
 | — | [v0.9.1 — Post-endgame Polish](#v091-post-endgame-polish-released) | Jul 2026 |
 | — | [v0.9.2 — Examples Completeness](#v092--examples-completeness-released) | Jul 2026 |
+| — | [v0.9.2.1 — Bugfix Release](#v0921--bugfix-release-released) | Jul 2026 |
 
 ---
 
@@ -1065,7 +1066,25 @@ unexercised **product** bugs, NOT example bugs, each needing its own future inve
 every node locally regardless, duplicating whatever a real Worker process builds for itself); and
 message signing over a real ZMQ transport silently times out an agent-to-agent `ask()` round trip
 even with `allow_unsigned=True` set, with no existing test ever having exercised signing over a
-real transport end-to-end. Both detailed in [Part 2 — Backlog](#part-2--backlog) below.
+real transport end-to-end. Both detailed, root-caused, and fixed in
+[v0.9.2.1](#v0921--bugfix-release-released) below.
+
+## v0.9.2.1 — Bugfix Release (Released)
+
+**Status: ✅ Released 2026-07-28.** Both real product bugs found building v0.9.2, fully
+root-caused and fixed, with real regression tests added for the exact gap that let each ship
+silently.
+
+| # | Deliverable | Priority |
+|---|-------------|----------|
+| — | ✅ **Done** — message signing + ZMQ/NATS transport fix: new `Transport.set_serializer()`, called from `Runtime.start()`'s signing-wiring, so the transport's own private serializer reference (used by `request()`'s internal reply_to round-trip) gets swapped to the signing one too, not just the Runtime's and the Bus's. New `tests/integration/test_signed_transport.py` proves a real signed `ask()` completes over both real ZMQ and real NATS | High |
+| — | ✅ **Done** — `process:`-tag filtering fix: new `process_filter` keyword on `Runtime.from_config()`/`from_config_dict()` (`"*"` default = build everything, unchanged; `None` = untagged nodes only; a named string = that process's nodes only, matching `Worker`'s own filtering). `civitas/cli/run.py`'s supervisor role now uses `process_filter=None`. New `TestProcessFilter` test class in `tests/unit/test_runtime.py` (5 tests, including nested-supervisor transparency and `dynamic_supervisor`'s node-level tag shape) | High |
+| — | ✅ **Done** — `examples/secured_messaging.py` gained a real, live, signed `ask()` demo (Part 3) now that it actually works; `examples/deployment/level2_multi_process/run_supervisor.py` updated to use `process_filter=None`, matching the fix | — |
+
+Both bugs were found via direct instrumentation of the actual wire bytes and CLI behavior, not
+guessed — see the [v0.9.2](#v092--examples-completeness-released) entry above for how they
+originally surfaced, and `civitas/transport/__init__.py`'s `Transport.set_serializer` docstring
+for the full signing root-cause writeup.
 
 
 ---
@@ -1088,20 +1107,6 @@ Owner column: `core` = python-civitas, else the target repo.
 > `tests/unit/test_actor_model_gaps.py`. Coverage top-ups and the dashboard rebuild are closed by
 > [v0.9.1](#v091-post-endgame-polish-released). The examples smoke test + 8 new examples are
 > closed by [v0.9.2](#v092--examples-completeness-released).
-
-### Real bugs found building v0.9.2 (Released) — tracked here, not fixed yet
-
-v0.9.2 itself — the examples smoke test + 8 new examples — shipped; see
-[v0.9.2 — Examples Completeness](#v092--examples-completeness-released) in Part 1. These two
-real **product** bugs (not example bugs) surfaced by actually running things end-to-end while
-writing those examples, not by review — neither had ever been exercised by any existing test.
-Deliberately NOT fixed as part of v0.9.2: each needs its own investigation, and the examples that
-found them were rescoped/worked around instead of quietly building on top of broken behavior.
-
-| Item | Priority | Source |
-|------|----------|--------|
-| **`Runtime.from_config()` / `civitas run --topology` (supervisor mode) does not filter `process:`-tagged nodes** — it builds EVERY node locally, including ones tagged for a different process, duplicating agents that a real Worker process also builds for itself (confirmed: `examples/deployment/level2_multi_process/run_supervisor.py`, run alone via `Runtime.from_config()`, registers `worker_a`/`worker_b` locally even though they're `process: worker`-tagged) | High | 2026-07-28 — found writing `examples/cross_process_spawn/`; worked around there by using the same empty-local-tree + `runtime.spawn()`-by-name pattern `tests/integration/test_cross_process_spawn.py` already proves correct, rather than the YAML `process:` shape |
-| **Message signing + ZMQ transport: an agent-to-agent `ask()` round trip silently times out when `security.signing.enabled=True`**, even with `allow_unsigned=True` set (no `SignatureError`, no other exception — just a plain 30s `ask()` `TimeoutError`) — reproduced with the simplest possible two-agent, single-process, real-ZMQ topology; the identical topology with signing disabled works immediately | High | 2026-07-28 — found writing `examples/secured_messaging.py`; **no existing test exercises signing over a real transport with an actual message round trip** (only config-parsing/wiring-flag unit tests exist) — the same "shipped but never exercised end-to-end" pattern as FD-01 and the dead metrics hooks, this time in `civitas/` itself, not a dashboard/example gap. Example rescoped to demonstrate the `AgentIdentity`/`KeyRegistry`/`MessageSigner` primitives directly (proven correct by `tests/unit/test_security.py`) instead of a live signed request/reply |
 
 ### v0.9.3 — Telemetry dashboard (Planned, after v0.9.2)
 

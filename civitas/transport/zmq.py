@@ -298,6 +298,15 @@ class ZMQTransport:
         """Return True if address is an active ephemeral reply queue."""
         return address in self._reply_queues
 
+    def set_serializer(self, serializer: Serializer) -> None:
+        """Replace the serializer used by request()'s internal reply_to
+        round-trip (v0.9.2.1 bugfix — see Transport.set_serializer's
+        docstring for the full story: this transport's own serializer
+        reference was never updated when Runtime.start() activated message
+        signing, silently corrupting every ask() into a blank message).
+        """
+        self._serializer = serializer
+
     async def wait_subscribed(self, address: str, timeout: float = 2.0) -> None:
         """Block until the subscription for ``address`` has propagated to PUB peers.
 

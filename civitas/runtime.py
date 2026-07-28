@@ -226,28 +226,55 @@ class Runtime:
         cls,
         path: str | Path,
         agent_classes: dict[str, type[AgentProcess]] | None = None,
+        *,
+        process_filter: str | None = "*",
     ) -> Runtime:
         """Build a Runtime from a YAML topology file.
 
         The ``agent_classes`` dict maps type strings (e.g. "MyAgent") to the
         actual Python class. If not provided, types are resolved via
         ``importlib`` from dotted module paths (e.g. "myapp.agents.MyAgent").
+
+        ``process_filter`` (v0.9.2.1 bugfix): a topology node (an ``agent``,
+        ``dynamic_supervisor``, or flat dotted-path node) MAY carry a
+        ``process: <name>`` tag meaning "this belongs to a different OS
+        process, started separately." Before this fix, ``from_config`` had
+        no awareness of that tag at all and built EVERY node into the local
+        tree regardless — silently duplicating whatever a real Worker
+        process elsewhere also builds for itself (confirmed:
+        ``deployment/level2_multi_process/run_supervisor.py``, run alone,
+        registered ``worker_a``/``worker_b`` locally even though they're
+        ``process: worker``-tagged).
+
+        - ``"*"`` (default): no filtering — build every node regardless of
+          any ``process:`` tag. Unchanged from every release before this
+          one; existing callers see no behavior change.
+        - ``None``: build only UNTAGGED nodes (no ``process:`` key at all)
+          — the coordinator/supervisor role in a multi-process topology.
+        - Any other string: build only nodes tagged ``process: <that string>``
+          — matches what ``Worker``'s own construction path already does via
+          ``_find_process_agents``, exposed here for symmetry/completeness.
         """
         config = yaml.safe_load(Path(path).read_text())
         config = substitute_vars(config)
-        return cls.from_config_dict(config, agent_classes=agent_classes)
+        return cls.from_config_dict(
+            config, agent_classes=agent_classes, process_filter=process_filter
+        )
 
     @classmethod
     def from_config_dict(
         cls,
         config: dict[str, Any],
         agent_classes: dict[str, type[AgentProcess]] | None = None,
+        *,
+        process_filter: str | None = "*",
     ) -> Runtime:
         """Build a Runtime from an already-parsed config dict.
 
         Same as ``from_config`` but accepts a dict instead of a file path.
         Useful for governance layers (e.g. Presidium) that need to extract
-        their own config block before passing the rest to the runtime.
+        their own config block before passing the rest to the runtime. See
+        ``from_config``'s docstring for ``process_filter``'s semantics.
         """
         unknown = set(config.keys()) - cls._KNOWN_CONFIG_KEYS
         if unknown:
@@ -336,10 +363,40 @@ class Runtime:
                     logger.warning("Unknown eval exporter type '%s' — skipping", kind)
             return result
 
-        def _build_node(node: dict[str, Any]) -> AgentProcess | Supervisor:
+        def _node_process_tag(node: dict[str, Any]) -> str | None:
+            """The ``process:`` tag for a node, wherever its shape puts it
+            (nested ``agent:`` dict vs. every other flatter node type) — v0.9.2.1
+            bugfix. Returns None for an untagged node (the common,
+            single-process case)."""
+            if "agent" in node:
+                tag = node["agent"].get("process")
+            else:
+                tag = node.get("process")
+            return str(tag) if tag is not None else None
+
+        def _node_belongs_to(node: dict[str, Any]) -> bool:
+            """Whether ``node`` should be built under the active
+            ``process_filter`` (v0.9.2.1 bugfix). ``"*"`` builds everything
+            (today's default, unchanged); otherwise the node's own
+            ``process:`` tag (None for untagged) must match exactly."""
+            if process_filter == "*":
+                return True
+            return _node_process_tag(node) == process_filter
+
+        def _build_node(node: dict[str, Any]) -> AgentProcess | Supervisor | None:
+            # Supervisor nodes are always transparent/structural, regardless of
+            # process_filter -- mirroring cli/run.py's _find_process_agents,
+            # which always descends into a nested supervisor unconditionally
+            # and only ever checks process: on agent/dynamic_supervisor LEAF
+            # nodes. Filtering a supervisor itself would silently discard its
+            # entire subtree, including any leaf that DOES belong here.
             if "supervisor" in node:
                 sup_cfg = node["supervisor"]
-                children = [_build_node(c) for c in sup_cfg.get("children", [])]
+                children = [
+                    c
+                    for c in (_build_node(c) for c in sup_cfg.get("children", []))
+                    if c is not None
+                ]
                 return Supervisor(
                     name=sup_cfg["name"],
                     children=children,
@@ -350,7 +407,9 @@ class Runtime:
                     backoff_base=sup_cfg.get("backoff_base", 1.0),
                     backoff_max=sup_cfg.get("backoff_max", 60.0),
                 )
-            elif node.get("type") == "topology_server":
+            if not _node_belongs_to(node):
+                return None
+            if node.get("type") == "topology_server":
                 cfg = node.get("config", {})
                 return TopologyServer(
                     name=node.get("name", "topology_server"),
@@ -423,7 +482,9 @@ class Runtime:
         if not sup_cfg:
             raise ConfigurationError("YAML topology must define a top-level 'supervision' key.")
         # Top-level is always a supervisor
-        children = [_build_node(c) for c in sup_cfg.get("children", [])]
+        children = [
+            c for c in (_build_node(c) for c in sup_cfg.get("children", [])) if c is not None
+        ]
         root = Supervisor(
             name=sup_cfg.get("name", "root"),
             children=children,
@@ -703,6 +764,15 @@ class Runtime:
             signing_ser = SigningSerializer(signer, self._security_config.signing)
             self._serializer = signing_ser
             cs.bus._serializer = signing_ser
+            # v0.9.2.1 bugfix: the transport holds its OWN private serializer
+            # reference (needed for request()'s internal reply_to round-trip)
+            # separate from the bus's — without this, ask() over a signing-
+            # enabled ZMQ/NATS transport silently corrupted every request into
+            # a blank message (empty sender/correlation_id), which made the
+            # reply-routing check in AgentProcess._dispatch() no-op with no
+            # exception anywhere — just a plain ask() TimeoutError. See
+            # Transport.set_serializer's docstring for the full root cause.
+            cs.bus._transport.set_serializer(signing_ser)
             self._key_registry = registry
             self._message_signer = signer
             self._signing_on = True

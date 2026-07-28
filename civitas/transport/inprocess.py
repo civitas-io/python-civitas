@@ -86,5 +86,15 @@ class InProcessTransport:
         """Return True if address is an active ephemeral reply queue."""
         return address in self._reply_queues
 
+    def set_serializer(self, serializer: Serializer) -> None:
+        """Replace the serializer used by request()'s internal reply_to
+        round-trip (v0.9.2.1 bugfix). Harmless no-op in effect for this
+        transport specifically — message signing is deliberately skipped for
+        in-process transport by design (D9, same OS process, no wire to
+        protect) — but implemented for interface consistency across all three
+        transports (Transport.set_serializer's docstring has the full story).
+        """
+        self._serializer = serializer
+
     async def wait_subscribed(self, address: str, timeout: float = 2.0) -> None:
         """No-op — in-process subscription is a dict insert, effective immediately."""
