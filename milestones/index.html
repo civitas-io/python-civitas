@@ -2225,6 +2225,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#v0921-bugfix-release-released" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.9.2.1 — Bugfix Release (Released)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#part-2-backlog" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3027,6 +3038,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#v0921-bugfix-release-released" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.9.2.1 — Bugfix Release (Released)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#part-2-backlog" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3255,6 +3277,11 @@ active todo list — everything not yet done).</p>
 <tr>
 <td>—</td>
 <td><a href="#v092--examples-completeness-released">v0.9.2 — Examples Completeness</a></td>
+<td>Jul 2026</td>
+</tr>
+<tr>
+<td>—</td>
+<td><a href="#v0921--bugfix-release-released">v0.9.2.1 — Bugfix Release</a></td>
 <td>Jul 2026</td>
 </tr>
 </tbody>
@@ -5266,7 +5293,42 @@ unexercised <strong>product</strong> bugs, NOT example bugs, each needing its ow
 every node locally regardless, duplicating whatever a real Worker process builds for itself); and
 message signing over a real ZMQ transport silently times out an agent-to-agent <code>ask()</code> round trip
 even with <code>allow_unsigned=True</code> set, with no existing test ever having exercised signing over a
-real transport end-to-end. Both detailed in <a href="#part-2--backlog">Part 2 — Backlog</a> below.</p>
+real transport end-to-end. Both detailed, root-caused, and fixed in
+<a href="#v0921--bugfix-release-released">v0.9.2.1</a> below.</p>
+<h2 id="v0921-bugfix-release-released">v0.9.2.1 — Bugfix Release (Released)<a class="headerlink" href="#v0921-bugfix-release-released" title="Permanent link">&para;</a></h2>
+<p><strong>Status: ✅ Released 2026-07-28.</strong> Both real product bugs found building v0.9.2, fully
+root-caused and fixed, with real regression tests added for the exact gap that let each ship
+silently.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Deliverable</th>
+<th>Priority</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>—</td>
+<td>✅ <strong>Done</strong> — message signing + ZMQ/NATS transport fix: new <code>Transport.set_serializer()</code>, called from <code>Runtime.start()</code>'s signing-wiring, so the transport's own private serializer reference (used by <code>request()</code>'s internal reply_to round-trip) gets swapped to the signing one too, not just the Runtime's and the Bus's. New <code>tests/integration/test_signed_transport.py</code> proves a real signed <code>ask()</code> completes over both real ZMQ and real NATS</td>
+<td>High</td>
+</tr>
+<tr>
+<td>—</td>
+<td>✅ <strong>Done</strong> — <code>process:</code>-tag filtering fix: new <code>process_filter</code> keyword on <code>Runtime.from_config()</code>/<code>from_config_dict()</code> (<code>"*"</code> default = build everything, unchanged; <code>None</code> = untagged nodes only; a named string = that process's nodes only, matching <code>Worker</code>'s own filtering). <code>civitas/cli/run.py</code>'s supervisor role now uses <code>process_filter=None</code>. New <code>TestProcessFilter</code> test class in <code>tests/unit/test_runtime.py</code> (5 tests, including nested-supervisor transparency and <code>dynamic_supervisor</code>'s node-level tag shape)</td>
+<td>High</td>
+</tr>
+<tr>
+<td>—</td>
+<td>✅ <strong>Done</strong> — <code>examples/secured_messaging.py</code> gained a real, live, signed <code>ask()</code> demo (Part 3) now that it actually works; <code>examples/deployment/level2_multi_process/run_supervisor.py</code> updated to use <code>process_filter=None</code>, matching the fix</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p>Both bugs were found via direct instrumentation of the actual wire bytes and CLI behavior, not
+guessed — see the <a href="#v092--examples-completeness-released">v0.9.2</a> entry above for how they
+originally surfaced, and <code>civitas/transport/__init__.py</code>'s <code>Transport.set_serializer</code> docstring
+for the full signing root-cause writeup.</p>
 <hr />
 <h2 id="part-2-backlog">Part 2 — Backlog<a class="headerlink" href="#part-2-backlog" title="Permanent link">&para;</a></h2>
 <p><strong>Status: 🗂️ Tracked</strong> — the active todo list: everything not yet done. New work lands here first
@@ -5299,34 +5361,6 @@ closed by <a href="#v090-supervision-endgame-released">v0.9.0</a> — zero xfail
 <a href="#v091-post-endgame-polish-released">v0.9.1</a>. The examples smoke test + 8 new examples are
 closed by <a href="#v092--examples-completeness-released">v0.9.2</a>.</p>
 </blockquote>
-<h3 id="real-bugs-found-building-v092-released-tracked-here-not-fixed-yet">Real bugs found building v0.9.2 (Released) — tracked here, not fixed yet<a class="headerlink" href="#real-bugs-found-building-v092-released-tracked-here-not-fixed-yet" title="Permanent link">&para;</a></h3>
-<p>v0.9.2 itself — the examples smoke test + 8 new examples — shipped; see
-<a href="#v092--examples-completeness-released">v0.9.2 — Examples Completeness</a> in Part 1. These two
-real <strong>product</strong> bugs (not example bugs) surfaced by actually running things end-to-end while
-writing those examples, not by review — neither had ever been exercised by any existing test.
-Deliberately NOT fixed as part of v0.9.2: each needs its own investigation, and the examples that
-found them were rescoped/worked around instead of quietly building on top of broken behavior.</p>
-<table>
-<thead>
-<tr>
-<th>Item</th>
-<th>Priority</th>
-<th>Source</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong><code>Runtime.from_config()</code> / <code>civitas run --topology</code> (supervisor mode) does not filter <code>process:</code>-tagged nodes</strong> — it builds EVERY node locally, including ones tagged for a different process, duplicating agents that a real Worker process also builds for itself (confirmed: <code>examples/deployment/level2_multi_process/run_supervisor.py</code>, run alone via <code>Runtime.from_config()</code>, registers <code>worker_a</code>/<code>worker_b</code> locally even though they're <code>process: worker</code>-tagged)</td>
-<td>High</td>
-<td>2026-07-28 — found writing <code>examples/cross_process_spawn/</code>; worked around there by using the same empty-local-tree + <code>runtime.spawn()</code>-by-name pattern <code>tests/integration/test_cross_process_spawn.py</code> already proves correct, rather than the YAML <code>process:</code> shape</td>
-</tr>
-<tr>
-<td><strong>Message signing + ZMQ transport: an agent-to-agent <code>ask()</code> round trip silently times out when <code>security.signing.enabled=True</code></strong>, even with <code>allow_unsigned=True</code> set (no <code>SignatureError</code>, no other exception — just a plain 30s <code>ask()</code> <code>TimeoutError</code>) — reproduced with the simplest possible two-agent, single-process, real-ZMQ topology; the identical topology with signing disabled works immediately</td>
-<td>High</td>
-<td>2026-07-28 — found writing <code>examples/secured_messaging.py</code>; <strong>no existing test exercises signing over a real transport with an actual message round trip</strong> (only config-parsing/wiring-flag unit tests exist) — the same "shipped but never exercised end-to-end" pattern as FD-01 and the dead metrics hooks, this time in <code>civitas/</code> itself, not a dashboard/example gap. Example rescoped to demonstrate the <code>AgentIdentity</code>/<code>KeyRegistry</code>/<code>MessageSigner</code> primitives directly (proven correct by <code>tests/unit/test_security.py</code>) instead of a live signed request/reply</td>
-</tr>
-</tbody>
-</table>
 <h3 id="v093-telemetry-dashboard-planned-after-v092">v0.9.3 — Telemetry dashboard (Planned, after v0.9.2)<a class="headerlink" href="#v093-telemetry-dashboard-planned-after-v092" title="Permanent link">&para;</a></h3>
 <p><strong>Design-first</strong> — a separate historical/trend-data surface (logging + graphs/charts on the
 OTEL/tracer infra already collected: message-rate, cost-over-time, trace/span drill-down),
