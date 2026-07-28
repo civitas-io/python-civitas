@@ -1058,43 +1058,13 @@ Owner column: `core` = python-civitas, else the target repo.
 > `tests/unit/test_actor_model_gaps.py`. Coverage top-ups and the dashboard rebuild are closed by
 > [v0.9.1](#v091-post-endgame-polish-released).
 
-### v0.9.2 — Dashboard control-plane, observability, + cross-platform CI (Planned, after v0.9.1)
+### v0.9.2 — Examples completeness (Planned, after v0.9.1)
 
-**Design-first, explicitly** — none of the control-plane items below get built until each has
-its own proper design conversation (2026-07 decision, in response to a "hold off on auth, don't
-knee-jerk it" instruction). `TopologyServer` has **zero authentication today** (verified by
-grep, not assumed) — everything it currently serves is read-only, which is why that's been an
-acceptable risk so far. The moment any write/control action ships, that risk tier changes
-completely, so an auth design is the prerequisite gate for the whole "control-plane" group below,
-not an afterthought bolted onto one endpoint.
-
-| Item | Priority | Source |
-|------|----------|--------|
-| **`TopologyServer` auth design** (prerequisite gate for every write/control item below) | High | found during dashboard-v2 capability discussion (2026-07-26) — zero auth exists today; every item below is blocked on this, by design |
-| Dashboard/API: suspend/resume an agent (write action) | Medium | 2026-07-26 discussion — safest write action to add first: `runtime.suspend()`/`resume()` already exist, already audited (`AuditEvent`), designed as this system's governed HITL pause primitive (not destructive, unlike kill) |
-| Dashboard/API: kill / force-restart an agent manually | Low | 2026-07-26 discussion — mechanically feasible (new "force crash" trigger + existing restart machinery) but real DoS surface without auth first |
-| Mailbox introspection (list/enumerate) | Low | 2026-07-26 discussion — **no non-destructive peek exists anywhere in `Mailbox` today** (only `get()`/consumes-one, `depth()`/count-only, `drain()`/consumes-everything); needs new `Mailbox` API, not just a new endpoint |
-| Mailbox: remove one specific in-flight message | Low | 2026-07-26 discussion — conflicts with the at-most-once/FIFO delivery guarantee this codebase is built around; a real design problem, not a small addition — needs its own conversation, may not be a good idea at all |
-| Mailbox: inject a message (add) | Low | 2026-07-26 discussion — mechanically `send()` exposed through a new surface, but payload content is a real data-exposure concern over an unauthenticated endpoint |
-| Per-agent process/container awareness beyond `process_id` (e.g. Docker) | Low | 2026-07-26 discussion — recommended AGAINST building container-awareness into civitas itself (couples the runtime to a deployment concern better owned by container-native tooling); revisit only if a concrete use case emerges |
-| **Telemetry dashboard**: logging + graphs/charts view, built on the OTEL/tracer infra already collected | Medium | 2026-07-26 — user's own framing: "we are already collecting telemetry — let's design that later"; distinct from the live-snapshot TUI (v0.9.1), this is historical/trend data (message-rate, cost-over-time, trace/span drill-down) — needs its own design round, likely its own surface (web UI?) not necessarily the terminal dashboard |
-| CI matrix: macOS + Windows runners (today: Ubuntu only) | Medium | found during dashboard-v2 Phase D planning (2026-07-24) — production ZMQ defaults are already Windows-safe (`tcp://`), but 4 test files use `ipc://` (Unix-only) and nothing has ever been CI-verified outside Linux |
-| Dashboard: network I/O per process | Low | design/dashboard-v2.md P1 |
-| Dashboard: "session length" (LLM conversation turns/duration) | Low | design/dashboard-v2.md P1 |
-| Dashboard: historical charts/sparklines (message-rate, cost-over-time) | Low | design/dashboard-v2.md P1 — likely folds into the telemetry dashboard item above rather than the live TUI |
-| Dashboard: distinct HITL-wait vs. governance-suspend visual signal | Low | design/dashboard-v2.md §6 option B — needs a real HITL flow to design against first |
-| Dashboard: log tail panel per agent | Low | design/dashboard-v2.md P2 — likely folds into the telemetry dashboard item above |
-| Dashboard: multi-cluster / multi-topology view | Low | design/dashboard-v2.md P2 |
-| Dashboard layout: optional focus/expand mode for the detail pane (Mockup A's wide-detail idea) | Low | design/dashboard-v2.md §7.0 — Mockup B (dense three-pane grid) shipped as the default in v0.9.1; Mockup A's core idea kept as an opt-in mode, not discarded |
-
-### Examples & example-coverage gaps (found 2026-07-27, fixing `examples/dashboard_demo/`)
-
-While building the dashboard demo, `examples/dynamic_spawning.py` was found silently broken (three
-separate calls to real APIs with the wrong signature — `spawn()`'s argument order, `Runtime(dict)`
-instead of `Runtime.from_config_dict()`, a `Message` object passed where a plain payload dict was
-required) and fixed. It ran with **zero test coverage** — no example file in this repo is exercised
-by the test suite at all, which is the actual root cause: nothing would have caught it, or the next
-one, automatically.
+**Cluster 3 minus the CI matrix** (2026-07-28 roadmap split — the single "v0.9.2" grab-bag from
+right after v0.9.1 shipped was four unrelated kinds of work; split into v0.9.2–v0.9.5 below, each
+a coherent, separately-scoped release). No open design questions in this one — straight
+execution: an examples smoke test, plus the 8 real features with dedicated design docs and zero
+demonstrative code, found while fixing `examples/dynamic_spawning.py` (2026-07-27).
 
 | Item | Priority | Source |
 |------|----------|--------|
@@ -1107,6 +1077,58 @@ one, automatically.
 | Example: gateway auth (JWT bearer, mTLS) | Low | 2026-07-27 — `gateway-auth.md`, `gateway-http-mtls-proxy.md`, `gateway-ws-grpc-auth.md` all exist; `http_gateway.py` doesn't configure auth |
 | Example: custom plugin (model provider / exporter / state store) | Low | 2026-07-27 — `docs/plugins.md` documents the extension points; every example only uses built-ins |
 | Example: supervision introspection (`civitas.supervision.status` query) | Low | 2026-07-27 — the v0.9.0 endgame's own introspection API has no standalone example outside the dashboard |
+
+> The CI matrix item (macOS + Windows runners) from the original grab-bag is intentionally NOT in
+> this release — moved to [v1.0.0 GA gates](#v100--ga-gates-planned) below, since cross-platform
+> CI is naturally a pre-GA gate, not example-completeness work. Revisit sooner if a real
+> Windows/macOS user need arises before then.
+
+### v0.9.3 — Telemetry dashboard (Planned, after v0.9.2)
+
+**Design-first** — a separate historical/trend-data surface (logging + graphs/charts on the
+OTEL/tracer infra already collected: message-rate, cost-over-time, trace/span drill-down),
+explicitly distinct from `civitas top`'s live-snapshot TUI (v0.9.1). Likely its own surface (a web
+UI?), not necessarily an extension of the terminal dashboard — to be decided in the design
+conversation before any code lands.
+
+| Item | Priority | Source |
+|------|----------|--------|
+| **Telemetry dashboard**: logging + graphs/charts view, built on the OTEL/tracer infra already collected | Medium | 2026-07-26 — user's own framing: "we are already collecting telemetry — let's design that later" |
+| Dashboard: historical charts/sparklines (message-rate, cost-over-time) | Low | design/dashboard-v2.md P1 — likely folds into the telemetry dashboard rather than the live TUI |
+| Dashboard: log tail panel per agent | Low | design/dashboard-v2.md P2 — likely folds into the telemetry dashboard |
+
+### v0.9.4 — Dashboard TUI polish (Planned, after v0.9.3)
+
+Small, self-contained additions to the existing live `civitas top` TUI — no auth needed, no new
+design surface, just more panes/signals on data already available (or cheaply addable).
+
+| Item | Priority | Source |
+|------|----------|--------|
+| Dashboard: network I/O per process | Low | design/dashboard-v2.md P1 |
+| Dashboard: "session length" (LLM conversation turns/duration) | Low | design/dashboard-v2.md P1 |
+| Dashboard: distinct HITL-wait vs. governance-suspend visual signal | Low | design/dashboard-v2.md §6 option B — blocked on a real HITL flow existing to design against first, not on auth |
+| Dashboard: multi-cluster / multi-topology view | Low | design/dashboard-v2.md P2 |
+| Dashboard layout: optional focus/expand mode for the detail pane (Mockup A's wide-detail idea) | Low | design/dashboard-v2.md §7.0 — Mockup B (dense three-pane grid) shipped as the default in v0.9.1; Mockup A's core idea kept as an opt-in mode, not discarded |
+
+### v0.9.5 — AuthN/AuthZ & dashboard control-plane (Planned, after v0.9.4)
+
+**Design-first, explicitly** — none of the items below get built until there's been a real, deep
+AuthN/AuthZ and access-control design conversation (2026-07-28 decision, in response to an earlier
+"hold off on auth, don't knee-jerk it" instruction). `TopologyServer` has **zero authentication
+today** (verified by grep, not assumed) — everything it currently serves is read-only, which is
+why that's been an acceptable risk so far. The moment any write/control action ships, that risk
+tier changes completely, so the auth design is the prerequisite gate for the whole group below,
+not an afterthought bolted onto one endpoint.
+
+| Item | Priority | Source |
+|------|----------|--------|
+| **`TopologyServer` AuthN/AuthZ + access control design** (prerequisite gate for every item below) | High | found during dashboard-v2 capability discussion (2026-07-26); scheduled as its own dedicated design round (2026-07-28) |
+| Dashboard/API: suspend/resume an agent (write action) | Medium | 2026-07-26 discussion — safest write action to add first: `runtime.suspend()`/`resume()` already exist, already audited (`AuditEvent`), designed as this system's governed HITL pause primitive (not destructive, unlike kill) |
+| Dashboard/API: kill / force-restart an agent manually | Low | 2026-07-26 discussion — mechanically feasible (new "force crash" trigger + existing restart machinery) but real DoS surface without auth first |
+| Mailbox introspection (list/enumerate) | Low | 2026-07-26 discussion — **no non-destructive peek exists anywhere in `Mailbox` today** (only `get()`/consumes-one, `depth()`/count-only, `drain()`/consumes-everything); needs new `Mailbox` API, not just a new endpoint |
+| Mailbox: remove one specific in-flight message | Low | 2026-07-26 discussion — conflicts with the at-most-once/FIFO delivery guarantee this codebase is built around; a real design problem, not a small addition — needs its own conversation, may not be a good idea at all |
+| Mailbox: inject a message (add) | Low | 2026-07-26 discussion — mechanically `send()` exposed through a new surface, but payload content is a real data-exposure concern over an unauthenticated endpoint |
+| Per-agent process/container awareness beyond `process_id` (e.g. Docker) | Low | 2026-07-26 discussion — recommended AGAINST building container-awareness into civitas itself (couples the runtime to a deployment concern better owned by container-native tooling); revisit only if a concrete use case emerges |
 
 ### v0.10.0 — HITL & Streaming polish (Planned — the Medicus runway)
 
@@ -1125,6 +1147,7 @@ one, automatically.
 | Postgres: zero-downtime dual-write migration | 🟢 Low | production-ops for GA |
 | Postgres: PgBouncer deployment guide | 🟢 Low | docs pass |
 | ZMQ at-least-once route establishment — go/no-go review | 🟢 Low | sub-ms residual after v0.8.1 settle-barrier; build only if reproduced (design/cross-process-spawn.md addendum) |
+| CI matrix: macOS + Windows runners (today: Ubuntu only) | 🟡 Medium | moved from the original v0.9.2 grab-bag (2026-07-28 roadmap split) — production ZMQ defaults are already Windows-safe (`tcp://`), but 4 test files use `ipc://` (Unix-only) and nothing has ever been CI-verified outside Linux; revisit sooner if a real Windows/macOS user need arises before GA |
 
 > Continuous (every release, no version): CVE watch / CVSS advisories — enforced by the Security
 > workflow (pip-audit --strict caught PYSEC-2026-2132 in practice).
