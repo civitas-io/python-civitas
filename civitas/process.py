@@ -285,6 +285,10 @@ class AgentProcess:
         self._status = ProcessStatus.INITIALIZING
         self._mailbox = Mailbox(maxsize=mailbox_size)
         self._task: asyncio.Task[None] | None = None
+        # v0.9.1 (dashboard-v2, D-DASH-1): set fresh in _start_nowait() on every
+        # incarnation, including restarts (D1a) — "uptime" means THIS
+        # incarnation's age, matching the fresh-instance restart semantic.
+        self._incarnation_started_at: float = time.monotonic()
         self._max_retries = max_retries
         self._shutdown_timeout = shutdown_timeout
         # H6: opt-in per-message watchdog. None (default) = no timeout. When set,
@@ -1248,30 +1252,59 @@ class AgentProcess:
             with self.llm_span("claude-sonnet", tokens_in=1200) as span:
                 response = await self.llm.chat(...)
                 span.set_attribute("civitas.llm.tokens_out", ...)
-        """
-        if self._tracer is None:
-            yield Span(name="llm", trace_id="", span_id="")
-            return
 
-        parent_span_id = (
-            self._current_handle_span.span_id
-            if self._current_handle_span is not None
-            else (self._current_message.span_id if self._current_message else None)
-        )
-        trace_id = self._current_message.trace_id if self._current_message else ""
-        span = self._tracer.start_span(
-            "civitas.llm.chat",
-            trace_id=trace_id,
-            parent_span_id=parent_span_id,
-            attributes={"civitas.llm.model": model, **attributes},
-        )
+        v0.9.1 (dashboard-v2, D-DASH-5, closes FD-01): on exit, whatever the
+        caller reported via ``span.set_attribute("civitas.llm.tokens_in"/
+        "tokens_out"/"cost_usd", ...)`` is forwarded to the metrics sink (if
+        any) as one ``llm_call()`` — independent of whether a tracer is
+        attached (metrics and tracing are separate concerns; a span that
+        never reports usage costs nothing, not a spurious zero-cost entry).
+        """
+        has_tracer = self._tracer is not None
+        if has_tracer:
+            assert self._tracer is not None  # narrows for mypy after the check above
+            parent_span_id = (
+                self._current_handle_span.span_id
+                if self._current_handle_span is not None
+                else (self._current_message.span_id if self._current_message else None)
+            )
+            trace_id = self._current_message.trace_id if self._current_message else ""
+            span = self._tracer.start_span(
+                "civitas.llm.chat",
+                trace_id=trace_id,
+                parent_span_id=parent_span_id,
+                attributes={"civitas.llm.model": model, **attributes},
+            )
+        else:
+            span = Span(
+                name="llm",
+                trace_id="",
+                span_id="",
+                attributes={"civitas.llm.model": model, **attributes},
+            )
         try:
             yield span
         except Exception as exc:
             span.set_error(exc)
             raise
         finally:
-            span.end()
+            if has_tracer:
+                span.end()
+            self._report_llm_metrics(model, span)
+
+    def _report_llm_metrics(self, model: str, span: Span) -> None:
+        """v0.9.1 (dashboard-v2, D-DASH-5): forward llm_span()'s reported usage
+        to the metrics sink, if any was actually reported."""
+        if self._metrics is None:
+            return
+        tokens_in = span.attributes.get("civitas.llm.tokens_in")
+        tokens_out = span.attributes.get("civitas.llm.tokens_out")
+        cost_usd = span.attributes.get("civitas.llm.cost_usd")
+        if tokens_in is None and tokens_out is None and cost_usd is None:
+            return  # nothing reported — no spurious zero-cost entry
+        self._metrics.llm_call(
+            self.name, tokens_in or 0, tokens_out or 0, cost_usd or 0.0, model=model
+        )
 
     @contextmanager
     def tool_span(self, tool_name: str, **attributes: Any) -> Iterator[Span]:
@@ -1321,8 +1354,19 @@ class AgentProcess:
         self._running_event = asyncio.Event()
         self._reached_loop = False
         self._start_phase = "restore"
+        self._incarnation_started_at = time.monotonic()
         self._task = asyncio.create_task(self._run(), name=self.name)
         return self._task
+
+    @property
+    def uptime_seconds(self) -> float:
+        """Seconds since THIS incarnation started (v0.9.1, D-DASH-1).
+
+        Resets on every restart (D1a fresh-instance semantics) — a restarted
+        agent is a new object, so its uptime is naturally the new incarnation's
+        age, not the child's lifetime across restarts (that's ``restart_count``).
+        """
+        return time.monotonic() - self._incarnation_started_at
 
     async def _run(self) -> None:
         """Run the full start lifecycle inside the agent's own task (R1 · D1)."""

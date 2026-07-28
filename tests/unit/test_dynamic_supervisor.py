@@ -307,6 +307,84 @@ class TestSpawnMethodNoAncestor:
             await agent.stop("echo-1")
 
 
+class TestSpawnIntoValidation:
+    """spawn_into() fails fast, before ever sending a message (v0.9.1 top-up)."""
+
+    async def test_spawn_into_self_target_raises(self):
+        agent = NullAgent("agent")
+        with pytest.raises(SpawnError, match="cannot spawn into self"):
+            await agent.spawn_into("agent", EchoAgent, "child")
+
+    async def test_spawn_into_unknown_supervisor_raises(self):
+        agent = NullAgent("agent")
+        agent._registry = LocalRegistry()
+        with pytest.raises(SpawnError, match="no such supervisor"):
+            await agent.spawn_into("ghost", EchoAgent, "child")
+
+    async def test_spawn_into_non_dynamic_supervisor_raises(self):
+        agent = NullAgent("agent")
+        registry = LocalRegistry()
+        registry.register("plain_agent", capabilities=[])  # no DYNAMIC_SUPERVISOR_CAPABILITY
+        agent._registry = registry
+        with pytest.raises(SpawnError, match="is not a DynamicSupervisor"):
+            await agent.spawn_into("plain_agent", EchoAgent, "child")
+
+    async def test_spawn_into_routing_error_wrapped_as_spawn_error(self):
+        from civitas.errors import MessageRoutingError
+
+        agent = NullAgent("agent")
+
+        async def _raise_routing(*_a: object, **_kw: object) -> Message:
+            raise MessageRoutingError("no route")
+
+        agent.ask = _raise_routing  # type: ignore[method-assign]
+        with pytest.raises(SpawnError, match="cannot route spawn"):
+            await agent.spawn_into("workers", EchoAgent, "child")
+
+    async def test_spawn_into_timeout_wrapped_as_spawn_error(self):
+        agent = NullAgent("agent")
+
+        async def _raise_timeout(*_a: object, **_kw: object) -> Message:
+            raise TimeoutError
+
+        agent.ask = _raise_timeout  # type: ignore[method-assign]
+        with pytest.raises(SpawnError, match="timed out"):
+            await agent.spawn_into("workers", EchoAgent, "child")
+
+    async def test_stop_error_reply_raises_with_reason(self):
+        """AgentProcess.stop(name) (soft-stop a dynamic child) wraps a non-ok
+        reply in SpawnError, mirroring spawn_into (v0.9.1 top-up)."""
+        agent = NullAgent("agent")
+        agent._dynamic_supervisor_name = "workers"
+
+        async def _error_reply(*_a: object, **_kw: object) -> Message:
+            return Message(
+                type="reply",
+                sender="workers",
+                recipient="agent",
+                payload={"status": "error", "reason": "no such agent"},
+            )
+
+        agent.ask = _error_reply  # type: ignore[method-assign]
+        with pytest.raises(SpawnError, match="no such agent"):
+            await agent.stop("ghost")
+
+    async def test_spawn_into_error_reply_raises_with_reason(self):
+        agent = NullAgent("agent")
+
+        async def _error_reply(*_a: object, **_kw: object) -> Message:
+            return Message(
+                type="reply",
+                sender="workers",
+                recipient="agent",
+                payload={"status": "error", "reason": "denied"},
+            )
+
+        agent.ask = _error_reply  # type: ignore[method-assign]
+        with pytest.raises(SpawnError, match="denied"):
+            await agent.spawn_into("workers", EchoAgent, "child")
+
+
 # ---------------------------------------------------------------------------
 # Integration tests — full Runtime lifecycle
 # ---------------------------------------------------------------------------

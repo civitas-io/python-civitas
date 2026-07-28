@@ -10,6 +10,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from civitas import DynamicSupervisor, Runtime, Supervisor, TopologyServer
+from civitas.messages import Message
+from tests.conftest import wait_for
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -17,10 +19,18 @@ from civitas import DynamicSupervisor, Runtime, Supervisor, TopologyServer
 
 
 def _make_mock_agent(name: str, status: str = "RUNNING") -> MagicMock:
+    """v0.9.1 (D-DASH-1): sets real, JSON-serializable values for the fields
+    TopologyServer's serializers now read (capabilities/capability_metadata/
+    uptime_seconds) — a bare MagicMock() auto-vivifies those as further
+    MagicMocks, which json.dumps() cannot serialize.
+    """
     agent = MagicMock()
     agent.name = name
     agent.status = MagicMock()
     agent.status.value = status
+    agent.capabilities = []
+    agent.capability_metadata = {}
+    agent.uptime_seconds = 0.0
     return agent
 
 
@@ -35,12 +45,19 @@ def _make_mock_supervisor(
     name: str,
     strategy: str = "ONE_FOR_ONE",
     children: list[Any] | None = None,
+    restart_counts: dict[str, int] | None = None,
+    crashes_in_window: int = 0,
 ) -> MagicMock:
     sup = MagicMock(spec=Supervisor)
     sup.name = name
     sup.strategy = MagicMock()
     sup.strategy.value = strategy
     sup.children = children or []
+    # v0.9.1 (D-DASH-1): _restart_counts/_engine.window are real instance
+    # attributes TopologyServer now reads directly (same-process, no bus hop).
+    sup._restart_counts = restart_counts or {}
+    sup._engine = MagicMock()
+    sup._engine.window = [0.0] * crashes_in_window
     return sup
 
 
@@ -59,6 +76,7 @@ def _make_mock_dyn(
     dyn._dynamic_children = {
         n: _make_mock_child_rec(a) for n, a in (dynamic_children or {}).items()
     }
+    dyn._child_restart_counts = {}  # v0.9.1 (D-DASH-1)
     return dyn
 
 
@@ -71,29 +89,29 @@ class TestRouteHttp:
     def setup_method(self) -> None:
         self.ts = TopologyServer(name="ts", port=0)
 
-    def test_health(self) -> None:
-        body, code = self.ts._route_http("/health")
+    async def test_health(self) -> None:
+        body, code = await self.ts._route_http("/health")
         assert code == 200
         assert json.loads(body) == {"status": "ok"}
 
-    def test_unknown_path(self) -> None:
-        body, code = self.ts._route_http("/notexist")
+    async def test_unknown_path(self) -> None:
+        body, code = await self.ts._route_http("/notexist")
         assert code == 404
         assert "error" in json.loads(body)
 
-    def test_topology_no_runtime(self) -> None:
-        body, code = self.ts._route_http("/topology")
+    async def test_topology_no_runtime(self) -> None:
+        body, code = await self.ts._route_http("/topology")
         assert code == 200
         data = json.loads(body)
         assert "error" in data
 
-    def test_agents_no_runtime(self) -> None:
-        body, code = self.ts._route_http("/agents")
+    async def test_agents_no_runtime(self) -> None:
+        body, code = await self.ts._route_http("/agents")
         assert code == 200
         assert isinstance(json.loads(body), list)
 
-    def test_agent_detail_not_found(self) -> None:
-        body, code = self.ts._route_http("/agents/missing")
+    async def test_agent_detail_not_found(self) -> None:
+        body, code = await self.ts._route_http("/agents/missing")
         assert code == 404
         assert "not found" in json.loads(body)["error"]
 
@@ -110,7 +128,20 @@ class TestSerializers:
     def test_serialize_agent(self) -> None:
         agent = _make_mock_agent("worker-1", "RUNNING")
         result = self.ts._serialize_node(agent)
-        assert result == {"name": "worker-1", "type": "agent", "status": "RUNNING"}
+        # v0.9.1 (D-DASH-1): capabilities/capability_metadata/uptime_seconds/
+        # restart_count are new fields on every serialized agent node.
+        # process_id (D-DASH addendum, 2026-07-26): no registry wired here, so
+        # it falls back to this TopologyServer's own name (same-process case).
+        assert result == {
+            "name": "worker-1",
+            "type": "agent",
+            "status": "RUNNING",
+            "restart_count": 0,
+            "process_id": "ts",
+            "capabilities": [],
+            "capability_metadata": {},
+            "uptime_seconds": 0.0,
+        }
 
     def test_serialize_supervisor(self) -> None:
         child = _make_mock_agent("child-a")
@@ -121,6 +152,38 @@ class TestSerializers:
         assert result["strategy"] == "ONE_FOR_ONE"
         assert len(result["children"]) == 1
 
+    def test_serialize_supervisor_children_get_own_restart_count(self) -> None:
+        """v0.9.1 (D-DASH-1): restart_count is attributed by the PARENT to each
+        child individually — a supervisor with two children and only one
+        crashed must not conflate their counts (the bug the naive "sum at the
+        parent" approach would have introduced).
+        """
+        flaky = _make_mock_agent("flaky")
+        stable = _make_mock_agent("stable")
+        sup = _make_mock_supervisor("root", children=[flaky, stable], restart_counts={"flaky": 3})
+        result = self.ts._serialize_node(sup)
+        children_by_name = {c["name"]: c for c in result["children"]}
+        assert children_by_name["flaky"]["restart_count"] == 3
+        assert children_by_name["stable"]["restart_count"] == 0
+
+    def test_serialize_supervisor_reports_own_crashes_in_window(self) -> None:
+        """crashes_in_window is the SUPERVISOR's own restart-window occupancy
+        (v0.9.1, D-DASH-1) — same field civitas.supervision.status already
+        computes (v0.9.0 Phase C), now also on /topology."""
+        sup = _make_mock_supervisor("root", crashes_in_window=2)
+        result = self.ts._serialize_node(sup)
+        assert result["crashes_in_window"] == 2
+
+    def test_serialize_nested_supervisor_restart_count_attributed_correctly(self) -> None:
+        """A child SUPERVISOR's own restart_count (as tracked by ITS parent) is
+        distinct from its crashes_in_window (its own escalation budget) —
+        v0.9.1 (D-DASH-1) exercises both together in one nested tree."""
+        inner = _make_mock_supervisor("inner", crashes_in_window=1)
+        root = _make_mock_supervisor("root", children=[inner], restart_counts={"inner": 2})
+        result = self.ts._serialize_node(root)
+        assert result["children"][0]["restart_count"] == 2  # from root's tracking
+        assert result["children"][0]["crashes_in_window"] == 1  # inner's own window
+
     def test_serialize_dynamic_supervisor(self) -> None:
         dyn_child = _make_mock_agent("dyn-1")
         dyn = _make_mock_dyn("workers", max_children=5, dynamic_children={"dyn-1": dyn_child})
@@ -130,12 +193,12 @@ class TestSerializers:
         assert result["max_children"] == 5
         assert result["children"][0]["name"] == "dyn-1"
 
-    def test_serialize_nested_supervisor(self) -> None:
+    async def test_serialize_nested_supervisor(self) -> None:
         leaf = _make_mock_agent("leaf")
         inner = _make_mock_supervisor("inner", children=[leaf])
         root = _make_mock_supervisor("root", children=[inner])
         self.ts._root_supervisor = root
-        body, code = self.ts._route_http("/topology")
+        body, code = await self.ts._route_http("/topology")
         assert code == 200
         data = json.loads(body)
         assert data["name"] == "root"
@@ -159,7 +222,18 @@ class TestSerializers:
         agent = _make_mock_agent("svc", "RUNNING")
         self.ts._agents = {"svc": agent}
         result = self.ts._build_agent_detail("svc")
-        assert result == {"name": "svc", "status": "RUNNING"}
+        # v0.9.1 (D-DASH-1): capabilities/capability_metadata/uptime_seconds
+        # are new fields on every agent-detail response. process_id (D-DASH
+        # addendum, 2026-07-26): no registry wired, falls back to this
+        # TopologyServer's own name (same-process case).
+        assert result == {
+            "name": "svc",
+            "status": "RUNNING",
+            "process_id": "ts",
+            "capabilities": [],
+            "capability_metadata": {},
+            "uptime_seconds": 0.0,
+        }
 
     def test_build_agent_detail_not_found(self) -> None:
         assert self.ts._build_agent_detail("ghost") is None
@@ -173,10 +247,10 @@ class TestSerializers:
         assert result is not None
         assert result["name"] == "dyn-2"
 
-    def test_agents_endpoint_returns_agent_detail(self) -> None:
+    async def test_agents_endpoint_returns_agent_detail(self) -> None:
         agent = _make_mock_agent("svc", "RUNNING")
         self.ts._agents = {"svc": agent}
-        body, code = self.ts._route_http("/agents/svc")
+        body, code = await self.ts._route_http("/agents/svc")
         assert code == 200
         assert json.loads(body)["name"] == "svc"
 
@@ -297,6 +371,304 @@ async def test_topology_server_http_agent_detail() -> None:
         assert code404 == 404
     finally:
         await runtime.stop()
+
+
+@pytest.mark.asyncio
+async def test_topology_server_http_uptime_resets_after_restart() -> None:
+    """v0.9.1 (D-DASH-1) end-to-end: uptime_seconds is per-INCARNATION, not
+    per-child-lifetime — a crash-restart (D1a fresh instance) resets it,
+    exactly like the fresh-instance restart semantics uptime is meant to
+    reflect. Real Supervisor + real crashing agent, not a mock."""
+    from civitas.process import AgentProcess
+
+    class _CrashOnce(AgentProcess):
+        async def handle(self, message: Message) -> Message | None:
+            if message.payload.get("cmd") == "boom":
+                raise RuntimeError("boom")
+            return None
+
+    ts = TopologyServer(name="topo", port=16793)
+    worker = _CrashOnce("worker")
+    root = Supervisor("root", children=[ts, worker], max_restarts=3, backoff_base=0.01)
+    runtime = Runtime(supervisor=root)
+    await runtime.start()
+    try:
+        # Give the FIRST incarnation a long, unambiguous uptime before crashing
+        # it, so "did it reset" has a wide, non-flaky margin to check against.
+        await asyncio.sleep(1.0)
+        code, body = await _http_get("http://127.0.0.1:16793/agents/worker")
+        assert code == 200
+        first_uptime = json.loads(body)["uptime_seconds"]
+        assert first_uptime > 0.8
+
+        await runtime.send("worker", {"cmd": "boom"})
+        await asyncio.sleep(0.2)  # crash + backoff (0.01s) + fresh-incarnation restart
+
+        code2, body2 = await _http_get("http://127.0.0.1:16793/agents/worker")
+        assert code2 == 200
+        second_uptime = json.loads(body2)["uptime_seconds"]
+        # A NOT-reset uptime would be >= first_uptime (it would have kept
+        # accumulating from the original start, now over 1.2s); a reset one is
+        # a small fraction of it, well under a second.
+        assert second_uptime < 0.5
+    finally:
+        await runtime.stop()
+
+
+@pytest.mark.asyncio
+async def test_runtime_auto_provisions_metrics_collector_for_topology_server() -> None:
+    """v0.9.1 (D-DASH-4): a Runtime with a TopologyServer and no explicit
+    metrics= gets a real MetricsCollector for free — /metrics has something
+    to read without any extra caller wiring."""
+    from civitas.dashboard.collector import MetricsCollector
+
+    ts = TopologyServer(name="topo", port=16794)
+    runtime = Runtime(supervisor=Supervisor("root", children=[ts]))
+    await runtime.start()
+    try:
+        assert isinstance(runtime._metrics, MetricsCollector)
+        assert ts._metrics_collector is runtime._metrics
+    finally:
+        await runtime.stop()
+
+
+@pytest.mark.asyncio
+async def test_runtime_respects_explicit_custom_metrics_sink() -> None:
+    """v0.9.1 (D-DASH-4): a caller's own metrics= sink is never overridden —
+    auto-provisioning only fires when metrics is None. A non-MetricsCollector
+    sink means /metrics reports 'not available', not a silent empty snapshot."""
+
+    class _CustomSink:
+        def message_handled(self, agent_name: str, latency_ms: float) -> None: ...
+        def message_sent(self, agent_name: str) -> None: ...
+        def agent_error(self, agent_name: str) -> None: ...
+        def agent_restarted(self, agent_name: str, reason: str = "") -> None: ...
+
+    custom = _CustomSink()
+    ts = TopologyServer(name="topo", port=16795)
+    runtime = Runtime(supervisor=Supervisor("root", children=[ts]), metrics=custom)
+    await runtime.start()
+    try:
+        assert runtime._metrics is custom  # never overridden
+        assert ts._metrics_collector is None  # not a MetricsCollector
+        code, body = await _http_get("http://127.0.0.1:16795/metrics")
+        assert code == 404
+        assert json.loads(body) == {"error": "metrics not available"}
+    finally:
+        await runtime.stop()
+
+
+@pytest.mark.asyncio
+async def test_topology_server_http_metrics_shape() -> None:
+    """v0.9.1 (D-DASH-2): /metrics returns the documented shape, reflecting
+    real message-handling activity end-to-end (no mocks)."""
+    from civitas.process import AgentProcess
+
+    class _Echo(AgentProcess):
+        async def handle(self, message: Message) -> Message | None:
+            return self.reply({"ok": True})
+
+    ts = TopologyServer(name="topo", port=16796)
+    echo = _Echo("echo")
+    runtime = Runtime(supervisor=Supervisor("root", children=[ts, echo]))
+    await runtime.start()
+    try:
+        await runtime.ask("echo", {"q": 1})
+        code, body = await _http_get("http://127.0.0.1:16796/metrics")
+        assert code == 200
+        data = json.loads(body)
+        assert "echo" in data["agents"]
+        echo_metrics = data["agents"]["echo"]
+        assert echo_metrics["messages_handled"] == 1
+        assert echo_metrics["avg_latency_ms"] >= 0.0
+        assert echo_metrics["last_model"] == ""  # nothing reported an LLM call yet
+        assert data["total_messages"] >= 1
+        assert data["uptime_seconds"] >= 0.0
+    finally:
+        await runtime.stop()
+
+
+@pytest.mark.asyncio
+async def test_topology_server_http_metrics_includes_dynamically_spawned_agent() -> None:
+    """v0.9.1 (dashboard-v2 D-DASH addendum): a DynamicSupervisor-spawned
+    child — never known to Runtime's static all_agents() registration loop —
+    still shows up in /metrics with real numbers, via MetricsCollector's lazy
+    self-registration. This is the actual fix for the gap Phase B's design
+    addendum flagged as a documented limitation; it is no longer one.
+    """
+    from tests.conftest import EchoAgent
+
+    ts = TopologyServer(name="topo", port=16797)
+    dyn = DynamicSupervisor("workers")
+    runtime = Runtime(supervisor=Supervisor("root", children=[ts, dyn]))
+    await runtime.start()
+    try:
+        await runtime.spawn("workers", EchoAgent, "spawned-1")
+        await runtime.ask("spawned-1", {"msg": "hi"})
+
+        code, body = await _http_get("http://127.0.0.1:16797/metrics")
+        assert code == 200
+        data = json.loads(body)
+        assert "spawned-1" in data["agents"]
+        assert data["agents"]["spawned-1"]["messages_handled"] == 1
+    finally:
+        await runtime.stop()
+
+
+@pytest.mark.asyncio
+async def test_topology_server_http_processes_includes_runtime_self_sample() -> None:
+    """v0.9.1 (D-DASH-3): /processes always includes at least the Runtime's
+    own self-measured process — no Worker/remote channel needed for this
+    part. Uses tcp:// (not ipc://) so this test stays Windows-compatible
+    (design dashboard-v2.md §12 cross-platform note).
+    """
+    ts = TopologyServer(name="topo", port=16798)
+    runtime = Runtime(supervisor=Supervisor("root", children=[ts]))
+    await runtime.start()
+    try:
+        code, body = await _http_get("http://127.0.0.1:16798/processes")
+        assert code == 200
+        data = json.loads(body)
+        runtime_entries = [p for p in data["processes"] if p["kind"] == "runtime"]
+        assert len(runtime_entries) == 1
+        entry = runtime_entries[0]
+        assert entry["id"] == "topo"
+        assert entry["pid"] > 0
+        assert entry["cpu_percent"] >= 0.0
+        assert entry["rss_bytes"] > 0
+    finally:
+        await runtime.stop()
+
+
+class TestProcessIdLinkage:
+    """v0.9.1 (D-DASH addendum, 2026-07-26): every agent's process_id must
+    match one of /processes' own 'id' fields exactly, so a client can join
+    the two endpoints directly — tested as an explicit contract, not just
+    that SOME string is present.
+    """
+
+    def setup_method(self) -> None:
+        self.ts = TopologyServer(name="ts", port=0)
+
+    def test_local_agent_falls_back_to_own_name(self) -> None:
+        """No registry wired (or no health_channel entry) => runs in the
+        SAME process as this TopologyServer — matches /processes' runtime
+        entry, whose id is this server's own name."""
+        assert self.ts._process_id_for("any-agent") == "ts"
+
+    def test_remote_agent_uses_its_workers_health_channel(self) -> None:
+        """A registered agent with a health_channel => hosted on that
+        Worker — matches /processes' worker entry, whose id is the channel."""
+        self.ts._registry = _fake_registry_with_channels({"remote-agent": "chan-1"})
+        assert self.ts._process_id_for("remote-agent") == "chan-1"
+
+    def test_registered_but_no_channel_still_falls_back(self) -> None:
+        """A registry entry that exists but carries no health_channel (a
+        pre-v0.9 worker, or a purely local registration) is still local."""
+        registry = MagicMock()
+        entry = MagicMock()
+        entry.health_channel = ""
+        registry.lookup.return_value = entry
+        self.ts._registry = registry
+        assert self.ts._process_id_for("agent") == "ts"
+
+
+async def test_topology_server_http_process_id_matches_processes_endpoint() -> None:
+    """v0.9.1 (D-DASH addendum) end-to-end: a real agent's /topology
+    process_id equals the exact 'id' of its /processes entry — the actual
+    contract the linkage exists to provide, proven over real HTTP, not just
+    unit-level on _process_id_for() in isolation."""
+    ts = TopologyServer(name="topo", port=16800)
+    runtime = Runtime(supervisor=Supervisor("root", children=[ts]))
+    await runtime.start()
+    try:
+        topo_code, topo_body = await _http_get("http://127.0.0.1:16800/topology")
+        assert topo_code == 200
+        topo_data = json.loads(topo_body)
+        assert topo_data["process_id"] == "topo"  # the root Supervisor's own process_id
+
+        proc_code, proc_body = await _http_get("http://127.0.0.1:16800/processes")
+        assert proc_code == 200
+        proc_data = json.loads(proc_body)
+        process_ids = {p["id"] for p in proc_data["processes"]}
+        assert topo_data["process_id"] in process_ids  # the actual join contract
+    finally:
+        await runtime.stop()
+
+
+async def test_topology_server_http_metrics_includes_restart_history() -> None:
+    """v0.9.1 (D-DASH addendum, 2026-07-26): restart_history was already
+    collected by MetricsCollector but never exposed — a real, safe,
+    read-only timeline, verified end-to-end with a real crash-restart."""
+    from civitas.process import AgentProcess
+
+    class _CrashOnce(AgentProcess):
+        async def handle(self, message: Message) -> Message | None:
+            if message.payload.get("cmd") == "boom":
+                raise RuntimeError("boom")
+            return None
+
+    ts = TopologyServer(name="topo", port=16801)
+    worker = _CrashOnce("flaky")
+    root = Supervisor("root", children=[ts, worker], max_restarts=3, backoff_base=0.01)
+    runtime = Runtime(supervisor=root)
+    await runtime.start()
+    try:
+        await runtime.send("flaky", {"cmd": "boom"})
+        await wait_for(lambda: root._restart_counts.get("flaky", 0) >= 1)
+        await asyncio.sleep(0.05)  # let the restart complete before polling
+
+        code, body = await _http_get("http://127.0.0.1:16801/metrics")
+        assert code == 200
+        data = json.loads(body)
+        assert "restart_history" in data
+        events = [e for e in data["restart_history"] if e["agent_name"] == "flaky"]
+        assert len(events) >= 1
+        assert events[0]["timestamp"] > 0
+    finally:
+        await runtime.stop()
+
+
+def _fake_registry_with_channels(channels: dict[str, str]) -> MagicMock:
+    """A minimal fake Registry: all_names() + lookup(name).health_channel,
+    the only two members _distinct_health_channels() touches."""
+    registry = MagicMock()
+    registry.all_names.return_value = list(channels)
+
+    def _lookup(name: str) -> MagicMock | None:
+        channel = channels.get(name)
+        if channel is None:
+            return None
+        entry = MagicMock()
+        entry.health_channel = channel
+        return entry
+
+    registry.lookup.side_effect = _lookup
+    return registry
+
+
+async def test_topology_server_distinct_health_channels_deduplicates() -> None:
+    """v0.9.1 (D-DASH-3): two agents hosted on the SAME Worker (one health
+    channel) must probe that Worker exactly once, not twice."""
+    ts = TopologyServer(name="topo", port=0)
+    ts._registry = _fake_registry_with_channels(
+        {"agent-a": "chan-1", "agent-b": "chan-1", "agent-c": "chan-2"}
+    )
+    assert ts._distinct_health_channels() == {"chan-1", "chan-2"}
+
+
+async def test_topology_server_probe_worker_process_timeout_returns_none() -> None:
+    """v0.9.1 (D-DASH-3): an unreachable Worker is simply absent from
+    /processes, not an error response for the whole endpoint."""
+    ts = TopologyServer(name="topo", port=0)
+
+    class _DeadBus:
+        async def request(self, message: Message, timeout: float) -> Message:
+            raise TimeoutError
+
+    ts._bus = _DeadBus()  # type: ignore[assignment]
+    result = await ts._probe_worker_process("chan-1")
+    assert result is None
 
 
 # ---------------------------------------------------------------------------
@@ -538,8 +910,11 @@ class TestTopologyShowCommand:
         runner = CliRunner()
         result = runner.invoke(app, ["topology", "show", str(topo_file)])
         assert result.exit_code == 0
-        # Falls back to static with annotation
-        assert "runtime not running" in result.output
+        # Falls back to static with annotation. Rich word-wraps to the
+        # terminal width, which is narrower in some CI/container environments
+        # (the exact V1 class of bug, v0.8.1) — normalize whitespace before
+        # the substring check so a mid-phrase wrap doesn't break the match.
+        assert "runtime not running" in " ".join(result.output.split())
 
     def test_show_live_when_runtime_available(self, tmp_path: Any) -> None:
         from unittest.mock import patch

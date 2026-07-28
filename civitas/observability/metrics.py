@@ -29,3 +29,20 @@ class MetricsSink(Protocol):
     def agent_restarted(self, agent_name: str, reason: str = "") -> None:
         """Record that a supervisor restarted an agent after a crash."""
         ...
+
+    def llm_call(
+        self,
+        agent_name: str,
+        tokens_in: int,
+        tokens_out: int,
+        cost_usd: float,
+        model: str = "",
+    ) -> None:
+        """Record one LLM call's token usage, cost, and model (v0.9.1, FD-01).
+
+        Called from ``AgentProcess.llm_span()``'s teardown when the caller
+        reported at least one of tokens_in/tokens_out/cost_usd via
+        ``span.set_attribute("civitas.llm.tokens_in"/"tokens_out"/"cost_usd", ...)``
+        — a span that never reports usage produces no call here.
+        """
+        ...

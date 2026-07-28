@@ -51,6 +51,7 @@ Everything in this part is done.
 | — | [v0.8.1 — Verification Perimeter](#v081-verification-perimeter-released) | Jul 2026 |
 | — | [v0.8.2 — Hygiene](#v082-hygiene-released) | Jul 2026 |
 | — | [v0.9.0 — Supervision Endgame](#v090-supervision-endgame-released) | Jul 2026 |
+| — | [v0.9.1 — Post-endgame Polish](#v091-post-endgame-polish-released) | Jul 2026 |
 
 ---
 
@@ -1013,6 +1014,32 @@ the pre-existing "no resurrection after stop" guarantee).
 
 ---
 
+## v0.9.1 — Post-endgame Polish (Released)
+
+**Status: ✅ Released 2026-07-28.** Coverage top-ups, and a full Textual TUI rebuild of
+`civitas dashboard` ("civitas top") that attaches to an already-running topology over HTTP instead
+of spawning its own runtime. Design: [`dashboard-v2.md`](design/dashboard-v2.md) — ✅ ACCEPTED,
+fully implemented. Plan: `.sisyphus/plans/dashboard-v2.md` (Phases A–G).
+
+| # | Deliverable | Priority |
+|---|-------------|----------|
+| — | ✅ **Done** — `process.py` (88%→92%) / `runtime.py` (87%→91%) coverage top-ups: 22 new tests covering `llm_span()`/`tool_span()`'s tracer-present path, `connect_mcp()`'s error paths, `spawn_into()`'s validation/error paths, suspend/resume/despawn checkpoint-failure branches, and message-signing wiring | Low |
+| A–D | ✅ **Done** — `TopologyServer` enrichment: `restart_count`, `crashes_in_window`, `capabilities`, `uptime_seconds`, `process_id`; new `GET /metrics` (auto-provisioned `MetricsCollector`) and `GET /processes` (psutil resource stats via the existing D5 health-probe wire protocol) endpoints; closed FD-01 (`llm_span()` now always feeds metrics, independent of tracing) | Medium |
+| E–F | ✅ **Done** — the Textual app itself (Mockup B's dense three-pane grid: tree \| detail \| resources), chosen after building and comparing two real runnable mockups; `civitas dashboard <topology.yaml>` rewritten to YAML-driven remote-attach only (breaking CLI change, documented); new `civitas[dashboard]` extra | Medium |
+| G | ✅ **Done** — verification sweep (1373/1373 unit+integration, macOS + Linux Docker), `docs/cli.md` rewrite, CHANGELOG entry, runnable demo at `examples/dashboard_demo/` | — |
+
+**Found along the way (not planned, surfaced by actually running things):** two dead metrics
+hooks (`llm_call()`/FD-01, `agent_restarted()`) that existed and were unit-tested but were never
+actually called from `civitas/`; `TopologyServer` has zero authentication today (acceptable for
+read-only endpoints, tracked as the v0.9.2 prerequisite gate for any write action); three silently
+broken API calls in `examples/dynamic_spawning.py`, fixed, exposing that no example file in this
+repo has any test coverage (tracked, v0.9.2). Control-plane items (auth, suspend/resume-as-write,
+kill/restart, mailbox introspection) were deliberately scoped OUT after a capability-scope
+discussion, to be designed properly rather than added reactively — see v0.9.2 below.
+
+
+---
+
 ## Part 2 — Backlog
 
 **Status: 🗂️ Tracked** — the active todo list: everything not yet done. New work lands here first
@@ -1028,14 +1055,58 @@ Owner column: `core` = python-civitas, else the target repo.
 > #27–#35 closed by [v0.8.0](#v080-supervision-core-hardening-released); #39–#43 closed by
 > [v0.8.1](#v081-verification-perimeter-released). The 2026-07 architecture review is fully
 > closed by [v0.9.0](#v090-supervision-endgame-released) — zero xfail trackers remain in
-> `tests/unit/test_actor_model_gaps.py`.
+> `tests/unit/test_actor_model_gaps.py`. Coverage top-ups and the dashboard rebuild are closed by
+> [v0.9.1](#v091-post-endgame-polish-released).
 
-### v0.9.1 — Post-endgame polish (Planned, after v0.9.0)
+### v0.9.2 — Dashboard control-plane, observability, + cross-platform CI (Planned, after v0.9.1)
 
-| Item | Priority | Why after v0.9.0 |
-|------|----------|------------------|
-| process.py / runtime.py coverage miss-range top-ups (streaming internals, MCP connect, exporter/signing blocks) | 🟢 Low | the D6/D1a rewiring churns exactly these regions — topping up first is wasted motion |
-| Textual dashboard rebuild on `TopologyServer` endpoints | 🟡 Medium | topology data model stabilizes in v0.9.0 |
+**Design-first, explicitly** — none of the control-plane items below get built until each has
+its own proper design conversation (2026-07 decision, in response to a "hold off on auth, don't
+knee-jerk it" instruction). `TopologyServer` has **zero authentication today** (verified by
+grep, not assumed) — everything it currently serves is read-only, which is why that's been an
+acceptable risk so far. The moment any write/control action ships, that risk tier changes
+completely, so an auth design is the prerequisite gate for the whole "control-plane" group below,
+not an afterthought bolted onto one endpoint.
+
+| Item | Priority | Source |
+|------|----------|--------|
+| **`TopologyServer` auth design** (prerequisite gate for every write/control item below) | High | found during dashboard-v2 capability discussion (2026-07-26) — zero auth exists today; every item below is blocked on this, by design |
+| Dashboard/API: suspend/resume an agent (write action) | Medium | 2026-07-26 discussion — safest write action to add first: `runtime.suspend()`/`resume()` already exist, already audited (`AuditEvent`), designed as this system's governed HITL pause primitive (not destructive, unlike kill) |
+| Dashboard/API: kill / force-restart an agent manually | Low | 2026-07-26 discussion — mechanically feasible (new "force crash" trigger + existing restart machinery) but real DoS surface without auth first |
+| Mailbox introspection (list/enumerate) | Low | 2026-07-26 discussion — **no non-destructive peek exists anywhere in `Mailbox` today** (only `get()`/consumes-one, `depth()`/count-only, `drain()`/consumes-everything); needs new `Mailbox` API, not just a new endpoint |
+| Mailbox: remove one specific in-flight message | Low | 2026-07-26 discussion — conflicts with the at-most-once/FIFO delivery guarantee this codebase is built around; a real design problem, not a small addition — needs its own conversation, may not be a good idea at all |
+| Mailbox: inject a message (add) | Low | 2026-07-26 discussion — mechanically `send()` exposed through a new surface, but payload content is a real data-exposure concern over an unauthenticated endpoint |
+| Per-agent process/container awareness beyond `process_id` (e.g. Docker) | Low | 2026-07-26 discussion — recommended AGAINST building container-awareness into civitas itself (couples the runtime to a deployment concern better owned by container-native tooling); revisit only if a concrete use case emerges |
+| **Telemetry dashboard**: logging + graphs/charts view, built on the OTEL/tracer infra already collected | Medium | 2026-07-26 — user's own framing: "we are already collecting telemetry — let's design that later"; distinct from the live-snapshot TUI (v0.9.1), this is historical/trend data (message-rate, cost-over-time, trace/span drill-down) — needs its own design round, likely its own surface (web UI?) not necessarily the terminal dashboard |
+| CI matrix: macOS + Windows runners (today: Ubuntu only) | Medium | found during dashboard-v2 Phase D planning (2026-07-24) — production ZMQ defaults are already Windows-safe (`tcp://`), but 4 test files use `ipc://` (Unix-only) and nothing has ever been CI-verified outside Linux |
+| Dashboard: network I/O per process | Low | design/dashboard-v2.md P1 |
+| Dashboard: "session length" (LLM conversation turns/duration) | Low | design/dashboard-v2.md P1 |
+| Dashboard: historical charts/sparklines (message-rate, cost-over-time) | Low | design/dashboard-v2.md P1 — likely folds into the telemetry dashboard item above rather than the live TUI |
+| Dashboard: distinct HITL-wait vs. governance-suspend visual signal | Low | design/dashboard-v2.md §6 option B — needs a real HITL flow to design against first |
+| Dashboard: log tail panel per agent | Low | design/dashboard-v2.md P2 — likely folds into the telemetry dashboard item above |
+| Dashboard: multi-cluster / multi-topology view | Low | design/dashboard-v2.md P2 |
+| Dashboard layout: optional focus/expand mode for the detail pane (Mockup A's wide-detail idea) | Low | design/dashboard-v2.md §7.0 — Mockup B (dense three-pane grid) shipped as the default in v0.9.1; Mockup A's core idea kept as an opt-in mode, not discarded |
+
+### Examples & example-coverage gaps (found 2026-07-27, fixing `examples/dashboard_demo/`)
+
+While building the dashboard demo, `examples/dynamic_spawning.py` was found silently broken (three
+separate calls to real APIs with the wrong signature — `spawn()`'s argument order, `Runtime(dict)`
+instead of `Runtime.from_config_dict()`, a `Message` object passed where a plain payload dict was
+required) and fixed. It ran with **zero test coverage** — no example file in this repo is exercised
+by the test suite at all, which is the actual root cause: nothing would have caught it, or the next
+one, automatically.
+
+| Item | Priority | Source |
+|------|----------|--------|
+| **Examples smoke test** — run every `examples/*.py` that needs no external service, assert exit 0 | High | 2026-07-27 — the structural gap that let `dynamic_spawning.py` ship broken; would catch the next one automatically, not just this one |
+| Example: non-blocking spawn (`spawn_nowait()` / `spawn(..., wait=False)`) | Medium | 2026-07-27 — B4/v0.9.0 has a full design doc (`design/non-blocking-spawn.md`) and zero examples; every existing example uses default `wait=True` |
+| Example: streaming response (`StreamContext`, bus-native streaming) | Medium | 2026-07-27 — `docs/streaming.md` is a full page; nothing in `examples/` demonstrates it |
+| Example: message signing / secured transport (CURVE, TLS, `MessageSigner`) | Medium | 2026-07-27 — `SECURITY.md` + `design/security-hardening.md` + a dedicated `security` extras group (`pynacl`) exist; no example configures any of it |
+| Example: cross-process dynamic spawn (`DynamicSupervisor` hosted in a Worker) | Medium | 2026-07-27 — `design/cross-process-spawn.md` (R6) describes this specifically; `deployment/level2`/`level3` only show static multi-process topologies |
+| Example: gRPC gateway | Low | 2026-07-27 — `civitas/gateway/grpc_server.py` is real and substantial with its own extras group and design doc; only `http_gateway.py` exists as an example |
+| Example: gateway auth (JWT bearer, mTLS) | Low | 2026-07-27 — `gateway-auth.md`, `gateway-http-mtls-proxy.md`, `gateway-ws-grpc-auth.md` all exist; `http_gateway.py` doesn't configure auth |
+| Example: custom plugin (model provider / exporter / state store) | Low | 2026-07-27 — `docs/plugins.md` documents the extension points; every example only uses built-ins |
+| Example: supervision introspection (`civitas.supervision.status` query) | Low | 2026-07-27 — the v0.9.0 endgame's own introspection API has no standalone example outside the dashboard |
 
 ### v0.10.0 — HITL & Streaming polish (Planned — the Medicus runway)
 

@@ -1,0 +1,201 @@
+"""civitas/dashboard/widgets.py \u2014 rendering-only widgets (v0.9.1, dashboard-v2
+Phase E). Each ``update_*`` method is HTTP-free and takes plain dicts (the
+app's poll workers own all I/O) \u2014 tested here with plain sample data, no
+server needed, matching design \u00a710's "few, meaningful" scope for widget-level
+tests (the end-to-end app/click/reconnect behavior lives in
+tests/integration/test_dashboard_app.py).
+"""
+
+from __future__ import annotations
+
+import pytest
+from textual.app import App, ComposeResult
+from textual.widgets import DataTable
+
+from civitas.dashboard.widgets import (
+    AgentDetailPanel,
+    ProcessResourcePanel,
+    ReconnectBanner,
+    TopologyTree,
+    flatten_topology,
+)
+
+# ---------------------------------------------------------------------------
+# flatten_topology \u2014 pure function, no Textual needed
+# ---------------------------------------------------------------------------
+
+
+def test_flatten_topology_none() -> None:
+    assert flatten_topology(None) == {}
+
+
+def test_flatten_topology_nested() -> None:
+    tree = {
+        "name": "root",
+        "type": "supervisor",
+        "children": [
+            {"name": "worker-a", "type": "agent", "status": "running"},
+            {
+                "name": "dyn",
+                "type": "dynamic_supervisor",
+                "children": [{"name": "spawned-1", "type": "agent", "status": "suspended"}],
+            },
+        ],
+    }
+    flat = flatten_topology(tree)
+    assert set(flat) == {"root", "worker-a", "dyn", "spawned-1"}
+    assert flat["spawned-1"]["status"] == "suspended"
+
+
+# ---------------------------------------------------------------------------
+# Widget rendering \u2014 mounted inside a minimal throwaway App (Textual widgets
+# need a running App/screen to safely query_one() their composed children).
+# ---------------------------------------------------------------------------
+
+
+class _SingleWidgetApp(App[None]):
+    def __init__(self, widget: object) -> None:
+        super().__init__()
+        self._widget = widget
+
+    def compose(self) -> ComposeResult:
+        yield self._widget  # type: ignore[misc]
+
+
+@pytest.mark.asyncio
+async def test_topology_tree_renders_agents_and_supervisors() -> None:
+    tree = TopologyTree()
+    app = _SingleWidgetApp(tree)
+    async with app.run_test():
+        tree.update_topology(
+            {
+                "name": "root",
+                "type": "supervisor",
+                "strategy": "one_for_one",
+                "crashes_in_window": 0,
+                "children": [
+                    {"name": "worker-a", "type": "agent", "status": "running", "restart_count": 0},
+                    {"name": "worker-b", "type": "agent", "status": "crashed", "restart_count": 3},
+                ],
+            }
+        )
+        # Tree.root is the "civitas top" title node (never the supervision
+        # root itself, matching the ratified mockup script) -- its one child
+        # IS the supervision root, and THAT node's children are the workers.
+        assert len(tree.root.children) == 1
+        supervision_root = tree.root.children[0]
+        labels = [str(n.label) for n in supervision_root.children]
+        assert len(labels) == 2
+        assert any("worker-a" in label for label in labels)
+        assert any("restarts:3" in label for label in labels)
+
+
+@pytest.mark.asyncio
+async def test_topology_tree_handles_error_response() -> None:
+    """A /topology error body (runtime not available) must not crash the
+    tree \u2014 it should render a disconnected-looking root with zero children."""
+    tree = TopologyTree()
+    app = _SingleWidgetApp(tree)
+    async with app.run_test():
+        tree.update_topology({"error": "runtime not available"})
+        assert len(tree.root.children) == 0
+
+
+@pytest.mark.asyncio
+async def test_agent_detail_panel_shows_placeholder_when_unselected() -> None:
+    panel = AgentDetailPanel()
+    app = _SingleWidgetApp(panel)
+    async with app.run_test():
+        panel.update_detail(None, None, None)
+        title = panel.query_one("#detail-title")
+        assert "Select" in str(title.render())
+
+
+@pytest.mark.asyncio
+async def test_agent_detail_panel_joins_topology_and_metrics() -> None:
+    """The join happens IN the widget (design \u00a77) \u2014 topology fields and
+    metrics fields must both land in the same table from two separate dicts."""
+    panel = AgentDetailPanel()
+    app = _SingleWidgetApp(panel)
+    async with app.run_test():
+        panel.update_detail(
+            "worker-a",
+            {
+                "name": "worker-a",
+                "type": "agent",
+                "status": "running",
+                "process_id": "topo",
+                "restart_count": 1,
+                "uptime_seconds": 90.0,
+                "capabilities": ["chat"],
+            },
+            {
+                "messages_handled": 12,
+                "messages_sent": 5,
+                "avg_latency_ms": 3.2,
+                "errors": 0,
+                "tokens_in": 100,
+                "tokens_out": 50,
+                "cost_usd": 0.02,
+                "last_model": "claude-sonnet",
+            },
+        )
+        table = panel.query_one("#detail-table", DataTable)
+        rows = [table.get_row_at(i) for i in range(table.row_count)]
+        fields = {row[0]: row[1] for row in rows}
+        assert fields["restart_count"] == "1"
+        assert fields["uptime"] == "1m 30s"
+        assert fields["capabilities"] == "chat"
+        assert fields["last_model"] == "claude-sonnet"
+        assert "0.02" in fields["cost_usd"] or fields["cost_usd"] == "$0.02"
+
+
+@pytest.mark.asyncio
+async def test_process_resource_panel_renders_gauge_rows() -> None:
+    panel = ProcessResourcePanel()
+    app = _SingleWidgetApp(panel)
+    async with app.run_test():
+        panel.update_processes(
+            [
+                {
+                    "kind": "runtime",
+                    "id": "topo",
+                    "pid": 1,
+                    "cpu_percent": 12.0,
+                    "rss_bytes": 1024,
+                    "uptime_seconds": 5.0,
+                },
+                {
+                    "kind": "worker",
+                    "id": "chan-1",
+                    "pid": 2,
+                    "cpu_percent": 90.0,
+                    "rss_bytes": 2048,
+                    "uptime_seconds": 5.0,
+                },
+            ]
+        )
+        table = panel.query_one("#resource-table", DataTable)
+        assert table.row_count == 2
+
+
+@pytest.mark.asyncio
+async def test_process_resource_panel_handles_none() -> None:
+    panel = ProcessResourcePanel()
+    app = _SingleWidgetApp(panel)
+    async with app.run_test():
+        panel.update_processes(None)
+        table = panel.query_one("#resource-table", DataTable)
+        assert table.row_count == 0
+
+
+@pytest.mark.asyncio
+async def test_reconnect_banner_show_and_clear() -> None:
+    banner = ReconnectBanner()
+    app = _SingleWidgetApp(banner)
+    async with app.run_test():
+        assert banner.display is False
+        banner.show_for("/topology")
+        assert banner.display is True
+        banner.clear()
+        assert banner.display is False

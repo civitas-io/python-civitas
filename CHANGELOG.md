@@ -9,6 +9,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ---
 
+## [Unreleased]
+
+## [0.9.1] — 2026-07-28
+
+Post-endgame polish: coverage top-ups, and a full Textual TUI rebuild of `civitas dashboard`
+("civitas top") that attaches to an already-running topology instead of spawning its own runtime.
+
+### Added
+
+- **`civitas top` — the dashboard is a full Textual TUI rebuild, not a patch** ([design/dashboard-v2.md](docs/design/dashboard-v2.md)) — `civitas dashboard <topology.yaml>` now attaches remotely to an already-running topology's `topology_server` over HTTP and polls it live, instead of spawning its own runtime. Mouse-clickable three-pane layout (supervision tree | agent detail | per-process resources), built-in light/dark theme switching (`Ctrl+P`), and a persistent reconnect banner if the server becomes unreachable. New `GET /metrics` and `GET /processes` endpoints on `TopologyServer`; `/topology` and `/agents` gained `restart_count`, `crashes_in_window`, `capabilities`, `uptime_seconds`, and `process_id` (joins directly to `/processes`' own process IDs). `Runtime.start()` now auto-provisions a `MetricsCollector` whenever a `TopologyServer` is present and no metrics sink was already attached. New `civitas[dashboard]` extra (`textual`, `psutil`). A runnable demo topology ships at `examples/dashboard_demo/`.
+- **Coverage top-ups: `process.py` (88%→92%) and `runtime.py` (87%→91%)** — deferred until after v0.9.0's D6/D1a rewiring settled in these exact regions (would have been wasted motion earlier). 22 new tests: `llm_span()`/`tool_span()`'s tracer-present path (span attributes, parent-span resolution, exception-sets-error — previously only the no-tracer branch was tested), `connect_mcp()`'s idempotent-reconnect and fabrica-absent `ConfigurationError` paths, `emit()`/`end_stream()`'s outside-handle guards, `spawn_into()`'s five validation/error paths (self-target, unknown supervisor, non-DynamicSupervisor target, routing/timeout wrapping, error-reply), `AgentProcess.stop()`'s error-reply path, four suspend/resume/despawn checkpoint-failure degraded-durability branches, and `Runtime.start()`'s message-signing wiring for non-InProcess transports (identity load, `KeyRegistry`, `MessageSigner`/`SigningSerializer` swap — previously only YAML parsing into `SecurityConfig` was tested, never the actual wiring). One block documented as an accepted, contrib-gated ceiling matching the `cli/state.py` precedent (v0.8.2 G3): `_build_exporters`' per-kind bodies (arize/langfuse/braintrust/langsmith/fiddler) require `civitas_contrib`, not a core dependency — only the `ConfigurationError` guard is testable in core CI.
+
+### Changed
+
+- **`civitas dashboard`'s CLI shape changed** — the topology YAML is now a required positional argument (was `--topology`, defaulting to `topology.yaml`), and the command only ever attaches remotely (the old spawn-your-own-runtime mode is removed). `--refresh` now means "poll interval" rather than "Rich `Live` refresh rate," but keeps the same flag and default.
+
+### Fixed
+
+- **`llm_span()` now actually feeds the dashboard's metrics collector, closing FD-01** — previously, token/cost/model usage reported via `span.set_attribute("civitas.llm.tokens_in"/...)` was only ever forwarded to a metrics sink when a tracer was also attached; a dashboard-only (no-tracer) setup silently recorded zero cost for every LLM call. Metrics reporting is now independent of tracing — both branches build a real span and share one `finally` that reports usage if the caller set at least one of tokens_in/tokens_out/cost_usd.
+- **Two dead metrics hooks, found while wiring the dashboard's new endpoints** — `MetricsCollector.agent_restarted()` was fully implemented and unit-tested but never called from anywhere in `civitas/` (only the now-retired standalone dashboard CLI wired it manually); restart history and per-agent restart counts now populate for any `TopologyServer`-having `Runtime`. `MetricsCollector`'s recording methods also now self-register a name lazily instead of silently no-op'ing for it, fixing dynamically-spawned children (invisible to `Runtime.all_agents()`'s static snapshot) for any spawn mechanism.
+- **`examples/dynamic_spawning.py` had three silently-broken API calls** — wrong `spawn()` argument order plus a nonexistent `init_kwargs` parameter, `Runtime(dict)` instead of `Runtime.from_config_dict(dict)`, and a `Message` object passed where a plain payload dict was required by `send()`. The example had zero test coverage (true of every file in `examples/` today — tracked in `docs/milestones.md`), so nothing caught it running broken. Verified end-to-end: exit code 0.
+
 ## [0.9.0] — 2026-07-24
 
 Supervision Endgame — closes the entire 2026-07 architecture review (zero xfails remain), makes

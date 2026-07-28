@@ -1,0 +1,26 @@
+# civitas top dashboard demo (v0.9.1) — deliberately noisy/colorful, not a
+# realistic workload. See README.md in this directory for how to run it.
+supervision:
+  name: root
+  strategy: ONE_FOR_ONE
+  max_restarts: 20
+  restart_window: 60.0
+  children:
+    - type: topology_server
+      name: topo_server
+      config:
+        host: 127.0.0.1
+        port: 6789
+
+    - type: examples.dashboard_demo.agents.ChattyWorker
+      name: chatty
+
+    - type: examples.dashboard_demo.agents.FlakyWorker
+      name: flaky
+
+    - type: dynamic_supervisor
+      name: workers
+      max_children: 10
+
+    - type: examples.dashboard_demo.agents.SpawnerAgent
+      name: spawner

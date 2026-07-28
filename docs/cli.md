@@ -255,18 +255,58 @@ Without `--force`, you are prompted to confirm before state is deleted.
 
 ## civitas dashboard
 
-Launch a live terminal dashboard showing real-time agent statuses.
+Launch **`civitas top`** — a live, mouse-clickable Textual dashboard for an already-running
+topology (v0.9.1 rebuild; see [design/dashboard-v2.md](design/dashboard-v2.md) for the full
+design). It attaches remotely over HTTP to the topology's `topology_server` node and polls
+`/topology`, `/metrics`, and `/processes` independently — it does not start a runtime of its own.
 
 ```bash
-civitas dashboard [--topology <path>] [--refresh <seconds>]
+civitas dashboard <topology.yaml> [--refresh <seconds>]
 ```
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--topology` | `topology.yaml` | Path to topology YAML file |
-| `--refresh` | `1.0` | Dashboard refresh rate in seconds |
+| Argument / Option | Default | Description |
+|-------------------|---------|-------------|
+| `topology` | — | Path to the topology YAML file (required). Must declare a `topology_server` node. |
+| `--refresh` / `-r` | `1.0` | Poll interval in seconds |
 
-The dashboard instruments the supervisor's crash handler to track restarts. Press `Ctrl+C` to exit cleanly.
+Requires the `dashboard` extra:
+
+```bash
+pip install 'civitas[dashboard]'
+```
+
+Without it, the command still appears in `--help`, but exits with a clear install instruction the
+moment you try to run it.
+
+### Layout
+
+Three equally-sized panes, all visible at once:
+
+- **Tree** (left) — the live supervision tree. Click any agent or supervisor to focus it in the
+  detail pane. Dynamically-spawned children (via `DynamicSupervisor`) appear and disappear live.
+  Status dots follow a fixed color convention: green = running, yellow = starting/stopping, red =
+  crashed, grey = suspended or stopped. A supervisor's crash count within its restart window, and
+  a child's own restart count, render inline in amber when non-zero.
+- **Detail** (middle) — status, uptime, capabilities, restart count, and — for agents reporting
+  LLM usage via `llm_span()` — messages handled/sent, tokens in/out, cost, and last model used,
+  for whichever node is currently focused.
+- **Processes** (right) — one row per OS process (the runtime itself, plus every distinct Worker
+  in a multi-process topology), each with a proportional CPU% gauge bar and RSS memory.
+
+Press `Ctrl+P` for Textual's built-in command palette, including a live light/dark theme switcher.
+Press `q` to quit; the topology you attached to keeps running.
+
+If the topology server becomes unreachable, a banner names the failing endpoint(s) and the
+dashboard keeps retrying — it does not exit.
+
+### Try it
+
+`examples/dashboard_demo/` is a small, deliberately noisy topology built to exercise every part of
+the dashboard (a crashing agent, a fake-LLM-calling agent, an agent that spawns/despawns dynamic
+children) — see its `README.md` for a two-terminal walkthrough.
 
 !!! note
-    The dashboard requires the runtime to be running in a separate process. It connects to the running system rather than starting one itself.
+    A single-process topology (the common case) shows one row in the Processes pane — agents
+    share one OS process, so per-agent CPU/memory is not real data and is not shown. Run a
+    multi-process topology (see [`examples/deployment`](https://github.com/civitas-io/python-civitas/tree/main/examples/deployment))
+    to see more than one row there.

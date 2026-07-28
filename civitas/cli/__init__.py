@@ -16,12 +16,14 @@ Package structure:
 
 from __future__ import annotations
 
-# F09-8: guard dashboard import — it requires optional dependencies (rich Live).
-# If the import fails, the rest of the CLI still loads normally.
-try:
-    import civitas.cli.dashboard  # noqa: F401
-except ImportError:
-    pass
+# v0.9.1 (Phase F): civitas.cli.dashboard now defers its optional 'dashboard'
+# extra (textual/psutil) import to inside the command function itself
+# (ConfigurationError with install instructions on invoke, matching
+# connect_mcp()'s pattern) — this top-level import always succeeds now, no
+# guard needed; the command still appears in --help without the extra
+# installed, only failing when actually run (a real UX improvement over the
+# old guard, which hid the whole command from --help).
+import civitas.cli.dashboard  # noqa: F401
 
 # Register all subcommands by importing the modules that decorate them.
 # Each module adds its commands to the shared `app` instance.

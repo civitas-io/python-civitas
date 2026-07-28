@@ -34,6 +34,7 @@ import logging
 from typing import Any
 
 from civitas.components import ComponentSet, build_component_set
+from civitas.dashboard.resources import sample_process, try_start_process_sampler
 from civitas.errors import ConfigurationError
 from civitas.messages import Message, _uuid7
 from civitas.observability.otel_agent import run_otel_agent
@@ -96,6 +97,12 @@ class Worker:
         # with any agent's dispatch latency — the A6 structural fix.
         self.id: str = _uuid7()
         self._health_channel = f"_agency.worker.{self.id}.health"
+        # v0.9.1 (dashboard-v2, D-DASH-3): primed ONCE, reused for every probe
+        # this Worker ever answers — see try_start_process_sampler()'s
+        # docstring for why a fresh handle per-probe would be a real bug, not
+        # a style choice. None (and the health-ack payload simply omits
+        # 'process') when psutil isn't installed — never a hard dependency.
+        self._resource_sampler = try_start_process_sampler()
 
         # Set during start()
         self._serializer: Serializer | None = None
@@ -229,11 +236,22 @@ class Worker:
                 "task_alive": task is not None and not task.done(),
                 "mailbox_depth": agent._mailbox.depth(),
             }
+        payload: dict[str, Any] = {"worker_id": self.id, "agents": snapshot}
+        # v0.9.1 (D-DASH-3): process-level resource stats, additive to the
+        # existing ack shape — a Supervisor that doesn't recognize this field
+        # (pre-v0.9.1, or a peer without the dashboard extra) simply ignores
+        # it, same compatibility posture as every other D5 ack field. Omitted
+        # entirely (not null) when psutil isn't installed — sample_process()
+        # is a plain sync call (no sleep, no I/O wait), safe on this same
+        # mailbox-free, dispatch-latency-free path as the rest of this method.
+        process_sample = sample_process(self._resource_sampler)
+        if process_sample is not None:
+            payload["process"] = process_sample
         reply = Message(
             type="_agency.health_ack",
             sender=self._health_channel,
             recipient=probe.reply_to or probe.sender,
-            payload={"worker_id": self.id, "agents": snapshot},
+            payload=payload,
             correlation_id=probe.correlation_id,
         )
         try:

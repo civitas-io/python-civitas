@@ -440,6 +440,49 @@ class TestRuntimeTransportSecurity:
         rt = Runtime.from_config(yaml_file)
         assert rt._transport_security is None
 
+    async def test_signing_infrastructure_wired_on_start_for_non_in_process_transport(
+        self, tmp_path: Path
+    ):
+        """v0.9.1 top-up: Runtime.start()'s signing setup (identity load,
+        KeyRegistry, MessageSigner/SigningSerializer swap) had never been
+        exercised — only YAML parsing into _security_config was tested above.
+        InProcess transport skips signing entirely (D9); this proves the
+        non-InProcess path actually wires it.
+        """
+        import tempfile
+
+        from civitas.process import AgentProcess
+        from civitas.security.identity import AgentIdentity
+        from civitas.security.signing import SigningSerializer
+        from civitas.supervisor import Supervisor
+
+        class _Echo(AgentProcess):
+            async def handle(self, msg: Message) -> None:
+                return None
+
+        d = tempfile.mkdtemp()
+        frontend, backend = f"ipc://{d}/f.sock", f"ipc://{d}/b.sock"
+        rt = Runtime(
+            supervisor=Supervisor("root", children=[_Echo("a")]),
+            transport="zmq",
+            zmq_pub_addr=frontend,
+            zmq_sub_addr=backend,
+            zmq_start_proxy=True,
+        )
+        rt._security_config = SecurityConfig.from_dict(
+            {"signing": {"enabled": True}, "identity": {"key_dir": str(tmp_path)}}
+        )
+        await rt.start()
+        try:
+            assert rt._signing_on is True
+            assert isinstance(rt._serializer, SigningSerializer)
+            assert rt._key_registry is not None
+            assert rt._key_registry.get("a") is not None
+            # A fresh identity was actually minted on disk for the agent (D8).
+            assert AgentIdentity.load("a", tmp_path).verify_key == rt._key_registry.get("a")
+        finally:
+            await rt.stop()
+
 
 # ---------------------------------------------------------------------------
 # civitas security init zmq — CLI key generation

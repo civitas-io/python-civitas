@@ -7,7 +7,7 @@ packages = ["civitas"]
 
 [project]
 name = "civitas"
-version = "0.9.0"
+version = "0.9.1"
 description = "The production runtime for Python agents"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -65,6 +65,9 @@ security  = ["pynacl"]
 encryption = ["cryptography>=41"]
 # Performance — drop-in Rust-backed JSON (accelerates JsonSerializer)
 fast      = ["orjson>=3.10"]
+# Dashboard ("civitas top") — Textual TUI + per-process resource stats.
+# Group created here with psutil (Phase D); textual joins it in Phase E.
+dashboard = ["psutil>=5.9", "textual>=0.60"]
 # Model providers, state stores, eval exporters, MCP, and framework adapters
 # have moved to civitas-contrib:  pip install civitas-contrib[anthropic,openai,...]
 dev       = [
@@ -179,7 +182,7 @@ warn_return_any = true
 warn_unused_ignores = true
 
 [[tool.mypy.overrides]]
-module = ["msgpack.*", "zmq.*", "nats.*", "nkeys", "nkeys.*", "litellm.*", "openai.*", "google", "google.*", "mistralai.*", "mcp.*", "aioquic", "aioquic.*", "uvicorn", "uvicorn.*", "nacl", "nacl.*", "asyncpg", "asyncpg.*", "grpc", "grpc.*", "grpc_health.*", "grpc_reflection.*"]
+module = ["msgpack.*", "zmq.*", "nats.*", "nkeys", "nkeys.*", "litellm.*", "openai.*", "google", "google.*", "mistralai.*", "mcp.*", "aioquic", "aioquic.*", "uvicorn", "uvicorn.*", "nacl", "nacl.*", "asyncpg", "asyncpg.*", "grpc", "grpc.*", "grpc_health.*", "grpc_reflection.*", "psutil", "psutil.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

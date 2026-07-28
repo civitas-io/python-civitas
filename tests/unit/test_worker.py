@@ -279,6 +279,42 @@ class TestHealthProbe:
         snap = route.call_args.args[0].payload["agents"]["bot"]
         assert snap["status"] == "CRASHED" and snap["task_alive"] is False
 
+    async def test_ack_includes_process_resource_sample(self) -> None:
+        """v0.9.1 (D-DASH-3): the ack's 'process' field carries real CPU/RSS
+        stats, additive to the existing per-agent snapshot shape."""
+        worker, _agent, route = self._worker_with_bus()
+        probe = Message(
+            type="_agency.health_probe",
+            sender="sup",
+            recipient=worker._health_channel,
+            correlation_id="c3",
+        )
+        await worker._on_health_probe(worker._serializer.serialize(probe))
+        ack = route.call_args.args[0]
+        assert "process" in ack.payload
+        process = ack.payload["process"]
+        assert process["pid"] > 0
+        assert process["cpu_percent"] >= 0.0
+        assert process["rss_bytes"] > 0
+
+    async def test_ack_omits_process_field_when_psutil_unavailable(self) -> None:
+        """v0.9.1 (D-DASH-3): psutil is never a hard requirement for a Worker
+        to function — the 'process' key is OMITTED (not null) when the
+        sampler couldn't start, and the rest of the ack is unaffected."""
+        worker, _agent, route = self._worker_with_bus()
+        worker._resource_sampler = None  # simulates psutil not installed
+
+        probe = Message(
+            type="_agency.health_probe",
+            sender="sup",
+            recipient=worker._health_channel,
+            correlation_id="c4",
+        )
+        await worker._on_health_probe(worker._serializer.serialize(probe))
+        ack = route.call_args.args[0]
+        assert "process" not in ack.payload
+        assert "agents" in ack.payload  # the rest of the ack is unaffected
+
     async def test_malformed_probe_is_dropped(self, caplog: pytest.LogCaptureFixture) -> None:
         worker, _, route = self._worker_with_bus()
         with caplog.at_level(logging.WARNING):

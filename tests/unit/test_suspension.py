@@ -576,6 +576,63 @@ async def test_clear_suspend_marker_noop_without_marker():
     store.set.assert_not_awaited()
 
 
+async def test_clear_suspend_marker_persist_failure_warns_but_clears_in_memory(
+    caplog: Any,
+) -> None:
+    """A failed persist during marker removal is degraded, not fatal (v0.9.1
+    top-up): the in-memory marker is still gone even though the store write
+    that would have made it durable failed."""
+    agent = RecorderAgent("cleared-degraded")
+    store = AsyncMock()
+    store.get.return_value = None
+    store.set.side_effect = RuntimeError("disk full")
+    agent.store = store
+    agent.state[MARKER] = {"reason": "r", "since": 1.0, "approver": None}
+
+    with caplog.at_level("WARNING"):
+        await agent._clear_suspend_marker()
+
+    assert MARKER not in agent.state
+    assert any("failed to clear suspend marker" in r.message for r in caplog.records)
+
+
+async def test_update_suspend_reason_persist_failure_warns(caplog: Any) -> None:
+    """_update_suspend_reason()'s checkpoint failure is degraded, not fatal
+    (v0.9.1 top-up) — the reason still updates in memory."""
+    agent = RecorderAgent("reason-degraded")
+    store = AsyncMock()
+    store.get.return_value = None
+    store.set.side_effect = RuntimeError("disk full")
+    agent.store = store
+    agent.state[MARKER] = {"reason": "old", "since": 1.0, "approver": None}
+
+    with caplog.at_level("WARNING"):
+        await agent._update_suspend_reason("new")
+
+    assert agent.state[MARKER]["reason"] == "new"
+    assert any("failed to persist updated suspend reason" in r.message for r in caplog.records)
+
+
+async def test_resume_persist_failure_warns_but_still_resumes(caplog: Any) -> None:
+    """resume()'s checkpoint failure (clearing the marker) is degraded, not
+    fatal (v0.9.1 top-up) — the agent still transitions to RUNNING and fires
+    on_resume; only durability is what's lost."""
+    agent = RecorderAgent("resume-degraded")
+    agent._status = ProcessStatus.SUSPENDED
+    agent.state[MARKER] = {"reason": "r", "since": 1.0, "approver": None}
+    store = AsyncMock()
+    store.get.return_value = None
+    store.set.side_effect = RuntimeError("disk full")
+    agent.store = store
+
+    with caplog.at_level("WARNING"):
+        await agent.resume("alice")
+
+    assert agent.status == ProcessStatus.RUNNING
+    assert agent.resume_approvers == ["alice"]
+    assert any("failed to clear suspend marker on resume" in r.message for r in caplog.records)
+
+
 async def test_dynamic_supervisor_clear_child_marker():
     """DynamicSupervisor clears a child's marker on permanent removal (S8)."""
     dyn = DynamicSupervisor("workers")

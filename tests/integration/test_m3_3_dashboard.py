@@ -1,24 +1,16 @@
 """M3.3 — Managed Observability Dashboard (Beta) testable criteria.
 
-Tests validate the metrics collector, renderer components, and CLI command
-registration. The live dashboard itself requires a running runtime and is
-tested via visual inspection.
+Tests validate the metrics collector and CLI command registration.
+civitas/dashboard/renderer.py (Rich-based) was retired in v0.9.1's Phase E
+rebuild -- see tests/integration/test_dashboard_app.py for the Textual app's
+own tests, and docs/design/dashboard-v2.md §7 for why this is a rebuild,
+not a patch.
 """
 
-from rich.layout import Layout
-from rich.table import Table
-from rich.tree import Tree
 from typer.testing import CliRunner
 
 from civitas.cli import app
 from civitas.dashboard.collector import MetricsCollector
-from civitas.dashboard.renderer import (
-    render_cost_attribution,
-    render_dashboard,
-    render_message_stats,
-    render_restart_history,
-    render_supervision_tree,
-)
 
 # ---------------------------------------------------------------------------
 # MetricsCollector
@@ -115,127 +107,29 @@ def test_collector_reset():
     assert collector.snapshot.total_messages == 0
 
 
-def test_collector_unknown_agent_ignored():
-    """Operations on unregistered agents are silently ignored."""
+def test_collector_never_registered_agent_self_registers_lazily():
+    """v0.9.1 (dashboard-v2 D-DASH addendum): an agent that was NEVER
+    explicitly register_agent()'d is tracked correctly from its first
+    reported event — this is what makes dynamically-spawned children (never
+    known to Runtime's static registration loop) show up in /metrics without
+    any spawn-time hook. Deliberate behavior change from the pre-v0.9.1
+    'operations on unregistered agents are silently ignored' contract —
+    that silent-drop was itself the bug making dynamic children invisible.
+    """
     collector = MetricsCollector()
-    collector.message_handled("ghost", 10.0)
-    collector.message_sent("ghost")
-    collector.agent_error("ghost")
-    collector.llm_call("ghost", 100, 50, 0.01)
-    # total_messages still increments (it's a global counter)
+    collector.message_handled("dyn-child", 10.0)
+    collector.message_sent("dyn-child")
+    collector.agent_error("dyn-child")
+    collector.llm_call("dyn-child", 100, 50, 0.01)
+
+    metrics = collector.snapshot.agents["dyn-child"]
+    assert metrics.messages_handled == 1
+    assert metrics.messages_sent == 1
+    assert metrics.errors == 1
+    assert metrics.tokens_in == 100
+    assert metrics.tokens_out == 50
+    assert metrics.cost_usd == 0.01
     assert collector.snapshot.total_messages == 1
-
-
-# ---------------------------------------------------------------------------
-# Renderer — supervision tree
-# ---------------------------------------------------------------------------
-
-
-def test_render_supervision_tree_with_agents():
-    """Supervision tree renders all registered agents."""
-    collector = MetricsCollector()
-    collector.register_agent("worker_a")
-    collector.register_agent("worker_b")
-    collector.agent_status_changed("worker_a", "running")
-    collector.agent_status_changed("worker_b", "running")
-    collector.message_handled("worker_a", 5.0)
-
-    tree = render_supervision_tree(collector.snapshot)
-    assert isinstance(tree, Tree)
-
-
-def test_render_supervision_tree_empty():
-    """Empty snapshot shows 'no agents' message."""
-    collector = MetricsCollector()
-    tree = render_supervision_tree(collector.snapshot)
-    assert isinstance(tree, Tree)
-
-
-# ---------------------------------------------------------------------------
-# Renderer — message stats
-# ---------------------------------------------------------------------------
-
-
-def test_render_message_stats():
-    """Message stats table renders with correct columns."""
-    collector = MetricsCollector()
-    collector.register_agent("agent_a")
-    collector.message_handled("agent_a", 15.0)
-    collector.message_sent("agent_a")
-    collector.agent_error("agent_a")
-
-    table = render_message_stats(collector.snapshot)
-    assert isinstance(table, Table)
-    assert table.title == "Message Flow"
-
-
-# ---------------------------------------------------------------------------
-# Renderer — cost attribution
-# ---------------------------------------------------------------------------
-
-
-def test_render_cost_attribution():
-    """Cost attribution table shows per-agent costs."""
-    collector = MetricsCollector()
-    collector.register_agent("agent_a")
-    collector.llm_call("agent_a", tokens_in=500, tokens_out=200, cost_usd=0.05)
-
-    table = render_cost_attribution(collector.snapshot)
-    assert isinstance(table, Table)
-    assert table.title == "Cost Attribution"
-
-
-def test_render_cost_attribution_no_data():
-    """Cost table shows placeholder when no LLM calls recorded."""
-    collector = MetricsCollector()
-    collector.register_agent("agent_a")
-
-    table = render_cost_attribution(collector.snapshot)
-    assert isinstance(table, Table)
-
-
-# ---------------------------------------------------------------------------
-# Renderer — restart history
-# ---------------------------------------------------------------------------
-
-
-def test_render_restart_history():
-    """Restart history table shows recent events."""
-    collector = MetricsCollector()
-    collector.register_agent("agent_a")
-    collector.agent_restarted("agent_a", reason="unhandled exception")
-    collector.agent_restarted("agent_a", reason="timeout")
-
-    table = render_restart_history(collector.snapshot)
-    assert isinstance(table, Table)
-    assert table.title == "Restart History"
-
-
-def test_render_restart_history_empty():
-    """Empty restart history shows placeholder."""
-    collector = MetricsCollector()
-    table = render_restart_history(collector.snapshot)
-    assert isinstance(table, Table)
-
-
-# ---------------------------------------------------------------------------
-# Renderer — full dashboard layout
-# ---------------------------------------------------------------------------
-
-
-def test_render_dashboard_layout():
-    """Full dashboard renders as a Rich Layout with all panels."""
-    collector = MetricsCollector()
-    collector.runtime_started()
-    collector.register_agent("agent_a")
-    collector.register_agent("agent_b")
-    collector.agent_status_changed("agent_a", "running")
-    collector.agent_status_changed("agent_b", "running")
-    collector.message_handled("agent_a", 10.0)
-    collector.llm_call("agent_a", 100, 50, 0.01)
-
-    layout = render_dashboard(collector)
-    assert isinstance(layout, Layout)
 
 
 # ---------------------------------------------------------------------------
@@ -244,9 +138,25 @@ def test_render_dashboard_layout():
 
 
 def test_dashboard_command_registered():
-    """Dashboard command is accessible via the CLI."""
+    """Dashboard command is accessible via the CLI.
+
+    v0.9.1 (Phase F, design dashboard-v2.md §9): the CLI shape changed from a
+    ``--topology`` flag to a required positional argument, and remote-attach
+    is now the only mode (no spawn-own-runtime path) — a real, documented
+    behavior change, not an accidental one; asserting the NEW shape here.
+    """
     runner = CliRunner()
-    result = runner.invoke(app, ["dashboard", "--help"])
+    # COLUMNS forces a wide terminal — without it, Click's help formatter
+    # truncates long argument help text to "..." in narrower CI/container
+    # environments (the same V1 class of bug as v0.8.1's Rich word-wrap
+    # flake). Asserting on "topology" (the actual parameter name, lowercase)
+    # rather than an uppercased "TOPOLOGY" metavar — found via a REAL
+    # Docker/Linux run with an unpinned, newer typer than this repo's own
+    # locked version (typer is ">=0.12" in pyproject.toml, genuinely
+    # unpinned): newer typer renders the metavar as "<str>", not the
+    # parameter name uppercased, so asserting on the uppercase form is
+    # itself version-fragile, not just a display-width fragility.
+    result = runner.invoke(app, ["dashboard", "--help"], env={"COLUMNS": "200"})
     assert result.exit_code == 0
-    assert "--topology" in result.output
+    assert "topology" in result.output.lower()
     assert "--refresh" in result.output

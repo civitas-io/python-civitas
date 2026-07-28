@@ -75,11 +75,7 @@ class OrchestratorAgent(AgentProcess):
         worker_names: list[str] = []
         for i, _topic in enumerate(topics):
             worker_name = f"researcher-{i}"
-            await self.spawn(
-                worker_name,
-                ResearchAgent,
-                init_kwargs={"name": worker_name},
-            )
+            await self.spawn(ResearchAgent, worker_name)
             worker_names.append(worker_name)
             logger.info("[orchestrator] spawned %s", worker_name)
 
@@ -87,7 +83,7 @@ class OrchestratorAgent(AgentProcess):
 
         # Send work to each worker
         for worker_name, topic in zip(worker_names, topics, strict=True):
-            await self.send(worker_name, Message(type="research.do", payload={"topic": topic}))
+            await self.send(worker_name, {"topic": topic}, message_type="research.do")
 
         # Give workers time to finish
         await asyncio.sleep(1.5)
@@ -101,7 +97,7 @@ class OrchestratorAgent(AgentProcess):
 
 
 async def main() -> None:
-    runtime = Runtime(TOPOLOGY)
+    runtime = Runtime.from_config_dict(TOPOLOGY)
     try:
         await runtime.start()
         # Let the orchestrator finish its work

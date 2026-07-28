@@ -26,7 +26,7 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --extra dev --extra otel
+        run: uv sync --extra dev --extra otel --extra dashboard
 
       - name: Run tests with coverage
         run: uv run pytest
@@ -55,7 +55,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync --extra dev --extra otel --extra zmq --extra nats
+        run: uv sync --extra dev --extra otel --extra zmq --extra nats --extra dashboard
 
       # G1 (v0.8.2): the NATS integration tests spawn a real nats-server binary
       # from PATH (a service container does not satisfy them). Without this,
@@ -100,7 +100,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync --extra dev --extra otel
+        run: uv sync --extra dev --extra otel --extra dashboard
 
       - name: Ruff lint
         run: uv run ruff check civitas/

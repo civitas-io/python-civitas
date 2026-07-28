@@ -385,6 +385,20 @@ async def test_send_requires_bus():
         await agent.send("someone", {})
 
 
+async def test_emit_outside_handle_raises():
+    """emit() raises RuntimeError when called outside of handle() (v0.9.1 top-up)."""
+    agent = TrackingAgent()
+    with pytest.raises(RuntimeError, match="outside of handle"):
+        await agent.emit({"chunk": 1})
+
+
+async def test_end_stream_outside_handle_raises():
+    """end_stream() raises RuntimeError when called outside of handle()."""
+    agent = TrackingAgent()
+    with pytest.raises(RuntimeError, match="outside of handle"):
+        await agent.end_stream()
+
+
 # ---------------------------------------------------------------------------
 # Configurable shutdown timeout (F02-10)
 # ---------------------------------------------------------------------------
@@ -414,6 +428,161 @@ def test_tool_span_no_tracer_yields_dummy():
     agent = TrackingAgent()
     with agent.tool_span("web_search") as span:
         assert isinstance(span, Span)
+
+
+def test_llm_span_with_tracer_records_attributes_and_parents(monkeypatch: Any) -> None:
+    """With a real tracer, llm_span() creates a span parented to the current
+    handle span (v0.9.1 coverage top-up), carrying the model + extra attrs."""
+    from civitas.observability.tracer import Tracer
+
+    agent = TrackingAgent()
+    agent._tracer = Tracer()
+    agent._current_message = Message(type="m", sender="x", trace_id="trace-1", span_id="msg-span")
+    handle_span = agent._tracer.start_span("civitas.agent.handle", trace_id="trace-1")
+    agent._current_handle_span = handle_span
+
+    with agent.llm_span("claude-sonnet", tokens_in=1200) as span:
+        assert span.trace_id == "trace-1"
+        assert span.parent_span_id == handle_span.span_id
+        assert span.attributes["civitas.llm.model"] == "claude-sonnet"
+        assert span.attributes["tokens_in"] == 1200
+
+
+def test_llm_span_with_tracer_no_current_handle_span_falls_back_to_message() -> None:
+    """Outside handle()'s own span (e.g. a background task), llm_span() still
+    parents to the current message's span if one is set."""
+    from civitas.observability.tracer import Tracer
+
+    agent = TrackingAgent()
+    agent._tracer = Tracer()
+    agent._current_message = Message(type="m", sender="x", trace_id="trace-2", span_id="msg-span-2")
+
+    with agent.llm_span("claude-sonnet") as span:
+        assert span.trace_id == "trace-2"
+        assert span.parent_span_id == "msg-span-2"
+
+
+def test_llm_span_records_exception_and_reraises() -> None:
+    """An exception inside the llm_span() block sets the span's error and
+    propagates unchanged."""
+    from civitas.observability.tracer import Tracer
+
+    agent = TrackingAgent()
+    agent._tracer = Tracer()
+
+    with pytest.raises(ValueError, match="boom"):
+        with agent.llm_span("claude-sonnet"):
+            raise ValueError("boom")
+
+
+def test_llm_span_reports_usage_to_metrics_sink() -> None:
+    """v0.9.1 (D-DASH-5, closes FD-01): a span that reports usage produces
+    exactly one llm_call() with the right values and model."""
+    from civitas.observability.tracer import Tracer
+
+    agent = TrackingAgent()
+    agent._tracer = Tracer()
+    agent._metrics = MagicMock()
+
+    with agent.llm_span("claude-sonnet") as span:
+        span.set_attribute("civitas.llm.tokens_in", 100)
+        span.set_attribute("civitas.llm.tokens_out", 50)
+        span.set_attribute("civitas.llm.cost_usd", 0.02)
+
+    agent._metrics.llm_call.assert_called_once_with("tracker", 100, 50, 0.02, model="claude-sonnet")
+
+
+def test_llm_span_reports_nothing_when_no_usage_set() -> None:
+    """v0.9.1 (D-DASH-5): a span that never reports usage produces ZERO
+    llm_call()s — no spurious zero-cost entry for every LLM span ever opened."""
+    from civitas.observability.tracer import Tracer
+
+    agent = TrackingAgent()
+    agent._tracer = Tracer()
+    agent._metrics = MagicMock()
+
+    with agent.llm_span("claude-sonnet"):
+        pass  # never sets tokens_in/tokens_out/cost_usd
+
+    agent._metrics.llm_call.assert_not_called()
+
+
+def test_llm_span_reports_metrics_even_without_a_tracer() -> None:
+    """v0.9.1 (D-DASH-5): metrics and tracing are independent concerns — a
+    dashboard-only setup (metrics attached, no tracer configured) still gets
+    cost/token tracking."""
+    agent = TrackingAgent()
+    assert agent._tracer is None
+    agent._metrics = MagicMock()
+
+    with agent.llm_span("claude-sonnet") as span:
+        span.set_attribute("civitas.llm.tokens_in", 10)
+
+    agent._metrics.llm_call.assert_called_once_with("tracker", 10, 0, 0.0, model="claude-sonnet")
+
+
+def test_llm_span_reports_metrics_despite_exception() -> None:
+    """v0.9.1 (D-DASH-5): metrics recording happens in the finally block —
+    independent of the exception path already covered by set_error."""
+    from civitas.observability.tracer import Tracer
+
+    agent = TrackingAgent()
+    agent._tracer = Tracer()
+    agent._metrics = MagicMock()
+
+    with pytest.raises(ValueError, match="boom"):
+        with agent.llm_span("claude-sonnet") as span:
+            span.set_attribute("civitas.llm.cost_usd", 0.01)
+            raise ValueError("boom")
+
+    agent._metrics.llm_call.assert_called_once_with("tracker", 0, 0, 0.01, model="claude-sonnet")
+
+
+def test_llm_span_end_to_end_with_real_metrics_collector() -> None:
+    """v0.9.1 (D-DASH-5): real MetricsCollector, not a mock — the actual FD-01
+    close-out, proving the whole chain (span attribute -> llm_call -> snapshot
+    -> last_model) works together, not just that the call was made."""
+    from civitas.dashboard.collector import MetricsCollector
+
+    agent = TrackingAgent()
+    agent._metrics = MetricsCollector()
+
+    with agent.llm_span("gpt-5") as span:
+        span.set_attribute("civitas.llm.tokens_in", 200)
+        span.set_attribute("civitas.llm.tokens_out", 80)
+        span.set_attribute("civitas.llm.cost_usd", 0.05)
+
+    metrics = agent._metrics.snapshot.agents["tracker"]
+    assert metrics.tokens_in == 200
+    assert metrics.tokens_out == 80
+    assert metrics.cost_usd == 0.05
+    assert metrics.last_model == "gpt-5"
+    assert agent._metrics.snapshot.total_cost_usd == 0.05
+
+
+def test_tool_span_with_tracer_records_attributes_and_parents() -> None:
+    """tool_span() mirrors llm_span()'s tracer-present behavior."""
+    from civitas.observability.tracer import Tracer
+
+    agent = TrackingAgent()
+    agent._tracer = Tracer()
+    agent._current_message = Message(type="m", sender="x", trace_id="trace-3", span_id="msg-span-3")
+
+    with agent.tool_span("web_search", query="civitas") as span:
+        assert span.trace_id == "trace-3"
+        assert span.attributes["civitas.tool.name"] == "web_search"
+        assert span.attributes["query"] == "civitas"
+
+
+def test_tool_span_records_exception_and_reraises() -> None:
+    from civitas.observability.tracer import Tracer
+
+    agent = TrackingAgent()
+    agent._tracer = Tracer()
+
+    with pytest.raises(RuntimeError, match="tool boom"):
+        with agent.tool_span("web_search"):
+            raise RuntimeError("tool boom")
 
 
 # ---------------------------------------------------------------------------
@@ -699,3 +868,78 @@ async def test_no_metrics_sink_does_not_raise():
     await agent._mailbox.put(Message(type="ping"))
     await wait_for(lambda: "handle:ping" in agent.events)
     await agent._stop()
+
+
+# ---------------------------------------------------------------------------
+# connect_mcp — MCP support lives in fabrica, not core (v0.9.1 top-up)
+# ---------------------------------------------------------------------------
+
+
+class _FakeConfig:
+    def __init__(self, name: str = "srv") -> None:
+        self.name = name
+
+
+async def test_connect_mcp_without_fabrica_raises_configuration_error():
+    """fabrica is not installed in core CI (by design — MCP is a fabrica-scope
+    dependency, not a civitas extra); connect_mcp() must fail loud with
+    install instructions, not an opaque ImportError."""
+    from civitas.errors import ConfigurationError
+
+    agent = TrackingAgent()
+    with pytest.raises(ConfigurationError, match="pip install fabrica"):
+        await agent.connect_mcp(_FakeConfig())
+
+
+async def test_connect_mcp_disconnects_existing_client_and_tools_first():
+    """Idempotent reconnect: an existing client for the same server name is
+    torn down (deregistering its tools) before the (here: failing, no
+    fabrica) reconnect attempt — the disconnect-then-reconnect ordering is
+    real behavior, independent of fabrica being installed."""
+    from civitas.errors import ConfigurationError
+    from civitas.plugins.tools import ToolRegistry
+
+    agent = TrackingAgent()
+    agent.tools = ToolRegistry()
+
+    class _FakeTool:
+        name = "mcp://srv/lookup"
+        schema: dict[str, object] = {}
+
+        async def execute(self, **_kw: object) -> None:
+            return None
+
+    agent.tools.register(_FakeTool())
+
+    disconnected = []
+
+    class _FakeExistingClient:
+        async def disconnect(self) -> None:
+            disconnected.append(True)
+
+    agent._mcp_clients["srv"] = _FakeExistingClient()
+
+    with pytest.raises(ConfigurationError):
+        await agent.connect_mcp(_FakeConfig("srv"))
+
+    assert disconnected == [True]
+    assert agent.tools.get("mcp://srv/lookup") is None  # deregistered by prefix
+
+
+async def test_connect_mcp_swallows_disconnect_failure_on_existing_client():
+    """A raising disconnect() on the OLD client must not prevent the
+    reconnect attempt — it's swallowed, matching the docstring's 'idempotent'
+    contract."""
+    from civitas.errors import ConfigurationError
+
+    agent = TrackingAgent()
+
+    class _FailingExistingClient:
+        async def disconnect(self) -> None:
+            raise RuntimeError("already gone")
+
+    agent._mcp_clients["srv"] = _FailingExistingClient()
+
+    # Must reach the (fabrica-absent) ConfigurationError, not RuntimeError.
+    with pytest.raises(ConfigurationError):
+        await agent.connect_mcp(_FakeConfig("srv"))
