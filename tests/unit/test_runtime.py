@@ -427,6 +427,104 @@ class TestFromConfigDict:
             Runtime.from_config_dict(config)
 
 
+class TestProcessFilter:
+    """v0.9.2.1 bugfix: `process:`-tagged nodes were never filtered at all --
+    `Runtime.from_config()` built EVERY node regardless, duplicating whatever
+    a real Worker process also builds for a `process:`-tagged node (confirmed
+    on examples/deployment/level2_multi_process/run_supervisor.py). See
+    civitas/runtime.py's `process_filter` docstring for the full contract.
+    """
+
+    MULTI_PROCESS_CONFIG = {
+        "supervision": {
+            "name": "root",
+            "children": [
+                {"type": "NullAgent", "name": "frontend"},
+                {"type": "NullAgent", "name": "worker_a", "process": "worker"},
+                {"type": "NullAgent", "name": "worker_b", "process": "worker"},
+            ],
+        }
+    }
+
+    def test_default_builds_everything_unchanged(self):
+        """process_filter="*" (the default) must be a complete no-op --
+        every caller before this fix gets IDENTICAL behavior."""
+        rt = Runtime.from_config_dict(
+            self.MULTI_PROCESS_CONFIG, agent_classes={"NullAgent": NullAgent}
+        )
+        names = {a.name for a in rt._root_supervisor.all_agents()}
+        assert names == {"frontend", "worker_a", "worker_b"}
+
+    def test_none_builds_only_untagged_nodes(self):
+        """The actual bug fix: process_filter=None ("I am the coordinator")
+        must exclude every process:-tagged node."""
+        rt = Runtime.from_config_dict(
+            self.MULTI_PROCESS_CONFIG, agent_classes={"NullAgent": NullAgent}, process_filter=None
+        )
+        names = {a.name for a in rt._root_supervisor.all_agents()}
+        assert names == {"frontend"}
+
+    def test_named_process_builds_only_matching_nodes(self):
+        """process_filter="worker" -- symmetry with Worker's own
+        _find_process_agents filtering, exposed on Runtime too."""
+        rt = Runtime.from_config_dict(
+            self.MULTI_PROCESS_CONFIG,
+            agent_classes={"NullAgent": NullAgent},
+            process_filter="worker",
+        )
+        names = {a.name for a in rt._root_supervisor.all_agents()}
+        assert names == {"worker_a", "worker_b"}
+
+    def test_nested_supervisor_stays_transparent(self):
+        """A nested supervisor is never itself process:-tagged (matches
+        cli/run.py's _find_process_agents convention) -- it must always be
+        descended into, regardless of process_filter, so a tagged LEAF several
+        levels deep is still found (or correctly excluded)."""
+        config = {
+            "supervision": {
+                "name": "root",
+                "children": [
+                    {
+                        "supervisor": {
+                            "name": "nested",
+                            "children": [
+                                {"type": "NullAgent", "name": "deep_untagged"},
+                                {"type": "NullAgent", "name": "deep_worker", "process": "worker"},
+                            ],
+                        }
+                    },
+                ],
+            }
+        }
+        rt_coordinator = Runtime.from_config_dict(
+            config, agent_classes={"NullAgent": NullAgent}, process_filter=None
+        )
+        assert {a.name for a in rt_coordinator._root_supervisor.all_agents()} == {"deep_untagged"}
+
+        rt_worker = Runtime.from_config_dict(
+            config, agent_classes={"NullAgent": NullAgent}, process_filter="worker"
+        )
+        assert {a.name for a in rt_worker._root_supervisor.all_agents()} == {"deep_worker"}
+
+    def test_dynamic_supervisor_process_tag_is_filtered(self):
+        """dynamic_supervisor nodes carry process: directly on the node (not
+        nested under an agent: key) -- confirmed via cli/run.py's own
+        _find_process_agents, which checks it the same way."""
+        config = {
+            "supervision": {
+                "name": "root",
+                "children": [
+                    {"type": "dynamic_supervisor", "name": "workers", "process": "worker"},
+                ],
+            }
+        }
+        rt = Runtime.from_config_dict(config, process_filter=None)
+        assert rt._root_supervisor.all_agents() == []
+
+        rt_worker = Runtime.from_config_dict(config, process_filter="worker")
+        assert [a.name for a in rt_worker._root_supervisor.all_agents()] == ["workers"]
+
+
 # ---------------------------------------------------------------------------
 # F12-9 — Example YAML topology files are valid against the config schema
 # ---------------------------------------------------------------------------

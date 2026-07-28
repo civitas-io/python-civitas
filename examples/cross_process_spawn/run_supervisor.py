@@ -8,14 +8,17 @@ Start THIS script first (it owns the ZMQ proxy, zmq_start_proxy=True below),
 then run_worker.py in a second terminal — see that file's docstring for why
 the order matters.
 
-Deliberately does NOT declare a local `workers` DynamicSupervisor of its own (a
-YAML topology with a `process: worker`-tagged node would be the more familiar
-declarative shape, but `Runtime.from_config()`/`civitas run --topology` build
-EVERY node locally regardless of `process:` — found writing this example,
-tracked in docs/milestones.md, not solved here). This script instead mirrors
-the pattern proven correct by tests/integration/test_cross_process_spawn.py:
-an empty local supervisor tree, and `runtime.spawn("workers", ...)` targeting
-the REMOTE DynamicSupervisor purely by the name it announces itself under.
+Deliberately does NOT declare a local `workers` DynamicSupervisor of its own.
+A YAML topology with a `process: worker`-tagged node plus
+`Runtime.from_config(path, process_filter=None)` is ALSO a valid way to write
+this now (the `process:`-filtering gap found while first writing this example
+was fixed in v0.9.2.1 — see `deployment/level2_multi_process/run_supervisor.py`
+for that exact pattern). This script instead mirrors the pattern proven
+correct by tests/integration/test_cross_process_spawn.py: an empty local
+supervisor tree, and `runtime.spawn("workers", ...)` targeting the REMOTE
+DynamicSupervisor purely by the name it announces itself under — kept as-is
+since it's an equally valid, already-verified pattern, not a workaround
+anymore.
 
 Usage (start this one first, then run_worker.py in a second terminal):
     python examples/cross_process_spawn/run_supervisor.py

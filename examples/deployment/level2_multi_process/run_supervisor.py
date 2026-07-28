@@ -25,7 +25,13 @@ TOPOLOGY = Path(__file__).parent / "topology.yaml"
 
 
 async def main() -> None:
-    runtime = Runtime.from_config(TOPOLOGY)
+    # process_filter=None (v0.9.2.1 bugfix): build only THIS process's own
+    # (untagged) agents. Before the fix, from_config() had no awareness of
+    # topology.yaml's `process: worker` tags at all and built worker_a/
+    # worker_b locally too -- duplicating what run_worker.py, in its own
+    # process, also builds for itself. This example is exactly what
+    # surfaced that bug (docs/milestones.md v0.9.2.1).
+    runtime = Runtime.from_config(TOPOLOGY, process_filter=None)
     await runtime.start()
     print("Supervisor running. Start the worker process, then send a request.")
     print("Press Ctrl+C to stop.\n")

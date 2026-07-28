@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from civitas.serializer import Serializer
 
 
 class Transport(Protocol):
@@ -64,5 +67,27 @@ class Transport(Protocol):
         sockets (ZMQ PUB/SUB) must confirm propagation — announcing a
         freshly-subscribed address before its subscription reaches peer PUB
         sockets makes peers publish into a void (#41).
+        """
+        ...
+
+    def set_serializer(self, serializer: Serializer) -> None:
+        """Replace the serializer this transport uses for its OWN internal
+        request()/reply-address bookkeeping (v0.9.2.1 bugfix).
+
+        Every transport that implements ``request()`` holds its own private
+        serializer reference, captured at construction, separate from the
+        ``MessageBus``'s. ``request()`` needs to inject ``reply_to`` into the
+        message it was given — already-serialized bytes from the bus — which
+        means deserializing and re-serializing internally. If the bus's
+        serializer is swapped later (e.g. ``Runtime.start()`` activating
+        message signing) without ALSO swapping the transport's own reference,
+        that internal round-trip keeps using the stale one: it calls
+        ``Message.from_dict()`` directly on a signed v2 envelope dict
+        (``{"v": 2, "msg": {...}, "sig": {...}}``), none of which are real
+        ``Message`` fields, silently reconstructing a blank message (found the
+        hard way: ``ask()`` over ZMQ with signing enabled just times out, no
+        exception, because the resulting blank ``correlation_id`` makes the
+        reply-routing check in ``AgentProcess._dispatch()`` silently no-op).
+        Call this whenever the bus's serializer changes after construction.
         """
         ...
