@@ -52,6 +52,7 @@ Everything in this part is done.
 | — | [v0.8.2 — Hygiene](#v082-hygiene-released) | Jul 2026 |
 | — | [v0.9.0 — Supervision Endgame](#v090-supervision-endgame-released) | Jul 2026 |
 | — | [v0.9.1 — Post-endgame Polish](#v091-post-endgame-polish-released) | Jul 2026 |
+| — | [v0.9.2 — Examples Completeness](#v092--examples-completeness-released) | Jul 2026 |
 
 ---
 
@@ -1035,7 +1036,36 @@ read-only endpoints, tracked as the v0.9.2 prerequisite gate for any write actio
 broken API calls in `examples/dynamic_spawning.py`, fixed, exposing that no example file in this
 repo has any test coverage (tracked, v0.9.2). Control-plane items (auth, suspend/resume-as-write,
 kill/restart, mailbox introspection) were deliberately scoped OUT after a capability-scope
-discussion, to be designed properly rather than added reactively — see v0.9.2 below.
+discussion, to be designed properly rather than added reactively — see v0.9.5 below (the
+original single "v0.9.2" grab-bag was later split into v0.9.2–v0.9.5, 2026-07-28).
+
+
+## v0.9.2 — Examples Completeness (Released)
+
+**Status: ✅ Released 2026-07-28.** A smoke test proving every example actually runs, 8 new
+examples for real, previously-undemonstrated features, and two real product bugs found and
+tracked (not papered over) along the way. This release is "Cluster 3 minus the CI matrix" from
+the 2026-07-28 roadmap split — the original single "v0.9.2" backlog written right after v0.9.1
+shipped was four unrelated kinds of work, separated into v0.9.2–v0.9.5, each its own
+coherently-scoped release.
+
+| # | Deliverable | Priority |
+|---|-------------|----------|
+| — | ✅ **Done** — examples smoke test (`tests/integration/test_examples_smoke.py`): 30 tests across three shapes (run-to-completion, long-running-then-signaled, paired long-running processes), plus a self-checking test so a future example can't silently ship untracked | High |
+| — | ✅ **Done** — 8 new examples: `non_blocking_spawn.py`, `supervision_introspection.py`, `custom_plugin.py`, `streaming_response.py`, `secured_messaging.py`, `grpc_gateway.py`, `gateway_auth.py`, `cross_process_spawn/` — every one verified running end-to-end on macOS and Linux (Docker), not just written and assumed correct | Medium |
+| — | ✅ **Done** — `examples/README.md`, a full index of every example (existing + new), what each demonstrates, and how to run the smoke test; linked from the top-level `README.md` | — |
+
+**Found along the way (not planned, surfaced by actually running things), each real enough to get
+its own tracked entry below rather than a quiet inline fix:** three more silently-broken example
+API calls (`stateful_workflow.py`'s wrong `SQLiteStateStore` import path,
+`level2_multi_process/run_worker.py`'s nonexistent `Worker.from_config()`, both `frameworks/*.py`
+examples' wrong `civitas.adapters.*` import path — all fixed); and two genuine, previously-
+unexercised **product** bugs, NOT example bugs, each needing its own future investigation:
+`Runtime.from_config()`/`civitas run --topology` doesn't filter `process:`-tagged nodes (builds
+every node locally regardless, duplicating whatever a real Worker process builds for itself); and
+message signing over a real ZMQ transport silently times out an agent-to-agent `ask()` round trip
+even with `allow_unsigned=True` set, with no existing test ever having exercised signing over a
+real transport end-to-end. Both detailed in [Part 2 — Backlog](#part-2--backlog) below.
 
 
 ---
@@ -1056,39 +1086,17 @@ Owner column: `core` = python-civitas, else the target repo.
 > [v0.8.1](#v081-verification-perimeter-released). The 2026-07 architecture review is fully
 > closed by [v0.9.0](#v090-supervision-endgame-released) — zero xfail trackers remain in
 > `tests/unit/test_actor_model_gaps.py`. Coverage top-ups and the dashboard rebuild are closed by
-> [v0.9.1](#v091-post-endgame-polish-released).
+> [v0.9.1](#v091-post-endgame-polish-released). The examples smoke test + 8 new examples are
+> closed by [v0.9.2](#v092--examples-completeness-released).
 
-### v0.9.2 — Examples completeness (Planned, after v0.9.1)
+### Real bugs found building v0.9.2 (Released) — tracked here, not fixed yet
 
-**Cluster 3 minus the CI matrix** (2026-07-28 roadmap split — the single "v0.9.2" grab-bag from
-right after v0.9.1 shipped was four unrelated kinds of work; split into v0.9.2–v0.9.5 below, each
-a coherent, separately-scoped release). No open design questions in this one — straight
-execution: an examples smoke test, plus the 8 real features with dedicated design docs and zero
-demonstrative code, found while fixing `examples/dynamic_spawning.py` (2026-07-27).
-
-| Item | Priority | Source |
-|------|----------|--------|
-| **Examples smoke test** — run every `examples/*.py` that needs no external service, assert exit 0 | High | ✅ **Done** — 30 tests (three shapes: run-to-completion, long-running-signaled, paired long-running), 1 self-checking test so a future example can't silently fall through untracked |
-| Example: non-blocking spawn (`spawn_nowait()` / `spawn(..., wait=False)`) | Medium | ✅ **Done** — `examples/non_blocking_spawn.py` |
-| Example: streaming response (`StreamContext`, bus-native streaming) | Medium | ✅ **Done** — `examples/streaming_response.py` |
-| Example: message signing / secured transport (CURVE, TLS, `MessageSigner`) | Medium | ✅ **Done** — `examples/secured_messaging.py`, scoped to what's provably solid (see the bug found below) |
-| Example: cross-process dynamic spawn (`DynamicSupervisor` hosted in a Worker) | Medium | ✅ **Done** — `examples/cross_process_spawn/` (found + worked around a real `civitas run`/`Runtime.from_config()` gap below rather than building on top of it) |
-| Example: gRPC gateway | Low | ✅ **Done** — `examples/grpc_gateway.py` |
-| Example: gateway auth (JWT bearer, mTLS) | Low | ✅ **Done** — `examples/gateway_auth.py` |
-| Example: custom plugin (model provider / exporter / state store) | Low | ✅ **Done** — `examples/custom_plugin.py` |
-| Example: supervision introspection (`civitas.supervision.status` query) | Low | ✅ **Done** — `examples/supervision_introspection.py` |
-
-> The CI matrix item (macOS + Windows runners) from the original grab-bag is intentionally NOT in
-> this release — moved to [v1.0.0 GA gates](#v100--ga-gates-planned) below, since cross-platform
-> CI is naturally a pre-GA gate, not example-completeness work. Revisit sooner if a real
-> Windows/macOS user need arises before then.
-
-### Found building v0.9.2 — two real product bugs, not example-completeness gaps
-
-Both surfaced by actually running things end-to-end while writing examples, not by review —
-neither had ever been exercised by any existing test. Deliberately NOT fixed inline: each needs
-its own investigation, and the examples above were rescoped/worked around instead of quietly
-building on top of broken behavior.
+v0.9.2 itself — the examples smoke test + 8 new examples — shipped; see
+[v0.9.2 — Examples Completeness](#v092--examples-completeness-released) in Part 1. These two
+real **product** bugs (not example bugs) surfaced by actually running things end-to-end while
+writing those examples, not by review — neither had ever been exercised by any existing test.
+Deliberately NOT fixed as part of v0.9.2: each needs its own investigation, and the examples that
+found them were rescoped/worked around instead of quietly building on top of broken behavior.
 
 | Item | Priority | Source |
 |------|----------|--------|
