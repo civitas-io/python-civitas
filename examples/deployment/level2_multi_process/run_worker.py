@@ -7,15 +7,33 @@ worker_a and worker_b.
 """
 
 import asyncio
+import sys
 from pathlib import Path
+
+# Python adds a script's OWN directory to sys.path[0] automatically, so a
+# plain `from agents import WorkerAgent` (agents.py is a sibling file) works
+# in any install mode -- deliberately NOT the examples.deployment... dotted
+# path run_supervisor.py needs for topology.yaml resolution, which requires
+# an explicit sys.path fix there (see that file's comment); this script has
+# no such requirement and shouldn't take on that fragility for no reason.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from agents import WorkerAgent  # noqa: E402
 
 from civitas.worker import Worker
 
-TOPOLOGY = Path(__file__).parent / "topology.yaml"
+# Worker has no from_config() classmethod (only Runtime does) -- built
+# directly here, matching topology.yaml's zmq addresses and the two
+# worker-process agents declared there.
 
 
 async def main() -> None:
-    worker = Worker.from_config(TOPOLOGY, process_name="worker")
+    worker = Worker(
+        agents=[WorkerAgent("worker_a"), WorkerAgent("worker_b")],
+        transport="zmq",
+        zmq_pub_addr="tcp://127.0.0.1:5559",
+        zmq_sub_addr="tcp://127.0.0.1:5560",
+    )
     await worker.start()
     print("Worker process running (worker_a, worker_b). Press Ctrl+C to stop.")
 

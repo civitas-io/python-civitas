@@ -11,6 +11,64 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+## [0.9.2] — 2026-07-28
+
+Examples completeness: a smoke test proving every example actually runs, 8 new examples for
+real, previously-undemonstrated features, and two real product bugs found and tracked (not
+papered over) along the way.
+
+### Added
+
+- **Examples smoke test** (`tests/integration/test_examples_smoke.py`) — runs every example that
+  needs no external service and asserts a clean exit, in three shapes: run-to-completion,
+  long-running-then-signaled, and paired long-running processes. A self-checking test fails CI if
+  a future example is added without being tracked. Exists because `examples/dynamic_spawning.py`
+  (v0.9.1) shipped with three silently-broken API calls that nothing had ever caught.
+- **8 new examples** for real, shipped features that previously had dedicated design docs but zero
+  demonstrative code: `non_blocking_spawn.py` (`wait=False` / `spawn_nowait()`),
+  `supervision_introspection.py` (`civitas.supervision.status`), `custom_plugin.py` (writing a
+  `ModelProvider` from scratch), `streaming_response.py` (bus-native `stream_reply()`/`.stream()`),
+  `secured_messaging.py` (Ed25519 message signing), `grpc_gateway.py` (the generic gRPC `Agent`
+  service), `gateway_auth.py` (HTTP gateway JWT bearer auth), and `cross_process_spawn/` (a
+  `DynamicSupervisor` hosted in a different OS process). Every one verified running end-to-end on
+  macOS and Linux, not just written and assumed correct.
+- **`examples/README.md`** — a full index of every example in the repo (existing and new), what
+  each demonstrates, how to run it, and how to run the smoke test. Linked from the top-level
+  `README.md`.
+
+### Fixed
+
+- **`examples/stateful_workflow.py`** imported `SQLiteStateStore` from a module that has never
+  existed (`civitas.plugins.sqlite_store`); the real class lives in
+  `civitas_contrib.plugins.sqlite_store`. Fixed the import path; the example is excluded from the
+  default smoke run (needs `civitas-contrib`, not a core dependency) but is now correct if
+  installed.
+- **`examples/deployment/level2_multi_process/run_worker.py`** called `Worker.from_config(...)`, a
+  classmethod that has never existed on `Worker` (only `Runtime` has one). Fixed to construct
+  `Worker(agents=, transport=, zmq_pub_addr=, zmq_sub_addr=)` directly. Also fixed both Level 2
+  scripts relying on `examples` being importable as a top-level package from the current working
+  directory — true only by accident in an editable dev install, confirmed false in a real
+  `pip install civitas[...]` via Docker.
+- **`examples/frameworks/langgraph_on_civitas.py`** and **`openai_sdk_on_civitas.py`** imported
+  from `civitas.adapters.*`, which does not exist in this repository — real framework adapters
+  live in `civitas_contrib.adapters.*`. Fixed the import paths and docstrings.
+
+### Known issues (found this release, tracked for future investigation, not fixed here)
+
+- **`Runtime.from_config()` / `civitas run --topology` (supervisor mode) does not filter
+  `process:`-tagged nodes** — it builds every node locally, including ones tagged for a different
+  process, duplicating agents a real Worker process also builds for itself. Confirmed on the
+  existing `deployment/level2_multi_process` example. `examples/cross_process_spawn/` works around
+  this with the same pattern `tests/integration/test_cross_process_spawn.py` already proves
+  correct, rather than building on top of the bug.
+- **Message signing + ZMQ transport: an agent-to-agent `ask()` round trip silently times out when
+  `security.signing.enabled=True`**, even with `allow_unsigned=True` — no existing test exercises
+  signing over a real transport with an actual message round trip. `examples/secured_messaging.py`
+  demonstrates the underlying `AgentIdentity`/`KeyRegistry`/`MessageSigner` primitives directly
+  (proven correct by unit tests) instead of a live signed request/reply.
+
+Both tracked in `docs/milestones.md`.
+
 ## [0.9.1] — 2026-07-28
 
 Post-endgame polish: coverage top-ups, and a full Textual TUI rebuild of `civitas dashboard`

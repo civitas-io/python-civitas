@@ -1,6 +1,7 @@
 """LangGraph workflow running on Agency — under 10 lines of adapter code.
 
-Requires: pip install civitas langgraph
+Requires: pip install civitas civitas-contrib[langgraph]
+(the adapter itself lives in civitas-contrib, not core civitas — see docs/adapters.md)
 
 This example wraps a LangGraph compiled graph as an Agency AgentProcess.
 The graph gains supervision, OTEL tracing, and transport-agnostic messaging.
@@ -8,10 +9,10 @@ The graph gains supervision, OTEL tracing, and transport-agnostic messaging.
 
 import asyncio
 
+from civitas_contrib.adapters.langgraph import LangGraphAgent
 from langgraph.graph import END, StateGraph
 
 from civitas import Runtime, Supervisor
-from civitas.adapters.langgraph import LangGraphAgent
 
 # --- Define a LangGraph workflow (this is pure LangGraph code) ---
 
