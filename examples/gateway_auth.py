@@ -19,9 +19,14 @@ Usage:
 from __future__ import annotations
 
 import os
+import secrets
 
-# Must happen before any `civitas` import (see module docstring).
-_JWT_SECRET = "demo-secret-do-not-use-in-production"
+# Must happen before any `civitas` import (see module docstring). Generated at
+# runtime, not a fixed string literal -- a static-analysis scanner (correctly)
+# flags any hardcoded JWT secret regardless of "it's just a demo" intent, and
+# there is no real reason a throwaway demo secret needs to be reproducible
+# across runs, or checked into git history at all.
+_JWT_SECRET = secrets.token_urlsafe(32)
 os.environ["CIVITAS_JWT_SECRET"] = _JWT_SECRET
 os.environ["CIVITAS_JWT_AUDIENCE"] = "civitas-demo"
 os.environ["CIVITAS_JWT_ISSUER"] = "civitas-examples"
