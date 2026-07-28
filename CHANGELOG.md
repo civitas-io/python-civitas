@@ -11,6 +11,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+## [0.9.1] — 2026-07-28
+
+Post-endgame polish: coverage top-ups, and a full Textual TUI rebuild of `civitas dashboard`
+("civitas top") that attaches to an already-running topology instead of spawning its own runtime.
+
 ### Added
 
 - **`civitas top` — the dashboard is a full Textual TUI rebuild, not a patch** ([design/dashboard-v2.md](docs/design/dashboard-v2.md)) — `civitas dashboard <topology.yaml>` now attaches remotely to an already-running topology's `topology_server` over HTTP and polls it live, instead of spawning its own runtime. Mouse-clickable three-pane layout (supervision tree | agent detail | per-process resources), built-in light/dark theme switching (`Ctrl+P`), and a persistent reconnect banner if the server becomes unreachable. New `GET /metrics` and `GET /processes` endpoints on `TopologyServer`; `/topology` and `/agents` gained `restart_count`, `crashes_in_window`, `capabilities`, `uptime_seconds`, and `process_id` (joins directly to `/processes`' own process IDs). `Runtime.start()` now auto-provisions a `MetricsCollector` whenever a `TopologyServer` is present and no metrics sink was already attached. New `civitas[dashboard]` extra (`textual`, `psutil`). A runnable demo topology ships at `examples/dashboard_demo/`.

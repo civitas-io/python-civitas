@@ -51,6 +51,7 @@ Everything in this part is done.
 | — | [v0.8.1 — Verification Perimeter](#v081-verification-perimeter-released) | Jul 2026 |
 | — | [v0.8.2 — Hygiene](#v082-hygiene-released) | Jul 2026 |
 | — | [v0.9.0 — Supervision Endgame](#v090-supervision-endgame-released) | Jul 2026 |
+| — | [v0.9.1 — Post-endgame Polish](#v091-post-endgame-polish-released) | Jul 2026 |
 
 ---
 
@@ -1013,6 +1014,32 @@ the pre-existing "no resurrection after stop" guarantee).
 
 ---
 
+## v0.9.1 — Post-endgame Polish (Released)
+
+**Status: ✅ Released 2026-07-28.** Coverage top-ups, and a full Textual TUI rebuild of
+`civitas dashboard` ("civitas top") that attaches to an already-running topology over HTTP instead
+of spawning its own runtime. Design: [`dashboard-v2.md`](design/dashboard-v2.md) — ✅ ACCEPTED,
+fully implemented. Plan: `.sisyphus/plans/dashboard-v2.md` (Phases A–G).
+
+| # | Deliverable | Priority |
+|---|-------------|----------|
+| — | ✅ **Done** — `process.py` (88%→92%) / `runtime.py` (87%→91%) coverage top-ups: 22 new tests covering `llm_span()`/`tool_span()`'s tracer-present path, `connect_mcp()`'s error paths, `spawn_into()`'s validation/error paths, suspend/resume/despawn checkpoint-failure branches, and message-signing wiring | Low |
+| A–D | ✅ **Done** — `TopologyServer` enrichment: `restart_count`, `crashes_in_window`, `capabilities`, `uptime_seconds`, `process_id`; new `GET /metrics` (auto-provisioned `MetricsCollector`) and `GET /processes` (psutil resource stats via the existing D5 health-probe wire protocol) endpoints; closed FD-01 (`llm_span()` now always feeds metrics, independent of tracing) | Medium |
+| E–F | ✅ **Done** — the Textual app itself (Mockup B's dense three-pane grid: tree \| detail \| resources), chosen after building and comparing two real runnable mockups; `civitas dashboard <topology.yaml>` rewritten to YAML-driven remote-attach only (breaking CLI change, documented); new `civitas[dashboard]` extra | Medium |
+| G | ✅ **Done** — verification sweep (1373/1373 unit+integration, macOS + Linux Docker), `docs/cli.md` rewrite, CHANGELOG entry, runnable demo at `examples/dashboard_demo/` | — |
+
+**Found along the way (not planned, surfaced by actually running things):** two dead metrics
+hooks (`llm_call()`/FD-01, `agent_restarted()`) that existed and were unit-tested but were never
+actually called from `civitas/`; `TopologyServer` has zero authentication today (acceptable for
+read-only endpoints, tracked as the v0.9.2 prerequisite gate for any write action); three silently
+broken API calls in `examples/dynamic_spawning.py`, fixed, exposing that no example file in this
+repo has any test coverage (tracked, v0.9.2). Control-plane items (auth, suspend/resume-as-write,
+kill/restart, mailbox introspection) were deliberately scoped OUT after a capability-scope
+discussion, to be designed properly rather than added reactively — see v0.9.2 below.
+
+
+---
+
 ## Part 2 — Backlog
 
 **Status: 🗂️ Tracked** — the active todo list: everything not yet done. New work lands here first
@@ -1028,19 +1055,8 @@ Owner column: `core` = python-civitas, else the target repo.
 > #27–#35 closed by [v0.8.0](#v080-supervision-core-hardening-released); #39–#43 closed by
 > [v0.8.1](#v081-verification-perimeter-released). The 2026-07 architecture review is fully
 > closed by [v0.9.0](#v090-supervision-endgame-released) — zero xfail trackers remain in
-> `tests/unit/test_actor_model_gaps.py`.
-
-### v0.9.1 — Post-endgame polish (Implementation complete, pending release)
-
-**Design:** [`dashboard-v2.md`](design/dashboard-v2.md) — DRAFT, PRD agreed in conversation
-(topology + status + LLM-metrics + per-process resources is P0/v0.9.1; network I/O, historical
-charts, write actions, and a distinct HITL-vs-suspended signal are explicitly P1/P2, deferred to
-v0.9.2 below — not silently dropped).
-
-| Item | Priority | Status |
-|------|----------|--------|
-| process.py / runtime.py coverage miss-range top-ups (streaming internals, MCP connect, exporter/signing blocks) | Low | ✅ **Done (dev/v0.9.1)** — process.py 88%→92%, runtime.py 87%→91%; 22 new tests; one block (eval exporter per-kind bodies) documented as an accepted civitas_contrib-gated ceiling |
-| Textual dashboard rebuild on `TopologyServer` endpoints ("civitas top") | Medium | ✅ **Done (dev/v0.9.1)** — all phases (A–G) complete, awaiting release — Phase A (topology/status/restart enrichment) ✅, Phase B (`/metrics` + auto-provisioned `MetricsCollector`, including a same-session fix for dynamically-spawned children) ✅, Phase C (closes FD-01 — `llm_span()` now actually feeds tokens/cost/model) ✅, Phase D (`/processes` — psutil resource stats) ✅, Phase E (the Textual app itself, Mockup B layout — folded in Phase F's CLI rewrite since deleting `renderer.py` broke the old CLI) ✅, Phase G (verification sweep + `docs/cli.md` rewrite + CHANGELOG entry) ✅. Runnable demo: `examples/dashboard_demo/`. 1373/1373 unit+integration green (macOS + Linux Docker), mypy/ruff/format clean. Awaiting release choreography (PR → CI → merge → tag → PyPI). Plan: `.sisyphus/plans/dashboard-v2.md` |
+> `tests/unit/test_actor_model_gaps.py`. Coverage top-ups and the dashboard rebuild are closed by
+> [v0.9.1](#v091-post-endgame-polish-released).
 
 ### v0.9.2 — Dashboard control-plane, observability, + cross-platform CI (Planned, after v0.9.1)
 
