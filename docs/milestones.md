@@ -1068,20 +1068,32 @@ demonstrative code, found while fixing `examples/dynamic_spawning.py` (2026-07-2
 
 | Item | Priority | Source |
 |------|----------|--------|
-| **Examples smoke test** — run every `examples/*.py` that needs no external service, assert exit 0 | High | 2026-07-27 — the structural gap that let `dynamic_spawning.py` ship broken; would catch the next one automatically, not just this one |
-| Example: non-blocking spawn (`spawn_nowait()` / `spawn(..., wait=False)`) | Medium | 2026-07-27 — B4/v0.9.0 has a full design doc (`design/non-blocking-spawn.md`) and zero examples; every existing example uses default `wait=True` |
-| Example: streaming response (`StreamContext`, bus-native streaming) | Medium | 2026-07-27 — `docs/streaming.md` is a full page; nothing in `examples/` demonstrates it |
-| Example: message signing / secured transport (CURVE, TLS, `MessageSigner`) | Medium | 2026-07-27 — `SECURITY.md` + `design/security-hardening.md` + a dedicated `security` extras group (`pynacl`) exist; no example configures any of it |
-| Example: cross-process dynamic spawn (`DynamicSupervisor` hosted in a Worker) | Medium | 2026-07-27 — `design/cross-process-spawn.md` (R6) describes this specifically; `deployment/level2`/`level3` only show static multi-process topologies |
-| Example: gRPC gateway | Low | 2026-07-27 — `civitas/gateway/grpc_server.py` is real and substantial with its own extras group and design doc; only `http_gateway.py` exists as an example |
-| Example: gateway auth (JWT bearer, mTLS) | Low | 2026-07-27 — `gateway-auth.md`, `gateway-http-mtls-proxy.md`, `gateway-ws-grpc-auth.md` all exist; `http_gateway.py` doesn't configure auth |
-| Example: custom plugin (model provider / exporter / state store) | Low | 2026-07-27 — `docs/plugins.md` documents the extension points; every example only uses built-ins |
-| Example: supervision introspection (`civitas.supervision.status` query) | Low | 2026-07-27 — the v0.9.0 endgame's own introspection API has no standalone example outside the dashboard |
+| **Examples smoke test** — run every `examples/*.py` that needs no external service, assert exit 0 | High | ✅ **Done** — 30 tests (three shapes: run-to-completion, long-running-signaled, paired long-running), 1 self-checking test so a future example can't silently fall through untracked |
+| Example: non-blocking spawn (`spawn_nowait()` / `spawn(..., wait=False)`) | Medium | ✅ **Done** — `examples/non_blocking_spawn.py` |
+| Example: streaming response (`StreamContext`, bus-native streaming) | Medium | ✅ **Done** — `examples/streaming_response.py` |
+| Example: message signing / secured transport (CURVE, TLS, `MessageSigner`) | Medium | ✅ **Done** — `examples/secured_messaging.py`, scoped to what's provably solid (see the bug found below) |
+| Example: cross-process dynamic spawn (`DynamicSupervisor` hosted in a Worker) | Medium | ✅ **Done** — `examples/cross_process_spawn/` (found + worked around a real `civitas run`/`Runtime.from_config()` gap below rather than building on top of it) |
+| Example: gRPC gateway | Low | ✅ **Done** — `examples/grpc_gateway.py` |
+| Example: gateway auth (JWT bearer, mTLS) | Low | ✅ **Done** — `examples/gateway_auth.py` |
+| Example: custom plugin (model provider / exporter / state store) | Low | ✅ **Done** — `examples/custom_plugin.py` |
+| Example: supervision introspection (`civitas.supervision.status` query) | Low | ✅ **Done** — `examples/supervision_introspection.py` |
 
 > The CI matrix item (macOS + Windows runners) from the original grab-bag is intentionally NOT in
 > this release — moved to [v1.0.0 GA gates](#v100--ga-gates-planned) below, since cross-platform
 > CI is naturally a pre-GA gate, not example-completeness work. Revisit sooner if a real
 > Windows/macOS user need arises before then.
+
+### Found building v0.9.2 — two real product bugs, not example-completeness gaps
+
+Both surfaced by actually running things end-to-end while writing examples, not by review —
+neither had ever been exercised by any existing test. Deliberately NOT fixed inline: each needs
+its own investigation, and the examples above were rescoped/worked around instead of quietly
+building on top of broken behavior.
+
+| Item | Priority | Source |
+|------|----------|--------|
+| **`Runtime.from_config()` / `civitas run --topology` (supervisor mode) does not filter `process:`-tagged nodes** — it builds EVERY node locally, including ones tagged for a different process, duplicating agents that a real Worker process also builds for itself (confirmed: `examples/deployment/level2_multi_process/run_supervisor.py`, run alone via `Runtime.from_config()`, registers `worker_a`/`worker_b` locally even though they're `process: worker`-tagged) | High | 2026-07-28 — found writing `examples/cross_process_spawn/`; worked around there by using the same empty-local-tree + `runtime.spawn()`-by-name pattern `tests/integration/test_cross_process_spawn.py` already proves correct, rather than the YAML `process:` shape |
+| **Message signing + ZMQ transport: an agent-to-agent `ask()` round trip silently times out when `security.signing.enabled=True`**, even with `allow_unsigned=True` set (no `SignatureError`, no other exception — just a plain 30s `ask()` `TimeoutError`) — reproduced with the simplest possible two-agent, single-process, real-ZMQ topology; the identical topology with signing disabled works immediately | High | 2026-07-28 — found writing `examples/secured_messaging.py`; **no existing test exercises signing over a real transport with an actual message round trip** (only config-parsing/wiring-flag unit tests exist) — the same "shipped but never exercised end-to-end" pattern as FD-01 and the dead metrics hooks, this time in `civitas/` itself, not a dashboard/example gap. Example rescoped to demonstrate the `AgentIdentity`/`KeyRegistry`/`MessageSigner` primitives directly (proven correct by `tests/unit/test_security.py`) instead of a live signed request/reply |
 
 ### v0.9.3 — Telemetry dashboard (Planned, after v0.9.2)
 

@@ -9,7 +9,7 @@ exercised by the test suite. This file is the structural fix: not exhaustive cov
 of what each example DOES, just proof that each one runs to completion (or shuts down
 cleanly) without crashing.
 
-Two distinct shapes, because examples come in two distinct shapes:
+Three distinct shapes, because examples come in three distinct shapes:
 
 - **Run-to-completion scripts** — start, do their demo, exit on their own. Simple:
   run, assert exit code 0.
@@ -20,6 +20,12 @@ Two distinct shapes, because examples come in two distinct shapes:
   (confirmed by hand to be caught by all three — some only handle SIGINT via
   `KeyboardInterrupt`, not SIGTERM, which has no handler and kills them outright),
   and must then exit cleanly (0) within a bounded wait.
+- **Paired long-running scripts** — `cross_process_spawn`'s supervisor/worker only
+  make sense started together, in a specific order (the proxy owner first — found
+  running this exact pair the other way around, which just times out). One dedicated
+  test starts both, lets the supervisor run its full demo to completion (proving the
+  actual cross-process spawn round trip succeeded, not just "didn't crash"), then
+  signals the worker and checks its clean shutdown too.
 
 Excluded, each for a real reason (not silently omitted — see EXCLUDED_EXAMPLES):
 real external API calls, an external MCP server process, extra packages not in any
@@ -28,9 +34,11 @@ core extras group, or genuine multi-host distributed transports.
 
 from __future__ import annotations
 
+import re
 import signal
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -57,6 +65,13 @@ RUN_TO_COMPLETION = [
     "examples/patterns/pipeline.py",
     "examples/patterns/router.py",
     "examples/deployment/level1_single_process/main.py",
+    "examples/non_blocking_spawn.py",
+    "examples/supervision_introspection.py",
+    "examples/custom_plugin.py",
+    "examples/streaming_response.py",
+    "examples/secured_messaging.py",  # needs civitas[zmq,security], both in CI's dev extras
+    "examples/grpc_gateway.py",  # grpcio* ships as part of the dev extra itself
+    "examples/gateway_auth.py",  # pyjwt[crypto] ships as part of the dev extra itself
 ]
 
 # --- Long-running servers: launch, confirm no startup crash, SIGINT, must exit
@@ -65,6 +80,13 @@ LONG_RUNNING_SERVERS = [
     "examples/http_gateway.py",
     "examples/deployment/level2_multi_process/run_supervisor.py",
     "examples/deployment/level2_multi_process/run_worker.py",
+]
+
+# --- Paired long-running scripts: see this module's docstring for why these two
+# need a dedicated test rather than being run independently. -----------------
+PAIRED_LONG_RUNNING = [
+    "examples/cross_process_spawn/run_supervisor.py",
+    "examples/cross_process_spawn/run_worker.py",
 ]
 
 # --- Deliberately excluded, with the exact reason — not silently absent. ----
@@ -153,6 +175,76 @@ def test_example_long_running_server_shuts_down_cleanly(rel_path: str) -> None:
     _run_long_running_server(rel_path)
 
 
+def test_cross_process_spawn_pair_completes_and_shuts_down_cleanly() -> None:
+    """cross_process_spawn's supervisor/worker only make sense started
+    together, in a specific order (found running this exact pair: the proxy
+    owner -- the supervisor, zmq_start_proxy=True -- must start FIRST, or the
+    worker tries to connect before any proxy exists and the supervisor's own
+    wait for its announcement just times out).
+
+    Unlike the other long-running pair (Level 2), this one's supervisor script
+    is written to run TO COMPLETION -- it proves the actual cross-process spawn
+    round trip succeeded (spawn, ask, despawn) and exits 0 on its own, rather
+    than needing to be signaled. Only the worker needs signaling afterward.
+    """
+    supervisor_path, worker_path = PAIRED_LONG_RUNNING
+    supervisor = subprocess.Popen(
+        [sys.executable, supervisor_path],
+        cwd=REPO_ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    worker: subprocess.Popen | None = None
+    try:
+        time.sleep(1.0)  # let the supervisor's proxy bind before the worker connects
+        worker = subprocess.Popen(
+            [sys.executable, worker_path],
+            cwd=REPO_ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        try:
+            sup_out, _ = supervisor.communicate(timeout=20.0)
+        except subprocess.TimeoutExpired:
+            supervisor.kill()
+            sup_out, _ = supervisor.communicate()
+            pytest.fail(
+                f"{supervisor_path} did not complete within 20s\n"
+                f"{sup_out.decode(errors='replace')[-3000:]}"
+            )
+        assert supervisor.returncode == 0, (
+            f"{supervisor_path} exited {supervisor.returncode}\n"
+            f"{sup_out.decode(errors='replace')[-3000:]}"
+        )
+
+        # A brief settle buffer before signaling the worker -- found running
+        # this exact pair back-to-back: signaling it the instant the
+        # supervisor's cross-process traffic finishes is a genuine (if
+        # narrow) race against the worker's own event loop mid-cleanup.
+        time.sleep(0.5)
+        worker.send_signal(signal.SIGINT)
+        try:
+            worker_out, _ = worker.communicate(timeout=10.0)
+        except subprocess.TimeoutExpired:
+            worker.kill()
+            worker_out, _ = worker.communicate()
+            pytest.fail(
+                f"{worker_path} did not shut down within 10s of SIGINT (had to kill it)\n"
+                f"{worker_out.decode(errors='replace')[-3000:]}"
+            )
+        assert worker.returncode == 0, (
+            f"{worker_path} did not exit cleanly after SIGINT, exit={worker.returncode}\n"
+            f"{worker_out.decode(errors='replace')[-3000:]}"
+        )
+    finally:
+        if worker is not None and worker.poll() is None:
+            worker.kill()
+            worker.wait()
+        if supervisor.poll() is None:
+            supervisor.kill()
+            supervisor.wait()
+
+
 def test_every_example_is_accounted_for() -> None:
     """Every top-level runnable script under examples/ is either tested above or
     explicitly excluded with a reason — a new example added later can't silently
@@ -162,17 +254,28 @@ def test_every_example_is_accounted_for() -> None:
     `agents.py`/`__init__.py` that only ever get imported are correctly outside
     this file's scope entirely.
     """
-    accounted_for = set(RUN_TO_COMPLETION) | set(LONG_RUNNING_SERVERS) | set(EXCLUDED_EXAMPLES)
+    accounted_for = (
+        set(RUN_TO_COMPLETION)
+        | set(LONG_RUNNING_SERVERS)
+        | set(PAIRED_LONG_RUNNING)
+        | set(EXCLUDED_EXAMPLES)
+    )
+    # 'if __name__ == "__main__":', not a bare "__main__" substring match --
+    # examples/cross_process_spawn/agents.py's own docstring mentions the
+    # string "__main__" in prose (explaining a DIFFERENT, real constraint
+    # about cross-process class resolution) without having an actual runnable
+    # guard, and a naive substring check flagged it as a false positive.
+    _main_guard = re.compile(r'if\s+__name__\s*==\s*["\']__main__["\']\s*:')
     runnable = {
         str(p.relative_to(REPO_ROOT))
         for p in (REPO_ROOT / "examples").rglob("*.py")
-        if "__main__" in p.read_text(encoding="utf-8")
+        if _main_guard.search(p.read_text(encoding="utf-8"))
     }
     missing = runnable - accounted_for
     assert not missing, (
         f"New runnable example(s) found with no smoke-test coverage and no "
         f"documented exclusion reason: {sorted(missing)} — add to RUN_TO_COMPLETION, "
-        f"LONG_RUNNING_SERVERS, or EXCLUDED_EXAMPLES in this file."
+        f"LONG_RUNNING_SERVERS, PAIRED_LONG_RUNNING, or EXCLUDED_EXAMPLES in this file."
     )
     stale = accounted_for - runnable
     assert not stale, (

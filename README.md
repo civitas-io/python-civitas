@@ -323,6 +323,10 @@ python examples/research_assistant.py    # four-agent hero demo
 python examples/stateful_workflow.py     # state persistence across restarts
 ```
 
+See **[`examples/README.md`](examples/README.md)** for the full index (security, gRPC/HTTP
+gateways, streaming, cross-process spawn, the `civitas top` dashboard demo, and more), plus how to
+run the automated smoke test that proves every one of them actually works.
+
 ---
 
 ## CLI
