@@ -1,0 +1,2942 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="The production runtime for Python agents">
+      
+      
+      
+        <link rel="canonical" href="https://civitas-io.github.io/python-civitas/design/dashboard-v2/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
+    
+    
+      
+        <title>Dashboard v2 — "civitas top" (v0.9.1) - civitas</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+  
+
+
+  
+  
+
+<script id="__analytics">function __md_analytics(){function e(){dataLayer.push(arguments)}window.dataLayer=window.dataLayer||[],e("js",new Date),e("config",""),document.addEventListener("DOMContentLoaded",(function(){document.forms.search&&document.forms.search.query.addEventListener("blur",(function(){this.value&&e("event","search",{search_term:this.value})}));document$.subscribe((function(){var t=document.forms.feedback;if(void 0!==t)for(var a of t.querySelectorAll("[type=submit]"))a.addEventListener("click",(function(a){a.preventDefault();var n=document.location.pathname,d=this.getAttribute("data-md-value");e("event","feedback",{page:n,data:d}),t.firstElementChild.disabled=!0;var r=t.querySelector(".md-feedback__note [data-md-value='"+d+"']");r&&(r.hidden=!1)})),t.hidden=!1})),location$.subscribe((function(t){e("config","",{page_path:t.pathname})}))}));var t=document.createElement("script");t.async=!0,t.src="https://www.googletagmanager.com/gtag/js?id=",document.getElementById("__analytics").insertAdjacentElement("afterEnd",t)}</script>
+  
+    <script>"undefined"!=typeof __md_analytics&&__md_analytics()</script>
+  
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#dashboard-v2-civitas-top-v091" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="civitas" class="md-header__button md-logo" aria-label="civitas" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            civitas
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Dashboard v2 — "civitas top" (v0.9.1)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/civitas-io/python-civitas" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    civitas-io/python-civitas
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting Started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../concepts/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../agents-guide/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  For Coding Agents
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../security/architecture/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Security
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../architecture/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../milestones/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Milestones
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../mcp-integration/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../rfc/0001-tool-retrieval/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  RFCs
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../contributing/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Contributing
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="civitas" class="md-nav__button md-logo" aria-label="civitas" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    civitas
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/civitas-io/python-civitas" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    civitas-io/python-civitas
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing Your Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../supervision/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Supervision
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../messaging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Messaging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../streaming/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Streaming
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../genserver/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GenServer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../transports/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Transports
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../gateway/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP Gateway
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../evalloop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    EvalLoop
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mcp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Tools
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../topology/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Topology YAML
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agents-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For Coding Agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Security
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/threat-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Threat Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/enterprise-checklist/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Enterprise Checklist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FAQ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_3" id="__nav_6_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/process/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AgentProcess
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/genserver/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GenServer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/supervisor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Supervisor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/messages/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Message
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/bus/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MessageBus
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/transport/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Transport
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../milestones/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Milestones
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp-integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Integration (M3.4)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../genserver/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GenServer (M3.5)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../http-gateway/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP Gateway (M4.x)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gateway-api-surface/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gateway API Surface (M4.x)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RFCs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    RFCs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../rfc/0001-tool-retrieval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RFC 0001 — Selective Tool Retrieval
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Problem
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Architecture
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-topologyserver-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. TopologyServer changes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. TopologyServer changes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-enrich-topology-and-agents-d-dash-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Enrich /topology and /agents (D-DASH-1)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-new-get-metrics-endpoint-d-dash-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 New GET /metrics endpoint (D-DASH-2)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-new-get-processes-endpoint-d-dash-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.3 New GET /processes endpoint (D-DASH-3)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-metricscollector-becomes-remotely-visible-d-dash-4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. MetricsCollector becomes remotely visible (D-DASH-4)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-closing-fd-01-llm_span-actually-feeds-the-collector-d-dash-5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Closing FD-01 — llm_span() actually feeds the collector (D-DASH-5)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-health-color-model-ratified-option-a" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Health color model (ratified: option A)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-textual-tui-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Textual TUI structure
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. Textual TUI structure">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#70-layout-decision-ratified-2026-07-dense-three-pane-grid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.0 Layout decision (ratified 2026-07): dense three-pane grid
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#71-visual-design-language-ratified-rich-and-colorful-not-excessive" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.1 Visual design language (ratified: rich and colorful, not excessive)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-new-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. New dependencies
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-cli-change" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. CLI change
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-testing-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Testing strategy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-compatibility-behavior-change-ledger" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Compatibility &amp; behavior-change ledger
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-open-items-carried-to-implementation-not-blocking-sign-off" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Open items carried to implementation (not blocking sign-off)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="12. Open items carried to implementation (not blocking sign-off)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-a-implementation-notes-d-dash-1-done" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase A implementation notes (D-DASH-1, done)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-b-implementation-notes-d-dash-2d-dash-4-done" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase B implementation notes (D-DASH-2/D-DASH-4, done)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-c-implementation-notes-d-dash-5-closes-fd-01-done" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase C implementation notes (D-DASH-5, closes FD-01, done)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-d-implementation-notes-d-dash-3-done" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase D implementation notes (D-DASH-3, done)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-phase-d-addendum-process_id-linkage-restart_history-2026-07-26-done" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Post-Phase-D addendum: process_id linkage + restart_history (2026-07-26, done)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-e-implementation-notes-textual-app-itself-done" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase E implementation notes (Textual app itself, done)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="dashboard-v2-civitas-top-v091">Dashboard v2 — "civitas top" (v0.9.1)<a class="headerlink" href="#dashboard-v2-civitas-top-v091" title="Permanent link">&para;</a></h1>
+<p><strong>Status: ✅ ACCEPTED, fully implemented (Phases A–G).</strong> PRD + design ratified in conversation
+(2026-07); Mockup B (dense three-pane grid) chosen over Mockup A after building and comparing both
+as real, runnable Textual apps (§7.0); auth/write-actions/telemetry-dashboard deliberately deferred
+to v0.9.2 (§12, <code>docs/milestones.md</code>). Implementation plan: <code>.sisyphus/plans/dashboard-v2.md</code>.</p>
+<h2 id="1-problem">1. Problem<a class="headerlink" href="#1-problem" title="Permanent link">&para;</a></h2>
+<p><code>civitas dashboard</code> (M3.3) starts its own <code>Runtime</code> in-process, wires a <code>MetricsCollector</code>
+directly, and renders with Rich's static <code>Live</code>. It cannot attach to a topology already running
+elsewhere, has no resource visibility, and its LLM/cost metrics have been silently dead since
+M3.3 shipped (FD-01, <code>docs/milestones.md</code>: <em>"<code>llm_call</code> is not auto-wired... a real follow-up, not
+silently claimed done"</em>). This is that follow-up, plus a full rebuild on <code>TopologyServer</code> (the
+remote-attach surface <code>civitas topology show</code> already uses) and a move to Textual for real
+interactivity — mouse, scrolling, click-to-focus. PRD (agreed in conversation, not reproduced
+in full here): P0 for v0.9.1 is topology + per-agent health/LLM-metrics + per-process resources;
+P1 (network I/O, session length, history/sparklines, write actions) and P2 (log tail,
+multi-cluster) are explicitly deferred to v0.9.2.</p>
+<h2 id="2-architecture">2. Architecture<a class="headerlink" href="#2-architecture" title="Permanent link">&para;</a></h2>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>┌─────────────────────┐        HTTP (poll, N Hz)        ┌──────────────────────────┐
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>│  civitas dashboard   │ ──────────────────────────────► │   TopologyServer         │
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>│  (Textual App,       │ ◄────────────────────────────── │   (inside Runtime&#39;s OS   │
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>│   separate process)  │   /topology /agents /metrics     │    process, supervised)  │
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>└─────────────────────┘        /processes                └──────────┬───────────────┘
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>                                                                     │ same-process reads
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>                                                        ┌────────────┼─────────────┐
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>                                                        │            │             │
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>                                                  Supervisor    MetricsCollector  psutil
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>                                                  tree (D6      (agent metrics)   (Runtime&#39;s
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>                                                  introspection)                  own PID)
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>                                                                     │
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>                                                          _agency.health_probe (D5, reused)
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>                                                                     │
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>                                                                     ▼
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>                                                        ┌──────────────────────────┐
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>                                                        │   Worker process(es)     │
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>                                                        │   psutil (own PID) in    │
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>                                                        │   the existing health-   │
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>                                                        │   ack reply             │
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>                                                        └──────────────────────────┘
+</span></code></pre></div>
+<p>Same discovery mechanism <code>civitas topology show</code> already uses (find the <code>topology_server</code> node
+in the YAML → host:port), but the dashboard polls <strong>continuously</strong> instead of once, with a
+visible "reconnecting…" state instead of one-shot fallback-to-static.</p>
+<h2 id="3-topologyserver-changes">3. <code>TopologyServer</code> changes<a class="headerlink" href="#3-topologyserver-changes" title="Permanent link">&para;</a></h2>
+<h3 id="31-enrich-topology-and-agents-d-dash-1">3.1 Enrich <code>/topology</code> and <code>/agents</code> (D-DASH-1)<a class="headerlink" href="#31-enrich-topology-and-agents-d-dash-1" title="Permanent link">&para;</a></h3>
+<p><code>_serialize_node</code>'s <code>Supervisor</code> branch and <code>_build_agents_list</code>/<code>_build_agent_detail</code> currently
+emit only <code>name</code>/<code>type</code>/<code>status</code>. Add, for every node, straight off attributes <code>TopologyServer</code>
+already has a reference to (no bus round-trip — same pattern as Phase C's <code>_status_snapshot()</code>):
+- <code>restart_count</code> (per child, from <code>sup._restart_counts</code>)
+- <code>crashes_in_window</code> (from <code>sup._engine.window</code> occupancy, per Supervisor node)
+- <code>capabilities</code> / <code>capability_metadata</code> (from <code>AgentProcess.capabilities</code> — this is the "agent
+  description" from the PRD; already exists, never surfaced)
+- <code>uptime_seconds</code> (needs a new <code>AgentProcess._incarnation_started_at</code> timestamp, set in
+  <code>_start_nowait()</code> — does not exist today; a restart's fresh incarnation naturally resets it,
+  which is the correct semantic: "uptime" means <em>this</em> incarnation's age)</p>
+<h3 id="32-new-get-metrics-endpoint-d-dash-2">3.2 New <code>GET /metrics</code> endpoint (D-DASH-2)<a class="headerlink" href="#32-new-get-metrics-endpoint-d-dash-2" title="Permanent link">&para;</a></h3>
+<p>Exposes a <code>MetricsCollector</code> snapshot. <code>TopologyServer</code> needs a reference to one — see §4.
+Shape: <code>{"agents": {name: {messages_handled, messages_sent, avg_latency_ms, restarts, errors,
+tokens_in, tokens_out, cost_usd, last_model}}, "total_messages", "total_cost_usd", "uptime_seconds"}</code>.</p>
+<h3 id="33-new-get-processes-endpoint-d-dash-3">3.3 New <code>GET /processes</code> endpoint (D-DASH-3)<a class="headerlink" href="#33-new-get-processes-endpoint-d-dash-3" title="Permanent link">&para;</a></h3>
+<p><strong>Reuses the D5 (v0.9.0) per-process health-probe wire protocol rather than inventing a new
+one.</strong> Two sources:
+- <strong>The Runtime's own process</strong>: <code>TopologyServer</code> runs inside it — a local <code>psutil.Process()</code>
+  self-measurement, no message needed.
+- <strong>Each Worker process</strong>: <code>TopologyServer</code> finds every distinct <code>health_channel</code> in the registry
+  (the same field D5 added to <code>RoutingEntry</code>) and sends <code>_agency.health_probe</code> directly — the
+  exact message a Supervisor already sends for liveness. The Worker's existing <code>_on_health_probe</code>
+  handler gains <code>cpu_percent</code> / <code>rss_bytes</code> to its <code>_agency.health_ack</code> payload (its own
+  <code>psutil.Process()</code> self-measurement), additive to the existing per-agent snapshot — Supervisors
+  ignore fields they don't recognize, so this is a compatible extension, not a wire-format break.</p>
+<p>Shape: <code>{"processes": [{"kind": "runtime"|"worker", "id": ..., "pid", "cpu_percent",
+"rss_bytes", "uptime_seconds"}]}</code>.</p>
+<h2 id="4-metricscollector-becomes-remotely-visible-d-dash-4">4. <code>MetricsCollector</code> becomes remotely visible (D-DASH-4)<a class="headerlink" href="#4-metricscollector-becomes-remotely-visible-d-dash-4" title="Permanent link">&para;</a></h2>
+<p><code>Runtime.start()</code> auto-constructs a <code>MetricsCollector</code> (if the caller didn't already provide one
+via the existing <code>metrics=</code> constructor kwarg) whenever the topology contains a
+<code>topology_server</code> node, wires it via the existing <code>set_metrics()</code>/<code>on_crash()</code> path (unchanged),
+and additionally hands the same reference to the <code>TopologyServer</code> instance
+(<code>topology_server._metrics_collector = collector</code>) during the existing injection pass in
+<code>start()</code> — the same place <code>_root_supervisor</code>/<code>_agents</code> already get set on it. Zero behavior
+change for anyone not running a <code>TopologyServer</code>; existing <code>Runtime(metrics=my_own_sink)</code> callers
+are unaffected (their sink is used as before; the dashboard-visible snapshot is simply unavailable
+if their sink isn't a <code>MetricsCollector</code>, which is now explicitly documented rather than assumed).</p>
+<h2 id="5-closing-fd-01-llm_span-actually-feeds-the-collector-d-dash-5">5. Closing FD-01 — <code>llm_span()</code> actually feeds the collector (D-DASH-5)<a class="headerlink" href="#5-closing-fd-01-llm_span-actually-feeds-the-collector-d-dash-5" title="Permanent link">&para;</a></h2>
+<p><code>MetricsSink</code> (the formal protocol <code>AgentProcess</code>/<code>Supervisor</code> are written against) gains a new
+method:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">llm_call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">agent_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">tokens_in</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">tokens_out</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">cost_usd</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Record one LLM call&#39;s usage, cost, and model.&quot;&quot;&quot;</span>
+</span></code></pre></div>
+<p>This is an <strong>additive protocol change</strong> — worth a CHANGELOG callout since any external
+<code>MetricsSink</code> implementation (Presidium-side, for example) now needs this method to satisfy the
+<code>@runtime_checkable</code> protocol at the type level, though <code>isinstance()</code> checks at call sites stay
+defensive (<code>if self._metrics is not None: self._metrics.llm_call(...)</code>, same guard style already
+used for <code>message_handled</code>).</p>
+<p><code>llm_span()</code>'s existing <code>finally:</code> block (after <code>span.end()</code>) reads back whatever the caller set
+via <code>span.set_attribute("civitas.llm.tokens_in"/"tokens_out"/"cost_usd", ...)</code> — the convention
+<code>docs/observability.md</code> already documents, previously read by nobody — and calls
+<code>self._metrics.llm_call(self.name, tokens_in, tokens_out, cost_usd, model=model)</code> if a sink is
+attached and at least one of the three attributes was actually set (an <code>llm_span()</code> that never
+sets them costs nothing and reports nothing, rather than reporting a spurious all-zero call).
+<code>MetricsCollector.llm_call()</code> gains the <code>model</code> parameter, storing <code>last_model</code> per agent.</p>
+<h2 id="6-health-color-model-ratified-option-a">6. Health color model (ratified: option A)<a class="headerlink" href="#6-health-color-model-ratified-option-a" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th><code>ProcessStatus</code></th>
+<th>Color</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>RUNNING</code></td>
+<td>green</td>
+<td></td>
+</tr>
+<tr>
+<td><code>INITIALIZING</code> / <code>STOPPING</code></td>
+<td>yellow</td>
+<td>transitional</td>
+</tr>
+<tr>
+<td><code>CRASHED</code></td>
+<td>red</td>
+<td></td>
+</tr>
+<tr>
+<td><code>SUSPENDED</code></td>
+<td>grey</td>
+<td>covers both governance-pause and HITL-wait — they are the same mechanism today (see PRD discussion); a distinct cyan HITL signal is explicit P1/v0.9.2, not built now</td>
+</tr>
+<tr>
+<td><code>STOPPED</code></td>
+<td>grey (dim)</td>
+<td>terminal, distinct dim shade from SUSPENDED in the actual TUI palette</td>
+</tr>
+</tbody>
+</table>
+<p>Elevated <strong>restart rate</strong> (<code>crashes_in_window</code> &gt; 0 while status is <code>RUNNING</code>) renders as amber
+text within an otherwise-green row — "recovering," not a separate <code>ProcessStatus</code>.</p>
+<h2 id="7-textual-tui-structure">7. Textual TUI structure<a class="headerlink" href="#7-textual-tui-structure" title="Permanent link">&para;</a></h2>
+<p>New <code>civitas/dashboard/app.py</code> (Textual <code>App</code> subclass), replacing <code>renderer.py</code>'s Rich-based
+rendering (the module is retired, not extended — this is a rebuild, not a patch, per the
+milestones item's own framing).</p>
+<h3 id="70-layout-decision-ratified-2026-07-dense-three-pane-grid">7.0 Layout decision (ratified 2026-07): dense three-pane grid<a class="headerlink" href="#70-layout-decision-ratified-2026-07-dense-three-pane-grid" title="Permanent link">&para;</a></h3>
+<p>Two layouts were prototyped as real, runnable Textual apps with sample data (not just described)
+and compared as rendered screenshots before choosing — source scripts kept at
+<code>.sisyphus/mockups/dashboard-mockup-{a-split,b-grid}.py</code> (untracked, per <code>.sisyphus/</code> convention);
+rendered screenshots archived at <code>docs/assets/dashboard-mockup-{a-split,b-grid}.svg</code>.</p>
+<ul>
+<li><strong><a href="../../assets/dashboard-mockup-a-split.svg">Mockup A — Horizontal split</a></strong> (tree left ~38%, wide
+  detail panel right ~62%, resource stats as a thin footer strip). Pro: more horizontal room for
+  the detail table. Con: the resource footer reads as an afterthought, not a first-class panel,
+  and the wide detail panel leaves a lot of dead vertical space on a real terminal (height varies
+  far more than the 120×40 mockup size did).</li>
+<li><strong><a href="../../assets/dashboard-mockup-b-grid.svg">Mockup B — Dense three-pane grid</a></strong> (tree | detail |
+  resources, roughly equal thirds, all visible simultaneously). Closer to btop/dolphie's density;
+  treats topology, agent detail, and process resources as three EQUALLY first-class panels,
+  matching the PRD's own framing rather than making one the "main" view and the others secondary.</li>
+</ul>
+<p><strong>Ratified: Mockup B (dense three-pane grid) ships in v0.9.1.</strong> Mockup A's core idea — a wider
+detail view — is not discarded: deferred to v0.9.2 as an optional <strong>focus/expand mode</strong> (e.g.
+pressing Enter on a tree node temporarily widens the detail pane), rather than the default
+layout. Tracked in <code>docs/milestones.md</code> v0.9.2.</p>
+<ul>
+<li><strong><code>TopologyTree</code></strong> (Textual <code>Tree</code> widget) — left pane, mouse-clickable nodes, click focuses
+  the detail pane on that agent/supervisor.</li>
+<li><strong><code>AgentDetailPanel</code></strong> (Textual <code>DataTable</code>/<code>Static</code> composite) — middle pane: status color,
+  capabilities, restart count, crash-window occupancy, uptime, messages/tokens/cost/last-model
+  for the focused node.</li>
+<li><strong><code>ProcessResourcePanel</code></strong> — right pane (not a footer, per the layout decision above): one row
+  per OS process (Runtime + Workers), each with a proportional <strong>colored gauge bar</strong> for CPU%
+  and RSS% (single-sample meter, gradient green→amber→red as it fills) alongside the raw
+  numbers — this is a <em>snapshot</em> visualization, not a history chart (multi-sample time-series
+  graphs stay P1/v0.9.2 per the PRD; a proportional bar from one reading is in scope now).</li>
+<li><strong>Polling worker</strong>: a Textual <code>@work</code> background task per endpoint (<code>/topology</code>, <code>/metrics</code>,
+  <code>/processes</code>), interval from the existing <code>--refresh</code> flag, each independently retried on
+  failure with a visible "reconnecting…" banner instead of the whole app dying — mirrors
+  <code>topology show</code>'s graceful-unreachable framing, but persistent instead of one-shot.</li>
+<li>Mouse support and scrolling are Textual defaults, not custom code — the framework does this.</li>
+</ul>
+<h3 id="71-visual-design-language-ratified-rich-and-colorful-not-excessive">7.1 Visual design language (ratified: rich and colorful, not excessive)<a class="headerlink" href="#71-visual-design-language-ratified-rich-and-colorful-not-excessive" title="Permanent link">&para;</a></h3>
+<p>Reference points: <strong>btop</strong> (gradient meter bars, confident color-per-category use),
+<strong>dolphie</strong> (a real, widely-used Textual dashboard — proof this aesthetic works cleanly in a
+terminal, not just in GUI toolkits), and Textual's own dark-theme design-token system
+(<code>$primary</code>/<code>$secondary</code>/<code>$success</code>/<code>$warning</code>/<code>$error</code>/<code>$accent</code>), which the app defines against
+rather than hardcoding ANSI colors — free light/dark theme support later, and consistent color
+semantics across every widget.</p>
+<p><strong>The guardrail for "not excessive": color always encodes meaning, never decoration.</strong> Concretely:</p>
+<ul>
+<li><strong>One accent color per data category, used consistently everywhere that category appears:</strong>
+  cyan/blue for topology/structure, violet/magenta for LLM+cost metrics, amber/gold for resource
+  gauges, and the five status colors from §6 for health — never mixed (an agent's cost figure is
+  always violet, never colored by its status; its status dot is always the §6 palette, never
+  themed by category).</li>
+<li><strong>Rounded panel borders</strong> (Textual <code>border: round</code>) with a colored title matching that panel's
+  category accent — this alone is most of what makes btop/dolphie read as "modern" rather than a
+  1980s curses app, and it's near-zero extra code (a CSS property).</li>
+<li><strong>One glyph vocabulary, reused, not reinvented per-widget</strong> — extends today's Rich renderer's
+  existing <code>_STATUS_DOTS</code> (<code>● ◐ ○ ✗ ?</code>) with color from §6, plus <code>▲</code>/<code>▼</code> only where a real
+  directional signal exists (e.g. cost trending up this session) — never decorative arrows with
+  no underlying signal.</li>
+<li><strong>No blinking, no flashing, no more than the defined palette</strong> — a crashed agent's red is
+  attention-grabbing because it's the <em>only</em> red in a mostly green/cyan/violet screen, not because
+  it animates.</li>
+<li>Textual's CSS is a separate <code>.tcss</code> file (<code>civitas/dashboard/app.tcss</code>), not inline styles —
+  keeps the visual language auditable/editable in one place instead of scattered through widget code.</li>
+</ul>
+<h2 id="8-new-dependencies">8. New dependencies<a class="headerlink" href="#8-new-dependencies" title="Permanent link">&para;</a></h2>
+<p><code>textual</code> and <code>psutil</code>, both under a <strong>new <code>civitas[dashboard]</code> extras group</strong> (not core), matching
+every other optional-surface precedent in this repo (<code>civitas[http]</code>, <code>civitas[grpc]</code>, etc.).
+<code>civitas dashboard</code> fails fast with a <code>ConfigurationError</code> + install instructions if the extra
+isn't installed, matching <code>connect_mcp()</code>'s pattern for <code>fabrica</code>.</p>
+<h2 id="9-cli-change">9. CLI change<a class="headerlink" href="#9-cli-change" title="Permanent link">&para;</a></h2>
+<p><code>civitas dashboard &lt;topology.yaml&gt;</code> — <strong>YAML-driven discovery only</strong> (ratified), no <code>--url</code> flag.
+Reuses <code>_find_topology_server()</code> from <code>cli/topology.py</code> (moved to a shared location, e.g.
+<code>cli/_topology_discovery.py</code>, since two commands now need it). Refuses with a clear error if the
+YAML declares no <code>topology_server</code> node — a dashboard needs something to attach to. The
+"spawn-my-own-runtime" code path in today's <code>dashboard.py</code> is <strong>removed</strong>, not kept as a second
+mode — the PRD's whole point is remote attach; keeping both would mean maintaining two mental
+models for one command. <code>--refresh</code> (seconds) is kept, now meaning "poll interval" instead of
+"Rich <code>Live</code> refresh rate."</p>
+<h2 id="10-testing-strategy">10. Testing strategy<a class="headerlink" href="#10-testing-strategy" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>TopologyServer</code> endpoint changes: plain unit tests (JSON shape assertions), no Textual needed
+  — matches how <code>/topology</code>/<code>/agents</code> are presumably tested today.</li>
+<li><code>MetricsCollector.llm_call()</code> + <code>llm_span()</code> wiring: unit tests asserting a span with
+  <code>civitas.llm.tokens_in</code> etc. set produces exactly one <code>llm_call()</code> invocation with the right
+  values; a span that never sets them produces zero calls (no spurious zero-cost entries).</li>
+<li><code>psutil</code>-based process stats: unit tests with <code>psutil.Process</code> mocked (no real process
+  introspection needed to prove the wiring is correct); one real (un-mocked) smoke test that
+  <code>psutil.Process(os.getpid())</code> returns sane values, guarding against API drift.</li>
+<li>The <code>_agency.health_probe</code>/<code>_agency.health_ack</code> extension: extend the existing
+  <code>tests/integration/test_process_liveness.py</code> real-ZMQ suite (same file D5 already lives in) with
+  an assertion that <code>cpu_percent</code>/<code>rss_bytes</code> arrive in the ack.</li>
+<li>Textual App itself: <code>textual.testing.Pilot</code> (bundled test harness) drives simulated key/mouse
+  events and asserts rendered state — used for the handful of interaction tests that matter
+  (click-to-focus, reconnect-banner-on-failure), not exhaustively for every widget.</li>
+</ul>
+<h2 id="11-compatibility-behavior-change-ledger">11. Compatibility &amp; behavior-change ledger<a class="headerlink" href="#11-compatibility-behavior-change-ledger" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Change</th>
+<th>Kind</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>MetricsSink.llm_call()</code></td>
+<td><strong>Additive protocol change</strong></td>
+<td>external sink implementers need this method now</td>
+</tr>
+<tr>
+<td><code>MetricsCollector.message_handled()</code>/<code>message_sent()</code>/<code>agent_error()</code>/<code>agent_restarted()</code>/<code>llm_call()</code></td>
+<td><strong>Behavior change</strong></td>
+<td>previously silently ignored an unregistered agent name; now self-register lazily on first event — fixes dynamically-spawned children, has no effect on any existing caller that already registered first</td>
+</tr>
+<tr>
+<td><code>TopologyServer</code> <code>/topology</code>/<code>/agents</code> response shape</td>
+<td>Additive</td>
+<td>new fields, existing fields unchanged</td>
+</tr>
+<tr>
+<td>New <code>/metrics</code>, <code>/processes</code> endpoints</td>
+<td>Additive</td>
+<td></td>
+</tr>
+<tr>
+<td><code>_agency.health_ack</code> payload</td>
+<td>Additive</td>
+<td>new <code>cpu_percent</code>/<code>rss_bytes</code> fields, existing fields unchanged</td>
+</tr>
+<tr>
+<td><code>civitas dashboard</code> CLI</td>
+<td><strong>Breaking (CLI only)</strong></td>
+<td>no longer spawns its own Runtime; requires a <code>topology_server</code> node in the YAML and a separately-running process to attach to</td>
+</tr>
+<tr>
+<td><code>civitas/dashboard/renderer.py</code></td>
+<td>Removed</td>
+<td>superseded by <code>civitas/dashboard/app.py</code> (Textual)</td>
+</tr>
+<tr>
+<td>New extras: <code>civitas[dashboard]</code></td>
+<td>Additive</td>
+<td><code>textual</code>, <code>psutil</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="12-open-items-carried-to-implementation-not-blocking-sign-off">12. Open items carried to implementation (not blocking sign-off)<a class="headerlink" href="#12-open-items-carried-to-implementation-not-blocking-sign-off" title="Permanent link">&para;</a></h2>
+<ul>
+<li>~~Whether <code>uptime_seconds</code> needs a new <code>_incarnation_started_at</code> field~~ <strong>Resolved (Phase A):</strong>
+  confirmed no existing per-incarnation timestamp existed; added <code>AgentProcess._incarnation_started_at</code>
+  (set fresh in <code>_start_nowait()</code>, so D1a's fresh-instance restart resets it automatically — zero
+  special-casing needed) + a public <code>uptime_seconds</code> property.</li>
+<li><strong>Cross-platform scope, raised mid-Phase-D-planning (2026-07-24)</strong>: the product targets macOS
+  and Windows in addition to Linux, but CI has only ever run <code>ubuntu-latest</code> and this whole arc's
+  manual verification has only ever covered macOS + Linux (Docker). Fixing full CI coverage is out
+  of scope for this design (tracked as its own backlog item, <code>docs/milestones.md</code> v0.9.2). What IS
+  in scope here: not making it WORSE — Phase D's new tests use <code>tcp://127.0.0.1:&lt;port&gt;</code> rather than
+  the <code>ipc://</code> (Unix-only) pattern 4 existing test files use, and its <code>psutil</code> usage is written
+  defensively rather than assuming Linux-only behavior. None of this is Windows-VERIFIED (no
+  Windows runner available in this environment) — it's Windows-AWARE, which is a real, honest
+  distinction worth keeping straight.</li>
+</ul>
+<h3 id="phase-a-implementation-notes-d-dash-1-done">Phase A implementation notes (D-DASH-1, done)<a class="headerlink" href="#phase-a-implementation-notes-d-dash-1-done" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>restart_count</code> attribution is per-child, computed by the PARENT</strong> — a node cannot know its own
+  restart count, only the supervisor tracking it can. <code>_serialize_node</code> gained a <code>restart_count</code>
+  parameter the parent supplies for each child it recurses into (root defaults to 0, no parent to
+  track it). Caught via a dedicated test (<code>test_serialize_supervisor_children_get_own_restart_count</code>)
+  proving two children's counts aren't conflated — the bug a naive "sum at the parent" version would
+  have introduced (an early draft of this implementation did exactly that before catching it).</li>
+<li><strong>Found and fixed a pre-existing, unrelated test flake while in this file</strong>: <code>TestTopologyShowCommand::
+  test_show_fallback_when_runtime_not_running</code> asserted an un-normalized substring against Rich's
+  word-wrapped CLI output — passed on macOS, failed on Linux/Docker (narrower default terminal
+  width wraps the phrase mid-string). Same class of bug as V1 (v0.8.1, Rich help-text width).
+  Confirmed pre-existing (reproduces identically without any Phase A changes) before fixing;
+  normalized whitespace before the substring check.</li>
+</ul>
+<h3 id="phase-b-implementation-notes-d-dash-2d-dash-4-done">Phase B implementation notes (D-DASH-2/D-DASH-4, done)<a class="headerlink" href="#phase-b-implementation-notes-d-dash-2d-dash-4-done" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>MetricsCollector.register_agent()</code> is required before any metric records anything</strong> —
+  <code>message_handled()</code>/<code>message_sent()</code>/etc. all silently no-op for an unregistered name (a
+  pre-existing <code>MetricsCollector</code> behavior, not new). The old CLI <code>dashboard.py</code> called
+  <code>register_agent()</code> manually for every static agent at startup; <code>Runtime</code>'s new auto-provisioning
+  reproduces this loop. Caught by a real end-to-end test (not assumed) — the first draft of
+  <code>test_topology_server_http_metrics_shape</code> failed with an empty <code>agents</code> dict until this was added.</li>
+<li><strong>Resolved, same session</strong> (was briefly a documented gap): dynamically-spawned children (via
+  <code>DynamicSupervisor</code>) aren't known to <code>all_agents()</code>'s static snapshot, so a spawn-time
+  registration hook looked like the obvious fix — but that chases a moving target for every
+  future spawn mechanism too. The actual fix is structural: <code>MetricsCollector</code>'s recording methods
+  (<code>message_handled</code>/<code>message_sent</code>/<code>agent_error</code>/<code>agent_restarted</code>/<code>llm_call</code>) now self-register
+  via a shared <code>_agent()</code> helper (<code>dict.setdefault</code>) instead of silently no-op'ing for an unknown
+  name. A dynamically-spawned agent is tracked correctly from its FIRST reported event, no matter
+  how or when it came to exist — zero new coupling between <code>DynamicSupervisor</code> and the collector.
+  <code>register_agent()</code> is kept as a still-useful <em>explicit</em> call for agents you want visible with
+  all-zero metrics before their first activity (what the static-registration loop does) — no
+  longer a <em>requirement</em> for correctness. Deliberate behavior change from the pre-v0.9.1
+  "operations on an unregistered agent are silently ignored" contract, verified end-to-end
+  (<code>test_topology_server_http_metrics_includes_dynamically_spawned_agent</code>: real <code>DynamicSupervisor</code>,
+  real spawn, real <code>/metrics</code> response) — not just at the unit level.
+  <strong>Status was never actually part of this gap</strong> — confirmed by tracing every call site of
+  <code>agent_status_changed()</code>: it was ONLY ever called from the old CLI <code>dashboard.py</code>'s manual
+  polling loop, never from <code>Runtime</code>/<code>AgentProcess</code>/<code>Supervisor</code>. <code>TopologyServer</code>'s <code>/topology</code>
+  and <code>/agents</code> (Phase A) read <code>agent.status.value</code> directly off the LIVE tree on every request —
+  status for dynamic children was already correct with zero <code>MetricsCollector</code> involvement.</li>
+<li><code>build_component_set()</code> captures <code>self._metrics</code> <strong>by value</strong>, so the auto-provisioning block
+  must run strictly before it — placed at the very top of <code>start()</code>, before the <code>ComponentSet</code>
+  branch, not alongside the later <code>TopologyServer</code> reference-injection block (which was the first,
+  wrong, instinct — caught by re-reading the existing code path before writing code, not by a
+  failing test).</li>
+</ul>
+<h3 id="phase-c-implementation-notes-d-dash-5-closes-fd-01-done">Phase C implementation notes (D-DASH-5, closes FD-01, done)<a class="headerlink" href="#phase-c-implementation-notes-d-dash-5-closes-fd-01-done" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Metrics reporting had to move OUTSIDE the <code>if self._tracer is not None:</code> branch</strong> — the
+  original <code>llm_span()</code> returned early for the no-tracer case, meaning a dashboard-only setup
+  (metrics attached, no OTEL tracer configured) would have silently gotten zero cost/token
+  tracking even after this phase, an easy trap to fall into if the restructure had been a
+  minimal patch rather than a real look at the control flow. Restructured so both branches
+  (tracer / no-tracer) build a real <code>Span</code> (the class already "works with or without OTEL" per
+  its own docstring) and share one <code>finally:</code> block that reports to the metrics sink regardless.</li>
+<li><code>has_tracer: bool</code> is a separate local from <code>self._tracer is not None</code> specifically so mypy can
+  be told, via one <code>assert</code>, that <code>self._tracer</code> is non-<code>None</code> inside that branch — checking a
+  boolean alias doesn't narrow the original attribute's type on its own.</li>
+<li>Considered a defensive <code>getattr(self._metrics, "llm_call", None)</code> guard for callers with an old
+  custom <code>MetricsSink</code> that predates this protocol addition, then rejected it — every other
+  <code>MetricsSink</code> call site in this file (<code>message_handled</code>/<code>message_sent</code>/<code>agent_error</code>) calls
+  directly, trusting the Protocol contract with no such guard. Matching that convention rather
+  than introducing a one-off exception for this call site.</li>
+<li><code>MetricsCollector.llm_call()</code>'s <code>model</code> parameter only overwrites <code>last_model</code> when non-empty —
+  a later call that doesn't report a model (or an agent using multiple providers where one call
+  doesn't tag it) shouldn't blank out the last known-real value.</li>
+</ul>
+<h3 id="phase-d-implementation-notes-d-dash-3-done">Phase D implementation notes (D-DASH-3, done)<a class="headerlink" href="#phase-d-implementation-notes-d-dash-3-done" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>_route_http</code> had to become <code>async</code></strong> — it was a plain sync dispatch table (no route needed
+  real I/O before this phase); <code>/processes</code> needs to <code>await</code> bus round-trips to remote Workers.
+  Every other route stays a synchronous call within the now-async method — unaffected behavior,
+  just a signature change (<code>tests/unit/test_topology_server.py</code>'s direct <code>_route_http(...)</code> calls
+  needed <code>await</code> added, mechanical).</li>
+<li><strong>A real deadlock, caught by actually running the integration test, not by review</strong>: the first
+  draft of the real-ZMQ end-to-end test used <code>urllib.request.urlopen()</code> inside an <code>async def</code> test
+  — a BLOCKING call that starves the very event loop the <code>TopologyServer</code> (client and server share
+  one process/loop in this test) needs to run on to answer the request. The test hung until its
+  own socket timeout fired, with no useful error pointing at the cause. Root-caused by testing
+  <code>_build_processes()</code> directly first (proved it returns correctly in milliseconds, ruling out the
+  new endpoint logic) before suspecting the HTTP client. Fixed by using the same async
+  <code>asyncio.open_connection()</code>-based helper <code>test_topology_server.py</code>'s own tests already use —
+  this codebase had already solved this exact problem once; the fix was to reuse it, not invent a
+  second one.</li>
+<li><strong>A real routing race, also caught by the same test, not assumed away</strong>: <code>_probe_worker_process</code>
+  only caught <code>TimeoutError</code>, but a Worker's health channel can be announced moments AFTER the
+  agent it hosts (same startup loop, separate messages) — probing in that narrow window raises
+  <code>MessageRoutingError</code>, which propagated uncaught through <code>_build_processes()</code> and
+  <code>_handle_connection</code>'s top-level <code>except Exception: pass</code>, silently killing the ENTIRE
+  <code>/processes</code> response (not just the one racing Worker's entry). Fixed by catching
+  <code>MessageRoutingError</code> alongside <code>TimeoutError</code> (both mean "not answerable right now, omit this
+  one entry") plus a broad final <code>except Exception</code> so one bad channel can never take down every
+  other process's data in the same response (F03-7 containment, matching this codebase's existing
+  convention for background/reporting paths).</li>
+<li><code>psutil</code> needed a <code>[[tool.mypy.overrides]] ignore_missing_imports</code> entry (no bundled type
+  stubs), added to the same override list <code>zmq</code>/<code>nats</code>/etc. already share.</li>
+</ul>
+<h3 id="post-phase-d-addendum-process_id-linkage-restart_history-2026-07-26-done">Post-Phase-D addendum: process_id linkage + restart_history (2026-07-26, done)<a class="headerlink" href="#post-phase-d-addendum-process_id-linkage-restart_history-2026-07-26-done" title="Permanent link">&para;</a></h3>
+<p>Two small, safe, read-only additions agreed during the capability-scope discussion (kept out of
+the control-plane/auth-gated group entirely — these add no write surface, no new risk tier):</p>
+<ul>
+<li><strong><code>process_id</code> on every serialized agent/supervisor node</strong> (<code>/topology</code>, <code>/agents</code>,
+  <code>/agents/{name}</code>) — matches one of <code>/processes</code>' own <code>id</code> fields exactly (a Worker's
+  <code>health_channel</code> for remote agents, this <code>TopologyServer</code>'s own name for everything else),
+  so a client can join the two endpoints directly. Verified end-to-end (not just the
+  <code>_process_id_for()</code> unit contract): a real agent's <code>/topology</code> <code>process_id</code> is asserted to be
+  literally present in a real <code>/processes</code> response's set of <code>id</code>s.</li>
+<li><strong><code>restart_history</code> in <code>/metrics</code></strong> — <code>MetricsCollector.restart_history</code> (a list of timestamped
+  <code>RestartEvent</code>s) had existed since M3.3 and was never exposed via this endpoint. Free, already-
+  collected data.</li>
+<li><strong>Found a second dead metrics hook while wiring the second one in</strong> — <code>agent_restarted()</code>
+  existed on <code>MetricsSink</code>/<code>MetricsCollector</code> and was fully unit-tested, but was <strong>never called
+  from anywhere in <code>civitas/</code></strong> — the exact same shape of gap FD-01 was for <code>llm_call()</code> (Phase
+  C). The old CLI <code>dashboard.py</code> was the only caller, wired manually via <code>Runtime.on_crash()</code>.
+  Reproduced that wiring in the same auto-provisioning block Phase B added, so <code>restart_history</code>
+  and per-agent restart-count accuracy work for ANY <code>TopologyServer</code>-having <code>Runtime</code>, not only
+  the (Phase F-removed) standalone CLI path. Caught by writing the real end-to-end test first
+  (a genuine crash-restart, not a mock) and watching it fail with an empty list — not assumed
+  correct because the field existed in the schema.</li>
+</ul>
+<h3 id="phase-e-implementation-notes-textual-app-itself-done">Phase E implementation notes (Textual app itself, done)<a class="headerlink" href="#phase-e-implementation-notes-textual-app-itself-done" title="Permanent link">&para;</a></h3>
+<p><code>civitas/dashboard/{client.py,palette.py,widgets.py,app.py,app.tcss}</code>, replacing
+<code>civitas/dashboard/renderer.py</code> (deleted) and <code>civitas/cli/dashboard.py</code> (rewritten to §9's
+YAML-driven-discovery-only shape — folded into this phase rather than left broken, since deleting
+<code>renderer.py</code> made the old CLI non-functional; <code>_find_topology_server</code> moved to the shared
+<code>civitas/cli/_topology_discovery.py</code> §9 already specified). Mockup B's dense three-pane grid
+shipped as designed. Six real bugs found by actually running the app (Pilot-driven integration
+tests plus a manual smoke run against a live Runtime per §10's mandate), not by review:</p>
+<ul>
+<li><strong><code>$token</code> markup fails inside <code>Tree</code>/<code>DataTable</code> content.</strong> Textual's theme-variable syntax
+  (<code>$accent</code>, <code>$success</code>, etc.) only resolves through Textual's own <code>Content</code> renderer, which
+  <code>Static.update()</code> uses — <code>Tree.add()</code>/<code>add_leaf()</code> and <code>DataTable</code>'s cell formatter both use
+  plain Rich <code>Text.from_markup()</code>, which raises <code>MarkupError</code> on an unrecognized <code>$name</code>. Fixed by
+  reverting <code>STATUS_COLORS</code> and the category-accent constants to plain, real Rich color names
+  (exactly what the retired <code>renderer.py</code> already used) for anything rendered into a Tree label or
+  DataTable cell; <code>$tokens</code> remain valid and used in <code>.tcss</code> and the one <code>Static</code>-only banner.</li>
+<li><strong><code>TopologyTree._add_node</code> silently shadowed <code>Tree</code>'s own private <code>_add_node</code>.</strong> Same class of
+  bug as v0.9.0's D-E4-6 — crashed on construction of every <code>TopologyTree</code> with a signature
+  mismatch. Renamed to <code>_add_topology_node</code>.</li>
+<li><strong><code>ReconnectBanner</code>'s hidden-by-default state depended entirely on <code>app.tcss</code>'s <code>display: none</code></strong>
+  and had no Python-level default — correct in the full app, broken in an isolated widget test with
+  no app CSS loaded. Set <code>self.display = False</code> explicitly in <code>__init__</code> too (defense-in-depth, not
+  redundant: a widget's own default state shouldn't depend entirely on external CSS being present).</li>
+<li><strong>A naive "clear the shared reconnect banner on any successful poll" is a real race</strong> with three
+  concurrent pollers — a healthy <code>/metrics</code> fetch could silently mask an ongoing <code>/processes</code>
+  outage. Fixed with a <code>self._failing: set[str]</code> tracked across all three pollers; the banner only
+  clears when the set is empty, and names every currently-failing endpoint otherwise.</li>
+<li><strong><code>@work(exclusive=True)</code> with no explicit <code>group=</code> defaults every decorated method to the SAME
+  <code>"default"</code> group</strong> — <code>exclusive=True</code> cancels the previous worker in a group when a new one
+  starts, so all three pollers fought over one group and only the last-called one
+  (<code>_poll_processes</code>) ever actually ran; <code>/topology</code> and <code>/metrics</code> silently never polled at all,
+  with no exception, nothing visible except a permanently-empty tree. Found by directly inspecting
+  <code>app.workers</code> in a live run, not by a test assertion (the failure produced no error to catch).
+  Fixed with an explicit distinct <code>group=</code> per poller.</li>
+<li><strong>Polling <code>@work</code> tasks can outlive <code>run_test()</code>'s teardown</strong> and resume into an already-unmounted
+  Screen, raising <code>NoMatches</code> and crashing the worker (which <code>run_test()</code> re-raises, failing the
+  test). Fixed with an <code>App.is_running</code> check (<code>_touch_dom()</code>) before every DOM query inside a
+  poller callback or the <code>_mark_ok</code>/<code>_mark_failed</code> helpers, closing the window instead of adding a
+  try/except at every call site.</li>
+<li><strong>Manual smoke run (§10's mandatory look-at-it pass) against a real live Runtime</strong> found two
+  more, non-crashing but real UX defects no automated test would catch: (1) <code>AgentDetailPanel</code> and
+  <code>ProcessResourcePanel</code> (both <code>Static</code> subclasses, default <code>height: auto</code>) didn't fill their
+  column the way <code>TopologyTree</code> (a <code>Tree</code>, which defaults to filling) did — fixed with explicit
+  <code>height: 1fr</code> on all three panes in <code>app.tcss</code>; (2) a 4<sup>th</sup> "uptime" column on the resource table
+  overflowed a &#8531;-width pane at realistic sizes and truncated the mem column — dropped back to
+  Mockup B's original 3 columns (process/cpu/mem); uptime remains visible per-agent in the detail
+  panel, so no information is lost, just not duplicated.</li>
+</ul>
+<p><code>civitas/cli/dashboard.py</code>'s import of the optional <code>dashboard</code> extra was moved from
+<code>civitas/cli/__init__.py</code>'s module-level guarded import into the command function itself, raising
+<code>ConfigurationError</code> with install instructions on invoke (matching <code>connect_mcp()</code>'s established
+pattern) — a real UX improvement over the old guard, which hid the whole <code>dashboard</code> command from
+<code>--help</code> if the extra wasn't installed; now the command always appears, only failing when actually
+run without the extra. <code>tests/integration/test_m3_3_dashboard.py::test_dashboard_command_registered</code>
+was updated for the new positional-argument CLI shape (§9's documented, intentional behavior
+change) and made robust to <code>typer</code>'s genuinely-unpinned (<code>&gt;=0.12</code>) version range after a real
+Docker/Linux run resolved a newer typer that renders argument metavars differently.</p>
+<p>1373/1373 unit+integration green (macOS); all green on Linux (Docker, dashboard + full extras
+installed) except the one confirmed pre-existing <code>.venv</code>-path environmental failure. mypy/ruff
+check/format all clean. Manual smoke run against a real live Runtime confirmed correct rendering,
+live data, and click-to-focus end-to-end (screenshot on file, not committed — ephemeral smoke
+artifact, not a design record like the Mockup A/B comparison was).</p>
+<p>Proceeding to Phase F (CLI — already substantially done as part of this phase's renderer.py
+removal) and Phase G (final verification sweep + docs + CHANGELOG + release choreography).</p>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Apache 2.0 License
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/civitas-io/python-civitas" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand", "navigation.top", "navigation.instant", "navigation.indexes", "content.code.copy", "content.code.annotate", "search.highlight", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="https://unpkg.com/mermaid@11/dist/mermaid.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -2203,6 +2203,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#v091-post-endgame-polish-released" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.9.1 — Post-endgame Polish (Released)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#part-2-backlog" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2983,6 +2994,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#v091-post-endgame-polish-released" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.9.1 — Post-endgame Polish (Released)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#part-2-backlog" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3201,6 +3223,11 @@ active todo list — everything not yet done).</p>
 <tr>
 <td>—</td>
 <td><a href="#v090-supervision-endgame-released">v0.9.0 — Supervision Endgame</a></td>
+<td>Jul 2026</td>
+</tr>
+<tr>
+<td>—</td>
+<td><a href="#v091-post-endgame-polish-released">v0.9.1 — Post-endgame Polish</a></td>
 <td>Jul 2026</td>
 </tr>
 </tbody>
@@ -5124,6 +5151,51 @@ code landed in each case (documented as design-doc addenda, not retrofitted): D-
 ordering had to reverse once crash-processing moved onto the supervisor's own loop, to preserve
 the pre-existing "no resurrection after stop" guarantee).</p>
 <hr />
+<h2 id="v091-post-endgame-polish-released">v0.9.1 — Post-endgame Polish (Released)<a class="headerlink" href="#v091-post-endgame-polish-released" title="Permanent link">&para;</a></h2>
+<p><strong>Status: ✅ Released 2026-07-28.</strong> Coverage top-ups, and a full Textual TUI rebuild of
+<code>civitas dashboard</code> ("civitas top") that attaches to an already-running topology over HTTP instead
+of spawning its own runtime. Design: <a href="../design/dashboard-v2/"><code>dashboard-v2.md</code></a> — ✅ ACCEPTED,
+fully implemented. Plan: <code>.sisyphus/plans/dashboard-v2.md</code> (Phases A–G).</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Deliverable</th>
+<th>Priority</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>—</td>
+<td>✅ <strong>Done</strong> — <code>process.py</code> (88%→92%) / <code>runtime.py</code> (87%→91%) coverage top-ups: 22 new tests covering <code>llm_span()</code>/<code>tool_span()</code>'s tracer-present path, <code>connect_mcp()</code>'s error paths, <code>spawn_into()</code>'s validation/error paths, suspend/resume/despawn checkpoint-failure branches, and message-signing wiring</td>
+<td>Low</td>
+</tr>
+<tr>
+<td>A–D</td>
+<td>✅ <strong>Done</strong> — <code>TopologyServer</code> enrichment: <code>restart_count</code>, <code>crashes_in_window</code>, <code>capabilities</code>, <code>uptime_seconds</code>, <code>process_id</code>; new <code>GET /metrics</code> (auto-provisioned <code>MetricsCollector</code>) and <code>GET /processes</code> (psutil resource stats via the existing D5 health-probe wire protocol) endpoints; closed FD-01 (<code>llm_span()</code> now always feeds metrics, independent of tracing)</td>
+<td>Medium</td>
+</tr>
+<tr>
+<td>E–F</td>
+<td>✅ <strong>Done</strong> — the Textual app itself (Mockup B's dense three-pane grid: tree | detail | resources), chosen after building and comparing two real runnable mockups; <code>civitas dashboard &lt;topology.yaml&gt;</code> rewritten to YAML-driven remote-attach only (breaking CLI change, documented); new <code>civitas[dashboard]</code> extra</td>
+<td>Medium</td>
+</tr>
+<tr>
+<td>G</td>
+<td>✅ <strong>Done</strong> — verification sweep (1373/1373 unit+integration, macOS + Linux Docker), <code>docs/cli.md</code> rewrite, CHANGELOG entry, runnable demo at <code>examples/dashboard_demo/</code></td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Found along the way (not planned, surfaced by actually running things):</strong> two dead metrics
+hooks (<code>llm_call()</code>/FD-01, <code>agent_restarted()</code>) that existed and were unit-tested but were never
+actually called from <code>civitas/</code>; <code>TopologyServer</code> has zero authentication today (acceptable for
+read-only endpoints, tracked as the v0.9.2 prerequisite gate for any write action); three silently
+broken API calls in <code>examples/dynamic_spawning.py</code>, fixed, exposing that no example file in this
+repo has any test coverage (tracked, v0.9.2). Control-plane items (auth, suspend/resume-as-write,
+kill/restart, mailbox introspection) were deliberately scoped OUT after a capability-scope
+discussion, to be designed properly rather than added reactively — see v0.9.2 below.</p>
+<hr />
 <h2 id="part-2-backlog">Part 2 — Backlog<a class="headerlink" href="#part-2-backlog" title="Permanent link">&para;</a></h2>
 <p><strong>Status: 🗂️ Tracked</strong> — the active todo list: everything not yet done. New work lands here first
 (a design doc if warranted), then moves into <a href="#part-1--shipped">Part 1 — Shipped</a> once released.
@@ -5151,27 +5223,168 @@ Owner column: <code>core</code> = python-civitas, else the target repo.</p>
 <h1 id="2735-closed-by-v080-3943-closed-by">27–#35 closed by <a href="#v080-supervision-core-hardening-released">v0.8.0</a>; #39–#43 closed by<a class="headerlink" href="#2735-closed-by-v080-3943-closed-by" title="Permanent link">&para;</a></h1>
 <p><a href="#v081-verification-perimeter-released">v0.8.1</a>. The 2026-07 architecture review is fully
 closed by <a href="#v090-supervision-endgame-released">v0.9.0</a> — zero xfail trackers remain in
-<code>tests/unit/test_actor_model_gaps.py</code>.</p>
+<code>tests/unit/test_actor_model_gaps.py</code>. Coverage top-ups and the dashboard rebuild are closed by
+<a href="#v091-post-endgame-polish-released">v0.9.1</a>.</p>
 </blockquote>
-<h3 id="v091-post-endgame-polish-planned-after-v090">v0.9.1 — Post-endgame polish (Planned, after v0.9.0)<a class="headerlink" href="#v091-post-endgame-polish-planned-after-v090" title="Permanent link">&para;</a></h3>
+<h3 id="v092-dashboard-control-plane-observability-cross-platform-ci-planned-after-v091">v0.9.2 — Dashboard control-plane, observability, + cross-platform CI (Planned, after v0.9.1)<a class="headerlink" href="#v092-dashboard-control-plane-observability-cross-platform-ci-planned-after-v091" title="Permanent link">&para;</a></h3>
+<p><strong>Design-first, explicitly</strong> — none of the control-plane items below get built until each has
+its own proper design conversation (2026-07 decision, in response to a "hold off on auth, don't
+knee-jerk it" instruction). <code>TopologyServer</code> has <strong>zero authentication today</strong> (verified by
+grep, not assumed) — everything it currently serves is read-only, which is why that's been an
+acceptable risk so far. The moment any write/control action ships, that risk tier changes
+completely, so an auth design is the prerequisite gate for the whole "control-plane" group below,
+not an afterthought bolted onto one endpoint.</p>
 <table>
 <thead>
 <tr>
 <th>Item</th>
 <th>Priority</th>
-<th>Why after v0.9.0</th>
+<th>Source</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>process.py / runtime.py coverage miss-range top-ups (streaming internals, MCP connect, exporter/signing blocks)</td>
-<td>🟢 Low</td>
-<td>the D6/D1a rewiring churns exactly these regions — topping up first is wasted motion</td>
+<td><strong><code>TopologyServer</code> auth design</strong> (prerequisite gate for every write/control item below)</td>
+<td>High</td>
+<td>found during dashboard-v2 capability discussion (2026-07-26) — zero auth exists today; every item below is blocked on this, by design</td>
 </tr>
 <tr>
-<td>Textual dashboard rebuild on <code>TopologyServer</code> endpoints</td>
-<td>🟡 Medium</td>
-<td>topology data model stabilizes in v0.9.0</td>
+<td>Dashboard/API: suspend/resume an agent (write action)</td>
+<td>Medium</td>
+<td>2026-07-26 discussion — safest write action to add first: <code>runtime.suspend()</code>/<code>resume()</code> already exist, already audited (<code>AuditEvent</code>), designed as this system's governed HITL pause primitive (not destructive, unlike kill)</td>
+</tr>
+<tr>
+<td>Dashboard/API: kill / force-restart an agent manually</td>
+<td>Low</td>
+<td>2026-07-26 discussion — mechanically feasible (new "force crash" trigger + existing restart machinery) but real DoS surface without auth first</td>
+</tr>
+<tr>
+<td>Mailbox introspection (list/enumerate)</td>
+<td>Low</td>
+<td>2026-07-26 discussion — <strong>no non-destructive peek exists anywhere in <code>Mailbox</code> today</strong> (only <code>get()</code>/consumes-one, <code>depth()</code>/count-only, <code>drain()</code>/consumes-everything); needs new <code>Mailbox</code> API, not just a new endpoint</td>
+</tr>
+<tr>
+<td>Mailbox: remove one specific in-flight message</td>
+<td>Low</td>
+<td>2026-07-26 discussion — conflicts with the at-most-once/FIFO delivery guarantee this codebase is built around; a real design problem, not a small addition — needs its own conversation, may not be a good idea at all</td>
+</tr>
+<tr>
+<td>Mailbox: inject a message (add)</td>
+<td>Low</td>
+<td>2026-07-26 discussion — mechanically <code>send()</code> exposed through a new surface, but payload content is a real data-exposure concern over an unauthenticated endpoint</td>
+</tr>
+<tr>
+<td>Per-agent process/container awareness beyond <code>process_id</code> (e.g. Docker)</td>
+<td>Low</td>
+<td>2026-07-26 discussion — recommended AGAINST building container-awareness into civitas itself (couples the runtime to a deployment concern better owned by container-native tooling); revisit only if a concrete use case emerges</td>
+</tr>
+<tr>
+<td><strong>Telemetry dashboard</strong>: logging + graphs/charts view, built on the OTEL/tracer infra already collected</td>
+<td>Medium</td>
+<td>2026-07-26 — user's own framing: "we are already collecting telemetry — let's design that later"; distinct from the live-snapshot TUI (v0.9.1), this is historical/trend data (message-rate, cost-over-time, trace/span drill-down) — needs its own design round, likely its own surface (web UI?) not necessarily the terminal dashboard</td>
+</tr>
+<tr>
+<td>CI matrix: macOS + Windows runners (today: Ubuntu only)</td>
+<td>Medium</td>
+<td>found during dashboard-v2 Phase D planning (2026-07-24) — production ZMQ defaults are already Windows-safe (<code>tcp://</code>), but 4 test files use <code>ipc://</code> (Unix-only) and nothing has ever been CI-verified outside Linux</td>
+</tr>
+<tr>
+<td>Dashboard: network I/O per process</td>
+<td>Low</td>
+<td>design/dashboard-v2.md P1</td>
+</tr>
+<tr>
+<td>Dashboard: "session length" (LLM conversation turns/duration)</td>
+<td>Low</td>
+<td>design/dashboard-v2.md P1</td>
+</tr>
+<tr>
+<td>Dashboard: historical charts/sparklines (message-rate, cost-over-time)</td>
+<td>Low</td>
+<td>design/dashboard-v2.md P1 — likely folds into the telemetry dashboard item above rather than the live TUI</td>
+</tr>
+<tr>
+<td>Dashboard: distinct HITL-wait vs. governance-suspend visual signal</td>
+<td>Low</td>
+<td>design/dashboard-v2.md §6 option B — needs a real HITL flow to design against first</td>
+</tr>
+<tr>
+<td>Dashboard: log tail panel per agent</td>
+<td>Low</td>
+<td>design/dashboard-v2.md P2 — likely folds into the telemetry dashboard item above</td>
+</tr>
+<tr>
+<td>Dashboard: multi-cluster / multi-topology view</td>
+<td>Low</td>
+<td>design/dashboard-v2.md P2</td>
+</tr>
+<tr>
+<td>Dashboard layout: optional focus/expand mode for the detail pane (Mockup A's wide-detail idea)</td>
+<td>Low</td>
+<td>design/dashboard-v2.md §7.0 — Mockup B (dense three-pane grid) shipped as the default in v0.9.1; Mockup A's core idea kept as an opt-in mode, not discarded</td>
+</tr>
+</tbody>
+</table>
+<h3 id="examples-example-coverage-gaps-found-2026-07-27-fixing-examplesdashboard_demo">Examples &amp; example-coverage gaps (found 2026-07-27, fixing <code>examples/dashboard_demo/</code>)<a class="headerlink" href="#examples-example-coverage-gaps-found-2026-07-27-fixing-examplesdashboard_demo" title="Permanent link">&para;</a></h3>
+<p>While building the dashboard demo, <code>examples/dynamic_spawning.py</code> was found silently broken (three
+separate calls to real APIs with the wrong signature — <code>spawn()</code>'s argument order, <code>Runtime(dict)</code>
+instead of <code>Runtime.from_config_dict()</code>, a <code>Message</code> object passed where a plain payload dict was
+required) and fixed. It ran with <strong>zero test coverage</strong> — no example file in this repo is exercised
+by the test suite at all, which is the actual root cause: nothing would have caught it, or the next
+one, automatically.</p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Priority</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Examples smoke test</strong> — run every <code>examples/*.py</code> that needs no external service, assert exit 0</td>
+<td>High</td>
+<td>2026-07-27 — the structural gap that let <code>dynamic_spawning.py</code> ship broken; would catch the next one automatically, not just this one</td>
+</tr>
+<tr>
+<td>Example: non-blocking spawn (<code>spawn_nowait()</code> / <code>spawn(..., wait=False)</code>)</td>
+<td>Medium</td>
+<td>2026-07-27 — B4/v0.9.0 has a full design doc (<code>design/non-blocking-spawn.md</code>) and zero examples; every existing example uses default <code>wait=True</code></td>
+</tr>
+<tr>
+<td>Example: streaming response (<code>StreamContext</code>, bus-native streaming)</td>
+<td>Medium</td>
+<td>2026-07-27 — <code>docs/streaming.md</code> is a full page; nothing in <code>examples/</code> demonstrates it</td>
+</tr>
+<tr>
+<td>Example: message signing / secured transport (CURVE, TLS, <code>MessageSigner</code>)</td>
+<td>Medium</td>
+<td>2026-07-27 — <code>SECURITY.md</code> + <code>design/security-hardening.md</code> + a dedicated <code>security</code> extras group (<code>pynacl</code>) exist; no example configures any of it</td>
+</tr>
+<tr>
+<td>Example: cross-process dynamic spawn (<code>DynamicSupervisor</code> hosted in a Worker)</td>
+<td>Medium</td>
+<td>2026-07-27 — <code>design/cross-process-spawn.md</code> (R6) describes this specifically; <code>deployment/level2</code>/<code>level3</code> only show static multi-process topologies</td>
+</tr>
+<tr>
+<td>Example: gRPC gateway</td>
+<td>Low</td>
+<td>2026-07-27 — <code>civitas/gateway/grpc_server.py</code> is real and substantial with its own extras group and design doc; only <code>http_gateway.py</code> exists as an example</td>
+</tr>
+<tr>
+<td>Example: gateway auth (JWT bearer, mTLS)</td>
+<td>Low</td>
+<td>2026-07-27 — <code>gateway-auth.md</code>, <code>gateway-http-mtls-proxy.md</code>, <code>gateway-ws-grpc-auth.md</code> all exist; <code>http_gateway.py</code> doesn't configure auth</td>
+</tr>
+<tr>
+<td>Example: custom plugin (model provider / exporter / state store)</td>
+<td>Low</td>
+<td>2026-07-27 — <code>docs/plugins.md</code> documents the extension points; every example only uses built-ins</td>
+</tr>
+<tr>
+<td>Example: supervision introspection (<code>civitas.supervision.status</code> query)</td>
+<td>Low</td>
+<td>2026-07-27 — the v0.9.0 endgame's own introspection API has no standalone example outside the dashboard</td>
 </tr>
 </tbody>
 </table>
