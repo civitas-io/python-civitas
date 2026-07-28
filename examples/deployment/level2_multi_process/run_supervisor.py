@@ -7,9 +7,19 @@ Run this before run_worker.py.
 """
 
 import asyncio
+import sys
 from pathlib import Path
 
-from civitas import Runtime
+# topology.yaml's `type: examples.deployment.level2_multi_process.agents.
+# FrontendAgent` resolves via plain importlib (civitas/runtime.py's
+# _resolve_class), which needs the repo root on sys.path -- true for an
+# editable dev install (implicit), NOT for a normal `pip install civitas`
+# (found by the examples smoke test's Docker/Linux run, v0.9.2: this failed
+# there with "No module named 'examples'" even though it "worked" locally).
+# Making this script self-contained rather than relying on install mode.
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+
+from civitas import Runtime  # noqa: E402
 
 TOPOLOGY = Path(__file__).parent / "topology.yaml"
 

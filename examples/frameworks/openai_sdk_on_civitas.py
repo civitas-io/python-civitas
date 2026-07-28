@@ -1,6 +1,7 @@
 """OpenAI Agents SDK agent running on Agency — under 10 lines of adapter code.
 
-Requires: pip install civitas openai-agents
+Requires: pip install civitas civitas-contrib[openai]
+(the adapter itself lives in civitas-contrib, not core civitas — see docs/adapters.md)
 
 This example wraps an OpenAI Agents SDK agent as an Agency AgentProcess.
 The agent gains supervision, OTEL tracing, and transport-agnostic messaging.
@@ -9,9 +10,9 @@ The agent gains supervision, OTEL tracing, and transport-agnostic messaging.
 import asyncio
 
 from agents import Agent
+from civitas_contrib.adapters.openai import OpenAIAgent
 
 from civitas import Runtime, Supervisor
-from civitas.adapters.openai import OpenAIAgent
 
 # --- Define an OpenAI agent (this is pure OpenAI SDK code) ---
 
