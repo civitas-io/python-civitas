@@ -2342,6 +2342,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#13-addendum-v093-a2-metrics-renamed-to-snapshot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. Addendum (v0.9.3, A2) — /metrics renamed to /snapshot
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2853,6 +2864,30 @@ live data, and click-to-focus end-to-end (screenshot on file, not committed — 
 artifact, not a design record like the Mockup A/B comparison was).</p>
 <p>Proceeding to Phase F (CLI — already substantially done as part of this phase's renderer.py
 removal) and Phase G (final verification sweep + docs + CHANGELOG + release choreography).</p>
+<h2 id="13-addendum-v093-a2-metrics-renamed-to-snapshot">13. Addendum (v0.9.3, A2) — <code>/metrics</code> renamed to <code>/snapshot</code><a class="headerlink" href="#13-addendum-v093-a2-metrics-renamed-to-snapshot" title="Permanent link">&para;</a></h2>
+<p><strong>Deviation from §3.2's original design</strong>, recorded per this project's convention that any design
+deviation during implementation gets an addendum here, not a silent divergence.</p>
+<p>§3.2 specified <code>GET /metrics</code> as <code>TopologyServer</code>'s new JSON metrics-snapshot endpoint, which
+shipped exactly as designed in v0.9.1. During v0.9.3 (real Prometheus text-format exposition,
+see <code>docs/milestones.md</code>), that path collided with the Prometheus ecosystem's own hard convention:
+virtually every Prometheus deployment defaults its scrape target to a bare <code>/metrics</code> with no
+<code>metrics_path</code> override. Explicit decision (2026-07-29): honor the ecosystem standard rather than
+pick a non-standard Prometheus path ("never wise to break standards in OSS projects") —
+civitas's own JSON snapshot moved to <code>GET /snapshot</code> (naming it directly after the underlying
+<code>RuntimeSnapshot</code> dataclass it returns verbatim), freeing <code>/metrics</code> for real Prometheus text
+exposition.</p>
+<p>This is a breaking change to a documented, already-shipped endpoint. Updated everywhere: <code>civitas
+top</code>'s own polling client (<code>civitas/dashboard/app.py</code>), <code>docs/cli.md</code>, <code>docs/observability.md</code>
+(new "Prometheus metrics" section), and every test exercising the old JSON shape at <code>/metrics</code>
+(now <code>/snapshot</code>) plus new tests for the new <code>/metrics</code> (Prometheus) behavior — see
+<code>tests/unit/test_topology_server.py</code> and the new <code>tests/unit/test_prometheus_export.py</code>.</p>
+<p>A second, unplanned finding surfaced live while verifying the new route against a real Prometheus
+server: <code>MetricsCollector.agent_status_changed()</code> (present since v0.9.1) had never actually been
+called from anywhere in the runtime — a plainly-running agent's exposed status came back
+"unknown" forever. Fixed by routing every <code>AgentProcess</code> status transition through a single new
+choke point (<code>_set_status()</code> in <code>civitas/process.py</code>), guarded so a user-supplied custom
+<code>MetricsSink</code> that only implements the required Protocol methods (<code>agent_status_changed</code> was
+never part of that Protocol) keeps working unchanged.</p>
 
 
 

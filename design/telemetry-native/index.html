@@ -1,0 +1,2751 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="The production runtime for Python agents">
+      
+      
+      
+        <link rel="canonical" href="https://civitas-io.github.io/python-civitas/design/telemetry-native/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
+    
+    
+      
+        <title>Native telemetry storage — B1 (v0.9.3.x, Track B) - civitas</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+  
+
+
+  
+  
+
+<script id="__analytics">function __md_analytics(){function e(){dataLayer.push(arguments)}window.dataLayer=window.dataLayer||[],e("js",new Date),e("config",""),document.addEventListener("DOMContentLoaded",(function(){document.forms.search&&document.forms.search.query.addEventListener("blur",(function(){this.value&&e("event","search",{search_term:this.value})}));document$.subscribe((function(){var t=document.forms.feedback;if(void 0!==t)for(var a of t.querySelectorAll("[type=submit]"))a.addEventListener("click",(function(a){a.preventDefault();var n=document.location.pathname,d=this.getAttribute("data-md-value");e("event","feedback",{page:n,data:d}),t.firstElementChild.disabled=!0;var r=t.querySelector(".md-feedback__note [data-md-value='"+d+"']");r&&(r.hidden=!1)})),t.hidden=!1})),location$.subscribe((function(t){e("config","",{page_path:t.pathname})}))}));var t=document.createElement("script");t.async=!0,t.src="https://www.googletagmanager.com/gtag/js?id=",document.getElementById("__analytics").insertAdjacentElement("afterEnd",t)}</script>
+  
+    <script>"undefined"!=typeof __md_analytics&&__md_analytics()</script>
+  
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#native-telemetry-storage-b1-v093x-track-b" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="civitas" class="md-header__button md-logo" aria-label="civitas" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            civitas
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Native telemetry storage — B1 (v0.9.3.x, Track B)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/civitas-io/python-civitas" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    civitas-io/python-civitas
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting Started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../concepts/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../agents-guide/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  For Coding Agents
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../security/architecture/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Security
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../architecture/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../milestones/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Milestones
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../mcp-integration/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../rfc/0001-tool-retrieval/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  RFCs
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../contributing/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Contributing
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="civitas" class="md-nav__button md-logo" aria-label="civitas" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    civitas
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/civitas-io/python-civitas" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    civitas-io/python-civitas
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing Your Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../supervision/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Supervision
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../messaging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Messaging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../streaming/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Streaming
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../genserver/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GenServer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../transports/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Transports
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../gateway/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP Gateway
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../evalloop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    EvalLoop
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mcp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Tools
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../topology/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Topology YAML
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agents-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For Coding Agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Security
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/threat-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Threat Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/enterprise-checklist/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Enterprise Checklist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FAQ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_3" id="__nav_6_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/process/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AgentProcess
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/genserver/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GenServer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/supervisor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Supervisor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/messages/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Message
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/bus/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MessageBus
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/transport/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Transport
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../milestones/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Milestones
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp-integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Integration (M3.4)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../genserver/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GenServer (M3.5)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../http-gateway/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP Gateway (M4.x)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gateway-api-surface/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gateway API Surface (M4.x)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RFCs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    RFCs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../rfc/0001-tool-retrieval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RFC 0001 — Selective Tool Retrieval
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Problem
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-where-this-plugs-in-no-protocol-changes-needed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Where this plugs in — no protocol changes needed
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-time-windowed-file-sharding-not-one-growing-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Time-windowed file sharding (not one growing file)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-schema-hot-fields-promoted-to-real-columns-decision-option-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Schema — hot fields promoted to real columns (decision: option 1)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Schema — hot fields promoted to real columns (decision: option 1)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#normalization-which-attribute-key-becomes-agent_name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Normalization: which attribute key becomes agent_name?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-async-io-aiosqlite-decision-use-the-dependency-not-run_in_executor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Async I/O — aiosqlite (decision: use the dependency, not run_in_executor)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-public-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Public API
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-multi-process-aggregation-explicitly-deferred-not-neglected" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Multi-process aggregation — explicitly deferred, not neglected
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-decision-log" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Decision log
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-testing-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Testing strategy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-non-goals-for-b1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Non-goals for B1
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-implementation-notes-2026-07-29" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Implementation notes (2026-07-29)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-addendum-2026-07-29-two-real-follow-up-questions-deferred-and-tracked" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Addendum (2026-07-29) — two real follow-up questions, deferred and tracked
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="12. Addendum (2026-07-29) — two real follow-up questions, deferred and tracked">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#121-placement-should-sqlitebackend-live-in-civitas-contrib-not-core" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12.1 Placement — should SQLiteBackend live in civitas-contrib, not core?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#122-pluggability-sqlite-is-one-backend-among-several" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12.2 Pluggability — SQLite is one backend among several
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-b2-shipped-as-part-of-v093-4-query-methods-more-candidates-evaluated-for-later" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. B2 (shipped as part of v0.9.3) — 4 query methods; more candidates evaluated for later
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#14-b3-shipped-as-part-of-v093-the-textual-tui" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14. B3 (shipped as part of v0.9.3) — the Textual TUI
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="native-telemetry-storage-b1-v093x-track-b">Native telemetry storage — B1 (v0.9.3.x, Track B)<a class="headerlink" href="#native-telemetry-storage-b1-v093x-track-b" title="Permanent link">&para;</a></h1>
+<p><strong>Status: ✅ ACCEPTED and IMPLEMENTED (2026-07-29).</strong> Scoped 2026-07-29 as part of the
+v0.9.3.x telemetry split (<code>docs/milestones.md</code>): Track A (harden what already half-exists via
+Jaeger/Grafana/OTLP, capabilities A1-A3) and Track B (B1-B3) were built as six sequential
+capabilities and shipped together as a single release, v0.9.3. This is Track B, capability B1 — a civitas-native,
+zero-dependency-beyond-<code>aiosqlite</code>, cost-focused persistent span store for small/local deployments
+that don't want to stand up Jaeger/Tempo just to see "what did this run cost me."</p>
+<h2 id="1-problem">1. Problem<a class="headerlink" href="#1-problem" title="Permanent link">&para;</a></h2>
+<p>Civitas already emits rich OTEL spans (cost, tokens, latency, per-agent/model — see
+<code>docs/observability.md</code>) but has <strong>no durable store of its own</strong>. A span's only two fates today
+are: printed to console and gone, or exported via real OTLP to an <em>external</em> backend
+(<code>docs/observability.md</code> Mode 3, Track A). There is no way to ask "what did my agents spend last
+week" without already running Jaeger/Grafana/Tempo — a real cost for the target audience Track B
+exists for (small/local deployments).</p>
+<h2 id="2-where-this-plugs-in-no-protocol-changes-needed">2. Where this plugs in — no protocol changes needed<a class="headerlink" href="#2-where-this-plugs-in-no-protocol-changes-needed" title="Permanent link">&para;</a></h2>
+<p><code>civitas/components.py</code>'s <code>build_component_set()</code> already has two mutually exclusive tracing paths
+(FD-09, confirmed while reading the code for this design):</p>
+<ul>
+<li><strong>Path A</strong> (default, no <code>exporters=</code> configured): <code>Tracer</code> talks to the OpenTelemetry SDK
+  directly — this is what Track A's OTLP-to-Jaeger/Grafana story and the A1 trace-linkage fix live
+  on.</li>
+<li><strong>Path B</strong> (<code>exporters=[...]</code> configured in topology YAML or passed directly): spans flow
+  <code>SpanQueue → OTELAgent → ExportBackend.export()</code> instead, batched and async, never blocking the
+  message loop (<code>civitas/observability/span_queue.py</code>'s own docstring).</li>
+</ul>
+<p><strong><code>SQLiteBackend</code> is a new <code>ExportBackend</code> implementation, nothing more</strong> — it plugs into Path B
+exactly the way a user's own custom exporter already can, composable with other exporters via the
+<em>already-existing</em> <code>FanOutBackend</code> (e.g. SQLite + a custom OTLP-forwarding exporter, if someone
+wants both). No changes to <code>Tracer</code>, <code>MessageBus</code>, or the wire protocol.</p>
+<h2 id="3-time-windowed-file-sharding-not-one-growing-file">3. Time-windowed file sharding (not one growing file)<a class="headerlink" href="#3-time-windowed-file-sharding-not-one-growing-file" title="Permanent link">&para;</a></h2>
+<p>Decision (2026-07-29, in conversation): rather than one SQLite file with row-level retention
+deletes, <strong>one SQLite file per fixed-size time window</strong> — e.g. one file per 30 days. Retention
+becomes deleting whole files (<code>os.remove()</code>), not <code>DELETE FROM ... WHERE</code> + <code>VACUUM</code> — simpler,
+no fragmentation, no risk of a bad <code>WHERE</code> clause corrupting live aggregations, and matches how
+log rotation already solves this exact problem elsewhere.</p>
+<ul>
+<li><code>window_days: int</code> (default <code>30</code>) — fixed-size windows anchored at the UNIX epoch, not calendar
+  months (avoids variable-month-length edge cases for a v1).</li>
+<li>File naming: <code>civitas_spans_&lt;window-start-date&gt;.db</code> — the window's <em>start</em> date in <code>YYYY-MM-DD</code>
+  form (human-discoverable — <code>ls</code> shows you exactly what's there and when it started), computed as
+  <code>window_index = int(start_time // (window_days * 86400))</code>, filename derived from
+  <code>datetime.fromtimestamp(window_index * window_days * 86400, tz=UTC)</code>.</li>
+<li><code>SQLiteBackend</code> keeps an LRU-ish cache of open <code>aiosqlite</code> connections keyed by window index —
+  most writes land in the current window; a connection to the previous window stays briefly
+  reachable for the rare late/out-of-order span near a boundary, then gets closed once evicted.</li>
+<li>Retention: <code>retention_windows: int</code> (default <code>6</code>, i.e. ~180 days at the default window size) — a
+  periodic sweep (piggybacked on <code>OTELAgent</code>'s own flush cadence, no new background task) lists
+  <code>civitas_spans_*.db</code> files in <code>db_dir</code>, deletes any whose window is older than
+  <code>retention_windows</code> windows ago.</li>
+<li><strong>Deliberately out of scope for B1</strong>: querying <em>across</em> multiple window files. SQLite's
+  <code>ATTACH DATABASE</code> mechanism handles this natively (<code>ATTACH 'civitas_spans_2026-06-01.db' AS w1;
+  SELECT * FROM w1.spans UNION ALL SELECT * FROM main.spans</code>) and is the natural fit for a small
+  number of windows — that's B2's job (the query/aggregation layer), not B1's. B1's job is writing
+  correctly-windowed files and exposing a way to enumerate them (<code>list_window_files()</code>), not
+  querying them.</li>
+</ul>
+<h2 id="4-schema-hot-fields-promoted-to-real-columns-decision-option-1">4. Schema — hot fields promoted to real columns (decision: option 1)<a class="headerlink" href="#4-schema-hot-fields-promoted-to-real-columns-decision-option-1" title="Permanent link">&para;</a></h2>
+<p>Rejected the "dumb writer + JSON1 <code>json_extract()</code> at query time" alternative — promoting the
+fields B2's stated queries actually need (cost-over-time, message-rate-over-time,
+per-agent/per-model breakdowns) to real, indexed columns keeps those queries plain SQL
+<code>GROUP BY</code>/<code>SUM()</code>, no per-row JSON parsing. The full <code>attributes</code> dict is <em>also</em> kept (as
+<code>attributes_json</code>) for drill-down fidelity — this isn't an either/or.</p>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">CREATE</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">spans</span><span class="w"> </span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">    </span><span class="n">id</span><span class="w"> </span><span class="nb">INTEGER</span><span class="w"> </span><span class="k">PRIMARY</span><span class="w"> </span><span class="k">KEY</span><span class="w"> </span><span class="n">AUTOINCREMENT</span><span class="p">,</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="n">name</span><span class="w"> </span><span class="nb">TEXT</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span><span class="n">trace_id</span><span class="w"> </span><span class="nb">TEXT</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">    </span><span class="n">span_id</span><span class="w"> </span><span class="nb">TEXT</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span><span class="n">parent_span_id</span><span class="w"> </span><span class="nb">TEXT</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">    </span><span class="n">start_time</span><span class="w"> </span><span class="nb">REAL</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">    </span><span class="n">end_time</span><span class="w"> </span><span class="nb">REAL</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">    </span><span class="n">status</span><span class="w"> </span><span class="nb">TEXT</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">    </span><span class="n">error_message</span><span class="w"> </span><span class="nb">TEXT</span><span class="p">,</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">    </span><span class="n">agent_name</span><span class="w"> </span><span class="nb">TEXT</span><span class="p">,</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">    </span><span class="n">llm_model</span><span class="w"> </span><span class="nb">TEXT</span><span class="p">,</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">    </span><span class="n">llm_tokens_in</span><span class="w"> </span><span class="nb">INTEGER</span><span class="p">,</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">    </span><span class="n">llm_tokens_out</span><span class="w"> </span><span class="nb">INTEGER</span><span class="p">,</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">    </span><span class="n">llm_cost_usd</span><span class="w"> </span><span class="nb">REAL</span><span class="p">,</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">    </span><span class="n">attributes_json</span><span class="w"> </span><span class="nb">TEXT</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="p">);</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="k">CREATE</span><span class="w"> </span><span class="k">INDEX</span><span class="w"> </span><span class="n">idx_spans_start_time</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">spans</span><span class="p">(</span><span class="n">start_time</span><span class="p">);</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="k">CREATE</span><span class="w"> </span><span class="k">INDEX</span><span class="w"> </span><span class="n">idx_spans_trace_id</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">spans</span><span class="p">(</span><span class="n">trace_id</span><span class="p">);</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="k">CREATE</span><span class="w"> </span><span class="k">INDEX</span><span class="w"> </span><span class="n">idx_spans_agent_name</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">spans</span><span class="p">(</span><span class="n">agent_name</span><span class="p">);</span>
+</span></code></pre></div>
+<h3 id="normalization-which-attribute-key-becomes-agent_name">Normalization: which attribute key becomes <code>agent_name</code>?<a class="headerlink" href="#normalization-which-attribute-key-becomes-agent_name" title="Permanent link">&para;</a></h3>
+<p>Different span <em>kinds</em> (<code>docs/observability.md</code>'s own table) use different attribute keys for
+"which agent is this about" — there is no single universal key. Normalization rule, checked in
+this order (first match wins):</p>
+<table>
+<thead>
+<tr>
+<th>Span name pattern</th>
+<th><code>agent_name</code> source</th>
+<th><code>llm_*</code> source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>civitas.agent.*</code> (start/stop/handle/retry)</td>
+<td><code>attributes["civitas.agent.name"]</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>llm.chat *</code></td>
+<td><code>attributes["civitas.sender"]</code> if present, else unset</td>
+<td><code>attributes["llm.model"/"llm.tokens_in"/"llm.tokens_out"/"llm.cost_usd"]</code></td>
+</tr>
+<tr>
+<td><code>send *</code> / <code>recv *</code></td>
+<td><code>attributes["civitas.sender"]</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tool.execute *</code></td>
+<td><code>attributes["civitas.sender"]</code> if present, else unset</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>supervisor.restart</code></td>
+<td><code>attributes["civitas.child"]</code> (the restarted child, not the supervisor)</td>
+<td>—</td>
+</tr>
+<tr>
+<td>anything else</td>
+<td>unset (<code>NULL</code>) — never guessed</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p>A row with <code>agent_name IS NULL</code> is not an error — some spans (e.g. driver-issued or malformed)
+genuinely have no clear "which agent" answer, and <code>NULL</code> (excluded from <code>GROUP BY agent_name</code>
+naturally) is more honest than a wrong guess.</p>
+<h2 id="5-async-io-aiosqlite-decision-use-the-dependency-not-run_in_executor">5. Async I/O — <code>aiosqlite</code> (decision: use the dependency, not <code>run_in_executor</code>)<a class="headerlink" href="#5-async-io-aiosqlite-decision-use-the-dependency-not-run_in_executor" title="Permanent link">&para;</a></h2>
+<p>Python's built-in <code>sqlite3</code> is synchronous; calling it directly inside <code>ExportBackend.export()</code>
+(an <code>async def</code>) would block the event loop during disk I/O, defeating <code>OTELAgent</code>'s whole "async
+export without blocking the message loop" design point. Decision: use <code>aiosqlite</code> rather than
+hand-rolling <code>run_in_executor()</code> wrapping — genuinely a closer call than A2's hand-roll-vs-library
+decision (this isn't a small, fully-bounded text-formatting task; it's real concurrent file I/O
+with connection lifecycle management across window rollovers, where a well-tested async wrapper is
+worth the dependency).</p>
+<p>New extras group: <code>civitas[telemetry]</code> (matches the <code>dashboard</code>/<code>otel</code>/<code>zmq</code>/<code>nats</code> extras
+pattern) — <strong>must be added to all three <code>uv sync</code> calls in <code>.github/workflows/ci.yml</code></strong>, per the
+exact gap that broke CI when the <code>dashboard</code> extra was first added (v0.9.1 release, PR #48).</p>
+<h2 id="6-public-api">6. Public API<a class="headerlink" href="#6-public-api" title="Permanent link">&para;</a></h2>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">civitas.observability.sqlite_backend</span><span class="w"> </span><span class="kn">import</span> <span class="n">SQLiteBackend</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">backend</span> <span class="o">=</span> <span class="n">SQLiteBackend</span><span class="p">(</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="n">db_dir</span><span class="o">=</span><span class="s2">&quot;./civitas_telemetry&quot;</span><span class="p">,</span>  <span class="c1"># constructor arg, user-config-driven; reasonable default</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">window_days</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">retention_windows</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="p">)</span>
+</span></code></pre></div>
+<p>Used exactly like any other <code>ExportBackend</code> — via <code>exporters=[backend]</code> (or inside a
+<code>FanOutBackend</code> alongside others) passed to <code>Runtime</code>/<code>Worker</code>, or declared in topology YAML's
+<code>plugins.exporters:</code> block.</p>
+<h2 id="7-multi-process-aggregation-explicitly-deferred-not-neglected">7. Multi-process aggregation — explicitly deferred, not neglected<a class="headerlink" href="#7-multi-process-aggregation-explicitly-deferred-not-neglected" title="Permanent link">&para;</a></h2>
+<p>Each OS process (Runtime + every Worker) builds its own independent <code>Tracer</code>/<code>SpanQueue</code>/exporter
+pipeline — a <code>SQLiteBackend</code> configured identically in each would produce <strong>one separate file set
+per process</strong>, not a unified store. SQLite cannot safely support concurrent multi-writer access
+across real separate OS processes/machines, so "one shared file" isn't a real option.</p>
+<p><strong>B1's scope is single-process.</strong> The sketched (not just "TBD") answer for a future
+cross-process capability: reuse civitas's <em>own message bus</em>, following the exact precedent of
+<code>_agency.health_probe</code> (<code>civitas/worker.py</code>/<code>civitas/topology_server.py</code>) — a well-known message
+type any process already sends/receives cross-process, proven for exactly this "funnel data from
+every Worker to one collector" shape (that's what <code>/processes</code> already does for health data).
+A future capability would have every non-collector process forward its <code>SpanData</code> batches as a
+normal civitas message to a well-known collector agent name; only that one process's
+<code>SQLiteBackend</code> touches disk. Deliberately <strong>not</strong> OTLP-receiver-based (see decision log below) —
+reusing the existing bus needs no new wire protocol, no OTLP-receiver implementation (which would
+meaningfully duplicate what a real OTel Collector already does well), staying proportionate to
+"one small capability" when it's eventually built.</p>
+<h2 id="8-decision-log">8. Decision log<a class="headerlink" href="#8-decision-log" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Question</th>
+<th>Decision</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Schema: promote hot fields or dumb JSON writer?</td>
+<td><strong>Promote</strong> (<code>agent_name</code>, <code>llm_model</code>, <code>llm_tokens_in/out</code>, <code>llm_cost_usd</code> as real indexed columns) + keep full <code>attributes_json</code> for drill-down</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Retention: row-level deletes or file sharding?</td>
+<td><strong>File sharding</strong> — one SQLite file per <code>window_days</code>-sized window, retention deletes whole files</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Multi-process aggregation now or deferred?</td>
+<td><strong>Deferred</strong>, single-process only for B1; sketched answer (bus-based forwarding, <code>_agency.health_probe</code> precedent) recorded for a future capability, not silently dropped</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Async I/O: <code>aiosqlite</code> or <code>run_in_executor</code>?</td>
+<td><strong><code>aiosqlite</code></strong> — real concurrent file I/O + connection lifecycle across window rollovers is enough complexity to justify the dependency</td>
+</tr>
+<tr>
+<td>5</td>
+<td>DB path configuration</td>
+<td><strong>Constructor arg</strong> (<code>db_dir=</code>), user-config-driven via topology YAML's <code>plugins.exporters:</code> or direct <code>exporters=[...]</code>, reasonable default</td>
+</tr>
+</tbody>
+</table>
+<h2 id="9-testing-strategy">9. Testing strategy<a class="headerlink" href="#9-testing-strategy" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Unit: schema creation, normalization table (every span-kind → correct <code>agent_name</code>/<code>llm_*</code>
+  mapping, including the <code>NULL</code>-on-no-match case), window-index/filename computation, retention
+  sweep (create fake old window files, confirm exactly the right ones get removed).</li>
+<li>Integration: a real <code>Runtime</code> with <code>exporters=[SQLiteBackend(...)]</code> running real agents,
+  confirming rows land correctly in the actual <code>.db</code> file (opened and queried directly, not just
+  asserting the writer didn't crash) — matching this whole project's "verify against the real
+  thing" standard, not just mocking <code>aiosqlite</code>.</li>
+<li>A window-rollover test: spans on either side of a <code>window_days</code> boundary land in two distinct
+  files with the expected names.</li>
+</ul>
+<h2 id="10-non-goals-for-b1">10. Non-goals for B1<a class="headerlink" href="#10-non-goals-for-b1" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Cross-window querying (B2).</li>
+<li>Multi-process aggregation (deferred, §7).</li>
+<li>Rollup/pre-aggregation tables (hourly/daily summaries) — raw-row aggregation is adequate at the
+  data volumes a "small/local deployment" actually produces; revisit only if real usage shows a
+  need.</li>
+<li>A UI (B3) — this ticket produces queryable data, not a way to look at it.</li>
+</ul>
+<h2 id="11-implementation-notes-2026-07-29">11. Implementation notes (2026-07-29)<a class="headerlink" href="#11-implementation-notes-2026-07-29" title="Permanent link">&para;</a></h2>
+<p>Shipped as designed (<code>civitas/observability/sqlite_backend.py</code>), with one unplanned but important
+root-cause fix found while writing the normalization logic (§4): <strong><code>AgentProcess.llm_span()</code>'s
+spans (<code>civitas.llm.chat</code>) had never carried any agent identity at all</strong>, in either the existing
+OTEL/Jaeger export path (Track A, already shipped) or this new storage backend — confirmed by
+directly inspecting a real span's attributes, not assumed. Fixed at the root in
+<code>civitas/process.py</code> by adding <code>civitas.agent.name</code> to that span's attributes (the ergonomic API
+has <code>self.name</code> available; the separate, lower-level <code>Tracer.start_llm_span()</code> API does not, and
+was left as-is — see the normalization table's updated notes in the module itself).</p>
+<p>Also discovered while verifying <code>Tracer.start_llm_span()</code>'s real attribute shape: it uses
+<code>llm.model</code>/<code>llm.tokens_in</code>/etc (no <code>civitas.</code> prefix, model in the span NAME) — a genuinely
+different shape from <code>civitas.llm.chat</code>'s <code>civitas.llm.*</code> attributes. Both are real, both are used
+(the former by examples calling the Tracer directly, the latter by all real agent code including
+<code>examples/dashboard_demo/</code>) — <code>normalize_span()</code> handles both shapes explicitly, matched by exact
+span name where the two could otherwise be ambiguous.</p>
+<p>Verification: unit tests for every normalization case (all span kinds + the deliberate <code>NULL</code>-on-
+no-match fallback), window-index/filename round-tripping, and the retention sweep (including the
+real edge case of a span written directly into an already-expired window, immediately swept within
+the same <code>export()</code> call). Integration test with a REAL <code>Runtime</code> running real agents
+(<code>exporters=[SQLiteBackend(...)]</code>), verified by directly querying the actual <code>.db</code> file with a
+fresh <code>aiosqlite</code> connection — not mocked, matching this project's "verify against the real thing"
+standard. 1474/1474 unit+integration tests green (macOS); Linux (Docker, full extras including the
+new <code>telemetry</code> extra) green except the one confirmed pre-existing <code>test_python_m_agency</code>
+<code>.venv</code>-path environmental failure. mypy/ruff check/format clean.</p>
+<h2 id="12-addendum-2026-07-29-two-real-follow-up-questions-deferred-and-tracked">12. Addendum (2026-07-29) — two real follow-up questions, deferred and tracked<a class="headerlink" href="#12-addendum-2026-07-29-two-real-follow-up-questions-deferred-and-tracked" title="Permanent link">&para;</a></h2>
+<p>Two legitimate design questions surfaced in conversation immediately after B1 shipped. Explicit
+decision: <strong>document both here and in <code>docs/milestones.md</code> (v0.9.3.6, B4) rather than refactor
+already-working, already-tested code mid-flight.</strong> Neither is a defect in what shipped — both are
+real architectural improvements worth doing deliberately, later, not reactively.</p>
+<h3 id="121-placement-should-sqlitebackend-live-in-civitas-contrib-not-core">12.1 Placement — should <code>SQLiteBackend</code> live in <code>civitas-contrib</code>, not core?<a class="headerlink" href="#121-placement-should-sqlitebackend-live-in-civitas-contrib-not-core" title="Permanent link">&para;</a></h3>
+<p>Two competing precedents exist in this codebase, pointing in different directions:</p>
+<ul>
+<li><strong>"Persistence backends live in <code>civitas-contrib</code>, even SQLite ones."</strong> <code>SQLiteStateStore</code>
+  (found mislocated in <code>civitas/plugins/sqlite_store</code> during v0.9.2's example fixes — the real
+  path is <code>civitas_contrib.plugins.sqlite_store</code>) lives in contrib alongside <code>postgres</code>
+  (<code>asyncpg</code>). Core <code>python-civitas</code> doesn't ship persistent <code>StateStore</code> backends at all.</li>
+<li><strong>"Batteries-included, zero-vendor-dependency exporters live in core."</strong> <code>ConsoleBackend</code>/
+  <code>FanOutBackend</code> already ship in <code>civitas/observability/export_backend.py</code> (core) — no vendor SDK
+  involved. <code>civitas-contrib</code>'s actual <code>ExportBackend</code>-shaped extras (<code>arize</code>, <code>langfuse</code>,
+  <code>braintrust</code>, <code>langsmith</code>, <code>fiddler</code>) are all third-party VENDOR eval/observability platforms;
+  <code>civitas-contrib</code>'s role for exporters specifically appears to be "vendor SDK integration," not
+  "a first-party local storage option."</li>
+</ul>
+<p><code>SQLiteBackend</code> is an <code>ExportBackend</code>, not a <code>StateStore</code> — but it durably persists data to disk,
+which is the defining trait of the first precedent, not the second. Ratified principle (2026-07-29,
+in conversation): <strong>"common/persistence-related elements belong in <code>civitas-contrib</code>; feature-
+related bits stay in <code>civitas</code> core."</strong> Applying it: <code>SQLiteBackend</code>'s disk-writing, connection-
+lifecycle, and window/retention mechanics are persistence — contrib. The <code>ExportBackend</code> protocol,
+<code>FanOutBackend</code>, <code>ConsoleBackend</code>, <code>Tracer</code>/<code>SpanQueue</code>/<code>OTELAgent</code>, and the Prometheus text
+formatter (<code>prometheus_export.py</code>, which touches no disk/db at all) are feature machinery — stay in
+core. This means moving <code>SQLiteBackend</code> isn't a partial split of one class; since core can never
+depend on contrib (only the reverse), the <em>entire</em> class (schema, normalization, and persistence
+mechanics together) would need to relocate as one unit, mirroring exactly where <code>SQLiteStateStore</code>
+already lives.</p>
+<p><strong>Not executed now</strong> — tracked as part of B4 (<code>docs/milestones.md</code>).</p>
+<h3 id="122-pluggability-sqlite-is-one-backend-among-several">12.2 Pluggability — SQLite is one backend among several<a class="headerlink" href="#122-pluggability-sqlite-is-one-backend-among-several" title="Permanent link">&para;</a></h3>
+<p>SQLite is unlikely to be the only storage choice users eventually want (Postgres was named
+explicitly in conversation). Today's <code>SQLiteBackend</code> bundles two genuinely separable concerns into
+one class:</p>
+<ol>
+<li><strong>Telemetry-specific logic</strong> — <code>normalize_span()</code>'s attribute-mapping table, the <code>spans</code> schema
+   shape (which columns, which types).</li>
+<li><strong>Storage mechanics</strong> — SQLite-specific connection handling, window-file sharding, the
+   retention sweep.</li>
+</ol>
+<p>A future refactor would separate these along a real seam — something like a <code>SpanStore</code> protocol
+(<code>insert_spans(normalized_rows)</code>, backend-specific schema/connection management behind it) that
+<code>SQLiteBackend</code> and a hypothetical future <code>PostgresBackend</code> both implement, with the normalization
+logic (§4's table) shared, written once, and reused regardless of which storage backend a user
+picks. Explicit intent stated in conversation: "build like a library so others can use the
+capability" — civitas-contrib authors should be able to add a new storage backend without
+reimplementing span normalization from scratch.</p>
+<p><strong>Not executed now</strong> — tracked as part of B4 (<code>docs/milestones.md</code>). The current v0.9.3
+implementation remains the correct, working, fully-tested shape until this refactor actually
+happens; this section exists so the seam is designed deliberately when it does, not discovered
+under pressure from a real second-backend request.</p>
+<h2 id="13-b2-shipped-as-part-of-v093-4-query-methods-more-candidates-evaluated-for-later">13. B2 (shipped as part of v0.9.3) — 4 query methods; more candidates evaluated for later<a class="headerlink" href="#13-b2-shipped-as-part-of-v093-4-query-methods-more-candidates-evaluated-for-later" title="Permanent link">&para;</a></h2>
+<p><code>SQLiteQueryEngine</code> (<code>civitas/observability/sqlite_query.py</code>) shipped with four methods:
+<code>cost_over_time</code>, <code>message_rate_over_time</code>, <code>cost_by_agent</code>, <code>cost_by_model</code>. Cross-window queries
+(a time range spanning more than one of B1's window files) use SQLite's native <code>ATTACH DATABASE</code>
+— confirmed working through <code>aiosqlite</code> directly, including the trickiest real case: a single time
+bucket whose spans landed in two different window files, requiring a double <code>GROUP BY</code> (once per
+attached file, once in an outer re-aggregation) to merge correctly into one row instead of two.</p>
+<p>Explicit decision (2026-07-29): <strong>ship these four now, evaluate more later</strong> rather than try to be
+exhaustive up front. Candidate methods identified for future evaluation, not built yet — tracked
+here so the list isn't lost, not a commitment to build all of them:</p>
+<ul>
+<li><strong>Latency percentiles</strong> (p50/p95/p99 message-handling latency, per agent) — <code>civitas_message_
+  latency_ms_sum</code>/<code>_count</code> (A2's Prometheus metrics) only give an average; SQLite has no built-in
+  percentile function, would need either an approximation (bucketed histogram counts) or pulling
+  raw rows and computing in Python — a real design decision of its own, not a trivial addition.</li>
+<li><strong>Error rate over time</strong> (bucketed, per agent) — mirrors <code>message_rate_over_time</code>'s shape exactly
+  but filtered to <code>status = 'error'</code>; likely the cheapest of this whole list to add.</li>
+<li><strong>Restart/crash timeline query</strong> — <code>civitas_agent_restarts_total</code> exists in Prometheus (A2), but
+  no query method surfaces the underlying restart EVENTS (timestamp + reason) from the spans table
+  the way <code>/snapshot</code>'s JSON <code>restart_history</code> already does for live data; a persisted equivalent
+  would need <code>supervisor.restart</code> spans specifically.</li>
+<li><strong>Trace/span drill-down</strong> ("show me every span in trace X") — a much simpler query than the
+  aggregate ones above (just <code>SELECT * FROM spans WHERE trace_id = ?</code> per attached window), but
+  needs its own decision about how much of <code>attributes_json</code> to surface and in what shape.</li>
+<li><strong>Top-N queries</strong> ("top 5 most expensive agents this week", "top 5 slowest tool calls") —
+  straightforward <code>ORDER BY ... LIMIT N</code> variants of the existing aggregates; low effort, deferred
+  only because nothing has asked for them yet.</li>
+<li><strong>Model comparison over time</strong> (cost/latency trend per model, not just a point-in-time total) —
+  a bucketed variant of <code>cost_by_model</code>, symmetrical with how <code>cost_over_time</code> already buckets by
+  agent+model together; could arguably have shipped in this same cut, held back to keep B2's first
+  release small.</li>
+</ul>
+<p>None of these block B3 (the UI) from starting once there's a reason to — B3 can be built against
+today's four methods and grow as new query methods are added, matching this whole project's "small
+capability at a time" cadence.</p>
+<h2 id="14-b3-shipped-as-part-of-v093-the-textual-tui">14. B3 (shipped as part of v0.9.3) — the Textual TUI<a class="headerlink" href="#14-b3-shipped-as-part-of-v093-the-textual-tui" title="Permanent link">&para;</a></h2>
+<p>Confirmed empirically before committing to it (not assumed): real charts genuinely render inside a
+Textual app, via <code>textual-plotext</code> (a real, installable, actively-maintained package wrapping
+<code>plotext</code>) — verified with a real headless render (<code>app.export_screenshot()</code>) showing a correctly-
+axis-labeled line chart before any of <code>civitas telemetry</code>'s own code was written.</p>
+<p><strong><code>civitas telemetry &lt;db-dir&gt;</code></strong> launches its own Textual app (<code>civitas/dashboard/telemetry_app.py</code>)
+— deliberately separate from <code>civitas top</code>, not a new tab there: <code>civitas top</code> requires a live,
+currently-running <code>TopologyServer</code> to attach to over HTTP; telemetry data is historical and lives in
+a local SQLite directory, readable even when nothing is running at all. Reuses <code>civitas top</code>'s
+established visual language (<code>palette.py</code>) and its periodic-poll-worker pattern (<code>@work(exclusive=
+True, group=...)</code>), adapted to re-query the local SQLite store instead of polling HTTP endpoints.</p>
+<p><strong>Panels</strong>: <code>CostChart</code>/<code>MessageRateChart</code> (real <code>PlotextPlot</code> line charts, capped at the top 6
+series by total value — a real multi-agent/multi-model deployment's full cardinality would make a
+terminal legend unreadable well before that), <code>StatPanel</code> (total spend/messages/top-agent, plain
+text — point-in-time numbers, not a trend, so a chart would be the wrong tool), <code>CostBreakdownTable</code>
+(a <code>DataTable</code>, per-agent + per-model rows), <code>TimeRangeBar</code> (shows the active range + preset keys).</p>
+<p><strong>Time range — both supported, per-conversation</strong>: <code>--since</code> accepts either a duration shorthand
+(<code>1h</code>/<code>24h</code>/<code>7d</code>/<code>30d</code>, a SLIDING window recomputed against "now" every refresh) or an absolute ISO
+datetime (a FIXED start point; only the window's end keeps tracking "now"). Interactively
+switchable in the TUI via the exact same h/d/w/m preset keys, plus <code>r</code> for an immediate manual
+refresh outside the normal refresh cadence.</p>
+<p><strong>Refresh</strong>: periodic, <code>--refresh</code> (default 30s) — reusing <code>civitas top</code>'s own <code>@work</code>-based
+polling precedent turned out NOT to be the hard path originally hedged against; period configurable
+via CLI, no separate one-shot-only fallback needed for v1.</p>
+<p><strong>New dependency</strong>: <code>textual-plotext</code>, folded into the existing <code>civitas[telemetry]</code> extra (not a
+separate one) — per-conversation, since the TUI is meaningless without the SQLite store it reads
+from anyway.</p>
+<p><strong>Deferred, tracked</strong> (<code>docs/milestones.md</code>): the log/event viewer (browsing individual
+spans/traces) — needs the "trace/span drill-down" query method from §13's candidate list, not yet
+built. Also newly identified and tracked during B3's build, not built now: per-second/per-minute
+live tick animation for the charts (today's refresh redraws the whole chart from scratch, which is
+correct but not smoothly animated), and a scrollable/paginated view for <code>CostBreakdownTable</code> once a
+real deployment has enough distinct agents/models to overflow one screen.</p>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Apache 2.0 License
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/civitas-io/python-civitas" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand", "navigation.top", "navigation.instant", "navigation.indexes", "content.code.copy", "content.code.annotate", "search.highlight", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="https://unpkg.com/mermaid@11/dist/mermaid.min.js"></script>
+      
+    
+  </body>
+</html>

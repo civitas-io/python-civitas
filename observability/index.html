@@ -1181,6 +1181,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#native-sqlite-storage-v093x-track-b-b1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Native SQLite storage (v0.9.3.x, Track B, B1)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#environment-variables" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1188,6 +1199,45 @@
       
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prometheus-metrics-v093-a2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prometheus metrics (v0.9.3, A2)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Prometheus metrics (v0.9.3, A2)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#metric-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Metric reference
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#grafana" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Grafana
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2681,6 +2731,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#native-sqlite-storage-v093x-track-b-b1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Native SQLite storage (v0.9.3.x, Track B, B1)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#environment-variables" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2688,6 +2749,45 @@
       
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prometheus-metrics-v093-a2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prometheus metrics (v0.9.3, A2)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Prometheus metrics (v0.9.3, A2)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#metric-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Metric reference
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#grafana" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Grafana
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2860,7 +2960,10 @@
 </span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="c1"># Open the trace UI</span>
 </span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>open<span class="w"> </span>http://localhost:16686
 </span></code></pre></div>
-<p>In Jaeger you will see a single distributed trace per request, with all agent spans, LLM calls, tool invocations, and supervisor events linked by parent-child relationships.</p>
+<p>In Jaeger you will see a single distributed trace per request, with all agent spans, LLM calls, tool invocations, and supervisor events linked by parent-child relationships — including across process/transport boundaries (e.g. a <code>civitas run --topology</code> supervisor process and a separate <code>Worker</code> process talking over real ZMQ or NATS).</p>
+<blockquote>
+<p><strong>Fixed in v0.9.3 (A1).</strong> Before this release, every OTEL span became its own isolated root trace regardless of civitas's own correct internal trace bookkeeping — <code>Tracer</code> never told the OpenTelemetry SDK which span caused which, so Jaeger/Grafana/Datadog would have shown one disconnected single-span "trace" per operation instead of a real request-flow tree. This was caught and fixed via live verification (a real 2-OS-process ZMQ round trip), not assumed from reading code — see <code>docs/milestones.md</code>'s v0.9.3 entry and <code>civitas/observability/tracer.py</code>'s <code>_otel_parent_context()</code> docstring for the full root cause.</p>
+</blockquote>
 <h3 id="grafana-tempo">Grafana + Tempo<a class="headerlink" href="#grafana-tempo" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Start Grafana Tempo (OTLP gRPC on port 4317)</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>docker<span class="w"> </span>run<span class="w"> </span>-d<span class="w"> </span>-p<span class="w"> </span><span class="m">4317</span>:4317<span class="w"> </span>-p<span class="w"> </span><span class="m">3200</span>:3200<span class="w"> </span>grafana/tempo
@@ -3027,6 +3130,48 @@
 </tbody>
 </table>
 <h3 id="llm-spans">LLM spans<a class="headerlink" href="#llm-spans" title="Permanent link">&para;</a></h3>
+<p>Two genuinely different shapes exist, depending on which API produced the span:</p>
+<p><strong><code>AgentProcess.llm_span()</code></strong> (the ergonomic, per-agent context manager — what real agent code
+actually calls, e.g. <code>with self.llm_span("gpt-4o") as span: ...</code>). Span name: <code>civitas.llm.chat</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>civitas.agent.name</code></td>
+<td>string</td>
+<td>The calling agent's name (added v0.9.3.x — a real gap: this span carried NO agent identity at all before, in either OTEL export or any storage backend)</td>
+</tr>
+<tr>
+<td><code>civitas.llm.model</code></td>
+<td>string</td>
+<td>Model identifier (e.g. <code>claude-haiku-4-5</code>)</td>
+</tr>
+<tr>
+<td><code>civitas.llm.tokens_in</code></td>
+<td>int</td>
+<td>Input token count — only present if the caller reported it</td>
+</tr>
+<tr>
+<td><code>civitas.llm.tokens_out</code></td>
+<td>int</td>
+<td>Output token count — only present if the caller reported it</td>
+</tr>
+<tr>
+<td><code>civitas.llm.cost_usd</code></td>
+<td>float</td>
+<td>Estimated cost in USD — only present if the caller reported it</td>
+</tr>
+</tbody>
+</table>
+<p><strong><code>Tracer.start_llm_span()</code>/<code>end_llm_span()</code></strong> (a lower-level, standalone API called directly on a
+bare <code>Tracer</code>, with no <code>AgentProcess</code>/agent context at all — see <code>examples/research_assistant.py</code>).
+Span name: <code>llm.chat {model}</code>.</p>
 <table>
 <thead>
 <tr>
@@ -3063,6 +3208,9 @@
 </tr>
 </tbody>
 </table>
+<p>This API has no agent identity to attach — architecturally, a bare <code>Tracer</code> has no concept of
+"current agent" the way <code>AgentProcess</code> does. If you need per-agent attribution with this lower-level
+API, add it yourself via <code>span.set_attribute(...)</code>.</p>
 <h3 id="tool-spans">Tool spans<a class="headerlink" href="#tool-spans" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -3164,6 +3312,35 @@
 </span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="p">])</span>
 </span></code></pre></div>
 <hr />
+<h2 id="native-sqlite-storage-v093x-track-b-b1">Native SQLite storage (v0.9.3.x, Track B, B1)<a class="headerlink" href="#native-sqlite-storage-v093x-track-b-b1" title="Permanent link">&para;</a></h2>
+<p><strong>Install <code>civitas[telemetry]</code>.</strong> A real, built-in <code>ExportBackend</code> for small/local deployments that
+want to ask "what did my agents spend last week" without already running Jaeger/Grafana/Tempo (see
+<a href="../design/telemetry-native/"><code>docs/design/telemetry-native.md</code></a> for the full design):</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">civitas.observability.sqlite_backend</span><span class="w"> </span><span class="kn">import</span> <span class="n">SQLiteBackend</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="n">backend</span> <span class="o">=</span> <span class="n">SQLiteBackend</span><span class="p">(</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>    <span class="n">db_dir</span><span class="o">=</span><span class="s2">&quot;./civitas_telemetry&quot;</span><span class="p">,</span>  <span class="c1"># reasonable default</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>    <span class="n">window_days</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span>                <span class="c1"># one SQLite file per 30-day window</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>    <span class="n">retention_windows</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span>           <span class="c1"># ~180 days retained; older FILES are deleted outright</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="p">)</span>
+</span></code></pre></div>
+<p>Used exactly like any other exporter — <code>exporters=[backend]</code> passed to <code>Runtime</code>/<code>Worker</code>, or
+declared in topology YAML's <code>plugins.exporters:</code> block, composable with other exporters (e.g. also
+forwarding to Jaeger) via <code>FanOutBackend</code>.</p>
+<p>Hot fields (<code>agent_name</code>, <code>llm_model</code>, <code>llm_tokens_in</code>/<code>_out</code>, <code>llm_cost_usd</code>) are promoted to real,
+indexed SQL columns — cost-per-agent, message-rate, and similar aggregate queries are plain
+<code>GROUP BY</code>/<code>SUM()</code>, not per-row JSON parsing. The full attributes dict is also kept
+(<code>attributes_json</code>) for drill-down. Retention deletes whole window files, not rows — simpler, no
+fragmentation, no risk of a bad <code>WHERE</code> clause corrupting live data.</p>
+<p><strong>Scope</strong>: single-process only for now — each OS process (Runtime + every Worker) would produce its
+own separate file set; multi-process aggregation is a deliberately deferred, tracked follow-up (see
+the design doc's §7 for the sketched answer), not silently unsupported.</p>
+<p><strong>Viewing it</strong>: <code>SQLiteQueryEngine</code> (<code>civitas/observability/sqlite_query.py</code>) provides
+cost-over-time, message-rate-over-time, and per-agent/per-model cost breakdown queries directly
+over this store, including cross-window queries via SQLite's native <code>ATTACH DATABASE</code>. See
+<a href="../cli/#civitas-telemetry"><code>civitas telemetry</code></a> for the live Textual TUI built on top of it
+(charts, gauges, and a cost breakdown table — real terminal charts, via <code>textual-plotext</code>).</p>
+<hr />
 <h2 id="environment-variables">Environment variables<a class="headerlink" href="#environment-variables" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -3188,13 +3365,111 @@
 </table>
 <p>Standard OTEL SDK environment variables (<code>OTEL_SERVICE_NAME</code>, <code>OTEL_RESOURCE_ATTRIBUTES</code>, etc.) are respected when <code>opentelemetry-sdk</code> is installed.</p>
 <hr />
+<h2 id="prometheus-metrics-v093-a2">Prometheus metrics (v0.9.3, A2)<a class="headerlink" href="#prometheus-metrics-v093-a2" title="Permanent link">&para;</a></h2>
+<p>Separate from tracing (spans, above) — <code>GET /metrics</code> on any running <code>TopologyServer</code> (the same
+component <code>civitas top</code> and <code>civitas topology show</code> already use) exposes real Prometheus
+text-format metrics: message rates, latency, errors, restarts, LLM token/cost totals, and current
+agent status, all labeled by <code>agent</code> (and <code>model</code> for LLM metrics).</p>
+<p>This is the <strong>standard</strong> Prometheus scrape path — point a <code>scrape_configs</code> target at it directly,
+no <code>metrics_path</code> override needed:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># prometheus.yml</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="nt">scrape_configs</span><span class="p">:</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">job_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">civitas</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">    </span><span class="nt">static_configs</span><span class="p">:</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">targets</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;127.0.0.1:6789&quot;</span><span class="p p-Indicator">]</span><span class="w">  </span><span class="c1"># your TopologyServer&#39;s host:port</span>
+</span></code></pre></div>
+<p><code>civitas</code>'s own JSON metrics snapshot (used internally by <code>civitas top</code>) lives at <code>GET /snapshot</code>
+now instead — <code>/metrics</code> was renamed specifically to make room for the real, standard Prometheus
+path (never wise to break ecosystem standards in an OSS project). This is a breaking change to a
+previously-documented endpoint; see the <a href="../CHANGELOG.md">v0.9.3 CHANGELOG entry</a> if you were
+depending on the old JSON shape at <code>/metrics</code> directly.</p>
+<h3 id="metric-reference">Metric reference<a class="headerlink" href="#metric-reference" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Type</th>
+<th>Labels</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>civitas_messages_handled_total</code></td>
+<td>counter</td>
+<td><code>agent</code></td>
+<td>Messages this agent has handled</td>
+</tr>
+<tr>
+<td><code>civitas_messages_sent_total</code></td>
+<td>counter</td>
+<td><code>agent</code></td>
+<td>Messages this agent has sent</td>
+</tr>
+<tr>
+<td><code>civitas_message_latency_ms_sum</code> / <code>_count</code></td>
+<td>counter</td>
+<td><code>agent</code></td>
+<td>Handling latency sum/count — divide for the average over any time window (Prometheus "summary" pattern; civitas doesn't track real histogram buckets)</td>
+</tr>
+<tr>
+<td><code>civitas_agent_errors_total</code></td>
+<td>counter</td>
+<td><code>agent</code></td>
+<td><code>handle()</code> errors</td>
+</tr>
+<tr>
+<td><code>civitas_agent_restarts_total</code></td>
+<td>counter</td>
+<td><code>agent</code></td>
+<td>Supervisor-initiated restarts</td>
+</tr>
+<tr>
+<td><code>civitas_llm_tokens_in_total</code> / <code>_out_total</code></td>
+<td>counter</td>
+<td><code>agent</code>, <code>model</code></td>
+<td>LLM token usage — only emitted for agents that have actually made an LLM call</td>
+</tr>
+<tr>
+<td><code>civitas_llm_cost_usd_total</code></td>
+<td>counter</td>
+<td><code>agent</code>, <code>model</code></td>
+<td><strong>The cost-tracking metric</strong> — aggregate with <code>sum by (agent) (civitas_llm_cost_usd_total)</code> for per-agent spend, or drop the <code>by</code> clause for total spend</td>
+</tr>
+<tr>
+<td><code>civitas_agent_status</code></td>
+<td>gauge</td>
+<td><code>agent</code>, <code>status</code></td>
+<td><code>1</code> for the agent's current status; other status values are simply absent (standard Prometheus enum pattern)</td>
+</tr>
+<tr>
+<td><code>civitas_runtime_uptime_seconds</code></td>
+<td>gauge</td>
+<td>—</td>
+<td>Seconds since this runtime started</td>
+</tr>
+</tbody>
+</table>
+<h3 id="grafana">Grafana<a class="headerlink" href="#grafana" title="Permanent link">&para;</a></h3>
+<p>A ready-made, fully-provisioned Prometheus + Grafana stack ships in
+<a href="https://github.com/civitas-io/python-civitas/tree/main/examples/observability/grafana"><code>examples/observability/grafana/</code></a>
+(v0.9.3, A3) — <code>docker compose up</code> gives you Prometheus already scraping civitas and Grafana already
+showing the dashboard, no manual datasource setup or dashboard import needed. Panels: message
+throughput, error rate, LLM cost over time (per agent/model), average latency, agent status, and
+at-a-glance totals. See that directory's <code>README.md</code> for the two-terminal walkthrough (run against
+<code>examples/dashboard_demo/</code> for realistic cost/latency/restart data out of the box).</p>
+<p>Building your own panels instead: add Prometheus as a Grafana datasource pointed at civitas's
+<code>/metrics</code>, then query the metrics above directly — e.g. <code>rate(civitas_messages_handled_total[5m])</code>
+for message throughput, or <code>sum by (agent) (civitas_llm_cost_usd_total)</code> for a cost-per-agent bar
+chart.</p>
+<hr />
 <h2 id="cost-attribution">Cost attribution<a class="headerlink" href="#cost-attribution" title="Permanent link">&para;</a></h2>
 <p>Every LLM span carries <code>llm.cost_usd</code>. Aggregating this attribute by <code>civitas.agent.name</code> in your OTEL backend gives you per-agent cost attribution over time:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>orchestrator   $0.0421  (3 LLM calls)
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>researcher     $0.0089  (1 LLM call)
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>summarizer     $0.0003  (1 LLM call)
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>─────────────────────────────────────
-</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>Total          $0.0513
+<div class="language-text highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>orchestrator   $0.0421  (3 LLM calls)
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>researcher     $0.0089  (1 LLM call)
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>summarizer     $0.0003  (1 LLM call)
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>─────────────────────────────────────
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>Total          $0.0513
 </span></code></pre></div>
 <p>The Anthropic provider computes cost from the model's token pricing. The LiteLLM provider uses LiteLLM's built-in cost calculation. Custom providers should populate <code>cost_usd</code> in <code>ModelResponse</code> for this to work.</p>
 <hr />

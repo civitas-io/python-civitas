@@ -1249,6 +1249,45 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#civitas-telemetry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        civitas telemetry
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="civitas telemetry">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#layout_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layout
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#try-it_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Try it
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2505,6 +2544,45 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#civitas-telemetry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        civitas telemetry
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="civitas telemetry">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#layout_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layout
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#try-it_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Try it
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2788,7 +2866,10 @@
 <p>Launch <strong><code>civitas top</code></strong> — a live, mouse-clickable Textual dashboard for an already-running
 topology (v0.9.1 rebuild; see <a href="../design/dashboard-v2/">design/dashboard-v2.md</a> for the full
 design). It attaches remotely over HTTP to the topology's <code>topology_server</code> node and polls
-<code>/topology</code>, <code>/metrics</code>, and <code>/processes</code> independently — it does not start a runtime of its own.</p>
+<code>/topology</code>, <code>/snapshot</code>, and <code>/processes</code> independently — it does not start a runtime of its own.
+(v0.9.3: <code>/snapshot</code> was <code>/metrics</code> at the time this section was first written — renamed to make
+room for real Prometheus text-format exposition at the standard <code>/metrics</code> scrape path; see
+<a href="../observability/#prometheus-metrics-v0931">observability.md</a>.)</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>civitas<span class="w"> </span>dashboard<span class="w"> </span>&lt;topology.yaml&gt;<span class="w"> </span><span class="o">[</span>--refresh<span class="w"> </span>&lt;seconds&gt;<span class="o">]</span>
 </span></code></pre></div>
 <table>
@@ -2846,6 +2927,64 @@ share one OS process, so per-agent CPU/memory is not real data and is not shown.
 multi-process topology (see <a href="https://github.com/civitas-io/python-civitas/tree/main/examples/deployment"><code>examples/deployment</code></a>)
 to see more than one row there.</p>
 </div>
+<h2 id="civitas-telemetry">civitas telemetry<a class="headerlink" href="#civitas-telemetry" title="Permanent link">&para;</a></h2>
+<p>Launch the live Textual telemetry TUI over B1/B2's native SQLite store (v0.9.3, B3; see
+<a href="../design/telemetry-native/">design/telemetry-native.md</a> for the full design). Unlike <code>civitas
+dashboard</code>, this does <strong>not</strong> attach to a live process — it reads directly from a local SQLite
+directory, so it works even after the app that wrote the data has stopped.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>civitas<span class="w"> </span>telemetry<span class="w"> </span><span class="o">[</span>&lt;db-dir&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--since<span class="w"> </span>&lt;range&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--window-days<span class="w"> </span>&lt;n&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--refresh<span class="w"> </span>&lt;seconds&gt;<span class="o">]</span>
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Argument / Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>db_dir</code></td>
+<td><code>./civitas_telemetry</code></td>
+<td>Path to the telemetry SQLite directory</td>
+</tr>
+<tr>
+<td><code>--since</code></td>
+<td><code>24h</code></td>
+<td>A duration shorthand (<code>1h</code>, <code>24h</code>, <code>7d</code>, <code>30d</code>) or an ISO datetime (e.g. <code>2026-07-01</code>). Also changeable interactively in the TUI.</td>
+</tr>
+<tr>
+<td><code>--window-days</code></td>
+<td><code>30</code></td>
+<td>Must match the <code>SQLiteBackend</code>'s own <code>window_days</code> setting</td>
+</tr>
+<tr>
+<td><code>--refresh</code> / <code>-r</code></td>
+<td><code>30.0</code></td>
+<td>Re-query interval in seconds</td>
+</tr>
+</tbody>
+</table>
+<p>Requires the <code>telemetry</code> extra:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s1">&#39;civitas[telemetry]&#39;</span>
+</span></code></pre></div>
+<p>Without it, the command still appears in <code>--help</code>, but exits with a clear install instruction the
+moment you try to run it.</p>
+<h3 id="layout_1">Layout<a class="headerlink" href="#layout_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Cost over time</strong> / <strong>Message rate over time</strong> (top row) — real line charts (via
+  <code>textual-plotext</code>), one series per agent (+ model, for cost). Capped at the top 6 series by
+  total value — a real multi-agent/multi-model deployment's full cardinality would make a terminal
+  legend unreadable well before that.</li>
+<li><strong>Totals</strong> / <strong>Breakdown</strong> (bottom row) — at-a-glance total spend/messages/top-agent, and a
+  per-agent + per-model cost table.</li>
+</ul>
+<p>Time range: press <code>h</code>/<code>d</code>/<code>w</code>/<code>m</code> to switch between 1h/24h/7d/30d presets interactively (recomputed
+against "now" each refresh), or <code>r</code> for an immediate manual refresh. <code>q</code> to quit.</p>
+<h3 id="try-it_1">Try it<a class="headerlink" href="#try-it_1" title="Permanent link">&para;</a></h3>
+<p>Run any topology with a <code>SQLiteBackend</code> exporter configured (see
+<a href="../observability/#native-sqlite-storage-v093x-track-b-b1">observability.md</a>), then point <code>civitas
+telemetry</code> at the same <code>db_dir</code> — it reads live, even while the app is still running and writing.</p>
 
 
 
