@@ -1,5 +1,18 @@
 # civitas top dashboard demo (v0.9.1) — deliberately noisy/colorful, not a
 # realistic workload. See README.md in this directory for how to run it.
+#
+# v0.9.3.5: also feeds civitas/observability/sqlite_backend.py's SQLiteBackend
+# (via plugins.exporters:, resolved as a dotted import path -- no built-in
+# "sqlite" exporter name is registered, matching civitas.plugins.loader's own
+# documented resolution order) -- one demo topology now serves civitas top,
+# the Grafana/Prometheus stack (examples/observability/grafana/), AND
+# `civitas telemetry`, all from the same live run.
+plugins:
+  exporters:
+    - type: civitas.observability.sqlite_backend.SQLiteBackend
+      config:
+        db_dir: ./civitas_telemetry_demo
+
 supervision:
   name: root
   strategy: ONE_FOR_ONE

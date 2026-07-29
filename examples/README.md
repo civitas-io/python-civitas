@@ -90,13 +90,14 @@ The gentlest on-ramp, in order:
 
 | File | Demonstrates |
 |---|---|
-| `dashboard_demo/` | `civitas top` — see its own `README.md` for the two-terminal walkthrough |
+| `dashboard_demo/` | `civitas top`, and (v0.9.3.5) `civitas telemetry` — one topology now feeds all three observability surfaces below. See its own `README.md` for the walkthrough. |
 
 ## Observability
 
 | File | Demonstrates |
 |---|---|
 | `observability/grafana/` | Real Prometheus + Grafana, fully provisioned (v0.9.3.1/A3) — `docker compose up` against `dashboard_demo/` gives a live cost/latency/error dashboard with zero manual clicking. See its own `README.md`. |
+| `civitas telemetry` (no separate example — see `dashboard_demo/README.md`) | Native SQLite telemetry storage (v0.9.3.3, B1) + the Textual TUI (v0.9.3.5, B3) — real cost/rate charts, gauges, and a breakdown table, reading directly from a local SQLite directory, no live process required. |
 
 ## Framework adapters
 
