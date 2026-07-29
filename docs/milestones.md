@@ -1108,21 +1108,41 @@ Owner column: `core` = python-civitas, else the target repo.
 > [v0.9.1](#v091-post-endgame-polish-released). The examples smoke test + 8 new examples are
 > closed by [v0.9.2](#v092--examples-completeness-released).
 
-### v0.9.3 — Telemetry dashboard (Planned, after v0.9.2)
+### v0.9.3.x — Telemetry (Planned, after v0.9.2.1)
 
-**Design-first** — a separate historical/trend-data surface (logging + graphs/charts on the
-OTEL/tracer infra already collected: message-rate, cost-over-time, trace/span drill-down),
-explicitly distinct from `civitas top`'s live-snapshot TUI (v0.9.1). Likely its own surface (a web
-UI?), not necessarily an extension of the terminal dashboard — to be decided in the design
-conversation before any code lands.
+**Scoped 2026-07-28** after a design conversation surfaced that two genuinely separate
+capabilities were both hiding under the single word "telemetry dashboard": (A) civitas already
+emits rich OTEL spans (cost, tokens, latency, per-agent/model) that already export cleanly to
+mature external tools (Jaeger/Grafana/Datadog) via one env var — `docs/observability.md` Mode 3
+— so a chunk of "Option A" already exists and just needs hardening/completing; (B) a genuinely new
+civitas-native, zero-dependency, cost-focused view has real value for small/local deployments that
+don't want to stand up Jaeger just to see "what did this run cost me" — but requires building
+persistence that doesn't exist anywhere today (spans have no durable store; they're printed or
+OTLP-exported and then gone).
 
-| Item | Priority | Source |
-|------|----------|--------|
-| **Telemetry dashboard**: logging + graphs/charts view, built on the OTEL/tracer infra already collected | Medium | 2026-07-26 — user's own framing: "we are already collecting telemetry — let's design that later" |
-| Dashboard: historical charts/sparklines (message-rate, cost-over-time) | Low | design/dashboard-v2.md P1 — likely folds into the telemetry dashboard rather than the live TUI |
-| Dashboard: log tail panel per agent | Low | design/dashboard-v2.md P2 — likely folds into the telemetry dashboard |
+Decision: do both, released as small, sequential, independently-shippable `v0.9.3.N` capabilities
+(mirroring the v0.9.2.1 patch-release precedent) rather than one big release — Track A first
+(cheap, low-risk, and A1 may itself surface a real bug per this project's pattern of "verify, don't
+assume"), Track B after, with its own dedicated design doc before B1's storage code lands (same
+rigor dashboard-v2 got).
 
-### v0.9.4 — Dashboard TUI polish (Planned, after v0.9.3)
+**Track A — harden/complete what already half-exists:**
+
+| # | Capability | Scope |
+|---|------------|-------|
+| v0.9.3 (A1) | Multi-process trace continuity audit — does `trace_id`/`parent_span_id` actually survive a real ZMQ/NATS hop, watched live in Jaeger, not assumed from reading code? Fix if broken (v0.9.2.1 found the last transport-layer assumption that turned out false) | Verification-first; only becomes code if a real bug is found |
+| v0.9.3.1 (A2) | Prometheus-format metrics exposition — a real `/metrics`-shaped Prometheus text-format route (message-rate, cost, latency histograms) so Grafana works without also running Tempo/Jaeger just for numbers | One new route, no schema/storage decisions |
+| v0.9.3.2 (A3) | Ready-made Grafana dashboard JSON + example OTel-collector config + a docs recipe matching the existing Jaeger recipe in `docs/observability.md` | Docs + a JSON file, no runtime code |
+
+**Track B — the native, cost-focused, zero-dependency view:**
+
+| # | Capability | Scope |
+|---|------------|-------|
+| v0.9.3.3 (B1) | A civitas-native persistent span store — smallest viable shape: a `SQLiteBackend` conforming to the *existing* `ExportBackend` protocol (`civitas/observability/export_backend.py`), runnable via the *already-existing* `FanOutBackend` alongside OTLP for free, no protocol change needed. The one real architectural decision here: schema, retention/rollup policy, single- vs multi-process aggregation (mirrors the same problem `/processes` already solved for topology, v0.9.1) | **Needs its own `docs/design/telemetry-native.md` before any code** |
+| v0.9.3.4 (B2) | A query/aggregation layer over B1's store — cost-over-time, message-rate-over-time, per-agent/per-model breakdowns | Depends on B1's schema |
+| v0.9.3.5 (B3) | A UI — deliberately undecided until B1/B2 exist: a small web page served by a `civitas telemetry` CLI command, or a new tab in the existing `civitas top` Textual app. Decide once there's real queryable data to look at, not before | Depends on B1 + B2 |
+
+### v0.9.4 — Dashboard TUI polish (Planned, after v0.9.3.x)
 
 Small, self-contained additions to the existing live `civitas top` TUI — no auth needed, no new
 design surface, just more panes/signals on data already available (or cheaply addable).
