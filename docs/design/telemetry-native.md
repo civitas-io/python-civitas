@@ -217,3 +217,63 @@ fresh `aiosqlite` connection — not mocked, matching this project's "verify aga
 standard. 1474/1474 unit+integration tests green (macOS); Linux (Docker, full extras including the
 new `telemetry` extra) green except the one confirmed pre-existing `test_python_m_agency`
 `.venv`-path environmental failure. mypy/ruff check/format clean.
+
+## 12. Addendum (2026-07-29) — two real follow-up questions, deferred and tracked
+
+Two legitimate design questions surfaced in conversation immediately after B1 shipped. Explicit
+decision: **document both here and in `docs/milestones.md` (v0.9.3.6, B4) rather than refactor
+already-working, already-tested code mid-flight.** Neither is a defect in what shipped — both are
+real architectural improvements worth doing deliberately, later, not reactively.
+
+### 12.1 Placement — should `SQLiteBackend` live in `civitas-contrib`, not core?
+
+Two competing precedents exist in this codebase, pointing in different directions:
+
+- **"Persistence backends live in `civitas-contrib`, even SQLite ones."** `SQLiteStateStore`
+  (found mislocated in `civitas/plugins/sqlite_store` during v0.9.2's example fixes — the real
+  path is `civitas_contrib.plugins.sqlite_store`) lives in contrib alongside `postgres`
+  (`asyncpg`). Core `python-civitas` doesn't ship persistent `StateStore` backends at all.
+- **"Batteries-included, zero-vendor-dependency exporters live in core."** `ConsoleBackend`/
+  `FanOutBackend` already ship in `civitas/observability/export_backend.py` (core) — no vendor SDK
+  involved. `civitas-contrib`'s actual `ExportBackend`-shaped extras (`arize`, `langfuse`,
+  `braintrust`, `langsmith`, `fiddler`) are all third-party VENDOR eval/observability platforms;
+  `civitas-contrib`'s role for exporters specifically appears to be "vendor SDK integration," not
+  "a first-party local storage option."
+
+`SQLiteBackend` is an `ExportBackend`, not a `StateStore` — but it durably persists data to disk,
+which is the defining trait of the first precedent, not the second. Ratified principle (2026-07-29,
+in conversation): **"common/persistence-related elements belong in `civitas-contrib`; feature-
+related bits stay in `civitas` core."** Applying it: `SQLiteBackend`'s disk-writing, connection-
+lifecycle, and window/retention mechanics are persistence — contrib. The `ExportBackend` protocol,
+`FanOutBackend`, `ConsoleBackend`, `Tracer`/`SpanQueue`/`OTELAgent`, and the Prometheus text
+formatter (`prometheus_export.py`, which touches no disk/db at all) are feature machinery — stay in
+core. This means moving `SQLiteBackend` isn't a partial split of one class; since core can never
+depend on contrib (only the reverse), the *entire* class (schema, normalization, and persistence
+mechanics together) would need to relocate as one unit, mirroring exactly where `SQLiteStateStore`
+already lives.
+
+**Not executed now** — tracked as part of B4 (`docs/milestones.md`).
+
+### 12.2 Pluggability — SQLite is one backend among several
+
+SQLite is unlikely to be the only storage choice users eventually want (Postgres was named
+explicitly in conversation). Today's `SQLiteBackend` bundles two genuinely separable concerns into
+one class:
+
+1. **Telemetry-specific logic** — `normalize_span()`'s attribute-mapping table, the `spans` schema
+   shape (which columns, which types).
+2. **Storage mechanics** — SQLite-specific connection handling, window-file sharding, the
+   retention sweep.
+
+A future refactor would separate these along a real seam — something like a `SpanStore` protocol
+(`insert_spans(normalized_rows)`, backend-specific schema/connection management behind it) that
+`SQLiteBackend` and a hypothetical future `PostgresBackend` both implement, with the normalization
+logic (§4's table) shared, written once, and reused regardless of which storage backend a user
+picks. Explicit intent stated in conversation: "build like a library so others can use the
+capability" — civitas-contrib authors should be able to add a new storage backend without
+reimplementing span normalization from scratch.
+
+**Not executed now** — tracked as part of B4 (`docs/milestones.md`). The current v0.9.3.3
+implementation remains the correct, working, fully-tested shape until this refactor actually
+happens; this section exists so the seam is designed deliberately when it does, not discovered
+under pressure from a real second-backend request.

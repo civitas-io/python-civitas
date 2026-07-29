@@ -18,6 +18,15 @@ Design summary (full rationale in ``docs/design/telemetry-native.md``):
   (``attributes_json``) for drill-down fidelity (§4).
 - **Single-process scope.** Multi-process aggregation is deliberately
   deferred (§7) — see the design doc for the concrete (not "TBD") answer.
+
+Two further follow-ups, deferred and tracked (design doc §12, ``docs/milestones.md``
+v0.9.3.6/B4) rather than refactored into this already-shipped implementation: whether
+this class belongs in ``civitas-contrib`` instead of core (it durably persists data to
+disk, matching where ``SQLiteStateStore`` already lives, unlike the zero-I/O
+``ExportBackend``/``FanOutBackend``/``ConsoleBackend`` machinery that stays in core); and
+separating the telemetry-specific normalization/schema logic from SQLite-specific
+storage mechanics behind a future backend-agnostic interface, so a hypothetical
+``PostgresBackend`` wouldn't have to reimplement ``normalize_span()`` from scratch.
 """
 
 from __future__ import annotations
