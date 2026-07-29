@@ -261,7 +261,7 @@ wheels = [
 
 [[package]]
 name = "civitas"
-version = "0.9.3.3"
+version = "0.9.3.4"
 source = { editable = "." }
 dependencies = [
     { name = "msgpack" },

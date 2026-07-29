@@ -58,6 +58,7 @@ Everything in this part is done.
 | — | [v0.9.3.1 — Prometheus Metrics](#v0931--prometheus-metrics-released) | Jul 2026 |
 | — | [v0.9.3.2 — Grafana Stack](#v0932--grafana-stack-released) | Jul 2026 |
 | — | [v0.9.3.3 — Native Telemetry Storage](#v0933--native-telemetry-storage-released) | Jul 2026 |
+| — | [v0.9.3.4 — Telemetry Query Layer](#v0934--telemetry-query-layer-released) | Jul 2026 |
 
 ---
 
@@ -1154,6 +1155,22 @@ span store for small/local deployments. Design-first: full design conversation a
 | — | ✅ **Done** — `docs/observability.md` gained a "Native SQLite storage" section, and a real documentation gap was fixed alongside it: the existing "LLM spans" attribute reference had only ever documented ONE of the two real LLM span shapes (`Tracer.start_llm_span()`'s), never `AgentProcess.llm_span()`'s (`civitas.llm.chat`) — now both are documented, distinctly | — |
 | — | **Deliberately deferred, not neglected** — multi-process aggregation (design doc §7): each OS process would produce its own separate file set; a concrete future answer (reuse civitas's own message bus, following the `_agency.health_probe` precedent) is sketched, not left as "TBD" | — |
 
+## v0.9.3.4 — Telemetry Query Layer (Released)
+
+**Status: ✅ Released 2026-07-29.** v0.9.3.x's Track B, capability B2 — a query/aggregation layer
+over B1's SQLite store. Design conversation (not a full standalone design doc — more mechanical
+than B1's genuine new architectural decision) captured in
+[`docs/design/telemetry-native.md`](../design/telemetry-native.md)'s §13.
+
+| # | Deliverable | Priority |
+|---|-------------|----------|
+| — | ✅ **Done** — `civitas/observability/sqlite_query.py`'s `SQLiteQueryEngine` — a pure, read-only query API deliberately decoupled from any UI/CLI (B3's job, still undecided). Four methods shipped: `cost_over_time`, `message_rate_over_time` (bucketed by time, `bucket_seconds` caller-chosen), `cost_by_agent`, `cost_by_model` (whole-range totals). Real dataclasses (`CostBucket`, `MessageRateBucket`) for results, matching the `SpanData`/`RuntimeSnapshot` precedent — not raw tuples | High |
+| — | ✅ **Done** — Cross-window queries (a time range spanning more than one of B1's window files) use SQLite's native `ATTACH DATABASE` — confirmed working through `aiosqlite` directly (including parameter-bound `ATTACH DATABASE ?`, not just a literal path) — one real SQL query across N attached files, not N round trips merged in Python, exactly as the design doc's §3 anticipated and deferred to B2 | High |
+| — | ✅ **Done** — Handles the trickiest real case correctly: a single time bucket whose spans landed in two different window files. A double `GROUP BY` (once per attached window file, once in an outer re-aggregation over the `UNION ALL`) merges these into one correct row instead of two separate per-file ones — verified with a real, carefully-constructed test (a window boundary that does NOT coincide with the chosen bucket boundary, confirmed empirically before writing the test, not assumed) | High |
+| — | ✅ **Done** — Small shared refactor: `SQLiteBackend`'s private `_index_from_filename` promoted to a module-level `index_from_filename()` function (alongside the existing `window_index`/`window_filename`) so `SQLiteQueryEngine` doesn't need to reach into `SQLiteBackend`'s internals | — |
+| — | ✅ **Done** — Verified against a REAL `Runtime` running real agents (`exporters=[SQLiteBackend(...)]`), queried by a real `SQLiteQueryEngine` — not synthetic `SpanData`. New `tests/unit/test_sqlite_query.py` (9 tests) and `tests/integration/test_sqlite_query_integration.py` | — |
+| — | **Explicit decision: ship 4 methods now, evaluate more later.** Design doc §13 records 6 candidate query methods considered but not built (latency percentiles, error rate over time, restart/crash timeline, trace/span drill-down, top-N queries, model-comparison-over-time) — tracked so the list isn't lost, not a commitment to build all of them | — |
+
 ---
 
 ## Part 2 — Backlog
@@ -1202,12 +1219,11 @@ A is now fully shipped.**
 
 **Track B — the native, cost-focused, zero-dependency view:**
 
-B1 shipped as [v0.9.3.3](#v0933--native-telemetry-storage-released) — see Part 1 above. Remaining
-Track B items:
+B1 shipped as [v0.9.3.3](#v0933--native-telemetry-storage-released); B2 shipped as
+[v0.9.3.4](#v0934--telemetry-query-layer-released) — see Part 1 above. Remaining Track B items:
 
 | # | Capability | Scope |
 |---|------------|-------|
-| v0.9.3.4 (B2) | A query/aggregation layer over B1's store — cost-over-time, message-rate-over-time, per-agent/per-model breakdowns | Depends on B1's schema |
 | v0.9.3.5 (B3) | A UI — deliberately undecided until B1/B2 exist: a small web page served by a `civitas telemetry` CLI command, or a new tab in the existing `civitas top` Textual app. Decide once there's real queryable data to look at, not before | Depends on B1 + B2 |
 | v0.9.3.6 (B4) | **Deferred by explicit decision (2026-07-29), documented not silently dropped** — two real design questions surfaced right after B1 shipped, both real enough to track but not worth a mid-flight refactor of already-working, already-tested code: (1) placement — `SQLiteBackend` writes durable data to disk, matching this project's own "persistence backends live in `civitas-contrib`" precedent (`SQLiteStateStore` already lives there) rather than core `python-civitas`, which currently only ships zero-I/O feature machinery (`ExportBackend`/`FanOutBackend`/`ConsoleBackend`); (2) pluggability — SQLite is one backend among several a user may eventually want (Postgres, etc.) — the telemetry-specific logic (span normalization, schema shape) should be separated from the storage mechanism itself so alternative backends don't have to reimplement normalization, "build like a library so others can use the capability." Full writeup in `docs/design/telemetry-native.md`'s §12 addendum. **Current, shipped v0.9.3.3 implementation is intentionally left as-is** — both of these are real, tracked follow-ups, not a defect in what already shipped | Deferred — tracked, not scheduled |
 

@@ -143,6 +143,26 @@ def window_filename(index: int, window_days: int) -> str:
     return f"civitas_spans_{start.strftime('%Y-%m-%d')}.db"
 
 
+def index_from_filename(filename: str, window_days: int) -> int | None:
+    """Recover a window's index from its own filename (round-trips through
+    window_filename()'s date formatting). Module-level (not a SQLiteBackend
+    method) so SQLiteQueryEngine (B2, sqlite_query.py) can enumerate window
+    files without reaching into SQLiteBackend's internals.
+
+    Known limitation, not engineered around (v1): assumes ``window_days``
+    hasn't changed since the file was written. Changing the window size
+    across restarts of the same db_dir would misjudge older files' ages --
+    a real but narrow edge case for a knob nothing in this design expects to
+    change often; revisit if it's ever a real complaint, not preemptively.
+    """
+    try:
+        date_str = filename.removeprefix("civitas_spans_").removesuffix(".db")
+        dt = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=UTC)
+    except ValueError:
+        return None
+    return int(dt.timestamp() // (window_days * 86400))
+
+
 class SQLiteBackend:
     """Time-windowed, civitas-native persistent span store.
 
@@ -243,7 +263,7 @@ class SQLiteBackend:
         if not self._db_dir.exists():
             return
         for path in self._db_dir.glob("civitas_spans_*.db"):
-            file_idx = self._index_from_filename(path.name)
+            file_idx = index_from_filename(path.name, self._window_days)
             if file_idx is not None and file_idx < cutoff_idx:
                 cached = self._connections.pop(file_idx, None)
                 if cached is not None:
@@ -252,26 +272,6 @@ class SQLiteBackend:
                     path.unlink()
                 except OSError:
                     logger.warning("SQLiteBackend: failed to remove expired window file %s", path)
-
-    def _index_from_filename(self, filename: str) -> int | None:
-        """Recover a window's index from its own filename (round-trips
-        through window_filename()'s date formatting) — used by the
-        retention sweep to identify expired files without keeping a
-        separate side-table of index->filename mappings.
-
-        Known limitation, not engineered around (v1): assumes ``window_days``
-        hasn't changed since the file was written. Changing the window size
-        across restarts of the same db_dir would misjudge older files' ages
-        during retention — a real but narrow edge case for a knob nothing in
-        this design expects to change often; revisit if it's ever a real
-        complaint, not preemptively.
-        """
-        try:
-            date_str = filename.removeprefix("civitas_spans_").removesuffix(".db")
-            dt = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=UTC)
-        except ValueError:
-            return None
-        return int(dt.timestamp() // (self._window_days * 86400))
 
     def list_window_files(self) -> list[Path]:
         """Enumerate this backend's window files, oldest first — for a

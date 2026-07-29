@@ -277,3 +277,41 @@ reimplementing span normalization from scratch.
 implementation remains the correct, working, fully-tested shape until this refactor actually
 happens; this section exists so the seam is designed deliberately when it does, not discovered
 under pressure from a real second-backend request.
+
+## 13. B2 (v0.9.3.4) — shipped with 4 query methods; more candidates evaluated for later
+
+`SQLiteQueryEngine` (`civitas/observability/sqlite_query.py`) shipped with four methods:
+`cost_over_time`, `message_rate_over_time`, `cost_by_agent`, `cost_by_model`. Cross-window queries
+(a time range spanning more than one of B1's window files) use SQLite's native `ATTACH DATABASE`
+— confirmed working through `aiosqlite` directly, including the trickiest real case: a single time
+bucket whose spans landed in two different window files, requiring a double `GROUP BY` (once per
+attached file, once in an outer re-aggregation) to merge correctly into one row instead of two.
+
+Explicit decision (2026-07-29): **ship these four now, evaluate more later** rather than try to be
+exhaustive up front. Candidate methods identified for future evaluation, not built yet — tracked
+here so the list isn't lost, not a commitment to build all of them:
+
+- **Latency percentiles** (p50/p95/p99 message-handling latency, per agent) — `civitas_message_
+  latency_ms_sum`/`_count` (A2's Prometheus metrics) only give an average; SQLite has no built-in
+  percentile function, would need either an approximation (bucketed histogram counts) or pulling
+  raw rows and computing in Python — a real design decision of its own, not a trivial addition.
+- **Error rate over time** (bucketed, per agent) — mirrors `message_rate_over_time`'s shape exactly
+  but filtered to `status = 'error'`; likely the cheapest of this whole list to add.
+- **Restart/crash timeline query** — `civitas_agent_restarts_total` exists in Prometheus (A2), but
+  no query method surfaces the underlying restart EVENTS (timestamp + reason) from the spans table
+  the way `/snapshot`'s JSON `restart_history` already does for live data; a persisted equivalent
+  would need `supervisor.restart` spans specifically.
+- **Trace/span drill-down** ("show me every span in trace X") — a much simpler query than the
+  aggregate ones above (just `SELECT * FROM spans WHERE trace_id = ?` per attached window), but
+  needs its own decision about how much of `attributes_json` to surface and in what shape.
+- **Top-N queries** ("top 5 most expensive agents this week", "top 5 slowest tool calls") —
+  straightforward `ORDER BY ... LIMIT N` variants of the existing aggregates; low effort, deferred
+  only because nothing has asked for them yet.
+- **Model comparison over time** (cost/latency trend per model, not just a point-in-time total) —
+  a bucketed variant of `cost_by_model`, symmetrical with how `cost_over_time` already buckets by
+  agent+model together; could arguably have shipped in this same cut, held back to keep B2's first
+  release small.
+
+None of these block B3 (the UI) from starting once there's a reason to — B3 can be built against
+today's four methods and grow as new query methods are added, matching this whole project's "small
+capability at a time" cadence.

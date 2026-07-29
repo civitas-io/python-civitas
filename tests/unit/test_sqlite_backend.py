@@ -16,6 +16,7 @@ import aiosqlite
 from civitas.observability.span_queue import SpanData
 from civitas.observability.sqlite_backend import (
     SQLiteBackend,
+    index_from_filename,
     normalize_span,
     window_filename,
     window_index,
@@ -165,17 +166,18 @@ def test_window_filename_is_human_readable_start_date():
     assert window_filename(0, 30) == "civitas_spans_1970-01-01.db"
 
 
-def test_window_filename_round_trips_through_backend_index_from_filename():
-    backend = SQLiteBackend(window_days=30)
+def test_window_filename_round_trips_through_index_from_filename():
+    """index_from_filename() is a module-level function (not a SQLiteBackend
+    method) so SQLiteQueryEngine (B2) can enumerate window files without
+    reaching into SQLiteBackend's internals."""
     for idx in (0, 1, 5, 100, 12345):
         filename = window_filename(idx, 30)
-        assert backend._index_from_filename(filename) == idx
+        assert index_from_filename(filename, 30) == idx
 
 
 def test_index_from_filename_rejects_malformed_names():
-    backend = SQLiteBackend(window_days=30)
-    assert backend._index_from_filename("not_a_span_file.db") is None
-    assert backend._index_from_filename("civitas_spans_not-a-date.db") is None
+    assert index_from_filename("not_a_span_file.db", 30) is None
+    assert index_from_filename("civitas_spans_not-a-date.db", 30) is None
 
 
 # ---------------------------------------------------------------------------

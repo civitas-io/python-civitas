@@ -11,6 +11,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+## [0.9.3.4] — 2026-07-29
+
+v0.9.3.x's Track B, capability B2 — a query/aggregation layer over B1's SQLite telemetry
+store.
+
+### Added
+
+- **`SQLiteQueryEngine`** (`civitas/observability/sqlite_query.py`) — a pure, read-only query
+  API over `SQLiteBackend`'s time-windowed store, decoupled from any UI/CLI. Four methods:
+  `cost_over_time`, `message_rate_over_time` (both bucketed by caller-chosen `bucket_seconds`),
+  `cost_by_agent`, `cost_by_model` (whole-range totals). Cross-window queries (a time range
+  spanning more than one window file) use SQLite's native `ATTACH DATABASE` — one real SQL
+  query across N attached files, with a double `GROUP BY` correctly merging any time bucket
+  whose spans landed in two different window files. Real dataclasses (`CostBucket`,
+  `MessageRateBucket`) for results.
+- Six candidate query methods (latency percentiles, error rate over time, restart/crash
+  timeline, trace/span drill-down, top-N queries, model-comparison-over-time) evaluated and
+  documented for a future cut — `docs/design/telemetry-native.md` §13 — not built in this
+  release; shipped 4 now rather than trying to be exhaustive up front.
+
+### Changed
+
+- `SQLiteBackend`'s private `_index_from_filename` promoted to a module-level
+  `index_from_filename()` function so `SQLiteQueryEngine` doesn't reach into `SQLiteBackend`'s
+  internals.
+
 ## [0.9.3.3] — 2026-07-29
 
 v0.9.3.x's Track B, capability B1 — a civitas-native persistent span store for small/local
