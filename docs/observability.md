@@ -387,10 +387,18 @@ depending on the old JSON shape at `/metrics` directly.
 
 ### Grafana
 
-Once Prometheus is scraping civitas, add it as a Grafana datasource and build panels against the
-metrics above — e.g. `rate(civitas_messages_handled_total[5m])` for message throughput, or
-`sum by (agent) (civitas_llm_cost_usd_total)` for a cost-per-agent bar chart. A ready-made
-dashboard JSON is planned as a follow-up (v0.9.3.2).
+A ready-made, fully-provisioned Prometheus + Grafana stack ships in
+[`examples/observability/grafana/`](https://github.com/civitas-io/python-civitas/tree/main/examples/observability/grafana)
+(v0.9.3.2) — `docker compose up` gives you Prometheus already scraping civitas and Grafana already
+showing the dashboard, no manual datasource setup or dashboard import needed. Panels: message
+throughput, error rate, LLM cost over time (per agent/model), average latency, agent status, and
+at-a-glance totals. See that directory's `README.md` for the two-terminal walkthrough (run against
+`examples/dashboard_demo/` for realistic cost/latency/restart data out of the box).
+
+Building your own panels instead: add Prometheus as a Grafana datasource pointed at civitas's
+`/metrics`, then query the metrics above directly — e.g. `rate(civitas_messages_handled_total[5m])`
+for message throughput, or `sum by (agent) (civitas_llm_cost_usd_total)` for a cost-per-agent bar
+chart.
 
 ---
 

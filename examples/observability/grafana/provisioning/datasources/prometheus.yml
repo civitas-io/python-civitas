@@ -1,0 +1,11 @@
+# Grafana datasource provisioning — auto-configures Prometheus on startup,
+# no manual "Add data source" click needed (v0.9.3.2, A3).
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    uid: civitas-prometheus

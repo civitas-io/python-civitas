@@ -1,0 +1,9 @@
+# Grafana dashboard provisioning — auto-loads civitas.json on startup, no
+# manual import needed (v0.9.3.2, A3).
+apiVersion: 1
+
+providers:
+  - name: civitas
+    type: file
+    options:
+      path: /etc/grafana/provisioning/dashboards

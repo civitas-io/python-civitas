@@ -1,0 +1,14 @@
+# Prometheus scrape config for civitas's standard /metrics endpoint (v0.9.3.1).
+#
+# host.docker.internal resolves to the Docker host from inside a container on
+# Docker Desktop (macOS/Windows) automatically. On Linux, either add
+#   extra_hosts: ["host.docker.internal:host-gateway"]
+# to prometheus's docker-compose service (already done here), or run civitas
+# on the same Docker network instead of the host.
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: civitas
+    static_configs:
+      - targets: ["host.docker.internal:6789"]

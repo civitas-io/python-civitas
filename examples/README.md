@@ -92,6 +92,12 @@ The gentlest on-ramp, in order:
 |---|---|
 | `dashboard_demo/` | `civitas top` — see its own `README.md` for the two-terminal walkthrough |
 
+## Observability
+
+| File | Demonstrates |
+|---|---|
+| `observability/grafana/` | Real Prometheus + Grafana, fully provisioned (v0.9.3.1/A3) — `docker compose up` against `dashboard_demo/` gives a live cost/latency/error dashboard with zero manual clicking. See its own `README.md`. |
+
 ## Framework adapters
 
 | File | Demonstrates |

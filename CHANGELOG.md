@@ -11,6 +11,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+## [0.9.3.2] — 2026-07-29
+
+v0.9.3.x's Track A, capability A3 — completing Track A.
+
+### Added
+
+- **`examples/observability/grafana/`** — a fully-provisioned Prometheus + Grafana
+  `docker-compose` stack for civitas's real Prometheus metrics (v0.9.3.1). Prometheus is
+  already scraping civitas's standard `/metrics` and Grafana already has both the
+  datasource and an 8-panel dashboard loaded after `docker compose up` — no manual setup.
+  Panels: message throughput, error rate, LLM cost over time (per agent/model), average
+  latency, agent status, and total-spend/restarts/uptime stat panels. Verified fully
+  end-to-end against the existing `examples/dashboard_demo/` (real cost/latency/restart
+  data), not just JSON-schema-validated — confirmed live via Prometheus's and Grafana's
+  own APIs that the scrape target is healthy, the datasource/dashboard auto-provisioned
+  correctly, and real non-zero cost data flows through.
+
+### Note
+
+- Scope correction from the original backlog wording: an "OTel-collector config" isn't
+  actually applicable here — civitas's `/metrics` is scraped directly by Prometheus
+  (pull-based), not pushed through a collector. A provisioned Prometheus+Grafana stack is
+  the more directly useful, actually-runnable deliverable for the metrics side.
+
 ## [0.9.3.1] — 2026-07-29
 
 v0.9.3.x's Track A, capability A2: real Prometheus text-format metrics exposition at the

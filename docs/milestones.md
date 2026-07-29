@@ -56,6 +56,7 @@ Everything in this part is done.
 | — | [v0.9.2.1 — Bugfix Release](#v0921--bugfix-release-released) | Jul 2026 |
 | — | [v0.9.3 — OTEL Trace Linkage](#v093--otel-trace-linkage-released) | Jul 2026 |
 | — | [v0.9.3.1 — Prometheus Metrics](#v0931--prometheus-metrics-released) | Jul 2026 |
+| — | [v0.9.3.2 — Grafana Stack](#v0932--grafana-stack-released) | Jul 2026 |
 
 ---
 
@@ -1126,6 +1127,17 @@ text-format metrics exposition at the standard `/metrics` scrape path.
 | — | ✅ **Done** — Verified against a REAL local Prometheus server (not mocked): installed via `brew install prometheus`, pointed a real `scrape_configs` target at a live civitas `TopologyServer` with zero `metrics_path` override, confirmed `"health": "up"` via `/api/v1/targets`, and confirmed real PromQL queries (`civitas_messages_handled_total`, `civitas_agent_status`) return correct live values via `/api/v1/query` | — |
 | — | ✅ **Done** — New `tests/unit/test_prometheus_export.py` (16 tests: escaping, float formatting, per-family HELP/TYPE lines, LLM-series suppression for non-LLM agents, well-formed-line structural check) plus a new end-to-end HTTP-level test in `tests/unit/test_topology_server.py` and two new tests in `tests/unit/test_process.py` proving the status-wiring fix (a real `MetricsCollector` end-to-end, and a hand-rolled fake WITHOUT `agent_status_changed` proving it never crashes) | — |
 
+## v0.9.3.2 — Grafana Stack (Released)
+
+**Status: ✅ Released 2026-07-29.** v0.9.3.x's Track A, capability A3 — completing Track A.
+
+| # | Deliverable | Priority |
+|---|-------------|----------|
+| — | ✅ **Done** — **Scope correction from the original backlog wording**: "example OTel-collector config" wasn't actually applicable — civitas's `/metrics` (v0.9.3.1) is scraped *directly* by Prometheus (pull-based); an OTel Collector is only relevant to the separate trace/OTLP push path already documented in `docs/observability.md`'s Mode 3. A fully-provisioned Prometheus + Grafana `docker-compose` stack is the more directly useful, actually-runnable deliverable for the metrics side — shipped instead | — |
+| — | ✅ **Done** — `examples/observability/grafana/`: a `docker-compose.yml` bringing up Prometheus (scraping civitas's standard `/metrics`) and Grafana, both fully provisioned via Grafana's own datasource/dashboard provisioning mechanism — zero manual clicking after `docker compose up`. Dashboard (`provisioning/dashboards/civitas.json`, a standard Grafana export) has 8 panels: message throughput, error rate, LLM cost over time (per agent/model — the actual cost-tracking value proposition), average latency (honest sum/count division, not a fabricated histogram), agent status table, and total-spend/restarts/uptime stat panels | High |
+| — | ✅ **Done** — Verified fully end-to-end, not just JSON-schema-validated: ran `examples/dashboard_demo/` (already-existing, already generates realistic cost/latency/restart/error data via `ChattyWorker`/`FlakyWorker`) as the real scrape target, brought up the real `docker compose` stack, confirmed via Prometheus's own `/api/v1/targets` that the scrape target reports `"health": "up"`, confirmed via Grafana's `/api/datasources` and `/api/search` that both the datasource and dashboard auto-provisioned correctly, and confirmed via a live PromQL query that real non-zero cost data (e.g. `chatty` agent accumulating real `$0.249` over the run) flows all the way through | — |
+| — | ✅ **Done** — `docs/observability.md`'s "Prometheus metrics" section and `examples/README.md`'s index both updated to point at the new example; the example's own `README.md` documents the two-terminal quick start, a full panel/query reference table, how to point it at your own app instead of the demo, and how to import the dashboard JSON into an existing Grafana instance | — |
+
 ---
 
 ## Part 2 — Backlog
@@ -1168,12 +1180,9 @@ rigor dashboard-v2 got).
 **Track A — harden/complete what already half-exists:**
 
 A1 shipped as [v0.9.3](#v093--otel-trace-linkage-released); A2 shipped as
-[v0.9.3.1](#v0931--prometheus-metrics-released) — see Part 1 above for full findings and fixes.
-Remaining Track A items:
-
-| # | Capability | Scope |
-|---|------------|-------|
-| v0.9.3.2 (A3) | Ready-made Grafana dashboard JSON + example OTel-collector config + a docs recipe matching the existing Jaeger recipe in `docs/observability.md` | Docs + a JSON file, no runtime code |
+[v0.9.3.1](#v0931--prometheus-metrics-released); A3 shipped as
+[v0.9.3.2](#v0932--grafana-stack-released) — see Part 1 above for full findings and fixes. **Track
+A is now fully shipped.**
 
 **Track B — the native, cost-focused, zero-dependency view:**
 
