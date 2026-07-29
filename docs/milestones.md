@@ -57,6 +57,7 @@ Everything in this part is done.
 | — | [v0.9.3 — OTEL Trace Linkage](#v093--otel-trace-linkage-released) | Jul 2026 |
 | — | [v0.9.3.1 — Prometheus Metrics](#v0931--prometheus-metrics-released) | Jul 2026 |
 | — | [v0.9.3.2 — Grafana Stack](#v0932--grafana-stack-released) | Jul 2026 |
+| — | [v0.9.3.3 — Native Telemetry Storage](#v0933--native-telemetry-storage-released) | Jul 2026 |
 
 ---
 
@@ -1138,6 +1139,21 @@ text-format metrics exposition at the standard `/metrics` scrape path.
 | — | ✅ **Done** — Verified fully end-to-end, not just JSON-schema-validated: ran `examples/dashboard_demo/` (already-existing, already generates realistic cost/latency/restart/error data via `ChattyWorker`/`FlakyWorker`) as the real scrape target, brought up the real `docker compose` stack, confirmed via Prometheus's own `/api/v1/targets` that the scrape target reports `"health": "up"`, confirmed via Grafana's `/api/datasources` and `/api/search` that both the datasource and dashboard auto-provisioned correctly, and confirmed via a live PromQL query that real non-zero cost data (e.g. `chatty` agent accumulating real `$0.249` over the run) flows all the way through | — |
 | — | ✅ **Done** — `docs/observability.md`'s "Prometheus metrics" section and `examples/README.md`'s index both updated to point at the new example; the example's own `README.md` documents the two-terminal quick start, a full panel/query reference table, how to point it at your own app instead of the demo, and how to import the dashboard JSON into an existing Grafana instance | — |
 
+## v0.9.3.3 — Native Telemetry Storage (Released)
+
+**Status: ✅ Released 2026-07-29.** v0.9.3.x's Track B, capability B1 — a civitas-native persistent
+span store for small/local deployments. Design-first: full design conversation and decision log in
+[`docs/design/telemetry-native.md`](../design/telemetry-native.md) before any code.
+
+| # | Deliverable | Priority |
+|---|-------------|----------|
+| — | ✅ **Done** — `civitas/observability/sqlite_backend.py`'s `SQLiteBackend` — a real `ExportBackend` implementation (no protocol changes; plugs into the already-existing `SpanQueue → OTELAgent → ExportBackend` path, composable with other exporters via the already-existing `FanOutBackend`). One SQLite file per fixed-size time window (`window_days`, default 30) rather than one growing file with row-level deletes — retention removes whole files, not rows. Hot fields (`agent_name`, `llm_model`, `llm_tokens_in`/`_out`, `llm_cost_usd`) promoted to real, indexed SQL columns for fast `GROUP BY`/`SUM()` aggregation, while the full `attributes` dict is also kept (`attributes_json`) for drill-down. New `civitas[telemetry]` extras group (`aiosqlite`) | High |
+| — | ✅ **Done, unplanned root-cause fix found live** — while writing the attribute-normalization logic, discovered that `AgentProcess.llm_span()`'s spans (`civitas.llm.chat` — the actually-used, ergonomic API real agent code calls, confirmed via `examples/dashboard_demo/agents.py`) had **never carried any agent identity at all**, in either the existing OTEL/Jaeger export path (Track A, already shipped) or this new storage backend. Confirmed by directly inspecting a real span's attributes, not assumed. Fixed at the root in `civitas/process.py` — `civitas.agent.name` added to that span's attributes. The separate, lower-level `Tracer.start_llm_span()` API (no `AgentProcess`/agent context available to it architecturally) was left as-is, documented as a real but different-in-kind limitation | High |
+| — | ✅ **Done** — Verified with a REAL `Runtime` running real agents (`exporters=[SQLiteBackend(...)]`), confirmed by directly querying the actual `.db` file with a fresh `aiosqlite` connection — not mocked. Confirmed the LLM cost-tracking value proposition specifically: a real `civitas.llm.chat` span's cost/tokens/model land correctly in the promoted SQL columns, queryable directly | — |
+| — | ✅ **Done** — New `tests/unit/test_sqlite_backend.py` (24 tests: every normalization case across both LLM span shapes plus the deliberate `NULL`-on-no-match fallback, window-index/filename round-tripping, retention sweep including the edge case of a span written directly into an already-expired window) and `tests/integration/test_sqlite_backend_integration.py` (real `Runtime`, real file, real query) | — |
+| — | ✅ **Done** — `docs/observability.md` gained a "Native SQLite storage" section, and a real documentation gap was fixed alongside it: the existing "LLM spans" attribute reference had only ever documented ONE of the two real LLM span shapes (`Tracer.start_llm_span()`'s), never `AgentProcess.llm_span()`'s (`civitas.llm.chat`) — now both are documented, distinctly | — |
+| — | **Deliberately deferred, not neglected** — multi-process aggregation (design doc §7): each OS process would produce its own separate file set; a concrete future answer (reuse civitas's own message bus, following the `_agency.health_probe` precedent) is sketched, not left as "TBD" | — |
+
 ---
 
 ## Part 2 — Backlog
@@ -1186,9 +1202,11 @@ A is now fully shipped.**
 
 **Track B — the native, cost-focused, zero-dependency view:**
 
+B1 shipped as [v0.9.3.3](#v0933--native-telemetry-storage-released) — see Part 1 above. Remaining
+Track B items:
+
 | # | Capability | Scope |
 |---|------------|-------|
-| v0.9.3.3 (B1) | A civitas-native persistent span store — smallest viable shape: a `SQLiteBackend` conforming to the *existing* `ExportBackend` protocol (`civitas/observability/export_backend.py`), runnable via the *already-existing* `FanOutBackend` alongside OTLP for free, no protocol change needed. The one real architectural decision here: schema, retention/rollup policy, single- vs multi-process aggregation (mirrors the same problem `/processes` already solved for topology, v0.9.1) | **Needs its own `docs/design/telemetry-native.md` before any code** |
 | v0.9.3.4 (B2) | A query/aggregation layer over B1's store — cost-over-time, message-rate-over-time, per-agent/per-model breakdowns | Depends on B1's schema |
 | v0.9.3.5 (B3) | A UI — deliberately undecided until B1/B2 exist: a small web page served by a `civitas telemetry` CLI command, or a new tab in the existing `civitas top` Textual app. Decide once there's real queryable data to look at, not before | Depends on B1 + B2 |
 

@@ -40,6 +40,15 @@ wheels = [
 ]
 
 [[package]]
+name = "aiosqlite"
+version = "0.22.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/4e/8a/64761f4005f17809769d23e518d915db74e6310474e733e3593cfc854ef1/aiosqlite-0.22.1.tar.gz", hash = "sha256:043e0bd78d32888c0a9ca90fc788b38796843360c855a7262a532813133a0650", size = 14821, upload-time = "2025-12-23T19:25:43.997Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/00/b7/e3bf5133d697a08128598c8d0abc5e16377b51465a33756de24fa7dee953/aiosqlite-0.22.1-py3-none-any.whl", hash = "sha256:21c002eb13823fad740196c5a2e9d8e62f6243bd9e7e4a1f87fb5e44ecb4fceb", size = 17405, upload-time = "2025-12-23T19:25:42.139Z" },
+]
+
+[[package]]
 name = "annotated-doc"
 version = "0.0.4"
 source = { registry = "https://pypi.org/simple" }
@@ -252,7 +261,7 @@ wheels = [
 
 [[package]]
 name = "civitas"
-version = "0.9.3.2"
+version = "0.9.3.3"
 source = { editable = "." }
 dependencies = [
     { name = "msgpack" },
@@ -268,6 +277,7 @@ dashboard = [
 ]
 dev = [
     { name = "aioquic" },
+    { name = "aiosqlite" },
     { name = "cryptography" },
     { name = "grpcio" },
     { name = "grpcio-health-checking" },
@@ -331,6 +341,9 @@ otel = [
 security = [
     { name = "pynacl" },
 ]
+telemetry = [
+    { name = "aiosqlite" },
+]
 zmq = [
     { name = "pyzmq" },
 ]
@@ -344,6 +357,8 @@ dev = [
 requires-dist = [
     { name = "aioquic", marker = "extra == 'dev'", specifier = ">=1.0" },
     { name = "aioquic", marker = "extra == 'http3'", specifier = ">=1.0" },
+    { name = "aiosqlite", marker = "extra == 'dev'", specifier = ">=0.19" },
+    { name = "aiosqlite", marker = "extra == 'telemetry'", specifier = ">=0.19" },
     { name = "cryptography", marker = "extra == 'dev'", specifier = ">=41" },
     { name = "cryptography", marker = "extra == 'encryption'", specifier = ">=41" },
     { name = "grpcio", marker = "extra == 'dev'", specifier = ">=1.78,<2" },
@@ -391,7 +406,7 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'http'", specifier = ">=0.30" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'http3'", specifier = ">=0.30" },
 ]
-provides-extras = ["zmq", "nats", "nkeys", "http", "http3", "grpc", "jwt", "otel", "security", "encryption", "fast", "dashboard", "dev", "docs"]
+provides-extras = ["zmq", "nats", "nkeys", "http", "http3", "grpc", "jwt", "otel", "security", "encryption", "fast", "dashboard", "telemetry", "dev", "docs"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pynacl", specifier = ">=1.6.2" }]

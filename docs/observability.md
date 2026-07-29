@@ -248,6 +248,23 @@ All Civitas-emitted attributes follow the `civitas.*` and `llm.*` / `tool.*` nam
 
 ### LLM spans
 
+Two genuinely different shapes exist, depending on which API produced the span:
+
+**`AgentProcess.llm_span()`** (the ergonomic, per-agent context manager — what real agent code
+actually calls, e.g. `with self.llm_span("gpt-4o") as span: ...`). Span name: `civitas.llm.chat`.
+
+| Attribute | Type | Description |
+|---|---|---|
+| `civitas.agent.name` | string | The calling agent's name (added v0.9.3.x — a real gap: this span carried NO agent identity at all before, in either OTEL export or any storage backend) |
+| `civitas.llm.model` | string | Model identifier (e.g. `claude-haiku-4-5`) |
+| `civitas.llm.tokens_in` | int | Input token count — only present if the caller reported it |
+| `civitas.llm.tokens_out` | int | Output token count — only present if the caller reported it |
+| `civitas.llm.cost_usd` | float | Estimated cost in USD — only present if the caller reported it |
+
+**`Tracer.start_llm_span()`/`end_llm_span()`** (a lower-level, standalone API called directly on a
+bare `Tracer`, with no `AgentProcess`/agent context at all — see `examples/research_assistant.py`).
+Span name: `llm.chat {model}`.
+
 | Attribute | Type | Description |
 |---|---|---|
 | `llm.model` | string | Model identifier (e.g. `claude-haiku-4-5`) |
@@ -255,6 +272,10 @@ All Civitas-emitted attributes follow the `civitas.*` and `llm.*` / `tool.*` nam
 | `llm.tokens_out` | int | Output token count |
 | `llm.cost_usd` | float | Estimated cost in USD |
 | `llm.latency_ms` | float | End-to-end call latency in milliseconds |
+
+This API has no agent identity to attach — architecturally, a bare `Tracer` has no concept of
+"current agent" the way `AgentProcess` does. If you need per-agent attribution with this lower-level
+API, add it yourself via `span.set_attribute(...)`.
 
 ### Tool spans
 
@@ -333,6 +354,38 @@ backend = FanOutBackend([
     HttpBackend("https://my-collector/spans"),
 ])
 ```
+
+---
+
+## Native SQLite storage (v0.9.3.x, Track B, B1)
+
+**Install `civitas[telemetry]`.** A real, built-in `ExportBackend` for small/local deployments that
+want to ask "what did my agents spend last week" without already running Jaeger/Grafana/Tempo (see
+[`docs/design/telemetry-native.md`](design/telemetry-native.md) for the full design):
+
+```python
+from civitas.observability.sqlite_backend import SQLiteBackend
+
+backend = SQLiteBackend(
+    db_dir="./civitas_telemetry",  # reasonable default
+    window_days=30,                # one SQLite file per 30-day window
+    retention_windows=6,           # ~180 days retained; older FILES are deleted outright
+)
+```
+
+Used exactly like any other exporter — `exporters=[backend]` passed to `Runtime`/`Worker`, or
+declared in topology YAML's `plugins.exporters:` block, composable with other exporters (e.g. also
+forwarding to Jaeger) via `FanOutBackend`.
+
+Hot fields (`agent_name`, `llm_model`, `llm_tokens_in`/`_out`, `llm_cost_usd`) are promoted to real,
+indexed SQL columns — cost-per-agent, message-rate, and similar aggregate queries are plain
+`GROUP BY`/`SUM()`, not per-row JSON parsing. The full attributes dict is also kept
+(`attributes_json`) for drill-down. Retention deletes whole window files, not rows — simpler, no
+fragmentation, no risk of a bad `WHERE` clause corrupting live data.
+
+**Scope**: single-process only for now — each OS process (Runtime + every Worker) would produce its
+own separate file set; multi-process aggregation is a deliberately deferred, tracked follow-up (see
+the design doc's §7 for the sketched answer), not silently unsupported.
 
 ---
 

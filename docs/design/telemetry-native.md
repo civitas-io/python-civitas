@@ -1,6 +1,6 @@
 # Native telemetry storage — B1 (v0.9.3.x, Track B)
 
-**Status: 🟡 DRAFT — awaiting sign-off before implementation.** Scoped 2026-07-29 as part of the
+**Status: ✅ ACCEPTED and IMPLEMENTED (2026-07-29).** Scoped 2026-07-29 as part of the
 v0.9.3.x telemetry split (`docs/milestones.md`): Track A (harden what already half-exists via
 Jaeger/Grafana/OTLP) shipped as v0.9.3–v0.9.3.2. This is Track B, capability B1 — a civitas-native,
 zero-dependency-beyond-`aiosqlite`, cost-focused persistent span store for small/local deployments
@@ -189,3 +189,31 @@ meaningfully duplicate what a real OTel Collector already does well), staying pr
   data volumes a "small/local deployment" actually produces; revisit only if real usage shows a
   need.
 - A UI (B3) — this ticket produces queryable data, not a way to look at it.
+
+## 11. Implementation notes (2026-07-29)
+
+Shipped as designed (`civitas/observability/sqlite_backend.py`), with one unplanned but important
+root-cause fix found while writing the normalization logic (§4): **`AgentProcess.llm_span()`'s
+spans (`civitas.llm.chat`) had never carried any agent identity at all**, in either the existing
+OTEL/Jaeger export path (Track A, already shipped) or this new storage backend — confirmed by
+directly inspecting a real span's attributes, not assumed. Fixed at the root in
+`civitas/process.py` by adding `civitas.agent.name` to that span's attributes (the ergonomic API
+has `self.name` available; the separate, lower-level `Tracer.start_llm_span()` API does not, and
+was left as-is — see the normalization table's updated notes in the module itself).
+
+Also discovered while verifying `Tracer.start_llm_span()`'s real attribute shape: it uses
+`llm.model`/`llm.tokens_in`/etc (no `civitas.` prefix, model in the span NAME) — a genuinely
+different shape from `civitas.llm.chat`'s `civitas.llm.*` attributes. Both are real, both are used
+(the former by examples calling the Tracer directly, the latter by all real agent code including
+`examples/dashboard_demo/`) — `normalize_span()` handles both shapes explicitly, matched by exact
+span name where the two could otherwise be ambiguous.
+
+Verification: unit tests for every normalization case (all span kinds + the deliberate `NULL`-on-
+no-match fallback), window-index/filename round-tripping, and the retention sweep (including the
+real edge case of a span written directly into an already-expired window, immediately swept within
+the same `export()` call). Integration test with a REAL `Runtime` running real agents
+(`exporters=[SQLiteBackend(...)]`), verified by directly querying the actual `.db` file with a
+fresh `aiosqlite` connection — not mocked, matching this project's "verify against the real thing"
+standard. 1474/1474 unit+integration tests green (macOS); Linux (Docker, full extras including the
+new `telemetry` extra) green except the one confirmed pre-existing `test_python_m_agency`
+`.venv`-path environmental failure. mypy/ruff check/format clean.

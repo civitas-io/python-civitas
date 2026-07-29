@@ -11,6 +11,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+## [0.9.3.3] — 2026-07-29
+
+v0.9.3.x's Track B, capability B1 — a civitas-native persistent span store for small/local
+deployments. Design-first: full design conversation in `docs/design/telemetry-native.md`
+before any code.
+
+### Added
+
+- **`SQLiteBackend`** (`civitas/observability/sqlite_backend.py`) — a real `ExportBackend`
+  implementation (no protocol changes; composable with other exporters via the existing
+  `FanOutBackend`). One SQLite file per fixed-size time window (`window_days`, default 30)
+  rather than one growing file with row-level deletes — retention removes whole files, not
+  rows. Hot fields (`agent_name`, `llm_model`, `llm_tokens_in`/`_out`, `llm_cost_usd`)
+  promoted to real, indexed SQL columns for fast aggregation, with the full attributes dict
+  also kept for drill-down. New `civitas[telemetry]` extras group (`aiosqlite`). Used via
+  `exporters=[SQLiteBackend(...)]` exactly like any other exporter.
+
+### Fixed
+
+- **`AgentProcess.llm_span()`'s spans (`civitas.llm.chat`) never carried any agent identity
+  at all** — found live while writing this backend's attribute-normalization logic, affecting
+  the existing OTEL/Jaeger export path too (Track A, already shipped), not just this new
+  backend. Fixed at the root in `civitas/process.py` by adding `civitas.agent.name` to that
+  span's attributes.
+- `docs/observability.md`'s "LLM spans" attribute reference had only ever documented one of
+  the two real LLM span shapes (`Tracer.start_llm_span()`'s) — now both are documented,
+  distinctly.
+
 ## [0.9.3.2] — 2026-07-29
 
 v0.9.3.x's Track A, capability A3 — completing Track A.

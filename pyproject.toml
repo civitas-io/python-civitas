@@ -7,7 +7,7 @@ packages = ["civitas"]
 
 [project]
 name = "civitas"
-version = "0.9.3.2"
+version = "0.9.3.3"
 description = "The production runtime for Python agents"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -68,6 +68,9 @@ fast      = ["orjson>=3.10"]
 # Dashboard ("civitas top") — Textual TUI + per-process resource stats.
 # Group created here with psutil (Phase D); textual joins it in Phase E.
 dashboard = ["psutil>=5.9", "textual>=0.60"]
+# Native telemetry storage (v0.9.3.x, Track B, B1) — SQLiteBackend, a real
+# ExportBackend implementation for local/small-deployment span persistence.
+telemetry = ["aiosqlite>=0.19"]
 # Model providers, state stores, eval exporters, MCP, and framework adapters
 # have moved to civitas-contrib:  pip install civitas-contrib[anthropic,openai,...]
 dev       = [
@@ -93,6 +96,7 @@ dev       = [
     "grpcio-tools>=1.78,<2",
     "orjson>=3.10",
     "cryptography>=41",
+    "aiosqlite>=0.19",
 ]
 docs      = [
     "mkdocs-material>=9.5",

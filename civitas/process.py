@@ -1299,14 +1299,33 @@ class AgentProcess:
                 "civitas.llm.chat",
                 trace_id=trace_id,
                 parent_span_id=parent_span_id,
-                attributes={"civitas.llm.model": model, **attributes},
+                # v0.9.3.x (Track B, B1): civitas.agent.name is required here --
+                # found while building the SQLite backend's normalization logic
+                # that no civitas.llm.chat span has EVER carried any agent
+                # identity, in either OTEL/Jaeger export (Track A) or any future
+                # storage backend. Nothing about "which agent made this LLM
+                # call" was ever recoverable from the span itself -- only by
+                # inference from its position in a trace tree, which isn't
+                # automatic in most UIs. Real, silent gap in the actually-used,
+                # documented, ergonomic API (not the lower-level
+                # Tracer.start_llm_span(), which has always taken civitas.sender
+                # via its own caller-supplied context) -- fixed at the root.
+                attributes={
+                    "civitas.llm.model": model,
+                    "civitas.agent.name": self.name,
+                    **attributes,
+                },
             )
         else:
             span = Span(
                 name="llm",
                 trace_id="",
                 span_id="",
-                attributes={"civitas.llm.model": model, **attributes},
+                attributes={
+                    "civitas.llm.model": model,
+                    "civitas.agent.name": self.name,
+                    **attributes,
+                },
             )
         try:
             yield span
