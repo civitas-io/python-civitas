@@ -59,6 +59,7 @@ Everything in this part is done.
 | — | [v0.9.3.2 — Grafana Stack](#v0932--grafana-stack-released) | Jul 2026 |
 | — | [v0.9.3.3 — Native Telemetry Storage](#v0933--native-telemetry-storage-released) | Jul 2026 |
 | — | [v0.9.3.4 — Telemetry Query Layer](#v0934--telemetry-query-layer-released) | Jul 2026 |
+| — | [v0.9.3.5 — Telemetry TUI](#v0935--telemetry-tui-released) | Jul 2026 |
 
 ---
 
@@ -1171,6 +1172,22 @@ than B1's genuine new architectural decision) captured in
 | — | ✅ **Done** — Verified against a REAL `Runtime` running real agents (`exporters=[SQLiteBackend(...)]`), queried by a real `SQLiteQueryEngine` — not synthetic `SpanData`. New `tests/unit/test_sqlite_query.py` (9 tests) and `tests/integration/test_sqlite_query_integration.py` | — |
 | — | **Explicit decision: ship 4 methods now, evaluate more later.** Design doc §13 records 6 candidate query methods considered but not built (latency percentiles, error rate over time, restart/crash timeline, trace/span drill-down, top-N queries, model-comparison-over-time) — tracked so the list isn't lost, not a commitment to build all of them | — |
 
+## v0.9.3.5 — Telemetry TUI (Released)
+
+**Status: ✅ Released 2026-07-29.** v0.9.3.x's Track B, capability B3 — the Textual TUI over B1/B2's
+native SQLite store, completing Track B's originally-scoped work. Full design + decisions in
+[`docs/design/telemetry-native.md`](../design/telemetry-native.md)'s §14.
+
+| # | Deliverable | Priority |
+|---|-------------|----------|
+| — | ✅ **Done** — Confirmed empirically BEFORE committing to the approach, not assumed: real charts genuinely render inside a Textual app via `textual-plotext` (a real, installable, actively-maintained package) — verified with an actual headless render (`app.export_screenshot()`) showing a correctly-axis-labeled line chart before any of `civitas telemetry`'s own code was written | — |
+| — | ✅ **Done** — `civitas telemetry <db-dir>` (`civitas/dashboard/telemetry_app.py`) — a NEW, separate Textual app from `civitas top` (different attach model: reads a local SQLite directory directly, no live process required, unlike `civitas top`'s live HTTP attach). Reuses `civitas top`'s palette and `@work`-based periodic-poll-worker pattern, adapted to re-query SQLite instead of polling HTTP | High |
+| — | ✅ **Done** — Panels: `CostChart`/`MessageRateChart` (real line charts, capped at the top 6 series by total value — a real multi-agent/multi-model deployment's cardinality would make a terminal legend unreadable well before that), `StatPanel` (total spend/messages/top-agent), `CostBreakdownTable` (per-agent + per-model), `TimeRangeBar` | High |
+| — | ✅ **Done** — Time range: **both** a `--since` launch flag (duration shorthand OR absolute ISO datetime) AND interactive in-TUI switching (h/d/w/m preset keys + `r` for immediate manual refresh), per explicit direction. Periodic refresh (`--refresh`, default 30s) shipped for v1 — reusing `civitas top`'s own polling precedent turned out not to be the hard path originally hedged as a fallback-to-one-shot option | High |
+| — | ✅ **Done** — New `civitas[telemetry]` dependency: `textual-plotext`, folded into the existing extra (not a separate one) — the TUI is meaningless without the SQLite store it reads from anyway | — |
+| — | ✅ **Done** — Verified end-to-end against REAL data: a real `Runtime` + `SQLiteBackend` writing live while a real headless Textual pilot drove the actual TUI, confirmed correct totals/charts/keybinding behavior via rendered screenshot text extraction, not just "it didn't crash." New `tests/unit/test_telemetry_time.py` (14 tests), `tests/unit/test_telemetry_widgets.py` (10 tests), `tests/integration/test_telemetry_app.py` (5 tests, including a real live-running-Runtime scenario and a genuine "data outside the query range" case) | — |
+| — | **Deferred, tracked** (not built now, see v0.9.3.7–9 above in Part 2) — log/event viewer (needs a new B2 query method), live tick chart animation, scrollable/paginated breakdown table for larger deployments | — |
+
 ---
 
 ## Part 2 — Backlog
@@ -1220,11 +1237,14 @@ A is now fully shipped.**
 **Track B — the native, cost-focused, zero-dependency view:**
 
 B1 shipped as [v0.9.3.3](#v0933--native-telemetry-storage-released); B2 shipped as
-[v0.9.3.4](#v0934--telemetry-query-layer-released) — see Part 1 above. Remaining Track B items:
+[v0.9.3.4](#v0934--telemetry-query-layer-released); B3 shipped as
+[v0.9.3.5](#v0935--telemetry-tui-released) — see Part 1 above. Remaining Track B items:
 
 | # | Capability | Scope |
 |---|------------|-------|
-| v0.9.3.5 (B3) | A UI — deliberately undecided until B1/B2 exist: a small web page served by a `civitas telemetry` CLI command, or a new tab in the existing `civitas top` Textual app. Decide once there's real queryable data to look at, not before | Depends on B1 + B2 |
+| v0.9.3.7 | **Log/event viewer** for `civitas telemetry` — deferred at B3 ship time, per-conversation. Needs the "trace/span drill-down" query method (§13's candidate list, itself not yet built) before the viewer panel can exist | Depends on a new B2 query method |
+| v0.9.3.8 | **Live tick animation** for `CostChart`/`MessageRateChart` — identified while building B3, not built: today's refresh redraws each chart from scratch on every re-query (correct, but not smoothly animated between ticks) | Low priority, cosmetic |
+| v0.9.3.9 | **Scrollable/paginated `CostBreakdownTable`** — identified while building B3: today's table renders every agent/model row unpaginated; fine at small scale, would overflow one screen for a real deployment with many distinct agents/models | Low priority, only matters at larger cardinality |
 | v0.9.3.6 (B4) | **Deferred by explicit decision (2026-07-29), documented not silently dropped** — two real design questions surfaced right after B1 shipped, both real enough to track but not worth a mid-flight refactor of already-working, already-tested code: (1) placement — `SQLiteBackend` writes durable data to disk, matching this project's own "persistence backends live in `civitas-contrib`" precedent (`SQLiteStateStore` already lives there) rather than core `python-civitas`, which currently only ships zero-I/O feature machinery (`ExportBackend`/`FanOutBackend`/`ConsoleBackend`); (2) pluggability — SQLite is one backend among several a user may eventually want (Postgres, etc.) — the telemetry-specific logic (span normalization, schema shape) should be separated from the storage mechanism itself so alternative backends don't have to reimplement normalization, "build like a library so others can use the capability." Full writeup in `docs/design/telemetry-native.md`'s §12 addendum. **Current, shipped v0.9.3.3 implementation is intentionally left as-is** — both of these are real, tracked follow-ups, not a defect in what already shipped | Deferred — tracked, not scheduled |
 
 ### v0.9.4 — Dashboard TUI polish (Planned, after v0.9.3.x)

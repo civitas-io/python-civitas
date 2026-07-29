@@ -315,3 +315,44 @@ here so the list isn't lost, not a commitment to build all of them:
 None of these block B3 (the UI) from starting once there's a reason to — B3 can be built against
 today's four methods and grow as new query methods are added, matching this whole project's "small
 capability at a time" cadence.
+
+## 14. B3 (v0.9.3.5) — the Textual TUI, shipped
+
+Confirmed empirically before committing to it (not assumed): real charts genuinely render inside a
+Textual app, via `textual-plotext` (a real, installable, actively-maintained package wrapping
+`plotext`) — verified with a real headless render (`app.export_screenshot()`) showing a correctly-
+axis-labeled line chart before any of `civitas telemetry`'s own code was written.
+
+**`civitas telemetry <db-dir>`** launches its own Textual app (`civitas/dashboard/telemetry_app.py`)
+— deliberately separate from `civitas top`, not a new tab there: `civitas top` requires a live,
+currently-running `TopologyServer` to attach to over HTTP; telemetry data is historical and lives in
+a local SQLite directory, readable even when nothing is running at all. Reuses `civitas top`'s
+established visual language (`palette.py`) and its periodic-poll-worker pattern (`@work(exclusive=
+True, group=...)`), adapted to re-query the local SQLite store instead of polling HTTP endpoints.
+
+**Panels**: `CostChart`/`MessageRateChart` (real `PlotextPlot` line charts, capped at the top 6
+series by total value — a real multi-agent/multi-model deployment's full cardinality would make a
+terminal legend unreadable well before that), `StatPanel` (total spend/messages/top-agent, plain
+text — point-in-time numbers, not a trend, so a chart would be the wrong tool), `CostBreakdownTable`
+(a `DataTable`, per-agent + per-model rows), `TimeRangeBar` (shows the active range + preset keys).
+
+**Time range — both supported, per-conversation**: `--since` accepts either a duration shorthand
+(`1h`/`24h`/`7d`/`30d`, a SLIDING window recomputed against "now" every refresh) or an absolute ISO
+datetime (a FIXED start point; only the window's end keeps tracking "now"). Interactively
+switchable in the TUI via the exact same h/d/w/m preset keys, plus `r` for an immediate manual
+refresh outside the normal refresh cadence.
+
+**Refresh**: periodic, `--refresh` (default 30s) — reusing `civitas top`'s own `@work`-based
+polling precedent turned out NOT to be the hard path originally hedged against; period configurable
+via CLI, no separate one-shot-only fallback needed for v1.
+
+**New dependency**: `textual-plotext`, folded into the existing `civitas[telemetry]` extra (not a
+separate one) — per-conversation, since the TUI is meaningless without the SQLite store it reads
+from anyway.
+
+**Deferred, tracked** (`docs/milestones.md`): the log/event viewer (browsing individual
+spans/traces) — needs the "trace/span drill-down" query method from §13's candidate list, not yet
+built. Also newly identified and tracked during B3's build, not built now: per-second/per-minute
+live tick animation for the charts (today's refresh redraws the whole chart from scratch, which is
+correct but not smoothly animated), and a scrollable/paginated view for `CostBreakdownTable` once a
+real deployment has enough distinct agents/models to overflow one screen.

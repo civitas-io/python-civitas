@@ -11,6 +11,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+## [0.9.3.5] — 2026-07-29
+
+v0.9.3.x's Track B, capability B3 — the Textual TUI over B1/B2's native SQLite store,
+completing Track B's originally-scoped work.
+
+### Added
+
+- **`civitas telemetry <db-dir>`** — a new, standalone Textual TUI (`civitas/dashboard/
+  telemetry_app.py`), separate from `civitas top` (reads a local SQLite directory directly, no
+  live process required). Real charts via `textual-plotext` (`CostChart`/`MessageRateChart`,
+  capped at the top 6 series by total value), a `StatPanel` (total spend/messages/top-agent), a
+  `CostBreakdownTable` (per-agent + per-model), and a `TimeRangeBar`.
+- Time range: a `--since` launch flag (duration shorthand `1h`/`24h`/`7d`/`30d` OR an absolute
+  ISO datetime) AND interactive in-TUI switching (h/d/w/m keys + `r` for immediate refresh) —
+  both supported. Periodic refresh (`--refresh`, default 30s).
+- New `textual-plotext` dependency, folded into the existing `civitas[telemetry]` extra.
+
+### Note
+
+- Deferred, tracked (not built now): a log/event viewer (needs a new trace/span drill-down query
+  method), live tick chart animation, and a scrollable/paginated breakdown table for larger
+  deployments — `docs/milestones.md` v0.9.3.7–9.
+
 ## [0.9.3.4] — 2026-07-29
 
 v0.9.3.x's Track B, capability B2 — a query/aggregation layer over B1's SQLite telemetry

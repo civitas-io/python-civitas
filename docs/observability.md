@@ -387,6 +387,12 @@ fragmentation, no risk of a bad `WHERE` clause corrupting live data.
 own separate file set; multi-process aggregation is a deliberately deferred, tracked follow-up (see
 the design doc's §7 for the sketched answer), not silently unsupported.
 
+**Viewing it**: `SQLiteQueryEngine` (`civitas/observability/sqlite_query.py`) provides
+cost-over-time, message-rate-over-time, and per-agent/per-model cost breakdown queries directly
+over this store, including cross-window queries via SQLite's native `ATTACH DATABASE`. See
+[`civitas telemetry`](cli.md#civitas-telemetry) for the live Textual TUI built on top of it
+(charts, gauges, and a cost breakdown table — real terminal charts, via `textual-plotext`).
+
 ---
 
 ## Environment variables

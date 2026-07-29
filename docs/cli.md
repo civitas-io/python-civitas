@@ -313,3 +313,48 @@ children) — see its `README.md` for a two-terminal walkthrough.
     share one OS process, so per-agent CPU/memory is not real data and is not shown. Run a
     multi-process topology (see [`examples/deployment`](https://github.com/civitas-io/python-civitas/tree/main/examples/deployment))
     to see more than one row there.
+
+## civitas telemetry
+
+Launch the live Textual telemetry TUI over B1/B2's native SQLite store (v0.9.3.5; see
+[design/telemetry-native.md](design/telemetry-native.md) for the full design). Unlike `civitas
+dashboard`, this does **not** attach to a live process — it reads directly from a local SQLite
+directory, so it works even after the app that wrote the data has stopped.
+
+```bash
+civitas telemetry [<db-dir>] [--since <range>] [--window-days <n>] [--refresh <seconds>]
+```
+
+| Argument / Option | Default | Description |
+|-------------------|---------|-------------|
+| `db_dir` | `./civitas_telemetry` | Path to the telemetry SQLite directory |
+| `--since` | `24h` | A duration shorthand (`1h`, `24h`, `7d`, `30d`) or an ISO datetime (e.g. `2026-07-01`). Also changeable interactively in the TUI. |
+| `--window-days` | `30` | Must match the `SQLiteBackend`'s own `window_days` setting |
+| `--refresh` / `-r` | `30.0` | Re-query interval in seconds |
+
+Requires the `telemetry` extra:
+
+```bash
+pip install 'civitas[telemetry]'
+```
+
+Without it, the command still appears in `--help`, but exits with a clear install instruction the
+moment you try to run it.
+
+### Layout
+
+- **Cost over time** / **Message rate over time** (top row) — real line charts (via
+  `textual-plotext`), one series per agent (+ model, for cost). Capped at the top 6 series by
+  total value — a real multi-agent/multi-model deployment's full cardinality would make a terminal
+  legend unreadable well before that.
+- **Totals** / **Breakdown** (bottom row) — at-a-glance total spend/messages/top-agent, and a
+  per-agent + per-model cost table.
+
+Time range: press `h`/`d`/`w`/`m` to switch between 1h/24h/7d/30d presets interactively (recomputed
+against "now" each refresh), or `r` for an immediate manual refresh. `q` to quit.
+
+### Try it
+
+Run any topology with a `SQLiteBackend` exporter configured (see
+[observability.md](observability.md#native-sqlite-storage-v093x-track-b-b1)), then point `civitas
+telemetry` at the same `db_dir` — it reads live, even while the app is still running and writing.
