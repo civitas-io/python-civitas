@@ -11,6 +11,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+## [0.9.3] — 2026-07-29
+
+v0.9.3.x's Track A, capability A1 (see `docs/milestones.md` for the full telemetry roadmap
+split). A live verification exercise ("does trace continuity survive a real ZMQ/NATS hop")
+found something more fundamental than its original framing.
+
+### Fixed
+
+- **OTEL spans never linked to each other at all, even within a single process** — confirmed via
+  direct instrumentation, not assumed from reading code. `Tracer._make_span()`
+  (`civitas/observability/tracer.py`) called OpenTelemetry's `start_span()` with no `context=`
+  parameter, so every span became its own isolated OTEL root trace with a random trace_id and
+  `parent_id: null`, regardless of civitas's own correct `trace_id`/`span_id`/`parent_span_id`
+  bookkeeping on `Span`/`Message`. A real Jaeger/Grafana/Datadog view (`docs/observability.md`
+  Mode 3) would have shown every `send`/`recv`/`llm.chat`/`tool.execute`/etc. span as a
+  disconnected single-span "trace" instead of a real request-flow tree — the one thing
+  distributed tracing exists to do. Fixed with a new `_otel_parent_context()` helper (the
+  standard "extracted remote context" pattern every OTEL propagator uses) plus making OTEL's own
+  minted span IDs authoritative for civitas's bookkeeping, synced back onto the outgoing
+  `Message` in `MessageBus.route()`/`request()` before serialization so cross-process/
+  cross-transport linkage holds too. Verified with a real 2-OS-process ZMQ round trip (not a
+  mock or a unit test alone) before landing the regression tests.
+
 ## [0.9.2.1] — 2026-07-28
 
 Bugfix release: two real product bugs found while building v0.9.2's examples, both fully

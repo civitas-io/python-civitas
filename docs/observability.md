@@ -118,7 +118,9 @@ python examples/research_assistant.py "Compare AI safety approaches"
 open http://localhost:16686
 ```
 
-In Jaeger you will see a single distributed trace per request, with all agent spans, LLM calls, tool invocations, and supervisor events linked by parent-child relationships.
+In Jaeger you will see a single distributed trace per request, with all agent spans, LLM calls, tool invocations, and supervisor events linked by parent-child relationships — including across process/transport boundaries (e.g. a `civitas run --topology` supervisor process and a separate `Worker` process talking over real ZMQ or NATS).
+
+> **Fixed in v0.9.3 (A1).** Before this release, every OTEL span became its own isolated root trace regardless of civitas's own correct internal trace bookkeeping — `Tracer` never told the OpenTelemetry SDK which span caused which, so Jaeger/Grafana/Datadog would have shown one disconnected single-span "trace" per operation instead of a real request-flow tree. This was caught and fixed via live verification (a real 2-OS-process ZMQ round trip), not assumed from reading code — see `docs/milestones.md`'s v0.9.3 entry and `civitas/observability/tracer.py`'s `_otel_parent_context()` docstring for the full root cause.
 
 ### Grafana + Tempo
 

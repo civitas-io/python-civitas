@@ -54,6 +54,7 @@ Everything in this part is done.
 | — | [v0.9.1 — Post-endgame Polish](#v091-post-endgame-polish-released) | Jul 2026 |
 | — | [v0.9.2 — Examples Completeness](#v092--examples-completeness-released) | Jul 2026 |
 | — | [v0.9.2.1 — Bugfix Release](#v0921--bugfix-release-released) | Jul 2026 |
+| — | [v0.9.3 — OTEL Trace Linkage](#v093--otel-trace-linkage-released) | Jul 2026 |
 
 ---
 
@@ -1086,6 +1087,29 @@ guessed — see the [v0.9.2](#v092--examples-completeness-released) entry above 
 originally surfaced, and `civitas/transport/__init__.py`'s `Transport.set_serializer` docstring
 for the full signing root-cause writeup.
 
+## v0.9.3 — OTEL Trace Linkage (Released)
+
+**Status: ✅ Released 2026-07-29.** v0.9.3.x's Track A (A1): a design conversation scoped
+"telemetry" into small sequential capabilities (see the v0.9.3.x backlog entry below for the
+full Track A/B breakdown); A1's live verification found something more fundamental than its
+original framing ("does trace continuity survive a network hop") — confirmed via direct
+instrumentation, not assumed from reading code, that OTEL spans had **never** linked to each
+other at all, even within a single process.
+
+| # | Deliverable | Priority |
+|---|-------------|----------|
+| — | ✅ **Done** — Root cause: `Tracer._make_span()` called `self._otel_tracer.start_span(name, attributes=...)` with no `context=` parameter at all — every real OTEL span became its own isolated root trace with a random OTEL-assigned trace_id and `parent_id: null`, regardless of civitas's own correct `trace_id`/`span_id`/`parent_span_id` bookkeeping on `Span`/`Message`. A real Jaeger/Grafana/Datadog view (`docs/observability.md` Mode 3) would have shown every `send`/`recv`/`llm.chat`/`tool.execute`/etc. span as a disconnected single-span "trace" — no tree, no request-flow view, the one thing distributed tracing exists to do | High |
+| — | ✅ **Done** — Fix: a new `_otel_parent_context()` helper builds a real (non-recording, "remote") OTEL `SpanContext` from civitas's own `trace_id`/`parent_span_id` — the standard extracted-context pattern every OTEL propagator uses — and `_make_span()` passes it as `context=` to `start_span()`. Since OTEL mints its own span_id/trace_id and there's no public API to force a specific one, OTEL's real assigned ID is made authoritative for civitas's own `Span.trace_id`/`span_id` too, and `MessageBus.route()`/`request()` (`civitas/bus.py`) copy that back onto the outgoing `Message` before it hits the wire — so a downstream hop's `handle_span`/`recv_span` parents to a span OTEL actually emitted, not a dangling made-up ID, across process/transport boundaries too | High |
+| — | ✅ **Done** — Verified with a REAL 2-OS-process ZMQ round trip (not a mock): `examples/deployment/level2_multi_process`'s `frontend`/`worker_a`/`worker_b` driven by an ad-hoc driver agent, OTEL console-exported spans from both processes captured and cross-checked — every span belonging to the actual message flow shares one `trace_id` across both processes with correct parent-child links end-to-end (confirmed `worker_a`'s `recv` span correctly parents to `frontend`'s real `send` span's OTEL-assigned ID); `civitas.agent.start`/`stop` lifecycle spans correctly remain standalone roots (no causal parent, as expected) | — |
+| — | ✅ **Done** — Regression tests: `tests/unit/test_observability.py` (parent-context linkage, root-span shape, malformed-ID fallback never raises, OTEL-authoritative ID overwrite) and `tests/unit/test_bus.py` (`route()` really mutates the outgoing `Message` before serialization, and what was sent is what arrived) — pinning the mechanism at unit-test speed so a regression doesn't need a live 2-process repro to catch | — |
+| — | ✅ **Done** — `docs/observability.md`'s existing (previously aspirational, now finally true) claim about Jaeger showing "a single distributed trace per request... linked by parent-child relationships" now carries a transparency note pointing at this fix | — |
+
+Known, deliberately-accepted limitation (documented in `_otel_parent_context()`'s docstring, not
+worked around): a caller-supplied non-empty `trace_id` with NO `parent_span_id` is discarded in
+favor of a fresh OTEL-minted one when OTEL is active, since OTEL's own `SpanContext` model has no
+way to express "root span, but honor this specific trace_id" via the public API. No real call site
+in this codebase hits this today — every caller derives `trace_id` and `parent_span_id` together,
+from the same message/span.
 
 ---
 
@@ -1128,9 +1152,11 @@ rigor dashboard-v2 got).
 
 **Track A — harden/complete what already half-exists:**
 
+A1 shipped as [v0.9.3](#v093--otel-trace-linkage-released) — see Part 1 above for the full
+finding and fix. Remaining Track A items:
+
 | # | Capability | Scope |
 |---|------------|-------|
-| v0.9.3 (A1) | Multi-process trace continuity audit — does `trace_id`/`parent_span_id` actually survive a real ZMQ/NATS hop, watched live in Jaeger, not assumed from reading code? Fix if broken (v0.9.2.1 found the last transport-layer assumption that turned out false) | Verification-first; only becomes code if a real bug is found |
 | v0.9.3.1 (A2) | Prometheus-format metrics exposition — a real `/metrics`-shaped Prometheus text-format route (message-rate, cost, latency histograms) so Grafana works without also running Tempo/Jaeger just for numbers | One new route, no schema/storage decisions |
 | v0.9.3.2 (A3) | Ready-made Grafana dashboard JSON + example OTel-collector config + a docs recipe matching the existing Jaeger recipe in `docs/observability.md` | Docs + a JSON file, no runtime code |
 

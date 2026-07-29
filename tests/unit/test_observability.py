@@ -396,6 +396,94 @@ def test_tracer_new_span_id_returns_hex_string() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Tracer -- OTEL parent-context linkage (v0.9.3, A1)
+#
+# Confirmed LIVE (not assumed) before this fix: Tracer._make_span() called
+# self._otel_tracer.start_span(name, attributes=...) with no `context=` at
+# all -- every real OTEL span became its own isolated root trace with
+# `parent_id: null`, regardless of civitas's own correct trace_id/span_id/
+# parent_span_id bookkeeping on Span/Message. A real Jaeger/Grafana view
+# (docs/observability.md Mode 3) showed every send/recv/llm/tool span as a
+# disconnected single-span "trace" -- no tree, no request-flow view, the one
+# thing distributed tracing exists to do. Confirmed fixed with a real
+# 2-OS-process ZMQ round trip (ask() -> frontend -> worker_a/worker_b over a
+# real ZMQ proxy) during development; these tests pin the underlying
+# mechanism so a regression is caught at unit-test speed.
+# ---------------------------------------------------------------------------
+
+
+def test_otel_span_links_to_real_parent_context() -> None:
+    """A span created with a valid parent_span_id becomes a real OTEL CHILD
+    span -- same trace_id, correct parent_id -- not an isolated root."""
+    tracer = Tracer()
+    if not tracer._use_otel:
+        pytest.skip("opentelemetry-sdk not installed")
+
+    root = tracer.start_span("root", trace_id="a" * 32)
+    root.end()
+    child = tracer.start_span("child", trace_id=root.trace_id, parent_span_id=root.span_id)
+    child.end()
+
+    assert child._otel_span is not None
+    child_ctx = child._otel_span.get_span_context()
+    assert child._otel_span.parent is not None
+    assert child._otel_span.parent.trace_id == child_ctx.trace_id
+    # v0.9.3 (A1): root's caller-given trace_id ('aaa...') is itself an OTEL
+    # ROOT span (no parent) so OTEL mints its own trace_id for it (a
+    # documented, accepted limitation -- see _otel_parent_context()'s
+    # docstring). What matters here: the CHILD correctly landed in the SAME
+    # OTEL trace as root's REAL (not the originally-requested) trace_id, and
+    # points at root's REAL span_id as its parent -- proving the linkage
+    # mechanism itself, independent of that separate, accepted limitation.
+    assert child.trace_id == root.trace_id
+    assert format(child_ctx.trace_id, "032x") == root.trace_id
+    assert child._otel_span.parent.span_id == int(root.span_id, 16)
+
+
+def test_otel_span_without_parent_is_a_real_root() -> None:
+    """No parent_span_id -> a genuine OTEL root span (parent is None), not
+    an error -- this is the expected shape for the first message of a flow."""
+    tracer = Tracer()
+    if not tracer._use_otel:
+        pytest.skip("opentelemetry-sdk not installed")
+
+    span = tracer.start_span("root-only")
+    span.end()
+    assert span._otel_span is not None
+    assert span._otel_span.parent is None
+
+
+def test_otel_span_malformed_parent_id_falls_back_to_root_without_raising() -> None:
+    """A non-hex trace_id/parent_span_id (e.g. a hand-built test Message)
+    must never crash send()/receive() -- fall back to a fresh OTEL root."""
+    tracer = Tracer()
+    if not tracer._use_otel:
+        pytest.skip("opentelemetry-sdk not installed")
+
+    span = tracer.start_span("weird", trace_id="not-hex-at-all", parent_span_id="also-not-hex")
+    span.end()  # must not raise
+    assert span._otel_span is not None
+    assert span._otel_span.parent is None
+
+
+def test_span_trace_and_span_id_become_otel_authoritative_when_otel_active() -> None:
+    """When OTEL is active, Span.trace_id/span_id are overwritten with
+    OTEL's OWN real, minted IDs (MessageBus.route()/request() then copy
+    these back onto the outgoing Message -- see test_bus.py) -- otherwise a
+    downstream hop's parent reference would point at an ID OTEL never
+    actually emitted, silently breaking the very linkage this fix restores.
+    """
+    tracer = Tracer()
+    if not tracer._use_otel:
+        pytest.skip("opentelemetry-sdk not installed")
+
+    span = tracer.start_span("x", trace_id="b" * 32)
+    real_ctx = span._otel_span.get_span_context()
+    assert span.trace_id == format(real_ctx.trace_id, "032x")
+    assert span.span_id == format(real_ctx.span_id, "016x")
+
+
+# ---------------------------------------------------------------------------
 # Tracer — span_queue makes Path A/Path B mutually exclusive (FD-09)
 # ---------------------------------------------------------------------------
 

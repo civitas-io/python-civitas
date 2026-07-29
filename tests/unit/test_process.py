@@ -432,17 +432,41 @@ def test_tool_span_no_tracer_yields_dummy():
 
 def test_llm_span_with_tracer_records_attributes_and_parents(monkeypatch: Any) -> None:
     """With a real tracer, llm_span() creates a span parented to the current
-    handle span (v0.9.1 coverage top-up), carrying the model + extra attrs."""
+    handle span (v0.9.1 coverage top-up), carrying the model + extra attrs.
+
+    v0.9.3 (A1): trace_id/span_id fixtures must be real OTEL-shaped hex (32/16
+    hex chars, matching _new_span_id()/os.urandom(16).hex()'s real output
+    shape) -- since Tracer._make_span() now builds a genuine OTEL parent
+    Context from these values (fixing OTEL spans never linking to each other
+    at all, confirmed live -- docs/milestones.md v0.9.3 A1), a non-hex
+    placeholder like the old "trace-1"/"msg-span" strings has no valid parent
+    to extract and gets silently replaced with a fresh OTEL-minted trace_id
+    (a DELIBERATE, documented fallback, not a bug) -- which would make this
+    test assert on an OTEL implementation detail instead of civitas's own
+    parent-linkage contract. handle_span is built exactly like
+    AgentProcess._dispatch() really builds it (trace_id + parent_span_id
+    together, from the current message) so the fixture actually exercises
+    the real fix instead of a case it doesn't apply to.
+    """
     from civitas.observability.tracer import Tracer
 
     agent = TrackingAgent()
     agent._tracer = Tracer()
-    agent._current_message = Message(type="m", sender="x", trace_id="trace-1", span_id="msg-span")
-    handle_span = agent._tracer.start_span("civitas.agent.handle", trace_id="trace-1")
+    agent._current_message = Message(
+        type="m",
+        sender="x",
+        trace_id="a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+        span_id="1122334455667788",
+    )
+    handle_span = agent._tracer.start_span(
+        "civitas.agent.handle",
+        trace_id=agent._current_message.trace_id,
+        parent_span_id=agent._current_message.span_id,
+    )
     agent._current_handle_span = handle_span
 
     with agent.llm_span("claude-sonnet", tokens_in=1200) as span:
-        assert span.trace_id == "trace-1"
+        assert span.trace_id == "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
         assert span.parent_span_id == handle_span.span_id
         assert span.attributes["civitas.llm.model"] == "claude-sonnet"
         assert span.attributes["tokens_in"] == 1200
@@ -450,16 +474,25 @@ def test_llm_span_with_tracer_records_attributes_and_parents(monkeypatch: Any) -
 
 def test_llm_span_with_tracer_no_current_handle_span_falls_back_to_message() -> None:
     """Outside handle()'s own span (e.g. a background task), llm_span() still
-    parents to the current message's span if one is set."""
+    parents to the current message's span if one is set.
+
+    v0.9.3 (A1): real hex fixtures -- see the docstring on
+    test_llm_span_with_tracer_records_attributes_and_parents for why.
+    """
     from civitas.observability.tracer import Tracer
 
     agent = TrackingAgent()
     agent._tracer = Tracer()
-    agent._current_message = Message(type="m", sender="x", trace_id="trace-2", span_id="msg-span-2")
+    agent._current_message = Message(
+        type="m",
+        sender="x",
+        trace_id="b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5",
+        span_id="2233445566778899",
+    )
 
     with agent.llm_span("claude-sonnet") as span:
-        assert span.trace_id == "trace-2"
-        assert span.parent_span_id == "msg-span-2"
+        assert span.trace_id == "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5"
+        assert span.parent_span_id == "2233445566778899"
 
 
 def test_llm_span_records_exception_and_reraises() -> None:
@@ -561,15 +594,24 @@ def test_llm_span_end_to_end_with_real_metrics_collector() -> None:
 
 
 def test_tool_span_with_tracer_records_attributes_and_parents() -> None:
-    """tool_span() mirrors llm_span()'s tracer-present behavior."""
+    """tool_span() mirrors llm_span()'s tracer-present behavior.
+
+    v0.9.3 (A1): real hex fixtures -- see the docstring on
+    test_llm_span_with_tracer_records_attributes_and_parents for why.
+    """
     from civitas.observability.tracer import Tracer
 
     agent = TrackingAgent()
     agent._tracer = Tracer()
-    agent._current_message = Message(type="m", sender="x", trace_id="trace-3", span_id="msg-span-3")
+    agent._current_message = Message(
+        type="m",
+        sender="x",
+        trace_id="c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6",
+        span_id="3344556677889900",
+    )
 
     with agent.tool_span("web_search", query="civitas") as span:
-        assert span.trace_id == "trace-3"
+        assert span.trace_id == "c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6"
         assert span.attributes["civitas.tool.name"] == "web_search"
         assert span.attributes["query"] == "civitas"
 

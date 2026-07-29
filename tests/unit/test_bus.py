@@ -60,6 +60,48 @@ async def test_route_delivers_to_agent(components):
     await transport.stop()
 
 
+async def test_route_syncs_message_span_id_from_real_otel_span(components):
+    """v0.9.3 (A1): when OTEL is active, route() must copy the send span's
+    REAL (possibly OTEL-minted) trace_id/span_id back onto the outgoing
+    Message before it's serialized -- otherwise the receiving side's
+    handle_span/recv_span would try to parent to an ID OTEL never actually
+    emitted, silently breaking cross-process/cross-agent trace linkage
+    (confirmed live with a real 2-process ZMQ round trip during
+    development; this pins the mechanism at unit-test speed).
+    """
+    bus, transport, registry, _, tracer = components
+    if not tracer._use_otel:
+        pytest.skip("opentelemetry-sdk not installed")
+    await transport.start()
+
+    agent = CollectorAgent("agent_a")
+    agent._bus = bus
+    registry.register("agent_a")
+    await bus.setup_agent(agent)
+
+    original_trace_id = "c" * 32
+    original_span_id = "d" * 16
+    msg = Message(
+        type="test",
+        sender="sender",
+        recipient="agent_a",
+        trace_id=original_trace_id,
+        span_id=original_span_id,
+    )
+    await bus.route(msg)
+
+    # route() mutated the Message IN PLACE before serializing it -- this is
+    # what actually goes over the wire.
+    assert msg.span_id != original_span_id
+    assert len(msg.span_id) == 16
+    int(msg.span_id, 16)  # must be real hex, not garbage
+
+    received = await agent._mailbox.get()
+    assert received.span_id == msg.span_id  # what was sent is what arrived
+
+    await transport.stop()
+
+
 async def test_route_span_closed_on_serialize_error(components):
     """Span is closed even when serializer raises."""
     bus, transport, registry, _, tracer = components
