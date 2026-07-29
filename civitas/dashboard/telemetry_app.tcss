@@ -1,0 +1,54 @@
+/* civitas telemetry — reuses civitas top's visual language (app.tcss):
+   Textual theme tokens, never hardcoded hex, one accent per data category. */
+
+Screen {
+    layout: vertical;
+}
+
+#main {
+    height: 1fr;
+}
+
+#charts {
+    height: 1fr;
+}
+
+#lower {
+    height: 1fr;
+}
+
+CostChart {
+    width: 1fr;
+    height: 1fr;
+    border: round $secondary;
+    border-title-color: $secondary;
+}
+
+MessageRateChart {
+    width: 1fr;
+    height: 1fr;
+    border: round $accent;
+    border-title-color: $accent;
+}
+
+StatPanel {
+    width: 1fr;
+    height: 1fr;
+    border: round $warning;
+    border-title-color: $warning;
+    padding: 0 1;
+}
+
+CostBreakdownTable {
+    width: 1fr;
+    height: 1fr;
+    border: round $secondary;
+    border-title-color: $secondary;
+}
+
+TimeRangeBar {
+    height: auto;
+    padding: 0 1;
+    border: round $accent;
+    border-title-color: $accent;
+}

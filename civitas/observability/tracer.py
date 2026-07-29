@@ -108,10 +108,51 @@ try:
     from opentelemetry.sdk.trace.export import (
         ConsoleSpanExporter as OTELConsoleSpanExporter,
     )
+    from opentelemetry.trace import (
+        NonRecordingSpan,
+        SpanContext,
+        TraceFlags,
+    )
+    from opentelemetry.trace import set_span_in_context as _otel_set_span_in_context
 
     _HAS_OTEL = True
 except ImportError:
     pass
+
+
+def _otel_parent_context(trace_id: str, parent_span_id: str | None) -> Any:
+    """Build a real OTEL parent Context from civitas's own trace/span IDs.
+
+    v0.9.3 (A1). Returns ``None`` (root span, OTEL mints its own trace_id) when
+    there's no parent to link to, or when either ID isn't valid OTEL-shaped
+    hex -- civitas's own trace_id can legitimately be `""` for a message that
+    started a flow with no prior context (e.g. an agent's own ``on_start()``),
+    which is not an error, just "nothing to extract". Never raises.
+
+    Known limitation, deliberately not engineered around: a caller-supplied
+    non-empty trace_id with NO parent_span_id is discarded in favor of a
+    fresh OTEL-minted one when OTEL is active. OTEL's own SpanContext model
+    has no way to express "root span, but honor this specific trace_id" via
+    the public API -- a context with an invalid (zero) span_id is rejected
+    outright by the SDK (confirmed empirically), not partially honored. No
+    real call site in this codebase hits this today (every caller derives
+    trace_id and parent_span_id together, from the same message/span), so
+    this is accepted rather than worked around.
+    """
+    if not _HAS_OTEL or not parent_span_id or not trace_id:
+        return None
+    try:
+        span_context = SpanContext(
+            trace_id=int(trace_id, 16),
+            span_id=int(parent_span_id, 16),
+            is_remote=True,
+            trace_flags=TraceFlags(TraceFlags.SAMPLED),
+        )
+    except (ValueError, TypeError):
+        # Malformed/foreign IDs (e.g. hand-built Message in a test) -- start
+        # a fresh OTEL root trace rather than crash the caller's send/receive.
+        return None
+    return _otel_set_span_in_context(NonRecordingSpan(span_context))
 
 
 class Tracer:
@@ -192,8 +233,34 @@ class Tracer:
             _span_queue=self._span_queue,
         )
         if self._use_otel and self._otel_tracer is not None:
-            otel_span = self._otel_tracer.start_span(name, attributes=span.attributes)
+            # v0.9.3 (A1): without an explicit parent Context, every OTEL span
+            # becomes its OWN root trace with a random OTEL-assigned trace_id
+            # and `parent_id: null` -- confirmed live, not assumed -- meaning
+            # a real Jaeger/Grafana view (docs/observability.md Mode 3) showed
+            # every send/recv/llm/tool span as a disconnected single-span
+            # "trace", never a tree, regardless of civitas's own correct
+            # trace_id/parent_span_id bookkeeping on Span/Message. Reconstruct
+            # that parent as a real (non-recording, "remote") OTEL SpanContext
+            # from civitas's own IDs -- the standard extracted-context pattern
+            # every OTEL propagator uses -- so OTEL groups and nests spans the
+            # same way civitas already does internally.
+            otel_context = _otel_parent_context(trace_id, parent_span_id)
+            otel_span = self._otel_tracer.start_span(
+                name, context=otel_context, attributes=span.attributes
+            )
             span._otel_span = otel_span
+            # OTEL mints its own trace_id/span_id when starting a span --
+            # there is no public API to force a specific one. Make that
+            # REAL id authoritative for civitas's own bookkeeping too,
+            # since MessageBus.route()/request() (v0.9.3, A1) copy
+            # span.trace_id/span_id back onto the outgoing Message before
+            # it hits the wire -- without this, the id a downstream hop's
+            # handle_span/recv_span would try to parent to would never
+            # match any span OTEL actually emitted, breaking the very
+            # linkage this fix exists to restore.
+            real_ctx = otel_span.get_span_context()
+            span.trace_id = format(real_ctx.trace_id, "032x")
+            span.span_id = format(real_ctx.span_id, "016x")
         return span
 
     # ------------------------------------------------------------------

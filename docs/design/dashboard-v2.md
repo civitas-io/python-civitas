@@ -459,3 +459,32 @@ artifact, not a design record like the Mockup A/B comparison was).
 
 Proceeding to Phase F (CLI — already substantially done as part of this phase's renderer.py
 removal) and Phase G (final verification sweep + docs + CHANGELOG + release choreography).
+
+## 13. Addendum (v0.9.3, A2) — `/metrics` renamed to `/snapshot`
+
+**Deviation from §3.2's original design**, recorded per this project's convention that any design
+deviation during implementation gets an addendum here, not a silent divergence.
+
+§3.2 specified `GET /metrics` as `TopologyServer`'s new JSON metrics-snapshot endpoint, which
+shipped exactly as designed in v0.9.1. During v0.9.3 (real Prometheus text-format exposition,
+see `docs/milestones.md`), that path collided with the Prometheus ecosystem's own hard convention:
+virtually every Prometheus deployment defaults its scrape target to a bare `/metrics` with no
+`metrics_path` override. Explicit decision (2026-07-29): honor the ecosystem standard rather than
+pick a non-standard Prometheus path ("never wise to break standards in OSS projects") —
+civitas's own JSON snapshot moved to `GET /snapshot` (naming it directly after the underlying
+`RuntimeSnapshot` dataclass it returns verbatim), freeing `/metrics` for real Prometheus text
+exposition.
+
+This is a breaking change to a documented, already-shipped endpoint. Updated everywhere: `civitas
+top`'s own polling client (`civitas/dashboard/app.py`), `docs/cli.md`, `docs/observability.md`
+(new "Prometheus metrics" section), and every test exercising the old JSON shape at `/metrics`
+(now `/snapshot`) plus new tests for the new `/metrics` (Prometheus) behavior — see
+`tests/unit/test_topology_server.py` and the new `tests/unit/test_prometheus_export.py`.
+
+A second, unplanned finding surfaced live while verifying the new route against a real Prometheus
+server: `MetricsCollector.agent_status_changed()` (present since v0.9.1) had never actually been
+called from anywhere in the runtime — a plainly-running agent's exposed status came back
+"unknown" forever. Fixed by routing every `AgentProcess` status transition through a single new
+choke point (`_set_status()` in `civitas/process.py`), guarded so a user-supplied custom
+`MetricsSink` that only implements the required Protocol methods (`agent_status_changed` was
+never part of that Protocol) keeps working unchanged.

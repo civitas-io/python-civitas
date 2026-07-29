@@ -118,7 +118,9 @@ python examples/research_assistant.py "Compare AI safety approaches"
 open http://localhost:16686
 ```
 
-In Jaeger you will see a single distributed trace per request, with all agent spans, LLM calls, tool invocations, and supervisor events linked by parent-child relationships.
+In Jaeger you will see a single distributed trace per request, with all agent spans, LLM calls, tool invocations, and supervisor events linked by parent-child relationships — including across process/transport boundaries (e.g. a `civitas run --topology` supervisor process and a separate `Worker` process talking over real ZMQ or NATS).
+
+> **Fixed in v0.9.3 (A1).** Before this release, every OTEL span became its own isolated root trace regardless of civitas's own correct internal trace bookkeeping — `Tracer` never told the OpenTelemetry SDK which span caused which, so Jaeger/Grafana/Datadog would have shown one disconnected single-span "trace" per operation instead of a real request-flow tree. This was caught and fixed via live verification (a real 2-OS-process ZMQ round trip), not assumed from reading code — see `docs/milestones.md`'s v0.9.3 entry and `civitas/observability/tracer.py`'s `_otel_parent_context()` docstring for the full root cause.
 
 ### Grafana + Tempo
 
@@ -246,6 +248,23 @@ All Civitas-emitted attributes follow the `civitas.*` and `llm.*` / `tool.*` nam
 
 ### LLM spans
 
+Two genuinely different shapes exist, depending on which API produced the span:
+
+**`AgentProcess.llm_span()`** (the ergonomic, per-agent context manager — what real agent code
+actually calls, e.g. `with self.llm_span("gpt-4o") as span: ...`). Span name: `civitas.llm.chat`.
+
+| Attribute | Type | Description |
+|---|---|---|
+| `civitas.agent.name` | string | The calling agent's name (added v0.9.3.x — a real gap: this span carried NO agent identity at all before, in either OTEL export or any storage backend) |
+| `civitas.llm.model` | string | Model identifier (e.g. `claude-haiku-4-5`) |
+| `civitas.llm.tokens_in` | int | Input token count — only present if the caller reported it |
+| `civitas.llm.tokens_out` | int | Output token count — only present if the caller reported it |
+| `civitas.llm.cost_usd` | float | Estimated cost in USD — only present if the caller reported it |
+
+**`Tracer.start_llm_span()`/`end_llm_span()`** (a lower-level, standalone API called directly on a
+bare `Tracer`, with no `AgentProcess`/agent context at all — see `examples/research_assistant.py`).
+Span name: `llm.chat {model}`.
+
 | Attribute | Type | Description |
 |---|---|---|
 | `llm.model` | string | Model identifier (e.g. `claude-haiku-4-5`) |
@@ -253,6 +272,10 @@ All Civitas-emitted attributes follow the `civitas.*` and `llm.*` / `tool.*` nam
 | `llm.tokens_out` | int | Output token count |
 | `llm.cost_usd` | float | Estimated cost in USD |
 | `llm.latency_ms` | float | End-to-end call latency in milliseconds |
+
+This API has no agent identity to attach — architecturally, a bare `Tracer` has no concept of
+"current agent" the way `AgentProcess` does. If you need per-agent attribution with this lower-level
+API, add it yourself via `span.set_attribute(...)`.
 
 ### Tool spans
 
@@ -334,6 +357,44 @@ backend = FanOutBackend([
 
 ---
 
+## Native SQLite storage (v0.9.3.x, Track B, B1)
+
+**Install `civitas[telemetry]`.** A real, built-in `ExportBackend` for small/local deployments that
+want to ask "what did my agents spend last week" without already running Jaeger/Grafana/Tempo (see
+[`docs/design/telemetry-native.md`](design/telemetry-native.md) for the full design):
+
+```python
+from civitas.observability.sqlite_backend import SQLiteBackend
+
+backend = SQLiteBackend(
+    db_dir="./civitas_telemetry",  # reasonable default
+    window_days=30,                # one SQLite file per 30-day window
+    retention_windows=6,           # ~180 days retained; older FILES are deleted outright
+)
+```
+
+Used exactly like any other exporter — `exporters=[backend]` passed to `Runtime`/`Worker`, or
+declared in topology YAML's `plugins.exporters:` block, composable with other exporters (e.g. also
+forwarding to Jaeger) via `FanOutBackend`.
+
+Hot fields (`agent_name`, `llm_model`, `llm_tokens_in`/`_out`, `llm_cost_usd`) are promoted to real,
+indexed SQL columns — cost-per-agent, message-rate, and similar aggregate queries are plain
+`GROUP BY`/`SUM()`, not per-row JSON parsing. The full attributes dict is also kept
+(`attributes_json`) for drill-down. Retention deletes whole window files, not rows — simpler, no
+fragmentation, no risk of a bad `WHERE` clause corrupting live data.
+
+**Scope**: single-process only for now — each OS process (Runtime + every Worker) would produce its
+own separate file set; multi-process aggregation is a deliberately deferred, tracked follow-up (see
+the design doc's §7 for the sketched answer), not silently unsupported.
+
+**Viewing it**: `SQLiteQueryEngine` (`civitas/observability/sqlite_query.py`) provides
+cost-over-time, message-rate-over-time, and per-agent/per-model cost breakdown queries directly
+over this store, including cross-window queries via SQLite's native `ATTACH DATABASE`. See
+[`civitas telemetry`](cli.md#civitas-telemetry) for the live Textual TUI built on top of it
+(charts, gauges, and a cost breakdown table — real terminal charts, via `textual-plotext`).
+
+---
+
 ## Environment variables
 
 | Variable | Default | Description |
@@ -342,6 +403,61 @@ backend = FanOutBackend([
 | `AGENCY_SERIALIZER` | `msgpack` | Serializer for messages: `msgpack` or `json`. |
 
 Standard OTEL SDK environment variables (`OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES`, etc.) are respected when `opentelemetry-sdk` is installed.
+
+---
+
+## Prometheus metrics (v0.9.3, A2)
+
+Separate from tracing (spans, above) — `GET /metrics` on any running `TopologyServer` (the same
+component `civitas top` and `civitas topology show` already use) exposes real Prometheus
+text-format metrics: message rates, latency, errors, restarts, LLM token/cost totals, and current
+agent status, all labeled by `agent` (and `model` for LLM metrics).
+
+This is the **standard** Prometheus scrape path — point a `scrape_configs` target at it directly,
+no `metrics_path` override needed:
+
+```yaml
+# prometheus.yml
+scrape_configs:
+  - job_name: civitas
+    static_configs:
+      - targets: ["127.0.0.1:6789"]  # your TopologyServer's host:port
+```
+
+`civitas`'s own JSON metrics snapshot (used internally by `civitas top`) lives at `GET /snapshot`
+now instead — `/metrics` was renamed specifically to make room for the real, standard Prometheus
+path (never wise to break ecosystem standards in an OSS project). This is a breaking change to a
+previously-documented endpoint; see the [v0.9.3 CHANGELOG entry](../CHANGELOG.md) if you were
+depending on the old JSON shape at `/metrics` directly.
+
+### Metric reference
+
+| Metric | Type | Labels | Meaning |
+|---|---|---|---|
+| `civitas_messages_handled_total` | counter | `agent` | Messages this agent has handled |
+| `civitas_messages_sent_total` | counter | `agent` | Messages this agent has sent |
+| `civitas_message_latency_ms_sum` / `_count` | counter | `agent` | Handling latency sum/count — divide for the average over any time window (Prometheus "summary" pattern; civitas doesn't track real histogram buckets) |
+| `civitas_agent_errors_total` | counter | `agent` | `handle()` errors |
+| `civitas_agent_restarts_total` | counter | `agent` | Supervisor-initiated restarts |
+| `civitas_llm_tokens_in_total` / `_out_total` | counter | `agent`, `model` | LLM token usage — only emitted for agents that have actually made an LLM call |
+| `civitas_llm_cost_usd_total` | counter | `agent`, `model` | **The cost-tracking metric** — aggregate with `sum by (agent) (civitas_llm_cost_usd_total)` for per-agent spend, or drop the `by` clause for total spend |
+| `civitas_agent_status` | gauge | `agent`, `status` | `1` for the agent's current status; other status values are simply absent (standard Prometheus enum pattern) |
+| `civitas_runtime_uptime_seconds` | gauge | — | Seconds since this runtime started |
+
+### Grafana
+
+A ready-made, fully-provisioned Prometheus + Grafana stack ships in
+[`examples/observability/grafana/`](https://github.com/civitas-io/python-civitas/tree/main/examples/observability/grafana)
+(v0.9.3, A3) — `docker compose up` gives you Prometheus already scraping civitas and Grafana already
+showing the dashboard, no manual datasource setup or dashboard import needed. Panels: message
+throughput, error rate, LLM cost over time (per agent/model), average latency, agent status, and
+at-a-glance totals. See that directory's `README.md` for the two-terminal walkthrough (run against
+`examples/dashboard_demo/` for realistic cost/latency/restart data out of the box).
+
+Building your own panels instead: add Prometheus as a Grafana datasource pointed at civitas's
+`/metrics`, then query the metrics above directly — e.g. `rate(civitas_messages_handled_total[5m])`
+for message throughput, or `sum by (agent) (civitas_llm_cost_usd_total)` for a cost-per-agent bar
+chart.
 
 ---
 

@@ -154,7 +154,7 @@ runtime = Runtime(
 - [Supervision](supervision.md) — strategies, backoff, escalation chains, heartbeat monitoring
 - [Messaging](messaging.md) — send, ask, broadcast, request-reply internals, backpressure
 - [Transports](transports.md) — InProcess → ZMQ → NATS: the scaling ladder
-- [Observability](observability.md) — automatic OTEL tracing, console exporter, Jaeger
+- [Observability](observability.md) — automatic OTEL tracing, Jaeger/Grafana, Prometheus metrics, native SQLite telemetry storage
 - [GenServer](genserver.md) — stateful service processes: rate limiters, caches, coordinators
 - [EvalLoop](evalloop.md) — corrective observability: monitor agents and send correction signals
 - [MCP Integration](mcp.md) — call external MCP tool servers and expose agents as MCP servers

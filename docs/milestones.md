@@ -1,7 +1,7 @@
 # Milestones
 
-Development progress across all phases of Civitas. Two parts: **[Part 1 — Shipped](#part-1--shipped)**
-(completed work, historical record — do not edit) and **[Part 2 — Backlog](#part-2--backlog)** (the
+Development progress across all phases of Civitas. Two parts: **[Part 1 — Shipped](#part-1-shipped)**
+(completed work, historical record — do not edit) and **[Part 2 — Backlog](#part-2-backlog)** (the
 active todo list — everything not yet done).
 
 ---
@@ -30,30 +30,31 @@ Everything in this part is done.
 | 1 | [Core Runtime](#phase-1-core-runtime) | Mar 2026 |
 | 2 | [Ecosystem — Transports](#m21-zmq-multi-process-transport) | Mar 2026 |
 | 2 | [Ecosystem — Observability](#m23-otel-observability) | Apr 2026 |
-| 2 | [Ecosystem — EvalLoop (local)](#m25-evalloop) | Apr 2026 |
+| 2 | [Ecosystem — EvalLoop (local)](#m25-evalloop-local) | Apr 2026 |
 | 2 | [Ecosystem — Remote Eval Exporters](#m26-remote-eval-exporters) | Apr 2026 |
 | 3 | [Developer Experience — CLI & Dashboard](#phase-3-developer-experience) | Mar 2026 |
 | 3 | [Developer Experience — MCP Integration](#m34-mcp-integration) | Apr 2026 |
 | 3 | [Developer Experience — GenServer](#m35-genserver) | Apr 2026 |
-| — | [Infrastructure & Release](#infrastructure--release) | Apr 2026 |
+| — | [Infrastructure & Release](#infrastructure-release) | Apr 2026 |
 | 4 | [Dynamic Agent Spawning](#m41b-dynamic-agent-spawning) | Apr 2026 |
 | 4 | [Security Hardening](#m42-security-hardening) | May 2026 |
-| 4 | [Codebase Security & Enterprise Posture](#m43-codebase-security--enterprise-posture) | Apr 2026 |
+| 4 | [Codebase Security & Enterprise Posture](#m43-codebase-security-enterprise-posture) | Apr 2026 |
 | 4 | [Capability-Aware Registry](#m44-capability-aware-registry) | May 2026 |
 | 4 | [HTTP Gateway](#http-gateway) | Apr 2026 |
 | 4 | [Gateway API Surface](#gateway-api-surface) | Apr 2026 |
-| 4 | [Postgres StateStore + Migration](#postgres-statestore--migration) | May 2026 |
+| 4 | [Postgres StateStore + Migration](#postgres-statestore-migration) | May 2026 |
 | — | [v0.4.0 Release Fixes](#v040-release-fixes) | Jul 2026 |
-| — | [v0.5.0 — Released](#v050--released) | Jul 2026 |
-| — | [v0.6.0 — Gateway Completion](#v060--gateway-completion-released) | Jul 2026 |
-| — | [v0.7.0 / v0.7.1 / v0.7.2 / v0.7.3 / v0.7.4 — Spawn Maturation, Gateway Auth & Bus-Native Streaming](#v070--spawn-maturation--gateway-auth-released) | Jul 2026 |
+| — | [v0.5.0 — Released](#v050-released) | Jul 2026 |
+| — | [v0.6.0 — Gateway Completion](#v060-gateway-completion-released) | Jul 2026 |
+| — | [v0.7.0 / v0.7.1 / v0.7.2 / v0.7.3 / v0.7.4 — Spawn Maturation, Gateway Auth & Bus-Native Streaming](#v070-spawn-maturation-gateway-auth-released) | Jul 2026 |
 | — | [v0.8.0 — Supervision Core Hardening](#v080-supervision-core-hardening-released) | Jul 2026 |
 | — | [v0.8.1 — Verification Perimeter](#v081-verification-perimeter-released) | Jul 2026 |
 | — | [v0.8.2 — Hygiene](#v082-hygiene-released) | Jul 2026 |
 | — | [v0.9.0 — Supervision Endgame](#v090-supervision-endgame-released) | Jul 2026 |
 | — | [v0.9.1 — Post-endgame Polish](#v091-post-endgame-polish-released) | Jul 2026 |
-| — | [v0.9.2 — Examples Completeness](#v092--examples-completeness-released) | Jul 2026 |
-| — | [v0.9.2.1 — Bugfix Release](#v0921--bugfix-release-released) | Jul 2026 |
+| — | [v0.9.2 — Examples Completeness](#v092-examples-completeness-released) | Jul 2026 |
+| — | [v0.9.2.1 — Bugfix Release](#v0921-bugfix-release-released) | Jul 2026 |
+| — | [v0.9.3 — Telemetry: OTEL Linkage, Prometheus, Grafana, Native Storage, Query Layer, TUI](#v093-telemetry-otel-linkage-prometheus-grafana-native-storage-query-layer-tui-released) | Jul 2026 |
 
 ---
 
@@ -71,7 +72,7 @@ Everything in this part is done.
 | M1.6 | `StateStore` protocol; SQLite plugin; state persistence across restarts | 🟡 Medium | ✅ |
 | M1.7 | Plugin system; LLM providers (Anthropic, OpenAI, Gemini, Mistral, LiteLLM) | 🔴 High | ✅ |
 
-> M1.8 (Medicus self-healing hero demo) is not done — tracked in [Part 2 — Backlog](#part-2--backlog).
+> M1.8 (Medicus self-healing hero demo) is not done — tracked in [Part 2 — Backlog](#part-2-backlog).
 
 ---
 
@@ -1067,7 +1068,7 @@ every node locally regardless, duplicating whatever a real Worker process builds
 message signing over a real ZMQ transport silently times out an agent-to-agent `ask()` round trip
 even with `allow_unsigned=True` set, with no existing test ever having exercised signing over a
 real transport end-to-end. Both detailed, root-caused, and fixed in
-[v0.9.2.1](#v0921--bugfix-release-released) below.
+[v0.9.2.1](#v0921-bugfix-release-released) below.
 
 ## v0.9.2.1 — Bugfix Release (Released)
 
@@ -1082,17 +1083,126 @@ silently.
 | — | ✅ **Done** — `examples/secured_messaging.py` gained a real, live, signed `ask()` demo (Part 3) now that it actually works; `examples/deployment/level2_multi_process/run_supervisor.py` updated to use `process_filter=None`, matching the fix | — |
 
 Both bugs were found via direct instrumentation of the actual wire bytes and CLI behavior, not
-guessed — see the [v0.9.2](#v092--examples-completeness-released) entry above for how they
+guessed — see the [v0.9.2](#v092-examples-completeness-released) entry above for how they
 originally surfaced, and `civitas/transport/__init__.py`'s `Transport.set_serializer` docstring
 for the full signing root-cause writeup.
 
+## v0.9.3 — Telemetry: OTEL Linkage, Prometheus, Grafana, Native Storage, Query Layer, TUI (Released)
+
+**Status: ✅ Released 2026-07-29, as a single release** (built and verified as six sequential
+capabilities — Track A: A1-A3, Track B: B1-B3 — each with its own real, live verification, then
+shipped together as one `v0.9.3`). A design conversation first scoped "telemetry dashboard" (the
+original grab-bag item) into these six small, sequential capabilities plus one deferred item (B4,
+Part 2 below) — see each subsection for the full finding and fix.
+
+### A1 — OTEL trace linkage
+
+Scoped as a verification exercise ("does trace continuity survive a network hop"); live
+verification found something more fundamental — confirmed via direct instrumentation, not assumed
+from reading code, that OTEL spans had **never** linked to each other at all, even within a single
+process.
+
+| # | Deliverable | Priority |
+|---|-------------|----------|
+| — | ✅ **Done** — Root cause: `Tracer._make_span()` called `self._otel_tracer.start_span(name, attributes=...)` with no `context=` parameter at all — every real OTEL span became its own isolated root trace with a random OTEL-assigned trace_id and `parent_id: null`, regardless of civitas's own correct `trace_id`/`span_id`/`parent_span_id` bookkeeping on `Span`/`Message`. A real Jaeger/Grafana/Datadog view (`docs/observability.md` Mode 3) would have shown every `send`/`recv`/`llm.chat`/`tool.execute`/etc. span as a disconnected single-span "trace" — no tree, no request-flow view, the one thing distributed tracing exists to do | High |
+| — | ✅ **Done** — Fix: a new `_otel_parent_context()` helper builds a real (non-recording, "remote") OTEL `SpanContext` from civitas's own `trace_id`/`parent_span_id` — the standard extracted-context pattern every OTEL propagator uses — and `_make_span()` passes it as `context=` to `start_span()`. Since OTEL mints its own span_id/trace_id and there's no public API to force a specific one, OTEL's real assigned ID is made authoritative for civitas's own `Span.trace_id`/`span_id` too, and `MessageBus.route()`/`request()` (`civitas/bus.py`) copy that back onto the outgoing `Message` before it hits the wire — so a downstream hop's `handle_span`/`recv_span` parents to a span OTEL actually emitted, not a dangling made-up ID, across process/transport boundaries too | High |
+| — | ✅ **Done** — Verified with a REAL 2-OS-process ZMQ round trip (not a mock): `examples/deployment/level2_multi_process`'s `frontend`/`worker_a`/`worker_b` driven by an ad-hoc driver agent, OTEL console-exported spans from both processes captured and cross-checked — every span belonging to the actual message flow shares one `trace_id` across both processes with correct parent-child links end-to-end (confirmed `worker_a`'s `recv` span correctly parents to `frontend`'s real `send` span's OTEL-assigned ID); `civitas.agent.start`/`stop` lifecycle spans correctly remain standalone roots (no causal parent, as expected) | — |
+| — | ✅ **Done** — Regression tests: `tests/unit/test_observability.py` (parent-context linkage, root-span shape, malformed-ID fallback never raises, OTEL-authoritative ID overwrite) and `tests/unit/test_bus.py` (`route()` really mutates the outgoing `Message` before serialization, and what was sent is what arrived) — pinning the mechanism at unit-test speed so a regression doesn't need a live 2-process repro to catch | — |
+| — | ✅ **Done** — `docs/observability.md`'s existing (previously aspirational, now finally true) claim about Jaeger showing "a single distributed trace per request... linked by parent-child relationships" now carries a transparency note pointing at this fix | — |
+
+Known, deliberately-accepted limitation (documented in `_otel_parent_context()`'s docstring, not
+worked around): a caller-supplied non-empty `trace_id` with NO `parent_span_id` is discarded in
+favor of a fresh OTEL-minted one when OTEL is active, since OTEL's own `SpanContext` model has no
+way to express "root span, but honor this specific trace_id" via the public API. No real call site
+in this codebase hits this today — every caller derives `trace_id` and `parent_span_id` together,
+from the same message/span.
+
+### A2 — Prometheus metrics
+
+Real Prometheus text-format metrics exposition at the standard `/metrics` scrape path.
+
+| # | Deliverable | Priority |
+|---|-------------|----------|
+| — | ✅ **Done** — `GET /metrics` on `TopologyServer` now serves real, hand-rolled Prometheus text-format exposition (`civitas/observability/prometheus_export.py`) at the **standard** scrape path — no `metrics_path` override needed in a Prometheus `scrape_configs` entry. Hand-rolled deliberately over the `prometheus_client` library after weighing the trade-off: the data shape only ever needs counters and gauges (no real histograms/summaries — `AgentMetrics` tracks a running sum + count, not buckets, so `_sum`/`_count` pairs are exposed honestly rather than faking the special histogram/summary quantile machinery), keeping full spec correctness achievable by hand (proper label-value escaping, `+Inf`/`-Inf`/`NaN` float formatting) without a new dependency/extras group | High |
+| — | ✅ **Done** — **Breaking change, deliberate**: civitas's own JSON metrics snapshot (used internally by `civitas top`) moved from `/metrics` to `GET /snapshot` — "never wise to break standards in OSS projects" (2026-07-29 decision). Updated everywhere: `civitas/dashboard/app.py`'s polling client, `docs/cli.md`, `docs/observability.md` (new "Prometheus metrics" section with the full metric reference table and a Grafana recipe), and a `docs/design/dashboard-v2.md` addendum (§13) recording the deviation from that design doc's original §3.2 spec | High |
+| — | ✅ **Done** — Metrics exposed: `civitas_messages_handled_total`/`_sent_total`, `civitas_message_latency_ms_sum`/`_count`, `civitas_agent_errors_total`/`_restarts_total`, `civitas_llm_tokens_in_total`/`_out_total`/`_cost_usd_total` (the actual cost-tracking value proposition — only emitted for agents that have actually made an LLM call, mirroring `MetricsCollector.llm_call()`'s own established FD-01 discipline), `civitas_agent_status` (enum-pattern gauge), `civitas_runtime_uptime_seconds`. Deliberately drops `total_messages`/`total_cost_usd` (redundant — Prometheus's own `sum()` over the per-agent series gives the same number) | — |
+| — | ✅ **Done** — **Unplanned second finding, fixed same-session**: live verification (a real Prometheus server actually scraping the endpoint, not just eyeballed output) surfaced that `MetricsCollector.agent_status_changed()` — present since v0.9.1 — had never been called from anywhere in the runtime; a plainly-running agent's exposed status came back `"unknown"` forever (the JSON `/snapshot` endpoint never even exposed `.status` at all, so nothing had surfaced this until the new Prometheus gauge did). Fixed by routing every `AgentProcess` status transition through one new choke point (`_set_status()` in `civitas/process.py`, replacing ~10 direct assignment sites) — guarded via `getattr` so a user-supplied custom `MetricsSink` implementing only the required Protocol methods (`agent_status_changed` was never actually part of that Protocol) keeps working unchanged, confirmed by a real hand-rolled-fake regression test | High |
+| — | ✅ **Done** — Verified against a REAL local Prometheus server (not mocked): installed via `brew install prometheus`, pointed a real `scrape_configs` target at a live civitas `TopologyServer` with zero `metrics_path` override, confirmed `"health": "up"` via `/api/v1/targets`, and confirmed real PromQL queries (`civitas_messages_handled_total`, `civitas_agent_status`) return correct live values via `/api/v1/query` | — |
+| — | ✅ **Done** — New `tests/unit/test_prometheus_export.py` (16 tests: escaping, float formatting, per-family HELP/TYPE lines, LLM-series suppression for non-LLM agents, well-formed-line structural check) plus a new end-to-end HTTP-level test in `tests/unit/test_topology_server.py` and two new tests in `tests/unit/test_process.py` proving the status-wiring fix (a real `MetricsCollector` end-to-end, and a hand-rolled fake WITHOUT `agent_status_changed` proving it never crashes) | — |
+
+### A3 — Grafana stack, completing Track A
+
+| # | Deliverable | Priority |
+|---|-------------|----------|
+| — | ✅ **Done** — **Scope correction from the original backlog wording**: "example OTel-collector config" wasn't actually applicable — civitas's `/metrics` (A2) is scraped *directly* by Prometheus (pull-based); an OTel Collector is only relevant to the separate trace/OTLP push path already documented in `docs/observability.md`'s Mode 3. A fully-provisioned Prometheus + Grafana `docker-compose` stack is the more directly useful, actually-runnable deliverable for the metrics side — shipped instead | — |
+| — | ✅ **Done** — `examples/observability/grafana/`: a `docker-compose.yml` bringing up Prometheus (scraping civitas's standard `/metrics`) and Grafana, both fully provisioned via Grafana's own datasource/dashboard provisioning mechanism — zero manual clicking after `docker compose up`. Dashboard (`provisioning/dashboards/civitas.json`, a standard Grafana export) has 8 panels: message throughput, error rate, LLM cost over time (per agent/model — the actual cost-tracking value proposition), average latency (honest sum/count division, not a fabricated histogram), agent status table, and total-spend/restarts/uptime stat panels | High |
+| — | ✅ **Done** — Verified fully end-to-end, not just JSON-schema-validated: ran `examples/dashboard_demo/` (already-existing, already generates realistic cost/latency/restart/error data via `ChattyWorker`/`FlakyWorker`) as the real scrape target, brought up the real `docker compose` stack, confirmed via Prometheus's own `/api/v1/targets` that the scrape target reports `"health": "up"`, confirmed via Grafana's `/api/datasources` and `/api/search` that both the datasource and dashboard auto-provisioned correctly, and confirmed via a live PromQL query that real non-zero cost data (e.g. `chatty` agent accumulating real `$0.249` over the run) flows all the way through | — |
+| — | ✅ **Done** — `docs/observability.md`'s "Prometheus metrics" section and `examples/README.md`'s index both updated to point at the new example; the example's own `README.md` documents the two-terminal quick start, a full panel/query reference table, how to point it at your own app instead of the demo, and how to import the dashboard JSON into an existing Grafana instance | — |
+
+**Track A is fully shipped as part of this release.**
+
+### B1 — Native telemetry storage
+
+A civitas-native persistent span store for small/local deployments. Design-first: full design
+conversation and decision log in
+[`docs/design/telemetry-native.md`](../design/telemetry-native.md) before any code.
+
+| # | Deliverable | Priority |
+|---|-------------|----------|
+| — | ✅ **Done** — `civitas/observability/sqlite_backend.py`'s `SQLiteBackend` — a real `ExportBackend` implementation (no protocol changes; plugs into the already-existing `SpanQueue → OTELAgent → ExportBackend` path, composable with other exporters via the already-existing `FanOutBackend`). One SQLite file per fixed-size time window (`window_days`, default 30) rather than one growing file with row-level deletes — retention removes whole files, not rows. Hot fields (`agent_name`, `llm_model`, `llm_tokens_in`/`_out`, `llm_cost_usd`) promoted to real, indexed SQL columns for fast `GROUP BY`/`SUM()` aggregation, while the full `attributes` dict is also kept (`attributes_json`) for drill-down. New `civitas[telemetry]` extras group (`aiosqlite`) | High |
+| — | ✅ **Done, unplanned root-cause fix found live** — while writing the attribute-normalization logic, discovered that `AgentProcess.llm_span()`'s spans (`civitas.llm.chat` — the actually-used, ergonomic API real agent code calls, confirmed via `examples/dashboard_demo/agents.py`) had **never carried any agent identity at all**, in either the OTEL/Jaeger export path (A1) or this new storage backend. Confirmed by directly inspecting a real span's attributes, not assumed. Fixed at the root in `civitas/process.py` — `civitas.agent.name` added to that span's attributes. The separate, lower-level `Tracer.start_llm_span()` API (no `AgentProcess`/agent context available to it architecturally) was left as-is, documented as a real but different-in-kind limitation | High |
+| — | ✅ **Done** — Verified with a REAL `Runtime` running real agents (`exporters=[SQLiteBackend(...)]`), confirmed by directly querying the actual `.db` file with a fresh `aiosqlite` connection — not mocked. Confirmed the LLM cost-tracking value proposition specifically: a real `civitas.llm.chat` span's cost/tokens/model land correctly in the promoted SQL columns, queryable directly | — |
+| — | ✅ **Done** — New `tests/unit/test_sqlite_backend.py` (24 tests: every normalization case across both LLM span shapes plus the deliberate `NULL`-on-no-match fallback, window-index/filename round-tripping, retention sweep including the edge case of a span written directly into an already-expired window) and `tests/integration/test_sqlite_backend_integration.py` (real `Runtime`, real file, real query) | — |
+| — | ✅ **Done** — `docs/observability.md` gained a "Native SQLite storage" section, and a real documentation gap was fixed alongside it: the existing "LLM spans" attribute reference had only ever documented ONE of the two real LLM span shapes (`Tracer.start_llm_span()`'s), never `AgentProcess.llm_span()`'s (`civitas.llm.chat`) — now both are documented, distinctly | — |
+| — | **Deliberately deferred, not neglected** — multi-process aggregation (design doc §7): each OS process would produce its own separate file set; a concrete future answer (reuse civitas's own message bus, following the `_agency.health_probe` precedent) is sketched, not left as "TBD" | — |
+
+### B2 — Telemetry query/aggregation layer
+
+A query/aggregation layer over B1's SQLite store. Design conversation (not a full standalone
+design doc — more mechanical than B1's genuine new architectural decision) captured in
+[`docs/design/telemetry-native.md`](../design/telemetry-native.md)'s §13.
+
+| # | Deliverable | Priority |
+|---|-------------|----------|
+| — | ✅ **Done** — `civitas/observability/sqlite_query.py`'s `SQLiteQueryEngine` — a pure, read-only query API deliberately decoupled from any UI/CLI (B3's job, still undecided). Four methods shipped: `cost_over_time`, `message_rate_over_time` (bucketed by time, `bucket_seconds` caller-chosen), `cost_by_agent`, `cost_by_model` (whole-range totals). Real dataclasses (`CostBucket`, `MessageRateBucket`) for results, matching the `SpanData`/`RuntimeSnapshot` precedent — not raw tuples | High |
+| — | ✅ **Done** — Cross-window queries (a time range spanning more than one of B1's window files) use SQLite's native `ATTACH DATABASE` — confirmed working through `aiosqlite` directly (including parameter-bound `ATTACH DATABASE ?`, not just a literal path) — one real SQL query across N attached files, not N round trips merged in Python, exactly as the design doc's §3 anticipated and deferred to B2 | High |
+| — | ✅ **Done** — Handles the trickiest real case correctly: a single time bucket whose spans landed in two different window files. A double `GROUP BY` (once per attached window file, once in an outer re-aggregation over the `UNION ALL`) merges these into one correct row instead of two separate per-file ones — verified with a real, carefully-constructed test (a window boundary that does NOT coincide with the chosen bucket boundary, confirmed empirically before writing the test, not assumed) | High |
+| — | ✅ **Done** — Small shared refactor: `SQLiteBackend`'s private `_index_from_filename` promoted to a module-level `index_from_filename()` function (alongside the existing `window_index`/`window_filename`) so `SQLiteQueryEngine` doesn't need to reach into `SQLiteBackend`'s internals | — |
+| — | ✅ **Done** — Verified against a REAL `Runtime` running real agents (`exporters=[SQLiteBackend(...)]`), queried by a real `SQLiteQueryEngine` — not synthetic `SpanData`. New `tests/unit/test_sqlite_query.py` (9 tests) and `tests/integration/test_sqlite_query_integration.py` | — |
+| — | **Explicit decision: ship 4 methods now, evaluate more later.** Design doc §13 records 6 candidate query methods considered but not built (latency percentiles, error rate over time, restart/crash timeline, trace/span drill-down, top-N queries, model-comparison-over-time) — tracked so the list isn't lost, not a commitment to build all of them | — |
+
+### B3 — Telemetry TUI, completing Track B
+
+The Textual TUI over B1/B2's native SQLite store. Full design + decisions in
+[`docs/design/telemetry-native.md`](../design/telemetry-native.md)'s §14.
+
+| # | Deliverable | Priority |
+|---|-------------|----------|
+| — | ✅ **Done** — Confirmed empirically BEFORE committing to the approach, not assumed: real charts genuinely render inside a Textual app via `textual-plotext` (a real, installable, actively-maintained package) — verified with an actual headless render (`app.export_screenshot()`) showing a correctly-axis-labeled line chart before any of `civitas telemetry`'s own code was written | — |
+| — | ✅ **Done** — `civitas telemetry <db-dir>` (`civitas/dashboard/telemetry_app.py`) — a NEW, separate Textual app from `civitas top` (different attach model: reads a local SQLite directory directly, no live process required, unlike `civitas top`'s live HTTP attach). Reuses `civitas top`'s palette and `@work`-based periodic-poll-worker pattern, adapted to re-query SQLite instead of polling HTTP | High |
+| — | ✅ **Done** — Panels: `CostChart`/`MessageRateChart` (real line charts, capped at the top 6 series by total value — a real multi-agent/multi-model deployment's cardinality would make a terminal legend unreadable well before that), `StatPanel` (total spend/messages/top-agent), `CostBreakdownTable` (per-agent + per-model), `TimeRangeBar` | High |
+| — | ✅ **Done** — Time range: **both** a `--since` launch flag (duration shorthand OR absolute ISO datetime) AND interactive in-TUI switching (h/d/w/m preset keys + `r` for immediate manual refresh), per explicit direction. Periodic refresh (`--refresh`, default 30s) shipped for v1 — reusing `civitas top`'s own polling precedent turned out not to be the hard path originally hedged as a fallback-to-one-shot option | High |
+| — | ✅ **Done** — New `civitas[telemetry]` dependency: `textual-plotext`, folded into the existing extra (not a separate one) — the TUI is meaningless without the SQLite store it reads from anyway | — |
+| — | ✅ **Done** — Verified end-to-end against REAL data: a real `Runtime` + `SQLiteBackend` writing live while a real headless Textual pilot drove the actual TUI, confirmed correct totals/charts/keybinding behavior via rendered screenshot text extraction, not just "it didn't crash." New `tests/unit/test_telemetry_time.py` (14 tests), `tests/unit/test_telemetry_widgets.py` (10 tests), `tests/integration/test_telemetry_app.py` (5 tests, including a real live-running-Runtime scenario and a genuine "data outside the query range" case) | — |
+| — | **Deferred, tracked** (not built now, see v0.9.3.7–9 in Part 2) — log/event viewer (needs a new B2 query method), live tick chart animation, scrollable/paginated breakdown table for larger deployments | — |
+
+**Track B's originally-scoped work (B1-B3) is fully shipped as part of this release.** B4
+(placement + pluggable-backend refactor) remains explicitly deferred — see Part 2 below.
+
+**Also included in this release**: a full documentation pass across the whole arc (README.md's
+CLI list and observability section, `docs/index.md`, `examples/README.md`,
+`examples/dashboard_demo/`) — found and fixed real gaps (the CLI list was missing both `civitas
+dashboard` and `civitas telemetry`; the observability section only told the original OTLP/Jaeger
+story). `examples/dashboard_demo/topology.yaml` now also feeds a `SQLiteBackend` exporter — one
+demo topology serves `civitas top`, Grafana, and `civitas telemetry` from the same live run,
+verified end-to-end including dynamically-spawned children's cost data.
 
 ---
 
 ## Part 2 — Backlog
 
 **Status: 🗂️ Tracked** — the active todo list: everything not yet done. New work lands here first
-(a design doc if warranted), then moves into [Part 1 — Shipped](#part-1--shipped) once released.
+(a design doc if warranted), then moves into [Part 1 — Shipped](#part-1-shipped) once released.
 Owner column: `core` = python-civitas, else the target repo.
 
 ### Now open — tracked issue (python-civitas)
@@ -1106,23 +1216,49 @@ Owner column: `core` = python-civitas, else the target repo.
 > closed by [v0.9.0](#v090-supervision-endgame-released) — zero xfail trackers remain in
 > `tests/unit/test_actor_model_gaps.py`. Coverage top-ups and the dashboard rebuild are closed by
 > [v0.9.1](#v091-post-endgame-polish-released). The examples smoke test + 8 new examples are
-> closed by [v0.9.2](#v092--examples-completeness-released).
+> closed by [v0.9.2](#v092-examples-completeness-released).
 
-### v0.9.3 — Telemetry dashboard (Planned, after v0.9.2)
+### v0.9.3 follow-ups — Telemetry (Planned)
 
-**Design-first** — a separate historical/trend-data surface (logging + graphs/charts on the
-OTEL/tracer infra already collected: message-rate, cost-over-time, trace/span drill-down),
-explicitly distinct from `civitas top`'s live-snapshot TUI (v0.9.1). Likely its own surface (a web
-UI?), not necessarily an extension of the terminal dashboard — to be decided in the design
-conversation before any code lands.
+**Scoped 2026-07-28** after a design conversation surfaced that two genuinely separate
+capabilities were both hiding under the single word "telemetry dashboard": (A) civitas already
+emits rich OTEL spans (cost, tokens, latency, per-agent/model) that already export cleanly to
+mature external tools (Jaeger/Grafana/Datadog) via one env var — `docs/observability.md` Mode 3
+— so a chunk of "Option A" already exists and just needs hardening/completing; (B) a genuinely new
+civitas-native, zero-dependency, cost-focused view has real value for small/local deployments that
+don't want to stand up Jaeger just to see "what did this run cost me" — but requires building
+persistence that doesn't exist anywhere today (spans have no durable store; they're printed or
+OTLP-exported and then gone).
 
-| Item | Priority | Source |
-|------|----------|--------|
-| **Telemetry dashboard**: logging + graphs/charts view, built on the OTEL/tracer infra already collected | Medium | 2026-07-26 — user's own framing: "we are already collecting telemetry — let's design that later" |
-| Dashboard: historical charts/sparklines (message-rate, cost-over-time) | Low | design/dashboard-v2.md P1 — likely folds into the telemetry dashboard rather than the live TUI |
-| Dashboard: log tail panel per agent | Low | design/dashboard-v2.md P2 — likely folds into the telemetry dashboard |
+Decision: do both, built as six small, sequential capabilities (Track A: A1-A3, Track B: B1-B3),
+each independently verified with real, live checks before moving to the next — Track A first
+(cheap, low-risk, and A1 did itself surface a real bug per this project's pattern of "verify,
+don't assume"), Track B after, with its own dedicated design doc before B1's storage code landed
+(same rigor dashboard-v2 got). All six shipped together as a single release,
+[v0.9.3](#v093-telemetry-otel-linkage-prometheus-grafana-native-storage-query-layer-tui-released)
+(2026-07-29 decision — ship the whole arc as one release rather than a version per capability).
+What remains below is genuine follow-up work, not part of that release.
 
-### v0.9.4 — Dashboard TUI polish (Planned, after v0.9.3)
+**Track A — harden/complete what already half-exists:**
+
+A1, A2, and A3 all shipped together as part of
+[v0.9.3](#v093-telemetry-otel-linkage-prometheus-grafana-native-storage-query-layer-tui-released)
+— see Part 1 above (§A1-A3) for full findings and fixes. **Track A is now fully shipped.**
+
+**Track B — the native, cost-focused, zero-dependency view:**
+
+B1, B2, and B3 all shipped together as part of
+[v0.9.3](#v093-telemetry-otel-linkage-prometheus-grafana-native-storage-query-layer-tui-released)
+too — see Part 1 above (§B1-B3). Remaining Track B items:
+
+| # | Capability | Scope |
+|---|------------|-------|
+| v0.9.3.6 (B4) | **Deferred by explicit decision (2026-07-29), documented not silently dropped** — two real design questions surfaced right after B1 shipped, both real enough to track but not worth a mid-flight refactor of already-working, already-tested code: (1) placement — `SQLiteBackend` writes durable data to disk, matching this project's own "persistence backends live in `civitas-contrib`" precedent (`SQLiteStateStore` already lives there) rather than core `python-civitas`, which currently only ships zero-I/O feature machinery (`ExportBackend`/`FanOutBackend`/`ConsoleBackend`); (2) pluggability — SQLite is one backend among several a user may eventually want (Postgres, etc.) — the telemetry-specific logic (span normalization, schema shape) should be separated from the storage mechanism itself so alternative backends don't have to reimplement normalization, "build like a library so others can use the capability." Full writeup in `docs/design/telemetry-native.md`'s §12 addendum. **Current, shipped v0.9.3.3 implementation is intentionally left as-is** — both of these are real, tracked follow-ups, not a defect in what already shipped | Deferred — tracked, not scheduled |
+| v0.9.3.7 | **Log/event viewer** for `civitas telemetry` — deferred at B3 ship time, per-conversation. Needs the "trace/span drill-down" query method (§13's candidate list, itself not yet built) before the viewer panel can exist | Depends on a new B2 query method |
+| v0.9.3.8 | **Live tick animation** for `CostChart`/`MessageRateChart` — identified while building B3, not built: today's refresh redraws each chart from scratch on every re-query (correct, but not smoothly animated between ticks) | Low priority, cosmetic |
+| v0.9.3.9 | **Scrollable/paginated `CostBreakdownTable`** — identified while building B3: today's table renders every agent/model row unpaginated; fine at small scale, would overflow one screen for a real deployment with many distinct agents/models | Low priority, only matters at larger cardinality |
+
+### v0.9.4 — Dashboard TUI polish (Planned, after v0.9.3.x)
 
 Small, self-contained additions to the existing live `civitas top` TUI — no auth needed, no new
 design surface, just more panes/signals on data already available (or cheaply addable).
@@ -1202,13 +1338,13 @@ not an afterthought bolted onto one endpoint.
 | `CivitasMCPServer` — expose an agent tree as an MCP server | fabrica | ⏸️ not started anywhere | §M3.4 |
 | CrewAI adapter — full implementation (stub raises `NotImplementedError` today) | civitas-contrib | ⏳ stub | §Infrastructure & Release |
 | MySQL StateStore | civitas-contrib | ⏸️ | §Postgres StateStore |
-| [Prompt Library & Playground](#prompt-library--playground) | civitas-contrib | 💡 idea (🔴 high), spec unwritten | §Phase 5 |
+| [Prompt Library & Playground](#prompt-library-playground) | civitas-contrib | 💡 idea (🔴 high), spec unwritten | §Phase 5 |
 | [Skills Gateway](#skills-gateway) | civitas-contrib | 💡 idea, spec unwritten | §Phase 5 |
-| [Fabrica — Tools Gateway](#fabrica--tools-gateway) / `find_tools` (RFC 0001) | civitas-forge | 💡 idea (🔴 high), spec unwritten | §Phase 5, rfc/0001 |
+| [Fabrica — Tools Gateway](#fabrica-tools-gateway) / `find_tools` (RFC 0001) | civitas-forge | 💡 idea (🔴 high), spec unwritten | §Phase 5, rfc/0001 |
 | [LLM Gateway](#llm-gateway) (governed: rate limits, budgets, grant routing) | presidium | ⏸️ moved | §Phase 5 |
 | Credential-propagation RFC (per-user OAuth for retrieved tools) | cross-repo | ⏸️ future RFC | rfc/0001 §out-of-scope |
 
-**Recently shipped** (moved out of this backlog; see [Part 1](#part-1--shipped) for detail):
+**Recently shipped** (moved out of this backlog; see [Part 1](#part-1-shipped) for detail):
 verification perimeter v0.8.1 (#39–#43, PR #44),
 supervision core hardening v0.8.0 (#27–#35, PR #38),
 cross-process dynamic spawning (#20), per-agent spawn quotas (#21), encrypted `StateStore` at rest

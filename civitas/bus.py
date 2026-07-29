@@ -140,6 +140,15 @@ class MessageBus:
             raise MessageRoutingError(f"No agent registered with name: {message.recipient!r}")
 
         span = self._tracer.start_send_span(message)
+        # v0.9.3 (A1): when OTEL is active, start_send_span() may have
+        # replaced span.trace_id/span_id with OTEL's own REAL, authoritative
+        # IDs (OTEL mints its own; civitas's original ones aren't otherwise
+        # honored -- see Tracer._make_span()'s docstring comment). Sync that
+        # back onto the outgoing Message before it hits the wire, so the
+        # receiving side's handle_span/recv_span parent to a span OTEL
+        # actually emitted, not a dangling made-up ID.
+        message.trace_id = span.trace_id
+        message.span_id = span.span_id
         try:
             data = self._serializer.serialize(message)
             await self._transport.publish(address, data)
@@ -176,6 +185,9 @@ class MessageBus:
             raise MessageRoutingError(f"No agent registered with name: {message.recipient!r}")
 
         span = self._tracer.start_send_span(message)
+        # v0.9.3 (A1): see the identical comment in route() above.
+        message.trace_id = span.trace_id
+        message.span_id = span.span_id
         try:
             data = self._serializer.serialize(message)
             reply_data = await self._transport.request(entry.address, data, timeout)

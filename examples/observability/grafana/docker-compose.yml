@@ -1,0 +1,29 @@
+# Prometheus + Grafana stack for civitas's real Prometheus metrics (v0.9.3.1,
+# A3). Fully provisioned: Prometheus is already scraping, Grafana already has
+# the Prometheus datasource AND the civitas dashboard loaded — no manual
+# clicking needed after `docker compose up`.
+#
+# Run alongside a real civitas app exposing /metrics (e.g.
+# examples/dashboard_demo/ — see this directory's README.md for the full
+# two-terminal recipe).
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # Linux: Docker Desktop already has this
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+    volumes:
+      - ./provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus

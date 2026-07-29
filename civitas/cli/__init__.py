@@ -29,6 +29,10 @@ import civitas.cli.dashboard  # noqa: F401
 # Each module adds its commands to the shared `app` instance.
 import civitas.cli.init  # noqa: F401
 import civitas.cli.run  # noqa: F401
+
+# v0.9.3.5 (B3): civitas.cli.telemetry follows the exact same pattern for
+# its optional 'telemetry' extra (aiosqlite/textual/textual-plotext).
+import civitas.cli.telemetry  # noqa: F401
 import civitas.cli.version  # noqa: F401
 from civitas.cli.app import app
 from civitas.cli.deploy import deploy_app

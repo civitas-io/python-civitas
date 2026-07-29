@@ -11,6 +11,108 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+## [0.9.3] — 2026-07-29
+
+Telemetry: OTEL trace linkage, real Prometheus metrics, a Grafana stack, native SQLite
+storage, a query/aggregation layer, and a Textual TUI. Built and verified as six sequential
+capabilities (Track A: A1-A3, Track B: B1-B3), each with its own real, live verification, then
+shipped together as this one release. Full per-capability detail, decision logs, and design
+docs in `docs/milestones.md` and `docs/design/telemetry-native.md`.
+
+### Added
+
+- **[A2] Real Prometheus text-format exposition** at `GET /metrics` on `TopologyServer` — the
+  standard scrape path, no `metrics_path` override needed. Hand-rolled
+  (`civitas/observability/prometheus_export.py`), not the `prometheus_client` library.
+  Metrics: `civitas_messages_handled_total`/`_sent_total`, `civitas_message_latency_ms_sum`/
+  `_count`, `civitas_agent_errors_total`/`_restarts_total`,
+  `civitas_llm_tokens_in_total`/`_out_total`/`_cost_usd_total` (only for agents that actually
+  called an LLM), `civitas_agent_status`, `civitas_runtime_uptime_seconds`. Verified against a
+  real local Prometheus server actually scraping the endpoint and answering PromQL queries.
+- **[A3] `examples/observability/grafana/`** — a fully-provisioned Prometheus + Grafana
+  `docker-compose` stack. Prometheus already scraping civitas's standard `/metrics`, Grafana
+  already has both the datasource and an 8-panel dashboard loaded after `docker compose up` —
+  no manual setup. Verified fully end-to-end against `examples/dashboard_demo/`.
+- **[B1] `SQLiteBackend`** (`civitas/observability/sqlite_backend.py`) — a real `ExportBackend`
+  implementation for civitas-native, small/local-deployment span persistence. One SQLite file
+  per fixed-size time window (`window_days`, default 30) rather than one growing file with
+  row-level deletes — retention removes whole files. Hot fields (`agent_name`, `llm_model`,
+  `llm_tokens_in`/`_out`, `llm_cost_usd`) promoted to real, indexed SQL columns, with the full
+  attributes dict also kept for drill-down. New `civitas[telemetry]` extras group.
+- **[B2] `SQLiteQueryEngine`** (`civitas/observability/sqlite_query.py`) — a pure, read-only
+  query API over `SQLiteBackend`'s store: `cost_over_time`, `message_rate_over_time` (both
+  bucketed), `cost_by_agent`, `cost_by_model`. Cross-window queries (a time range spanning more
+  than one window file) use SQLite's native `ATTACH DATABASE`, with a double `GROUP BY`
+  correctly merging any time bucket whose spans landed in two different window files.
+- **[B3] `civitas telemetry <db-dir>`** — a new, standalone Textual TUI
+  (`civitas/dashboard/telemetry_app.py`), separate from `civitas top` (reads a local SQLite
+  directory directly, no live process required). Real charts via `textual-plotext`
+  (`CostChart`/`MessageRateChart`), a `StatPanel`, a `CostBreakdownTable`, a `TimeRangeBar`.
+  Time range: a `--since` launch flag (duration shorthand or absolute ISO datetime) AND
+  interactive in-TUI switching (h/d/w/m keys + `r` for immediate refresh). Periodic refresh
+  (`--refresh`, default 30s). New `textual-plotext` dependency, folded into `civitas[telemetry]`.
+
+### Changed
+
+- **[A2] Breaking**: `TopologyServer`'s existing JSON metrics-snapshot endpoint moved from
+  `GET /metrics` to `GET /snapshot` to make room for the standard Prometheus path ("never wise
+  to break ecosystem standards in an OSS project"). If you were polling `/metrics` directly for
+  civitas's own JSON shape (rather than through `civitas top`, which is updated already),
+  update to `/snapshot`.
+- **[B2]** `SQLiteBackend`'s private `_index_from_filename` promoted to a module-level
+  `index_from_filename()` function so `SQLiteQueryEngine` doesn't reach into `SQLiteBackend`'s
+  internals.
+
+### Fixed
+
+- **[A1] OTEL spans never linked to each other at all, even within a single process** —
+  confirmed via direct instrumentation, not assumed from reading code. `Tracer._make_span()`
+  called OpenTelemetry's `start_span()` with no `context=` parameter, so every span became its
+  own isolated OTEL root trace with a random trace_id and `parent_id: null`. Fixed with a new
+  `_otel_parent_context()` helper plus making OTEL's own minted span IDs authoritative for
+  civitas's bookkeeping, synced back onto the outgoing `Message` before serialization so
+  cross-process/cross-transport linkage holds too. Verified with a real 2-OS-process ZMQ round
+  trip before landing the regression tests.
+- **[A2] `MetricsCollector.agent_status_changed()` was never called from anywhere in the
+  runtime**, present since v0.9.1 but dead on arrival — found live while verifying the new
+  Prometheus route against a real scrape, when a plainly-running agent's exposed status came
+  back `"unknown"` forever. Fixed by routing every `AgentProcess` status transition through one
+  new choke point (`_set_status()`), guarded so a user-supplied custom `MetricsSink`
+  implementing only the required Protocol methods keeps working unchanged.
+- **[B1] `AgentProcess.llm_span()`'s spans (`civitas.llm.chat`) never carried any agent
+  identity at all** — found live while writing `SQLiteBackend`'s attribute-normalization logic,
+  affecting the OTEL/Jaeger export path too (A1), not just the new storage backend. Fixed at
+  the root in `civitas/process.py` by adding `civitas.agent.name` to that span's attributes.
+- `docs/observability.md`'s "LLM spans" attribute reference had only ever documented one of
+  the two real LLM span shapes (`Tracer.start_llm_span()`'s) — now both are documented,
+  distinctly.
+- Every internal anchor link in `docs/milestones.md` using a double-hyphen after an em-dash
+  header (e.g. `#v092--examples-completeness-released`) was broken — the actual generated
+  anchor uses a single hyphen. Found while consolidating this release's own milestones entries;
+  fixed across the entire file (34 links audited, all now verified to resolve), not just the
+  new entries.
+
+### Note
+
+- **[A3]** Scope correction from the original backlog wording: an "OTel-collector config"
+  isn't actually applicable — civitas's `/metrics` is scraped directly by Prometheus
+  (pull-based), not pushed through a collector. A provisioned Prometheus+Grafana stack is the
+  more directly useful, actually-runnable deliverable.
+- **[B1]** Multi-process aggregation deliberately deferred, not neglected — each OS process
+  would produce its own separate file set; a concrete future answer (reuse civitas's own
+  message bus) is sketched in `docs/design/telemetry-native.md` §7.
+- **[B2]** Six candidate query methods (latency percentiles, error rate over time,
+  restart/crash timeline, trace/span drill-down, top-N queries, model-comparison-over-time)
+  evaluated and documented for a future cut, not built now.
+- **[B3]** Deferred, tracked (not built now): a log/event viewer (needs a new trace/span
+  drill-down query method), live tick chart animation, and a scrollable/paginated breakdown
+  table for larger deployments — `docs/milestones.md` v0.9.3.7–9.
+- **[B4, deferred entirely]** Two real design questions tracked, not acted on: whether
+  `SQLiteBackend` belongs in `civitas-contrib` instead of core (it durably persists data to
+  disk, matching where `SQLiteStateStore` already lives), and separating the telemetry-specific
+  normalization/schema logic from SQLite-specific storage mechanics so a future `PostgresBackend`
+  wouldn't have to reimplement it. Full writeup in `docs/design/telemetry-native.md` §12.
+
 ## [0.9.2.1] — 2026-07-28
 
 Bugfix release: two real product bugs found while building v0.9.2's examples, both fully

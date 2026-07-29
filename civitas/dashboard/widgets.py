@@ -32,7 +32,7 @@ from civitas.dashboard.palette import (
 def flatten_topology(node: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
     """Flatten the recursive ``/topology`` tree into ``{name: node_dict}``.
 
-    ``AgentDetailPanel`` joins the focused name against this + the ``/metrics``
+    ``AgentDetailPanel`` joins the focused name against this + the ``/snapshot``
     snapshot client-side (design §7's explicit "the JOIN happens in the widget" —
     each endpoint stays independently simple).
     """

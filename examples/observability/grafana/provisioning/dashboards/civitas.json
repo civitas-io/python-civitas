@@ -1,0 +1,125 @@
+{
+  "title": "Civitas — Runtime Metrics (v0.9.3.1)",
+  "uid": "civitas-runtime-metrics",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "timezone": "browser",
+  "time": { "from": "now-15m", "to": "now" },
+  "refresh": "5s",
+  "tags": ["civitas"],
+  "panels": [
+    {
+      "id": 1,
+      "title": "Message throughput (per agent)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "civitas-prometheus" },
+      "targets": [
+        {
+          "expr": "rate(civitas_messages_handled_total[1m])",
+          "legendFormat": "{{agent}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] }
+    },
+    {
+      "id": 2,
+      "title": "Error rate (per agent)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "civitas-prometheus" },
+      "targets": [
+        {
+          "expr": "rate(civitas_agent_errors_total[1m])",
+          "legendFormat": "{{agent}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] }
+    },
+    {
+      "id": 3,
+      "title": "LLM cost over time (per agent)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "civitas-prometheus" },
+      "description": "The actual cost-tracking value proposition — see docs/observability.md's Prometheus metrics section.",
+      "targets": [
+        {
+          "expr": "increase(civitas_llm_cost_usd_total[5m])",
+          "legendFormat": "{{agent}} ({{model}})",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "currencyUSD" }, "overrides": [] }
+    },
+    {
+      "id": 4,
+      "title": "Average message latency (per agent)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "civitas-prometheus" },
+      "description": "civitas doesn't track real histogram buckets, only a running sum+count — this is the honest Prometheus \"summary\" pattern, not a fabricated histogram.",
+      "targets": [
+        {
+          "expr": "rate(civitas_message_latency_ms_sum[1m]) / rate(civitas_message_latency_ms_count[1m])",
+          "legendFormat": "{{agent}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] }
+    },
+    {
+      "id": 5,
+      "title": "Agent status",
+      "type": "table",
+      "gridPos": { "x": 0, "y": 16, "w": 8, "h": 6 },
+      "datasource": { "type": "prometheus", "uid": "civitas-prometheus" },
+      "targets": [
+        {
+          "expr": "civitas_agent_status == 1",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "Value": true, "__name__": true, "instance": true, "job": true } } }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Total LLM spend",
+      "type": "stat",
+      "gridPos": { "x": 8, "y": 16, "w": 4, "h": 6 },
+      "datasource": { "type": "prometheus", "uid": "civitas-prometheus" },
+      "targets": [
+        { "expr": "sum(civitas_llm_cost_usd_total)", "instant": true, "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "currencyUSD" }, "overrides": [] }
+    },
+    {
+      "id": 7,
+      "title": "Total restarts",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 16, "w": 4, "h": 6 },
+      "datasource": { "type": "prometheus", "uid": "civitas-prometheus" },
+      "targets": [
+        { "expr": "sum(civitas_agent_restarts_total)", "instant": true, "refId": "A" }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Runtime uptime",
+      "type": "stat",
+      "gridPos": { "x": 16, "y": 16, "w": 8, "h": 6 },
+      "datasource": { "type": "prometheus", "uid": "civitas-prometheus" },
+      "targets": [
+        { "expr": "civitas_runtime_uptime_seconds", "instant": true, "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
+    }
+  ]
+}

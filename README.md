@@ -197,7 +197,33 @@ export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
 python my_agent.py
 ```
 
-Trace context propagates automatically across process and machine boundaries.
+Trace context propagates automatically across process and machine boundaries — including across
+process and transport boundaries (verified with a real 2-OS-process ZMQ round trip).
+
+**Prometheus** is also a first-class scrape target — `GET /metrics` on any running
+`TopologyServer` is real Prometheus text-format exposition at the standard path, no
+`metrics_path` override needed:
+
+```yaml
+# prometheus.yml
+scrape_configs:
+  - job_name: civitas
+    static_configs:
+      - targets: ["127.0.0.1:6789"]
+```
+
+A fully-provisioned Prometheus + Grafana stack ships in
+[`examples/observability/grafana/`](examples/observability/grafana/) — `docker compose up`
+already has the dashboard and datasource configured, zero manual clicking.
+
+**No Jaeger or Grafana? `civitas telemetry`** reads a local SQLite directory directly (no live
+process, no external infra) and gives you real cost-over-time/message-rate charts, gauges, and a
+per-agent/per-model breakdown table in your terminal:
+
+```bash
+pip install 'civitas[telemetry]'
+civitas telemetry ./civitas_telemetry
+```
 
 ---
 
@@ -337,6 +363,8 @@ Civitas ships a full CLI for running, inspecting, and deploying agent systems.
 civitas run          — start a topology (supervisor or worker process)
 civitas topology     — validate, visualise, and diff topology files
 civitas state        — inspect and manage persisted agent state
+civitas dashboard    — civitas top: live Textual dashboard for a running topology
+civitas telemetry    — live Textual TUI over B1's native SQLite cost/rate history
 civitas deploy       — generate Docker Compose deployment artifacts
 civitas version      — show the installed version
 ```
@@ -422,7 +450,7 @@ Full documentation is available at **[civitas-io.github.io/python-civitas](https
 | [Supervision](https://civitas-io.github.io/python-civitas/supervision/) | Strategies, backoff, escalation, heartbeats |
 | [Messaging](https://civitas-io.github.io/python-civitas/messaging/) | send, ask, broadcast, backpressure, trace propagation |
 | [Transports](https://civitas-io.github.io/python-civitas/transports/) | InProcess → ZMQ → NATS, switching levels |
-| [Observability](https://civitas-io.github.io/python-civitas/observability/) | OTEL spans, console exporter, Jaeger setup |
+| [Observability](https://civitas-io.github.io/python-civitas/observability/) | OTEL spans, Jaeger/Grafana setup, Prometheus metrics, native SQLite telemetry storage |
 | [Plugins](https://civitas-io.github.io/python-civitas/plugins/) | ModelProvider, ToolProvider, StateStore, custom plugins |
 | [Topology YAML](https://civitas-io.github.io/python-civitas/topology/) | Schema reference, CLI commands |
 | [CLI Reference](https://civitas-io.github.io/python-civitas/cli/) | All commands, options, and examples |
