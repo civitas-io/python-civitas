@@ -347,6 +347,53 @@ Standard OTEL SDK environment variables (`OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATT
 
 ---
 
+## Prometheus metrics (v0.9.3.1)
+
+Separate from tracing (spans, above) — `GET /metrics` on any running `TopologyServer` (the same
+component `civitas top` and `civitas topology show` already use) exposes real Prometheus
+text-format metrics: message rates, latency, errors, restarts, LLM token/cost totals, and current
+agent status, all labeled by `agent` (and `model` for LLM metrics).
+
+This is the **standard** Prometheus scrape path — point a `scrape_configs` target at it directly,
+no `metrics_path` override needed:
+
+```yaml
+# prometheus.yml
+scrape_configs:
+  - job_name: civitas
+    static_configs:
+      - targets: ["127.0.0.1:6789"]  # your TopologyServer's host:port
+```
+
+`civitas`'s own JSON metrics snapshot (used internally by `civitas top`) lives at `GET /snapshot`
+now instead — `/metrics` was renamed specifically to make room for the real, standard Prometheus
+path (never wise to break ecosystem standards in an OSS project). This is a breaking change to a
+previously-documented endpoint; see the [v0.9.3.1 CHANGELOG entry](../CHANGELOG.md) if you were
+depending on the old JSON shape at `/metrics` directly.
+
+### Metric reference
+
+| Metric | Type | Labels | Meaning |
+|---|---|---|---|
+| `civitas_messages_handled_total` | counter | `agent` | Messages this agent has handled |
+| `civitas_messages_sent_total` | counter | `agent` | Messages this agent has sent |
+| `civitas_message_latency_ms_sum` / `_count` | counter | `agent` | Handling latency sum/count — divide for the average over any time window (Prometheus "summary" pattern; civitas doesn't track real histogram buckets) |
+| `civitas_agent_errors_total` | counter | `agent` | `handle()` errors |
+| `civitas_agent_restarts_total` | counter | `agent` | Supervisor-initiated restarts |
+| `civitas_llm_tokens_in_total` / `_out_total` | counter | `agent`, `model` | LLM token usage — only emitted for agents that have actually made an LLM call |
+| `civitas_llm_cost_usd_total` | counter | `agent`, `model` | **The cost-tracking metric** — aggregate with `sum by (agent) (civitas_llm_cost_usd_total)` for per-agent spend, or drop the `by` clause for total spend |
+| `civitas_agent_status` | gauge | `agent`, `status` | `1` for the agent's current status; other status values are simply absent (standard Prometheus enum pattern) |
+| `civitas_runtime_uptime_seconds` | gauge | — | Seconds since this runtime started |
+
+### Grafana
+
+Once Prometheus is scraping civitas, add it as a Grafana datasource and build panels against the
+metrics above — e.g. `rate(civitas_messages_handled_total[5m])` for message throughput, or
+`sum by (agent) (civitas_llm_cost_usd_total)` for a cost-per-agent bar chart. A ready-made
+dashboard JSON is planned as a follow-up (v0.9.3.2).
+
+---
+
 ## Cost attribution
 
 Every LLM span carries `llm.cost_usd`. Aggregating this attribute by `civitas.agent.name` in your OTEL backend gives you per-agent cost attribution over time:

@@ -349,6 +349,32 @@ class AgentProcess:
     def status(self) -> ProcessStatus:
         return self._status
 
+    def _set_status(self, new_status: ProcessStatus) -> None:
+        """Single choke point for every status transition after construction
+        (v0.9.3.1). ``MetricsCollector.agent_status_changed()`` existed since
+        v0.9.1 but was never called from anywhere in the runtime -- found
+        live, while building the Prometheus /metrics route, when a plainly-
+        running agent's exposed status came back "unknown" (AgentMetrics's
+        own default, never overwritten). Routing every transition through
+        ONE method here (instead of adding a call at each of the ~10 direct
+        ``self._status = ...`` assignment sites) means a future new status
+        transition can't silently reintroduce this same gap by forgetting
+        one call site.
+        """
+        self._status = new_status
+        # agent_status_changed() is NOT part of the MetricsSink Protocol
+        # (civitas/observability/metrics.py only requires message_handled/
+        # message_sent/agent_error/agent_restarted/llm_call) -- it's a
+        # MetricsCollector-specific enrichment. Guarded with getattr rather
+        # than a hard call: any user-supplied custom MetricsSink that
+        # implements only the required Protocol methods (a legitimate,
+        # documented extension point -- see MetricsSink's own docstring)
+        # must keep working unchanged, not crash the FIRST time an agent's
+        # status ever transitions.
+        status_hook = getattr(self._metrics, "agent_status_changed", None)
+        if status_hook is not None:
+            status_hook(self.name, new_status.value)
+
     # ------------------------------------------------------------------
     # Credential helpers (M4.2c)
     # ------------------------------------------------------------------
@@ -544,7 +570,7 @@ class AgentProcess:
         if self._status != ProcessStatus.SUSPENDED:
             return
         self.state.pop(self._SUSPEND_STATE_KEY, None)
-        self._status = ProcessStatus.RUNNING
+        self._set_status(ProcessStatus.RUNNING)
         try:
             await self.checkpoint()
         except Exception:
@@ -566,7 +592,7 @@ class AgentProcess:
         persist leaves the agent paused with degraded durability — it never
         falls back to RUNNING, because immediate safety outranks durability.
         """
-        self._status = ProcessStatus.SUSPENDED
+        self._set_status(ProcessStatus.SUSPENDED)
         self.state[self._SUSPEND_STATE_KEY] = {
             "reason": reason,
             "since": time.time(),
@@ -1350,7 +1376,7 @@ class AgentProcess:
         loop — all inside the task, so no lifecycle work runs in the caller's
         context. Callers that need blocking-until-ready semantics use ``_start()``.
         """
-        self._status = ProcessStatus.INITIALIZING
+        self._set_status(ProcessStatus.INITIALIZING)
         self._running_event = asyncio.Event()
         self._reached_loop = False
         self._start_phase = "restore"
@@ -1394,7 +1420,7 @@ class AgentProcess:
             if start_span is not None:
                 start_span.set_error(exc)
                 start_span.end()
-            self._status = ProcessStatus.CRASHED
+            self._set_status(ProcessStatus.CRASHED)
             # D12: on_stop() is best-effort here so a throwing on_stop cannot mask
             # the on_start failure the caller needs to see.
             try:
@@ -1447,9 +1473,9 @@ class AgentProcess:
         suspend). _running_event is set either way so _start() never hangs.
         """
         if self._SUSPEND_STATE_KEY in self.state:
-            self._status = ProcessStatus.SUSPENDED
+            self._set_status(ProcessStatus.SUSPENDED)
         else:
-            self._status = ProcessStatus.RUNNING
+            self._set_status(ProcessStatus.RUNNING)
         self._reached_loop = True
         self._start_phase = "running"
         if self._running_event is not None:
@@ -1528,7 +1554,7 @@ class AgentProcess:
             # Preserve CRASHED — only move to STOPPING for normal/requested exits
             crashed = self._status == ProcessStatus.CRASHED
             if not crashed:
-                self._status = ProcessStatus.STOPPING
+                self._set_status(ProcessStatus.STOPPING)
 
             # Emit agent.stop span — always, including on crash
             if self._tracer is not None:
@@ -1563,7 +1589,7 @@ class AgentProcess:
                 stop_span.end()
 
             if not crashed:
-                self._status = ProcessStatus.STOPPED
+                self._set_status(ProcessStatus.STOPPED)
 
     async def _dispatch(self, message: Message) -> None:
         """Dispatch one delivery: run handle(), retrying IN PLACE on RETRY (H8, #32).
@@ -1636,7 +1662,7 @@ class AgentProcess:
                     message.attempt += 1
                     if message.attempt > self._max_retries:
                         # Max retries exceeded — escalate instead of looping forever
-                        self._status = ProcessStatus.CRASHED
+                        self._set_status(ProcessStatus.CRASHED)
                         raise exc
                     if self._status != ProcessStatus.RUNNING:
                         # STOP/shutdown arrived mid-retry — don't delay it by up to
@@ -1676,9 +1702,9 @@ class AgentProcess:
         if action == ErrorAction.SKIP:
             pass  # discard message, continue
         elif action == ErrorAction.STOP:
-            self._status = ProcessStatus.STOPPING
+            self._set_status(ProcessStatus.STOPPING)
         elif action == ErrorAction.ESCALATE:
-            self._status = ProcessStatus.CRASHED
+            self._set_status(ProcessStatus.CRASHED)
             raise exc  # propagate to supervisor via task exception
 
     async def _stop(self) -> None:

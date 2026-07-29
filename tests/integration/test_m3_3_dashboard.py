@@ -111,7 +111,8 @@ def test_collector_never_registered_agent_self_registers_lazily():
     """v0.9.1 (dashboard-v2 D-DASH addendum): an agent that was NEVER
     explicitly register_agent()'d is tracked correctly from its first
     reported event — this is what makes dynamically-spawned children (never
-    known to Runtime's static registration loop) show up in /metrics without
+    known to Runtime's static registration loop) show up in /snapshot (or
+    /metrics, v0.9.3.1) without
     any spawn-time hook. Deliberate behavior change from the pre-v0.9.1
     'operations on unregistered agents are silently ignored' contract —
     that silent-drop was itself the bug making dynamic children invisible.

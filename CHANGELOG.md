@@ -11,6 +11,43 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+## [0.9.3.1] — 2026-07-29
+
+v0.9.3.x's Track A, capability A2: real Prometheus text-format metrics exposition at the
+standard `/metrics` scrape path.
+
+### Added
+
+- **Real Prometheus text-format exposition** at `GET /metrics` on `TopologyServer` — the
+  standard scrape path, no `metrics_path` override needed in a Prometheus `scrape_configs`
+  entry. Hand-rolled (`civitas/observability/prometheus_export.py`), not the `prometheus_client`
+  library — the data shape only needs counters and gauges, keeping full spec correctness
+  (label-value escaping, `+Inf`/`-Inf`/`NaN` float formatting) achievable without a new
+  dependency. Metrics: `civitas_messages_handled_total`/`_sent_total`,
+  `civitas_message_latency_ms_sum`/`_count`, `civitas_agent_errors_total`/`_restarts_total`,
+  `civitas_llm_tokens_in_total`/`_out_total`/`_cost_usd_total` (only for agents that actually
+  called an LLM), `civitas_agent_status`, `civitas_runtime_uptime_seconds`. Verified against a
+  real local Prometheus server actually scraping the endpoint and answering PromQL queries, not
+  just eyeballed output. See `docs/observability.md`'s new "Prometheus metrics" section for the
+  full reference and a Grafana recipe.
+
+### Changed
+
+- **Breaking**: `TopologyServer`'s existing JSON metrics-snapshot endpoint moved from
+  `GET /metrics` to `GET /snapshot` to make room for the standard Prometheus path above ("never
+  wise to break ecosystem standards in an OSS project"). If you were polling `/metrics` directly
+  for civitas's own JSON shape (rather than through `civitas top`, which is updated already),
+  update to `/snapshot`.
+
+### Fixed
+
+- **`MetricsCollector.agent_status_changed()` was never called from anywhere in the runtime**,
+  present since v0.9.1 but dead on arrival — found live while verifying the new Prometheus route
+  against a real scrape, when a plainly-running agent's exposed status came back `"unknown"`
+  forever. Fixed by routing every `AgentProcess` status transition through one new choke point
+  (`_set_status()` in `civitas/process.py`), guarded so a user-supplied custom `MetricsSink`
+  implementing only the required Protocol methods keeps working unchanged.
+
 ## [0.9.3] — 2026-07-29
 
 v0.9.3.x's Track A, capability A1 (see `docs/milestones.md` for the full telemetry roadmap

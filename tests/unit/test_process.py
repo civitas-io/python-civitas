@@ -848,6 +848,46 @@ async def test_message_handled_recorded_on_success():
     assert latency_ms >= 0.0
 
 
+async def test_fake_sink_without_agent_status_changed_never_crashes():
+    """v0.9.3.1: _FakeMetricsSink above does NOT implement
+    agent_status_changed() -- deliberately, since it's NOT part of the
+    MetricsSink Protocol (only message_handled/message_sent/agent_error/
+    agent_restarted/llm_call are required). A real custom sink implementing
+    only the required methods must keep working through every status
+    transition an agent's full start/stop lifecycle produces, not crash the
+    first time one occurs."""
+    agent = TrackingAgent()
+    sink = _FakeMetricsSink()
+    agent._metrics = sink
+
+    await agent._start()  # INITIALIZING -> RUNNING transitions happen here
+    await agent._stop()  # RUNNING -> STOPPING -> STOPPED transitions happen here
+    # No AttributeError anywhere above -- that's the whole assertion.
+
+
+async def test_agent_status_changed_called_on_real_metrics_collector():
+    """v0.9.3.1: MetricsCollector.agent_status_changed() -- defined since
+    v0.9.1 but never called from anywhere in the runtime until now (found
+    live: a plainly-running agent's exposed status came back "unknown",
+    AgentMetrics's own never-overwritten default, while building the
+    Prometheus /metrics route). Real AgentProcess lifecycle, real
+    MetricsCollector -- not a hand-rolled fake -- proving the actual wiring,
+    not just that _set_status() calls SOME method with SOME name."""
+    from civitas.dashboard.collector import MetricsCollector
+    from civitas.process import ProcessStatus
+
+    agent = TrackingAgent()
+    collector = MetricsCollector()
+    agent._metrics = collector
+
+    await agent._start()
+    await wait_for(lambda: collector.snapshot.agents["tracker"].status == "RUNNING")
+    assert agent.status == ProcessStatus.RUNNING
+
+    await agent._stop()
+    assert collector.snapshot.agents["tracker"].status == "STOPPED"
+
+
 async def test_agent_error_and_message_handled_recorded_on_failure():
     """A raising handle() call records both agent_error and message_handled (FD-01)."""
 

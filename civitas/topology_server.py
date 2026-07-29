@@ -3,6 +3,13 @@
 Declared as ``type: topology_server`` in topology YAML. The CLI's
 ``civitas topology show`` pings ``GET /topology`` and renders a live tree;
 it falls back to the static YAML tree when the server is not reachable.
+
+v0.9.3.1: ``/metrics`` now means real Prometheus text-format exposition
+(the standard scrape path every Prometheus deployment defaults to) --
+civitas's own JSON metrics snapshot (used by ``civitas top``) moved to
+``/snapshot`` to make room for it. Breaking change to a documented
+endpoint, done deliberately rather than picking a non-standard Prometheus
+path: "never wise to break standards in OSS projects" (2026-07-29).
 """
 
 from __future__ import annotations
@@ -16,6 +23,10 @@ from civitas.dashboard.resources import sample_process, try_start_process_sample
 from civitas.errors import MessageRoutingError
 from civitas.genserver import GenServer
 from civitas.messages import Message, _new_span_id, _uuid7
+from civitas.observability.prometheus_export import (
+    PROMETHEUS_CONTENT_TYPE,
+    render_prometheus_metrics,
+)
 from civitas.supervisor import DynamicSupervisor, Supervisor
 
 logger = logging.getLogger(__name__)
@@ -27,11 +38,17 @@ if TYPE_CHECKING:
 class TopologyServer(GenServer):
     """Supervised JSON HTTP server exposing live topology state.
 
-    Endpoints (read-only, JSON):
-        GET /health          → {"status": "ok"}
-        GET /topology        → full supervision tree with live dynamic children
-        GET /agents          → flat list of all running agents + status
-        GET /agents/{name}   → single agent status or 404
+    Endpoints:
+        GET /health          → JSON {"status": "ok"}
+        GET /topology        → JSON full supervision tree with live dynamic children
+        GET /agents          → JSON flat list of all running agents + status
+        GET /agents/{name}   → JSON single agent status or 404
+        GET /snapshot        → JSON civitas's own metrics snapshot (v0.9.3.1: renamed
+                               from /metrics -- see module docstring)
+        GET /metrics         → Prometheus text-format exposition (v0.9.3.1) -- the
+                               standard scrape path; point a Prometheus
+                               scrape_config at this with no metrics_path override
+        GET /processes       → JSON one row per OS process
     """
 
     def __init__(
@@ -52,7 +69,8 @@ class TopologyServer(GenServer):
         # v0.9.1 (dashboard-v2, D-DASH-2/D-DASH-4): injected by Runtime.start()
         # alongside _root_supervisor/_agents — None when the caller supplied a
         # non-MetricsCollector metrics= sink of their own (documented, not silently
-        # empty; see /metrics's "not available" response).
+        # empty; see /snapshot's "not available" response, v0.9.3.1: renamed from
+        # /metrics to make room for real Prometheus exposition at that path).
         self._metrics_collector: Any = None
         # v0.9.1 (D-DASH-3): primed ONCE at construction, reused for every
         # /processes request — see try_start_process_sampler()'s docstring
@@ -115,12 +133,12 @@ class TopologyServer(GenServer):
                 if header_line in (b"\r\n", b"\n", b""):
                     break
 
-            body_str, status_code = await self._route_http(path)
+            body_str, status_code, content_type = await self._route_http(path)
             body_bytes = body_str.encode()
             status_text = "200 OK" if status_code == 200 else f"{status_code} Not Found"
             header = (
                 f"HTTP/1.1 {status_text}\r\n"
-                f"Content-Type: application/json\r\n"
+                f"Content-Type: {content_type}\r\n"
                 f"Content-Length: {len(body_bytes)}\r\n"
                 f"Connection: close\r\n"
                 f"\r\n"
@@ -136,30 +154,37 @@ class TopologyServer(GenServer):
             except Exception:
                 pass
 
-    async def _route_http(self, path: str) -> tuple[str, int]:
+    async def _route_http(self, path: str) -> tuple[str, int, str]:
         """Async (v0.9.1, D-DASH-3) — ``/processes`` is the first route that
         needs real I/O (probing remote Worker health channels over the bus);
         every other route below stays a plain synchronous call, awaiting
         nothing — this signature change doesn't alter their behavior.
+
+        v0.9.3.1: returns a content-type alongside body/status now, since
+        ``/metrics`` (Prometheus) is plain text, not JSON like every other
+        route here.
         """
+        json_type = "application/json"
         if path == "/health":
-            return json.dumps({"status": "ok"}), 200
+            return json.dumps({"status": "ok"}), 200, json_type
         if path == "/topology":
-            return json.dumps(self._build_topology()), 200
+            return json.dumps(self._build_topology()), 200, json_type
         if path == "/agents":
-            return json.dumps(self._build_agents_list()), 200
+            return json.dumps(self._build_agents_list()), 200, json_type
         if path.startswith("/agents/"):
             name = path[len("/agents/") :]
             data = self._build_agent_detail(name)
             if data is None:
-                return json.dumps({"error": f"agent '{name}' not found"}), 404
-            return json.dumps(data), 200
-        if path == "/metrics":
+                return json.dumps({"error": f"agent '{name}' not found"}), 404, json_type
+            return json.dumps(data), 200, json_type
+        if path == "/snapshot":
             data, code = self._build_metrics()
-            return json.dumps(data), code
+            return json.dumps(data), code, json_type
+        if path == "/metrics":
+            return self._build_prometheus_metrics()
         if path == "/processes":
-            return json.dumps(await self._build_processes()), 200
-        return json.dumps({"error": "not found"}), 404
+            return json.dumps(await self._build_processes()), 200, json_type
+        return json.dumps({"error": "not found"}), 404, json_type
 
     # ------------------------------------------------------------------
     # Serialisers
@@ -344,6 +369,24 @@ class TopologyServer(GenServer):
                 for e in snapshot.restart_history
             ],
         }, 200
+
+    def _build_prometheus_metrics(self) -> tuple[str, int, str]:
+        """v0.9.3.1: real Prometheus text-format exposition at the standard
+        ``/metrics`` scrape path. Same underlying data as /snapshot (JSON,
+        v0.9.1) -- a different representation of the same MetricsCollector
+        snapshot, not a second collection mechanism. Absent-collector shape
+        mirrors /snapshot's: an explicit, documented empty body rather than
+        pretending metrics exist when they don't (a Prometheus scrape of an
+        empty 200 body is valid -- "no series right now" -- so no error
+        status is needed here the way /snapshot's 404 is for JSON clients).
+        """
+        if self._metrics_collector is None:
+            return "", 200, PROMETHEUS_CONTENT_TYPE
+        return (
+            render_prometheus_metrics(self._metrics_collector.snapshot),
+            200,
+            PROMETHEUS_CONTENT_TYPE,
+        )
 
     async def _build_processes(self) -> dict[str, Any]:
         """v0.9.1 (dashboard-v2, D-DASH-3): one row per OS process (the

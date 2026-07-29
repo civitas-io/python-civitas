@@ -90,30 +90,50 @@ class TestRouteHttp:
         self.ts = TopologyServer(name="ts", port=0)
 
     async def test_health(self) -> None:
-        body, code = await self.ts._route_http("/health")
+        body, code, content_type = await self.ts._route_http("/health")
         assert code == 200
+        assert content_type == "application/json"
         assert json.loads(body) == {"status": "ok"}
 
     async def test_unknown_path(self) -> None:
-        body, code = await self.ts._route_http("/notexist")
+        body, code, content_type = await self.ts._route_http("/notexist")
         assert code == 404
+        assert content_type == "application/json"
         assert "error" in json.loads(body)
 
     async def test_topology_no_runtime(self) -> None:
-        body, code = await self.ts._route_http("/topology")
+        body, code, _ = await self.ts._route_http("/topology")
         assert code == 200
         data = json.loads(body)
         assert "error" in data
 
     async def test_agents_no_runtime(self) -> None:
-        body, code = await self.ts._route_http("/agents")
+        body, code, _ = await self.ts._route_http("/agents")
         assert code == 200
         assert isinstance(json.loads(body), list)
 
     async def test_agent_detail_not_found(self) -> None:
-        body, code = await self.ts._route_http("/agents/missing")
+        body, code, _ = await self.ts._route_http("/agents/missing")
         assert code == 404
         assert "not found" in json.loads(body)["error"]
+
+    async def test_snapshot_route_exists(self) -> None:
+        """v0.9.3.1: /metrics (JSON) was renamed to /snapshot to make room
+        for real Prometheus exposition at the standard /metrics path."""
+        body, code, content_type = await self.ts._route_http("/snapshot")
+        assert code == 404  # no MetricsCollector wired in this bare TopologyServer
+        assert content_type == "application/json"
+        assert "error" in json.loads(body)
+
+    async def test_metrics_route_is_prometheus_text(self) -> None:
+        """v0.9.3.1: /metrics is now Prometheus text-format exposition, not
+        civitas's own JSON snapshot (see /snapshot above)."""
+        from civitas.observability.prometheus_export import PROMETHEUS_CONTENT_TYPE
+
+        body, code, content_type = await self.ts._route_http("/metrics")
+        assert code == 200
+        assert content_type == PROMETHEUS_CONTENT_TYPE
+        assert body == ""  # no MetricsCollector wired -- empty, not an error
 
 
 # ---------------------------------------------------------------------------
@@ -198,7 +218,7 @@ class TestSerializers:
         inner = _make_mock_supervisor("inner", children=[leaf])
         root = _make_mock_supervisor("root", children=[inner])
         self.ts._root_supervisor = root
-        body, code = await self.ts._route_http("/topology")
+        body, code, _ = await self.ts._route_http("/topology")
         assert code == 200
         data = json.loads(body)
         assert data["name"] == "root"
@@ -250,7 +270,7 @@ class TestSerializers:
     async def test_agents_endpoint_returns_agent_detail(self) -> None:
         agent = _make_mock_agent("svc", "RUNNING")
         self.ts._agents = {"svc": agent}
-        body, code = await self.ts._route_http("/agents/svc")
+        body, code, _ = await self.ts._route_http("/agents/svc")
         assert code == 200
         assert json.loads(body)["name"] == "svc"
 
@@ -436,7 +456,8 @@ async def test_runtime_auto_provisions_metrics_collector_for_topology_server() -
 async def test_runtime_respects_explicit_custom_metrics_sink() -> None:
     """v0.9.1 (D-DASH-4): a caller's own metrics= sink is never overridden —
     auto-provisioning only fires when metrics is None. A non-MetricsCollector
-    sink means /metrics reports 'not available', not a silent empty snapshot."""
+    sink means /snapshot reports 'not available', not a silent empty snapshot.
+    (v0.9.3.1: this was /metrics at the time -- renamed to /snapshot.)"""
 
     class _CustomSink:
         def message_handled(self, agent_name: str, latency_ms: float) -> None: ...
@@ -451,7 +472,7 @@ async def test_runtime_respects_explicit_custom_metrics_sink() -> None:
     try:
         assert runtime._metrics is custom  # never overridden
         assert ts._metrics_collector is None  # not a MetricsCollector
-        code, body = await _http_get("http://127.0.0.1:16795/metrics")
+        code, body = await _http_get("http://127.0.0.1:16795/snapshot")
         assert code == 404
         assert json.loads(body) == {"error": "metrics not available"}
     finally:
@@ -460,8 +481,9 @@ async def test_runtime_respects_explicit_custom_metrics_sink() -> None:
 
 @pytest.mark.asyncio
 async def test_topology_server_http_metrics_shape() -> None:
-    """v0.9.1 (D-DASH-2): /metrics returns the documented shape, reflecting
-    real message-handling activity end-to-end (no mocks)."""
+    """v0.9.1 (D-DASH-2): /snapshot returns the documented shape, reflecting
+    real message-handling activity end-to-end (no mocks). (v0.9.3.1: this was
+    /metrics at the time -- renamed to /snapshot.)"""
     from civitas.process import AgentProcess
 
     class _Echo(AgentProcess):
@@ -474,7 +496,7 @@ async def test_topology_server_http_metrics_shape() -> None:
     await runtime.start()
     try:
         await runtime.ask("echo", {"q": 1})
-        code, body = await _http_get("http://127.0.0.1:16796/metrics")
+        code, body = await _http_get("http://127.0.0.1:16796/snapshot")
         assert code == 200
         data = json.loads(body)
         assert "echo" in data["agents"]
@@ -492,7 +514,7 @@ async def test_topology_server_http_metrics_shape() -> None:
 async def test_topology_server_http_metrics_includes_dynamically_spawned_agent() -> None:
     """v0.9.1 (dashboard-v2 D-DASH addendum): a DynamicSupervisor-spawned
     child — never known to Runtime's static all_agents() registration loop —
-    still shows up in /metrics with real numbers, via MetricsCollector's lazy
+    still shows up in /snapshot with real numbers, via MetricsCollector's lazy
     self-registration. This is the actual fix for the gap Phase B's design
     addendum flagged as a documented limitation; it is no longer one.
     """
@@ -506,7 +528,7 @@ async def test_topology_server_http_metrics_includes_dynamically_spawned_agent()
         await runtime.spawn("workers", EchoAgent, "spawned-1")
         await runtime.ask("spawned-1", {"msg": "hi"})
 
-        code, body = await _http_get("http://127.0.0.1:16797/metrics")
+        code, body = await _http_get("http://127.0.0.1:16797/snapshot")
         assert code == 200
         data = json.loads(body)
         assert "spawned-1" in data["agents"]
@@ -598,7 +620,8 @@ async def test_topology_server_http_process_id_matches_processes_endpoint() -> N
 
 async def test_topology_server_http_metrics_includes_restart_history() -> None:
     """v0.9.1 (D-DASH addendum, 2026-07-26): restart_history was already
-    collected by MetricsCollector but never exposed — a real, safe,
+    collected by MetricsCollector but never exposed (v0.9.3.1: this endpoint
+    was /metrics at the time -- renamed to /snapshot) — a real, safe,
     read-only timeline, verified end-to-end with a real crash-restart."""
     from civitas.process import AgentProcess
 
@@ -618,13 +641,54 @@ async def test_topology_server_http_metrics_includes_restart_history() -> None:
         await wait_for(lambda: root._restart_counts.get("flaky", 0) >= 1)
         await asyncio.sleep(0.05)  # let the restart complete before polling
 
-        code, body = await _http_get("http://127.0.0.1:16801/metrics")
+        code, body = await _http_get("http://127.0.0.1:16801/snapshot")
         assert code == 200
         data = json.loads(body)
         assert "restart_history" in data
         events = [e for e in data["restart_history"] if e["agent_name"] == "flaky"]
         assert len(events) >= 1
         assert events[0]["timestamp"] > 0
+    finally:
+        await runtime.stop()
+
+
+async def test_topology_server_http_metrics_is_real_prometheus_text() -> None:
+    """v0.9.3.1: /metrics (the standard Prometheus scrape path, no
+    metrics_path override needed) returns real text-format exposition
+    reflecting actual message-handling activity end-to-end (no mocks) --
+    the same underlying MetricsCollector data /snapshot exposes as JSON.
+    """
+    from civitas.observability.prometheus_export import PROMETHEUS_CONTENT_TYPE
+    from civitas.process import AgentProcess
+
+    class _Echo(AgentProcess):
+        async def handle(self, message: Message) -> Message | None:
+            return self.reply({"ok": True})
+
+    ts = TopologyServer(name="topo", port=16802)
+    echo = _Echo("echo")
+    runtime = Runtime(supervisor=Supervisor("root", children=[ts, echo]))
+    await runtime.start()
+    try:
+        await runtime.ask("echo", {"q": 1})
+
+        reader, writer = await asyncio.open_connection("127.0.0.1", 16802)
+        writer.write(b"GET /metrics HTTP/1.1\r\nHost: x\r\n\r\n")
+        await writer.drain()
+        raw = await asyncio.wait_for(reader.read(), timeout=5.0)
+        writer.close()
+
+        header, _, body = raw.partition(b"\r\n\r\n")
+        header_text = header.decode()
+        assert "200" in header_text.split("\r\n")[0]
+        assert f"Content-Type: {PROMETHEUS_CONTENT_TYPE}" in header_text
+
+        text = body.decode()
+        assert 'civitas_messages_handled_total{agent="echo"} 1' in text
+        assert "# HELP civitas_messages_handled_total" in text
+        assert "# TYPE civitas_messages_handled_total counter" in text
+        # echo never made an LLM call -- no all-zero LLM series should appear
+        assert "civitas_llm_cost_usd_total" not in text
     finally:
         await runtime.stop()
 

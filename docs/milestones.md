@@ -55,6 +55,7 @@ Everything in this part is done.
 | — | [v0.9.2 — Examples Completeness](#v092--examples-completeness-released) | Jul 2026 |
 | — | [v0.9.2.1 — Bugfix Release](#v0921--bugfix-release-released) | Jul 2026 |
 | — | [v0.9.3 — OTEL Trace Linkage](#v093--otel-trace-linkage-released) | Jul 2026 |
+| — | [v0.9.3.1 — Prometheus Metrics](#v0931--prometheus-metrics-released) | Jul 2026 |
 
 ---
 
@@ -1111,6 +1112,20 @@ way to express "root span, but honor this specific trace_id" via the public API.
 in this codebase hits this today — every caller derives `trace_id` and `parent_span_id` together,
 from the same message/span.
 
+## v0.9.3.1 — Prometheus Metrics (Released)
+
+**Status: ✅ Released 2026-07-29.** v0.9.3.x's Track A, capability A2: real Prometheus
+text-format metrics exposition at the standard `/metrics` scrape path.
+
+| # | Deliverable | Priority |
+|---|-------------|----------|
+| — | ✅ **Done** — `GET /metrics` on `TopologyServer` now serves real, hand-rolled Prometheus text-format exposition (`civitas/observability/prometheus_export.py`) at the **standard** scrape path — no `metrics_path` override needed in a Prometheus `scrape_configs` entry. Hand-rolled deliberately over the `prometheus_client` library after weighing the trade-off: the data shape only ever needs counters and gauges (no real histograms/summaries — `AgentMetrics` tracks a running sum + count, not buckets, so `_sum`/`_count` pairs are exposed honestly rather than faking the special histogram/summary quantile machinery), keeping full spec correctness achievable by hand (proper label-value escaping, `+Inf`/`-Inf`/`NaN` float formatting) without a new dependency/extras group | High |
+| — | ✅ **Done** — **Breaking change, deliberate**: civitas's own JSON metrics snapshot (used internally by `civitas top`) moved from `/metrics` to `GET /snapshot` — "never wise to break standards in OSS projects" (2026-07-29 decision). Updated everywhere: `civitas/dashboard/app.py`'s polling client, `docs/cli.md`, `docs/observability.md` (new "Prometheus metrics" section with the full metric reference table and a Grafana recipe), and a `docs/design/dashboard-v2.md` addendum (§13) recording the deviation from that design doc's original §3.2 spec | High |
+| — | ✅ **Done** — Metrics exposed: `civitas_messages_handled_total`/`_sent_total`, `civitas_message_latency_ms_sum`/`_count`, `civitas_agent_errors_total`/`_restarts_total`, `civitas_llm_tokens_in_total`/`_out_total`/`_cost_usd_total` (the actual cost-tracking value proposition — only emitted for agents that have actually made an LLM call, mirroring `MetricsCollector.llm_call()`'s own established FD-01 discipline), `civitas_agent_status` (enum-pattern gauge), `civitas_runtime_uptime_seconds`. Deliberately drops `total_messages`/`total_cost_usd` (redundant — Prometheus's own `sum()` over the per-agent series gives the same number) | — |
+| — | ✅ **Done** — **Unplanned second finding, fixed same-session**: live verification (a real Prometheus server actually scraping the endpoint, not just eyeballed output) surfaced that `MetricsCollector.agent_status_changed()` — present since v0.9.1 — had never been called from anywhere in the runtime; a plainly-running agent's exposed status came back `"unknown"` forever (the JSON `/snapshot` endpoint never even exposed `.status` at all, so nothing had surfaced this until the new Prometheus gauge did). Fixed by routing every `AgentProcess` status transition through one new choke point (`_set_status()` in `civitas/process.py`, replacing ~10 direct assignment sites) — guarded via `getattr` so a user-supplied custom `MetricsSink` implementing only the required Protocol methods (`agent_status_changed` was never actually part of that Protocol) keeps working unchanged, confirmed by a real hand-rolled-fake regression test | High |
+| — | ✅ **Done** — Verified against a REAL local Prometheus server (not mocked): installed via `brew install prometheus`, pointed a real `scrape_configs` target at a live civitas `TopologyServer` with zero `metrics_path` override, confirmed `"health": "up"` via `/api/v1/targets`, and confirmed real PromQL queries (`civitas_messages_handled_total`, `civitas_agent_status`) return correct live values via `/api/v1/query` | — |
+| — | ✅ **Done** — New `tests/unit/test_prometheus_export.py` (16 tests: escaping, float formatting, per-family HELP/TYPE lines, LLM-series suppression for non-LLM agents, well-formed-line structural check) plus a new end-to-end HTTP-level test in `tests/unit/test_topology_server.py` and two new tests in `tests/unit/test_process.py` proving the status-wiring fix (a real `MetricsCollector` end-to-end, and a hand-rolled fake WITHOUT `agent_status_changed` proving it never crashes) | — |
+
 ---
 
 ## Part 2 — Backlog
@@ -1152,12 +1167,12 @@ rigor dashboard-v2 got).
 
 **Track A — harden/complete what already half-exists:**
 
-A1 shipped as [v0.9.3](#v093--otel-trace-linkage-released) — see Part 1 above for the full
-finding and fix. Remaining Track A items:
+A1 shipped as [v0.9.3](#v093--otel-trace-linkage-released); A2 shipped as
+[v0.9.3.1](#v0931--prometheus-metrics-released) — see Part 1 above for full findings and fixes.
+Remaining Track A items:
 
 | # | Capability | Scope |
 |---|------------|-------|
-| v0.9.3.1 (A2) | Prometheus-format metrics exposition — a real `/metrics`-shaped Prometheus text-format route (message-rate, cost, latency histograms) so Grafana works without also running Tempo/Jaeger just for numbers | One new route, no schema/storage decisions |
 | v0.9.3.2 (A3) | Ready-made Grafana dashboard JSON + example OTel-collector config + a docs recipe matching the existing Jaeger recipe in `docs/observability.md` | Docs + a JSON file, no runtime code |
 
 **Track B — the native, cost-focused, zero-dependency view:**

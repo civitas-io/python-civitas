@@ -1,7 +1,7 @@
 """``civitas top`` — the Textual dashboard app (v0.9.1, dashboard-v2 Phase E).
 
 Attaches to an already-running ``TopologyServer`` over HTTP and polls three
-endpoints independently and continuously: ``/topology``, ``/metrics``,
+endpoints independently and continuously: ``/topology``, ``/snapshot``,
 ``/processes``. Layout is Mockup B's dense three-pane grid (design §7.0):
 tree | detail | resources, all three equally first-class, all visible at once.
 
@@ -105,9 +105,12 @@ class CivitasDashboardApp(App[None]):
     # exclusive=True and no group=, all three pollers shared one group, and
     # starting each new one silently CANCELLED the previous one (that's what
     # exclusive=True does within a group) — only the last-called poller
-    # (_poll_processes) ever actually ran; /topology and /metrics never
+    # (_poll_processes) ever actually ran; /topology and /snapshot never
     # polled at all, with no error, no exception, nothing to see except an
-    # empty tree forever.
+    # empty tree forever. (v0.9.3.1: this endpoint was /metrics at the time
+    # -- renamed to /snapshot to make room for real Prometheus exposition at
+    # the standard /metrics path; this comment's history is otherwise
+    # unchanged.)
     @work(exclusive=True, group="topology-poll")
     async def _poll_topology(self) -> None:
         async for data in self._poll_forever("/topology"):
@@ -120,7 +123,7 @@ class CivitasDashboardApp(App[None]):
 
     @work(exclusive=True, group="metrics-poll")
     async def _poll_metrics(self) -> None:
-        async for data in self._poll_forever("/metrics"):
+        async for data in self._poll_forever("/snapshot"):  # v0.9.3.1: was /metrics
             self._metrics = data
             if not self._touch_dom():
                 return

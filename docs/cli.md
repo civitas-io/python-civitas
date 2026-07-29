@@ -258,7 +258,10 @@ Without `--force`, you are prompted to confirm before state is deleted.
 Launch **`civitas top`** — a live, mouse-clickable Textual dashboard for an already-running
 topology (v0.9.1 rebuild; see [design/dashboard-v2.md](design/dashboard-v2.md) for the full
 design). It attaches remotely over HTTP to the topology's `topology_server` node and polls
-`/topology`, `/metrics`, and `/processes` independently — it does not start a runtime of its own.
+`/topology`, `/snapshot`, and `/processes` independently — it does not start a runtime of its own.
+(v0.9.3.1: `/snapshot` was `/metrics` at the time this section was first written — renamed to make
+room for real Prometheus text-format exposition at the standard `/metrics` scrape path; see
+[observability.md](observability.md#prometheus-metrics-v0931).)
 
 ```bash
 civitas dashboard <topology.yaml> [--refresh <seconds>]
