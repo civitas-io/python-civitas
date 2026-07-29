@@ -6,7 +6,7 @@ crashes and restarts on a timer, and a spawner that spins dynamic children up
 and down. Not a realistic workload — just enough motion to see the feature
 working.
 
-Since v0.9.3.5, this same topology also feeds a `SQLiteBackend` exporter
+Since v0.9.3, this same topology also feeds a `SQLiteBackend` exporter
 (`plugins.exporters:` in `topology.yaml`) — one live run now serves THREE
 observability surfaces: `civitas top` (below), the Grafana/Prometheus stack
 (`examples/observability/grafana/`), and `civitas telemetry` (also below).
@@ -70,7 +70,7 @@ local SQLite directory directly, so it works even after you stop the runtime.
 
 - `topology.yaml` — the topology; also runnable directly with `civitas run` or
   inspected statically with `civitas topology show`. Declares the
-  `SQLiteBackend` exporter (v0.9.3.5) alongside the `topology_server`.
+  `SQLiteBackend` exporter (v0.9.3) alongside the `topology_server`.
 - `agents.py` — `ChattyWorker`, `FlakyWorker`, `SpawnerAgent`.
 - `civitas_telemetry_demo/` — created at runtime by the `SQLiteBackend`
   exporter (git-ignored, not checked in).

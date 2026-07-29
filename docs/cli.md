@@ -259,7 +259,7 @@ Launch **`civitas top`** — a live, mouse-clickable Textual dashboard for an al
 topology (v0.9.1 rebuild; see [design/dashboard-v2.md](design/dashboard-v2.md) for the full
 design). It attaches remotely over HTTP to the topology's `topology_server` node and polls
 `/topology`, `/snapshot`, and `/processes` independently — it does not start a runtime of its own.
-(v0.9.3.1: `/snapshot` was `/metrics` at the time this section was first written — renamed to make
+(v0.9.3: `/snapshot` was `/metrics` at the time this section was first written — renamed to make
 room for real Prometheus text-format exposition at the standard `/metrics` scrape path; see
 [observability.md](observability.md#prometheus-metrics-v0931).)
 
@@ -316,7 +316,7 @@ children) — see its `README.md` for a two-terminal walkthrough.
 
 ## civitas telemetry
 
-Launch the live Textual telemetry TUI over B1/B2's native SQLite store (v0.9.3.5; see
+Launch the live Textual telemetry TUI over B1/B2's native SQLite store (v0.9.3, B3; see
 [design/telemetry-native.md](design/telemetry-native.md) for the full design). Unlike `civitas
 dashboard`, this does **not** attach to a live process — it reads directly from a local SQLite
 directory, so it works even after the app that wrote the data has stopped.

@@ -460,13 +460,13 @@ artifact, not a design record like the Mockup A/B comparison was).
 Proceeding to Phase F (CLI — already substantially done as part of this phase's renderer.py
 removal) and Phase G (final verification sweep + docs + CHANGELOG + release choreography).
 
-## 13. Addendum (v0.9.3.1) — `/metrics` renamed to `/snapshot`
+## 13. Addendum (v0.9.3, A2) — `/metrics` renamed to `/snapshot`
 
 **Deviation from §3.2's original design**, recorded per this project's convention that any design
 deviation during implementation gets an addendum here, not a silent divergence.
 
 §3.2 specified `GET /metrics` as `TopologyServer`'s new JSON metrics-snapshot endpoint, which
-shipped exactly as designed in v0.9.1. During v0.9.3.1 (real Prometheus text-format exposition,
+shipped exactly as designed in v0.9.1. During v0.9.3 (real Prometheus text-format exposition,
 see `docs/milestones.md`), that path collided with the Prometheus ecosystem's own hard convention:
 virtually every Prometheus deployment defaults its scrape target to a bare `/metrics` with no
 `metrics_path` override. Explicit decision (2026-07-29): honor the ecosystem standard rather than

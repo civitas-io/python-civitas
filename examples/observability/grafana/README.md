@@ -1,4 +1,4 @@
-# Grafana + Prometheus for civitas (v0.9.3.1, A3)
+# Grafana + Prometheus for civitas (v0.9.3, A3)
 
 A fully-provisioned Prometheus + Grafana stack for civitas's real Prometheus metrics
 (`docs/observability.md`'s "Prometheus metrics" section). No manual clicking after

@@ -406,7 +406,7 @@ Standard OTEL SDK environment variables (`OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATT
 
 ---
 
-## Prometheus metrics (v0.9.3.1)
+## Prometheus metrics (v0.9.3, A2)
 
 Separate from tracing (spans, above) — `GET /metrics` on any running `TopologyServer` (the same
 component `civitas top` and `civitas topology show` already use) exposes real Prometheus
@@ -427,7 +427,7 @@ scrape_configs:
 `civitas`'s own JSON metrics snapshot (used internally by `civitas top`) lives at `GET /snapshot`
 now instead — `/metrics` was renamed specifically to make room for the real, standard Prometheus
 path (never wise to break ecosystem standards in an OSS project). This is a breaking change to a
-previously-documented endpoint; see the [v0.9.3.1 CHANGELOG entry](../CHANGELOG.md) if you were
+previously-documented endpoint; see the [v0.9.3 CHANGELOG entry](../CHANGELOG.md) if you were
 depending on the old JSON shape at `/metrics` directly.
 
 ### Metric reference
@@ -448,7 +448,7 @@ depending on the old JSON shape at `/metrics` directly.
 
 A ready-made, fully-provisioned Prometheus + Grafana stack ships in
 [`examples/observability/grafana/`](https://github.com/civitas-io/python-civitas/tree/main/examples/observability/grafana)
-(v0.9.3.2) — `docker compose up` gives you Prometheus already scraping civitas and Grafana already
+(v0.9.3, A3) — `docker compose up` gives you Prometheus already scraping civitas and Grafana already
 showing the dashboard, no manual datasource setup or dashboard import needed. Panels: message
 throughput, error rate, LLM cost over time (per agent/model), average latency, agent status, and
 at-a-glance totals. See that directory's `README.md` for the two-terminal walkthrough (run against

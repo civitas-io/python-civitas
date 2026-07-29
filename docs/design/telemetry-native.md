@@ -2,7 +2,8 @@
 
 **Status: ✅ ACCEPTED and IMPLEMENTED (2026-07-29).** Scoped 2026-07-29 as part of the
 v0.9.3.x telemetry split (`docs/milestones.md`): Track A (harden what already half-exists via
-Jaeger/Grafana/OTLP) shipped as v0.9.3–v0.9.3.2. This is Track B, capability B1 — a civitas-native,
+Jaeger/Grafana/OTLP, capabilities A1-A3) and Track B (B1-B3) were built as six sequential
+capabilities and shipped together as a single release, v0.9.3. This is Track B, capability B1 — a civitas-native,
 zero-dependency-beyond-`aiosqlite`, cost-focused persistent span store for small/local deployments
 that don't want to stand up Jaeger/Tempo just to see "what did this run cost me."
 
@@ -273,12 +274,12 @@ picks. Explicit intent stated in conversation: "build like a library so others c
 capability" — civitas-contrib authors should be able to add a new storage backend without
 reimplementing span normalization from scratch.
 
-**Not executed now** — tracked as part of B4 (`docs/milestones.md`). The current v0.9.3.3
+**Not executed now** — tracked as part of B4 (`docs/milestones.md`). The current v0.9.3
 implementation remains the correct, working, fully-tested shape until this refactor actually
 happens; this section exists so the seam is designed deliberately when it does, not discovered
 under pressure from a real second-backend request.
 
-## 13. B2 (v0.9.3.4) — shipped with 4 query methods; more candidates evaluated for later
+## 13. B2 (shipped as part of v0.9.3) — 4 query methods; more candidates evaluated for later
 
 `SQLiteQueryEngine` (`civitas/observability/sqlite_query.py`) shipped with four methods:
 `cost_over_time`, `message_rate_over_time`, `cost_by_agent`, `cost_by_model`. Cross-window queries
@@ -316,7 +317,7 @@ None of these block B3 (the UI) from starting once there's a reason to — B3 ca
 today's four methods and grow as new query methods are added, matching this whole project's "small
 capability at a time" cadence.
 
-## 14. B3 (v0.9.3.5) — the Textual TUI, shipped
+## 14. B3 (shipped as part of v0.9.3) — the Textual TUI
 
 Confirmed empirically before committing to it (not assumed): real charts genuinely render inside a
 Textual app, via `textual-plotext` (a real, installable, actively-maintained package wrapping
