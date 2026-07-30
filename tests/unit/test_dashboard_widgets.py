@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 from textual.app import App, ComposeResult
-from textual.widgets import DataTable
+from textual.widgets import DataTable, Static
 
 from civitas.dashboard.widgets import (
     AgentDetailPanel,
@@ -148,6 +148,168 @@ async def test_agent_detail_panel_joins_topology_and_metrics() -> None:
         assert fields["capabilities"] == "chat"
         assert fields["last_model"] == "claude-sonnet"
         assert "0.02" in fields["cost_usd"] or fields["cost_usd"] == "$0.02"
+
+
+@pytest.mark.asyncio
+async def test_agent_detail_panel_shows_session_when_agent_has_made_llm_calls() -> None:
+    """v0.9.4 (design/dashboard-v2.md P1): session_turn_count/
+    session_duration_seconds, when present and non-zero, render as a
+    'session' row alongside uptime."""
+    panel = AgentDetailPanel()
+    app = _SingleWidgetApp(panel)
+    async with app.run_test():
+        panel.update_detail(
+            "chatty",
+            {
+                "name": "chatty",
+                "type": "agent",
+                "status": "running",
+                "process_id": "topo",
+                "uptime_seconds": 300.0,
+                "session_turn_count": 3,
+                "session_duration_seconds": 90.0,
+            },
+            None,
+        )
+        table = panel.query_one("#detail-table", DataTable)
+        rows = [table.get_row_at(i) for i in range(table.row_count)]
+        fields = {row[0]: row[1] for row in rows}
+        assert fields["session"] == "3 turns, 1m 30s"
+
+
+@pytest.mark.asyncio
+async def test_agent_detail_panel_hides_session_row_with_zero_turns() -> None:
+    """v0.9.4: no spurious 'session' row for an agent that has never made an
+    LLM call this incarnation -- matches this panel's existing "no spurious
+    zero entry" discipline (e.g. capabilities only shown when non-empty)."""
+    panel = AgentDetailPanel()
+    app = _SingleWidgetApp(panel)
+    async with app.run_test():
+        panel.update_detail(
+            "flaky",
+            {
+                "name": "flaky",
+                "type": "agent",
+                "status": "running",
+                "process_id": "topo",
+                "uptime_seconds": 300.0,
+                "session_turn_count": 0,
+                "session_duration_seconds": 0.0,
+            },
+            None,
+        )
+        table = panel.query_one("#detail-table", DataTable)
+        rows = [table.get_row_at(i) for i in range(table.row_count)]
+        fields = {row[0]: row[1] for row in rows}
+        assert "session" not in fields
+
+
+@pytest.mark.asyncio
+async def test_agent_detail_panel_hides_session_row_when_field_absent() -> None:
+    """Backward compatibility: a topology_node dict without session fields at
+    all (e.g. from a not-yet-upgraded remote process) must not crash or show
+    a bogus session row."""
+    panel = AgentDetailPanel()
+    app = _SingleWidgetApp(panel)
+    async with app.run_test():
+        panel.update_detail(
+            "worker-a",
+            {"name": "worker-a", "type": "agent", "status": "running", "process_id": "topo"},
+            None,
+        )
+        table = panel.query_one("#detail-table", DataTable)
+        rows = [table.get_row_at(i) for i in range(table.row_count)]
+        fields = {row[0]: row[1] for row in rows}
+        assert "session" not in fields
+
+
+@pytest.mark.asyncio
+async def test_agent_detail_panel_shows_hitl_approval_row_and_distinct_color() -> None:
+    """v0.9.4 (design/dashboard-v2.md §6/§18): a HITL-suspended agent's title
+    renders the distinct blue signal (not the shared SUSPENDED grey a
+    governance pause would use), and the table gains a readable
+    'suspended_because' row."""
+    panel = AgentDetailPanel()
+    app = _SingleWidgetApp(panel)
+    async with app.run_test():
+        panel.update_detail(
+            "approval-worker",
+            {
+                "name": "approval-worker",
+                "type": "agent",
+                "status": "SUSPENDED",
+                "process_id": "topo",
+                "suspend_category": "hitl_approval",
+            },
+            None,
+        )
+        title = panel.query_one("#detail-title", Static)
+        assert "blue" in str(title.content)
+        table = panel.query_one("#detail-table", DataTable)
+        rows = [table.get_row_at(i) for i in range(table.row_count)]
+        fields = {row[0]: row[1] for row in rows}
+        assert fields["suspended_because"] == "awaiting approval (HITL)"
+
+
+@pytest.mark.asyncio
+async def test_agent_detail_panel_governance_pause_uses_shared_grey_not_hitl_blue() -> None:
+    """A governance-pause (or category-less/'other') SUSPENDED agent keeps
+    the original shared grey -- the distinct blue is HITL-only."""
+    panel = AgentDetailPanel()
+    app = _SingleWidgetApp(panel)
+    async with app.run_test():
+        panel.update_detail(
+            "paused-worker",
+            {
+                "name": "paused-worker",
+                "type": "agent",
+                "status": "SUSPENDED",
+                "process_id": "topo",
+                "suspend_category": "governance_pause",
+            },
+            None,
+        )
+        title = panel.query_one("#detail-title", Static)
+        rendered = str(title.content)
+        assert "blue" not in rendered
+        assert "grey58" in rendered
+        table = panel.query_one("#detail-table", DataTable)
+        rows = [table.get_row_at(i) for i in range(table.row_count)]
+        fields = {row[0]: row[1] for row in rows}
+        assert fields["suspended_because"] == "governance pause"
+
+
+@pytest.mark.asyncio
+async def test_topology_tree_renders_hitl_agent_with_distinct_color() -> None:
+    """The tree's own leaf label (not just the detail panel's title) also
+    carries the distinct HITL color -- both render surfaces stay consistent."""
+    tree = TopologyTree()
+    app = _SingleWidgetApp(tree)
+    async with app.run_test():
+        tree.update_topology(
+            {
+                "name": "root",
+                "type": "supervisor",
+                "children": [
+                    {
+                        "name": "approval-worker",
+                        "type": "agent",
+                        "status": "SUSPENDED",
+                        "suspend_category": "hitl_approval",
+                    }
+                ],
+            }
+        )
+        # update_topology's tree shape (see _add_topology_node): a non-"agent"
+        # top-level node (here, "supervisor") is itself added as a NEW child
+        # under self.root -- so tree.root.children[0] is MY "root" supervisor
+        # node, and the agent LEAF is one level deeper still.
+        supervisor_node = tree.root.children[0]
+        leaf = supervisor_node.children[0]
+        # The tree's label is a parsed Rich Text (markup already resolved into
+        # style Spans by add_leaf()) -- "blue" lives in a Span's style, not in
+        # str(label) itself, unlike the detail panel's raw-markup-string Static.
+        assert any("blue" in str(span.style) for span in leaf.label.spans)
 
 
 @pytest.mark.asyncio

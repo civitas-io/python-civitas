@@ -9,18 +9,39 @@ Each endpoint has its OWN background poll worker (design §7: "each independentl
 retried on failure with a visible 'reconnecting…' banner instead of the whole app
 dying") — a stalled `/processes` probe (e.g. a Worker mid-restart) must never
 freeze the topology tree or vice versa.
+
+v0.9.4: multi-cluster/multi-topology view (design/dashboard-v2.md P2). The
+per-cluster three-pane-view-plus-poll-workers logic that used to live
+directly on ``CivitasDashboardApp`` was extracted into ``ClusterView`` (a
+real, independently reusable Widget) so the app can host N of them — one
+per topology given on the command line. Confirmed empirically before this
+refactor (not assumed): a Widget's own ``query_one()`` scopes correctly to
+its own subtree even with sibling instances sharing the same child IDs, and
+a Widget's own ``BINDINGS`` dispatch correctly whenever ANY descendant
+currently has focus, not just the widget itself — both are what make N
+independent ``ClusterView`` instances (each with their own poll workers,
+their own "f" focus-toggle, their own reconnect banner) safe to host
+side-by-side without cross-cluster interference or ID-suffixing hacks.
+
+Single-topology invocation is unchanged in behavior and DOM shape from the
+caller's point of view: exactly one ``ClusterView`` is composed directly,
+no ``TabbedContent`` wrapper — existing code/tests that ``query_one()`` for
+``TopologyTree``/``AgentDetailPanel``/etc directly on the App still work,
+since Textual's ``query_one()`` searches the whole subtree recursively, not
+just direct children.
 """
 
 from __future__ import annotations
 
 import logging
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from typing import Any
 
 from textual import work
 from textual.app import App, ComposeResult
-from textual.containers import Horizontal
-from textual.widgets import Footer, Header, Tree
+from textual.containers import Horizontal, Vertical
+from textual.widgets import Footer, Header, TabbedContent, TabPane, Tree
 
 from civitas.dashboard.client import DashboardConnectionError, fetch_json
 from civitas.dashboard.widgets import (
@@ -36,14 +57,27 @@ logger = logging.getLogger(__name__)
 _CSS_PATH = "app.tcss"
 
 
-class CivitasDashboardApp(App[None]):
-    """``civitas top`` — live, mouse-clickable dashboard for a running topology."""
+@dataclass(frozen=True)
+class ClusterTarget:
+    """One topology to attach to — a label (shown on its tab in multi-cluster
+    mode; irrelevant in single-cluster mode) plus its TopologyServer address."""
 
-    CSS_PATH = _CSS_PATH
-    TITLE = "civitas top"
-    BINDINGS = [("q", "quit", "Quit")]
+    label: str
+    host: str
+    port: int
 
-    def __init__(self, host: str = "127.0.0.1", port: int = 6789, refresh: float = 1.0) -> None:
+
+class ClusterView(Vertical):
+    """One cluster's live three-pane view, plus its own independent poll
+    workers and its own reconnect banner (v0.9.4) — extracted from
+    ``CivitasDashboardApp`` so the app can host N of these side-by-side in
+    multi-cluster mode. See module docstring for why this is safe (query
+    scoping + binding dispatch both confirmed to work correctly per-instance).
+    """
+
+    BINDINGS = [("f", "toggle_focus", "Focus detail")]
+
+    def __init__(self, host: str, port: int, refresh: float) -> None:
         super().__init__()
         self._host = host
         self._port = port
@@ -55,6 +89,8 @@ class CivitasDashboardApp(App[None]):
         self._metrics: dict[str, Any] | None = None
         self._processes: list[dict[str, Any]] | None = None
         self._focused_name: str | None = None
+        # v0.9.4: whether focus/expand mode is currently active (design §7.0).
+        self._focus_mode = False
         # Which endpoint paths are CURRENTLY failing. A set, not a single
         # flag/banner-owned bool: three independent workers share one banner
         # widget, and a naive "clear on any success" would let a healthy
@@ -63,13 +99,11 @@ class CivitasDashboardApp(App[None]):
         self._failing: set[str] = set()
 
     def compose(self) -> ComposeResult:
-        yield Header()
         yield ReconnectBanner()
         with Horizontal(id="main"):
             yield TopologyTree()
             yield AgentDetailPanel()
             yield ProcessResourcePanel()
-        yield Footer()
 
     def on_mount(self) -> None:
         self._poll_topology()
@@ -86,6 +120,23 @@ class CivitasDashboardApp(App[None]):
             return
         self._focused_name = name
         self._refresh_detail_panel()
+        event.stop()  # v0.9.4: don't let a sibling ClusterView's own Tree react too
+
+    def action_toggle_focus(self) -> None:
+        """v0.9.4: toggle focus/expand mode (design §7.0) -- widens
+        AgentDetailPanel at the expense of TopologyTree/ProcessResourcePanel
+        via a CSS class on #main, rather than replacing the three-pane
+        layout entirely (Mockup B's "three equally first-class panels,
+        always visible" philosophy holds even while focused -- this EXPANDS
+        the detail pane, it doesn't hide the other two).
+
+        No-ops with nothing selected yet -- expanding an empty placeholder
+        has no real effect worth a keypress.
+        """
+        if self._focused_name is None:
+            return
+        self._focus_mode = not self._focus_mode
+        self.query_one("#main").set_class(self._focus_mode, "focused")
 
     def _refresh_detail_panel(self) -> None:
         detail = self.query_one(AgentDetailPanel)
@@ -110,7 +161,10 @@ class CivitasDashboardApp(App[None]):
     # empty tree forever. (v0.9.3.1: this endpoint was /metrics at the time
     # -- renamed to /snapshot to make room for real Prometheus exposition at
     # the standard /metrics path; this comment's history is otherwise
-    # unchanged.)
+    # unchanged. v0.9.4: these workers now run per-ClusterView instance, not
+    # per-App — Textual's @work group isolation is per-DOMNode-method, so N
+    # ClusterViews' identically-named groups don't collide with each other,
+    # confirmed alongside this refactor's other Textual-mechanic checks.)
     @work(exclusive=True, group="topology-poll")
     async def _poll_topology(self) -> None:
         async for data in self._poll_forever("/topology"):
@@ -139,7 +193,7 @@ class CivitasDashboardApp(App[None]):
             self.query_one(ProcessResourcePanel).update_processes(processes)
 
     def _touch_dom(self) -> bool:
-        """``True`` if it's currently safe to query/mutate this app's DOM.
+        """``True`` if it's currently safe to query/mutate this widget's DOM.
 
         Found via a real, reproducible failure (not review): Textual's own
         app-shutdown teardown (``run_test()``'s ``__aexit__`` in tests; the
@@ -151,16 +205,18 @@ class CivitasDashboardApp(App[None]):
         widgets it expects, raising ``NoMatches`` and crashing the worker
         (which ``run_test()`` then re-raises). Checking ``self.is_running``
         before every DOM touch closes that window without an artificial
-        try/except NoMatches at every call site.
+        try/except NoMatches at every call site. (v0.9.4: ``Widget.is_running``
+        delegates to the owning App's own ``is_running`` — correct here too,
+        not just for App subclasses.)
         """
         return self.is_running
 
     def _mark_ok(self, path: str) -> None:
         """Endpoint ``path`` just answered successfully.
 
-        Only clears/hides the shared banner when NO endpoint is failing — see
-        ``self._failing``'s docstring for why a naive per-worker clear() is a
-        real race with three concurrent poll workers.
+        Only clears/hides this cluster's OWN banner when NO endpoint of ITS
+        OWN is failing — see ``self._failing``'s docstring for why a naive
+        per-worker clear() is a real race with three concurrent poll workers.
         """
         self._failing.discard(path)
         if not self._touch_dom():
@@ -173,7 +229,9 @@ class CivitasDashboardApp(App[None]):
 
     def _mark_failed(self, path: str) -> None:
         """Endpoint ``path`` just failed — add it to the failing set and show
-        (or update) the shared banner naming every currently-failing endpoint."""
+        (or update) this cluster's OWN banner naming every currently-failing
+        endpoint (never a different cluster's — each ClusterView owns a
+        distinct ReconnectBanner instance)."""
         self._failing.add(path)
         if not self._touch_dom():
             return
@@ -183,10 +241,11 @@ class CivitasDashboardApp(App[None]):
         """Poll ``path`` forever at ``self._refresh`` interval.
 
         Yields the parsed JSON body on every successful fetch. On failure,
-        marks this endpoint failing in the shared banner and keeps retrying —
-        never raises, never stops the loop; this is what makes each endpoint's
-        failure independently visible from the others (design §7), without one
-        endpoint's recovery silently masking a different endpoint's outage.
+        marks this endpoint failing in this cluster's own banner and keeps
+        retrying — never raises, never stops the loop; this is what makes
+        each endpoint's failure independently visible from the others
+        (design §7), without one endpoint's recovery silently masking a
+        different endpoint's outage.
         """
         import asyncio
 
@@ -201,4 +260,61 @@ class CivitasDashboardApp(App[None]):
             await asyncio.sleep(self._refresh)
 
 
-__all__ = ["CivitasDashboardApp"]
+class CivitasDashboardApp(App[None]):
+    """``civitas top`` — live, mouse-clickable dashboard for one or more
+    running topologies (v0.9.4: multi-cluster support)."""
+
+    CSS_PATH = _CSS_PATH
+    TITLE = "civitas top"
+    BINDINGS = [("q", "quit", "Quit")]
+
+    def __init__(
+        self,
+        clusters: list[ClusterTarget] | None = None,
+        refresh: float = 1.0,
+        *,
+        host: str = "127.0.0.1",
+        port: int = 6789,
+    ) -> None:
+        """``clusters`` is the v0.9.4 multi-topology API. ``host``/``port``
+        are kept as a backward-compatible single-cluster convenience (the
+        v0.9.1-v0.9.3 constructor shape) — used only when ``clusters`` is
+        not given, so no existing direct-construction call site breaks.
+        """
+        super().__init__()
+        self._clusters = clusters or [ClusterTarget(label="default", host=host, port=port)]
+        self._refresh = refresh
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        if len(self._clusters) == 1:
+            # v0.9.1-v0.9.3 shape, unchanged: no tab bar at all for a single
+            # topology — the common case shouldn't carry multi-cluster UI
+            # chrome it has no use for.
+            cluster = self._clusters[0]
+            yield ClusterView(cluster.host, cluster.port, self._refresh)
+        else:
+            with TabbedContent():
+                for cluster in self._clusters:
+                    with TabPane(cluster.label, id=f"cluster-{cluster.label}"):
+                        yield ClusterView(cluster.host, cluster.port, self._refresh)
+        yield Footer()
+
+    def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
+        """v0.9.4: move keyboard focus onto the newly-active tab's own
+        TopologyTree -- found live (not assumed) that TabbedContent's own
+        internal tab-selector bar (ContentTabs) grabs default focus instead
+        of any tab's actual content, which would silently make ClusterView's
+        "f" binding (bound via ancestor-of-focused-widget dispatch) never
+        fire at all in multi-cluster mode -- confirmed by inspecting
+        app.focused directly during a real headless run, not by review.
+        Fires for the initially-active tab too, not just user-driven
+        switches, so this closes the gap in both cases with one handler.
+        """
+        try:
+            event.pane.query_one(TopologyTree).focus()
+        except Exception:
+            logger.debug("could not focus newly-active tab's tree", exc_info=True)
+
+
+__all__ = ["CivitasDashboardApp", "ClusterTarget", "ClusterView"]

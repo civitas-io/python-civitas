@@ -1197,6 +1197,26 @@ story). `examples/dashboard_demo/topology.yaml` now also feeds a `SQLiteBackend`
 demo topology serves `civitas top`, Grafana, and `civitas telemetry` from the same live run,
 verified end-to-end including dynamically-spawned children's cost data.
 
+## v0.9.4 — Dashboard TUI Polish (Released)
+
+**Status: ✅ Released 2026-07-30, as a single release** (five small, self-contained additions to
+the existing live `civitas top` TUI — no auth needed, no new design surface — built and verified
+one item at a time, then shipped together as this one release, matching the v0.9.3 precedent).
+
+**Also closed by this walkthrough, not previously cross-referenced**: dashboard-v2.md's original
+P1 item "historical charts/sparklines (message-rate, cost-over-time)" is exactly what v0.9.3's B2
+(`SQLiteQueryEngine.cost_over_time`/`message_rate_over_time`) and B3 (`civitas telemetry`'s real
+charts) shipped — a different app (`civitas telemetry`, not `civitas top`) than originally
+envisioned, but the same underlying need. Considered done, not tracked separately.
+
+| Item | Priority | Source | Status |
+|------|----------|--------|--------|
+| Dashboard layout: optional focus/expand mode for the detail pane (Mockup A's wide-detail idea) | Low | design/dashboard-v2.md §7.0 (§14 addendum) — Mockup B (dense three-pane grid) shipped as the default in v0.9.1; Mockup A's core idea kept as an opt-in mode, not discarded | ✅ **Done** — a dedicated `f` keybinding (not Enter — confirmed `Tree.NodeSelected` can't distinguish click from Enter), widens `AgentDetailPanel` 1fr→3fr at the expense of the other two panes (which shrink but stay visible, never hidden). Verified via real measured widget widths in a headless Textual test, not just the CSS flag |
+| Dashboard: multi-cluster / multi-topology view | Low | design/dashboard-v2.md P2 (§15 addendum) | ✅ **Done** — `civitas dashboard` accepts multiple topology files, each attached to and polled concurrently, switchable via tabs, all already-live in the background (instant switching, no fetch-on-demand delay). Required extracting the per-cluster view+poll-worker logic into a new, independently reusable `ClusterView` widget. Found and fixed a real, live-discovered gap along the way: `TabbedContent`'s own tab-selector bar grabs default keyboard focus, not any tab's content — confirmed by inspecting `app.focused` directly, not assumed — which would have silently broken the "f" focus-toggle binding (item above) in multi-cluster mode. Verified against two REAL, concurrently-running `Runtime`+`TopologyServer` processes with genuinely distinct agent sets, confirming real cross-cluster data isolation |
+| Dashboard: "session length" (LLM conversation turns/duration) | Low | design/dashboard-v2.md P1 (§16 addendum) | ✅ **Done** — defined as THIS INCARNATION's LLM engagement (`AgentProcess.session_turn_count`/`session_duration_seconds`, reset on restart, matching `uptime_seconds`'s own precedent exactly) rather than a genuine cross-restart concept — that bigger idea is real and tracked separately, not folded in here (see "Tracked idea — explicit cross-restart `session_id` concept" below). Only counts real LLM usage (FD-01's discipline); exposed via `/topology` like `uptime_seconds`, not routed through `MetricsCollector`. Verified end-to-end against a real running `dashboard_demo` agent, not just unit-tested |
+| Dashboard: network I/O per process | Low | design/dashboard-v2.md P1 (§17 addendum) | ❌ **Investigated, declined** — a genuinely different category from "blocked": there's nothing to wait for, the underlying capability doesn't exist affordably on any platform. Confirmed empirically, not assumed: Linux's `/proc/<pid>/net/dev` is byte-for-byte identical to system-wide `/proc/net/dev` (per-namespace, not per-process, for the normal non-containerized case) — real attribution needs eBPF/root. macOS's `nettop -P -L 1 -x` DOES work (verified with real output) but is an undocumented, private CSV format with no stability contract. Windows has no clean per-process network counter in the standard taxonomy either. Every path needs root, heuristic packet-capture attribution, or fragile undocumented-CLI-parsing — none fit this project's lean-dependency philosophy. Not built, not planned |
+| Dashboard: distinct HITL-wait vs. governance-suspend visual signal | Low | design/dashboard-v2.md §6 option B (§18 addendum) | ✅ **Done** — the cross-repo blocker (Presidium owns the policy that would populate a meaningful `reason`) was broken by a civitas-side API, not an invented heuristic: `AgentProcess.suspend()`/`Runtime.suspend()`/the `_agency.suspend` wire payload all gained an additive, backward-compatible `category: SuspendCategory` parameter (`HITL_APPROVAL`/`GOVERNANCE_PAUSE`/`OTHER`, default `OTHER`), persisted in the same durable suspend marker, plus a `suspend_for_approval()` convenience wrapper. Rendered as a distinct **blue** (not the originally-suggested cyan — already reserved as `TOPOLOGY_ACCENT`) in the tree/detail panel, only for `hitl_approval`. `examples/dashboard_demo/` gained a real `ApprovalWorker` agent; verified end-to-end against it — a real running `/topology` endpoint returning `suspend_category: hitl_approval`, and a real headless Textual pilot + exported SVG confirming the actual rendered blue ink (`#0000ff`), not just markup text |
+
 ---
 
 ## Part 2 — Backlog
@@ -1258,18 +1278,57 @@ too — see Part 1 above (§B1-B3). Remaining Track B items:
 | v0.9.3.8 | **Live tick animation** for `CostChart`/`MessageRateChart` — identified while building B3, not built: today's refresh redraws each chart from scratch on every re-query (correct, but not smoothly animated between ticks) | Low priority, cosmetic |
 | v0.9.3.9 | **Scrollable/paginated `CostBreakdownTable`** — identified while building B3: today's table renders every agent/model row unpaginated; fine at small scale, would overflow one screen for a real deployment with many distinct agents/models | Low priority, only matters at larger cardinality |
 
-### v0.9.4 — Dashboard TUI polish (Planned, after v0.9.3.x)
+### Tracked idea — explicit cross-restart `session_id` concept (not scheduled)
 
-Small, self-contained additions to the existing live `civitas top` TUI — no auth needed, no new
-design surface, just more panes/signals on data already available (or cheaply addable).
+Raised in conversation (2026-07-30) while scoping v0.9.4's simple "session length" signal
+(above) — deliberately NOT folded into that small, incarnation-scoped feature. This is a
+genuinely bigger, cross-cutting idea: real session **identity** with explicit boundaries and
+**continuation relationships across restarts** ("session 2 continues session 1 after a
+crash-restart"), not just "how long has this incarnation been running."
 
-| Item | Priority | Source |
-|------|----------|--------|
-| Dashboard: network I/O per process | Low | design/dashboard-v2.md P1 |
-| Dashboard: "session length" (LLM conversation turns/duration) | Low | design/dashboard-v2.md P1 |
-| Dashboard: distinct HITL-wait vs. governance-suspend visual signal | Low | design/dashboard-v2.md §6 option B — blocked on a real HITL flow existing to design against first, not on auth |
-| Dashboard: multi-cluster / multi-topology view | Low | design/dashboard-v2.md P2 |
-| Dashboard layout: optional focus/expand mode for the detail pane (Mockup A's wide-detail idea) | Low | design/dashboard-v2.md §7.0 — Mockup B (dense three-pane grid) shipped as the default in v0.9.1; Mockup A's core idea kept as an opt-in mode, not discarded |
+**What it would add, concretely:**
+
+- **A real `session_id`** (likely a UUID) that can PERSIST across restarts when appropriate —
+  the runtime (or the agent) recognizing "this is a continuation of an interrupted session" vs
+  "this is genuinely new," which today's incarnation-scoped signal cannot do (it deliberately
+  resets on every restart, full stop).
+- **Explicit boundary triggers**, plural — today's signal has exactly one (a restart). A real
+  concept needs at least three: (a) idle timeout (no LLM call in N minutes → session ends even
+  without a restart), (b) an explicit agent-declared boundary (e.g. "user said goodbye", "task
+  complete" — an opt-in API, not automatic), (c) restart/crash (today's only signal).
+- **Propagation through the existing message-causality mechanism** — a `civitas.session_id`
+  attribute threaded through messages/spans the same way `trace_id` already propagates via
+  inheritance from `_current_message` in `send()`/`ask()`. This is what would let EVERY message
+  and span in one logical session share an identity, not just the initiating agent.
+- **A real telemetry connection, not just a dashboard cosmetic**: if spans carried
+  `civitas.session_id`, `SQLiteBackend`'s `normalize_span()` (§4) could promote it to a real
+  column, and `SQLiteQueryEngine` could gain a `cost_by_session`/`turns_by_session` query —
+  genuinely more useful paired with the ALREADY-tracked, not-yet-built "trace/span drill-down"
+  candidate method (§13's list): "show me this session's full trace timeline," not just one span.
+- **Cross-restart continuation would need `StateStore`** — persisting `{session_id, ended_at}` on
+  shutdown (graceful or crash-recovery-detected), read back in `on_start()`/`_restore_state()` to
+  decide whether to continue the prior session or start fresh (with some "recent enough to count
+  as interrupted" threshold needing its own decision).
+
+**Real open questions a proper design would need to resolve, not yet decided:**
+
+- **The crux of the whole thing**: does "session" mean "one incarnation's engagement" (today's
+  simple version, and what this whole idea has been implicitly assuming) or "one logical
+  conversation with a specific counterparty" — which a SINGLE incarnation could have MANY of
+  concurrently (e.g. a customer-support agent handling 5 different users' conversations at once)?
+  If the latter (which feels like the more honest, generally-useful definition), `session_id`
+  can't be a single scalar on the agent at all — it needs to be keyed per-correspondent/per-task,
+  a meaningfully different (and bigger) shape than anything sketched above.
+- Who generates/owns the session boundary — automatic runtime heuristics, or an explicit
+  opt-in agent API? Automatic is more "batteries included" but risks getting boundaries wrong for
+  use cases the runtime structurally can't know about (see the per-correspondent question above).
+- Does this belong in core `civitas`, or is it more naturally a `civitas_contrib` pattern/mixin
+  agents opt into? Also possibly touches v0.9.5's AuthN/AuthZ conversation ("who is this
+  conversation with" is an identity-adjacent question too) — worth raising there, not deciding now.
+
+**Not scheduled against any version** — tracked here so the idea isn't lost, deliberately not
+assigned to v0.9.4 (too big, violates that release's own "no new design surface" framing) or
+v0.9.5 (a different kind of design conversation, though possibly a discussion point there too).
 
 ### v0.9.5 — AuthN/AuthZ & dashboard control-plane (Planned, after v0.9.4)
 

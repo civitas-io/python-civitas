@@ -526,3 +526,45 @@ crashed and restarted by its supervisor — a deliberately-paused agent gets for
 crash signals). Fix direction: heartbeats ride the priority channel (stopgap) and liveness moves
 out of the per-agent mailbox (structural), per supervision-hardening.md D5. Until then,
 cross-process suspend (already a non-goal for v0.5 above) must remain off.
+
+---
+
+## Addendum (v0.9.4) — `SuspendCategory`: an additive, backward-compatible categorization
+
+The original design's `reason: str` was always free text with zero structure — by design, since
+this whole mechanism exists for **Presidium**, a separate external product, to consume for its
+HITL approval flow (see `docs/design/civitas-presidium-boundary.md`); civitas was never meant to
+interpret `reason`'s contents itself. `docs/design/dashboard-v2.md` §6 wanted to render a HITL
+approval wait differently from an operational governance pause, but had nothing to key off — both
+looked like an identical `SUSPENDED` with an opaque string.
+
+**Resolution**: `suspend()` gains an additive `category: SuspendCategory = SuspendCategory.OTHER`
+parameter (`HITL_APPROVAL` / `GOVERNANCE_PAUSE` / `OTHER`), alongside the unchanged free-form
+`reason`. This does NOT violate S1-S10 above:
+
+- **S2 (non-blocking boundary transition)** — unchanged; `category` is carried the same way
+  `reason` already is (`self._suspend_category`, actioned at the same boundary).
+- **S4/S5 (durable marker, write-ahead ordering)** — `category` is written into the SAME marker
+  dict `_enter_suspended()` already persists (`reason`/`since`/`approver` + now `category`), in the
+  same write-ahead-ordered checkpoint — no new persistence path, no new failure mode.
+- **S6 (approver-gated resume)** — unchanged; `resume(approver)` doesn't need to know which
+  category triggered the suspend.
+- **S10 (idempotent re-suspend)** — `_update_suspend_reason()` now also accepts an optional
+  `category` and updates it in place, same idempotent shape as the existing `reason` update.
+- **Restore path** — read via a new `suspend_category` property that reads the persisted marker
+  DIRECTLY, not a separate in-memory attribute — deliberately more restore-safe than the
+  pre-existing (harmless-today) gap where `self._suspend_reason` itself is never re-populated from
+  the marker after `_restore_state()`.
+
+**Backward compatibility** (a hard constraint — `suspend()`/`resume()` are a documented
+Civitas-Presidium contract): every new parameter defaults such that an existing caller passing
+only `reason=` is completely unaffected, landing in `SuspendCategory.OTHER` — today's only
+category, in effect. The `_agency.suspend` wire payload's `category` field is optional; a sender
+that never sends it (an older Presidium, or any other caller) keeps working exactly as before.
+
+**Convenience wrapper**: `suspend_for_approval(reason: str = "")` — "a subset of suspend/resume"
+— is `suspend(reason=reason, category=SuspendCategory.HITL_APPROVAL)`. `resume(approver)` is
+unchanged; no separate `approve()` alias was added.
+
+See `docs/design/dashboard-v2.md` §18 for the dashboard-rendering side of this (the actual
+motivating use case) and its own real end-to-end verification against a running agent.

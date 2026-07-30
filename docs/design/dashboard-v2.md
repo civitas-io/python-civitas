@@ -125,7 +125,7 @@ sets them costs nothing and reports nothing, rather than reporting a spurious al
 | `RUNNING` | green | |
 | `INITIALIZING` / `STOPPING` | yellow | transitional |
 | `CRASHED` | red | |
-| `SUSPENDED` | grey | covers both governance-pause and HITL-wait — they are the same mechanism today (see PRD discussion); a distinct cyan HITL signal is explicit P1/v0.9.2, not built now |
+| `SUSPENDED` | grey, or **blue** for a HITL approval wait | §18 (v0.9.4): a `SuspendCategory` distinguishes governance-pause/other (grey, unchanged) from a HITL approval wait (blue) — previously the same grey for both |
 | `STOPPED` | grey (dim) | terminal, distinct dim shade from SUSPENDED in the actual TUI palette |
 
 Elevated **restart rate** (`crashes_in_window` > 0 while status is `RUNNING`) renders as amber
@@ -488,3 +488,196 @@ called from anywhere in the runtime — a plainly-running agent's exposed status
 choke point (`_set_status()` in `civitas/process.py`), guarded so a user-supplied custom
 `MetricsSink` that only implements the required Protocol methods (`agent_status_changed` was
 never part of that Protocol) keeps working unchanged.
+
+## 14. §7.0's deferred focus/expand mode — shipped (v0.9.4)
+
+Mockup A's core idea (a wider detail pane), deferred at v0.9.1 sign-off as an opt-in mode rather
+than the default layout, shipped in v0.9.4. Implementation detail worth recording: §7.0's own
+illustrative text ("e.g. pressing Enter on a tree node") turned out not to be directly
+implementable as originally phrased — confirmed by reading Textual's `Tree.NodeSelected` event
+source, which carries no information about which input method (mouse click vs Enter key)
+triggered it, so there's no reliable way to distinguish "select" from "select AND expand" through
+that one event alone. Shipped instead as a dedicated `f` keybinding toggling a CSS class on
+`#main`, which resizes `AgentDetailPanel` from `1fr` to `3fr` at the expense of the other two
+panes (which shrink to `1fr` each but stay fully visible — Mockup B's "three equally first-class
+panels" philosophy holds even while focused; this expands the detail pane, it doesn't replace the
+layout). No-ops with nothing selected yet. Verified via real measured widget widths in a headless
+Textual test (`tests/integration/test_dashboard_app.py`), not just the CSS class flag being set.
+
+## 15. P2's deferred multi-cluster view — shipped (v0.9.4)
+
+`civitas dashboard` now accepts multiple topology files, each attached to and polled
+concurrently, switchable via tabs. Required extracting the per-cluster three-pane-view-plus-
+poll-workers logic that used to live directly on `CivitasDashboardApp` into a new, independently
+reusable `ClusterView` widget — the app hosts N of these inside a `TabbedContent` when multiple
+topologies are given, or exactly one directly (byte-for-byte unchanged single-cluster DOM shape
+and behavior) when only one is given.
+
+Two Textual mechanics were confirmed empirically, with small standalone scripts, BEFORE
+committing to this refactor shape, not assumed:
+
+- **A widget's own `query_one()` scopes correctly to its own subtree**, even with sibling
+  instances sharing identical child IDs (e.g. two `ClusterView`s each containing their own
+  `#main` `Horizontal`) — this is what makes N independent `ClusterView` instances safe to host
+  side-by-side without any ID-suffixing scheme.
+- **A widget's own `BINDINGS` dispatch correctly whenever ANY descendant currently has focus**,
+  not just the widget itself — confirmed the binding-resolution chain walks up from the focused
+  widget through its ancestors, checking each level's own `BINDINGS`. This is what lets
+  `ClusterView`'s own "f" focus-toggle binding (§14) keep working unmodified after moving from
+  `CivitasDashboardApp` onto `ClusterView` itself.
+
+**One real, live-discovered gap found while verifying the second mechanic against the ACTUAL
+multi-cluster composition** (not the isolated test scripts above): `TabbedContent`'s own internal
+tab-selector bar (`ContentTabs`) grabs default keyboard focus when the app mounts — not any
+tab's own content. Confirmed by inspecting `app.focused` directly during a real headless run: it
+was `ContentTabs()`, not `TopologyTree()`, meaning `ClusterView`'s "f" binding would have silently
+never fired in multi-cluster mode (nothing in that focus chain includes `ClusterView` as an
+ancestor). Fixed by handling `TabbedContent.TabActivated` at the App level and moving focus onto
+the newly-active tab's own `TopologyTree` — fires for the initially-active tab too, not just
+user-driven switches, closing both gaps with one handler.
+
+Each `ClusterView` owns its own `ReconnectBanner` (not one shared banner disambiguated by cluster
+name) — simpler mental model, avoids cross-cluster banner-text complexity, matches "a cluster's
+own local health status" naturally. Tab labels are derived from each topology file's own name,
+sanitized to a safe widget-ID character set, with a numeric suffix for the (unlikely but real)
+case of two topology files sharing a stem. Verified against two REAL, concurrently-running
+`Runtime`+`TopologyServer` processes (not two mocked endpoints) — confirmed genuine cross-cluster
+data isolation (each `ClusterView` shows only its own topology's own agents, never a sibling's).
+
+## 16. P1's deferred "session length" — shipped (v0.9.4)
+
+Defined and scoped in conversation (2026-07-30) before any code, deliberately reusing an existing
+precedent rather than inventing a new runtime primitive — this section's whole framing ("no auth
+needed, no new design surface") ruled out a genuine explicit session concept, which is real,
+separate, tracked future work instead (`docs/milestones.md`).
+
+**Definition**: a "session" is THIS INCARNATION's LLM engagement — `AgentProcess.session_turn_count`
+(how many LLM calls this incarnation has actually reported usage for) and
+`AgentProcess.session_duration_seconds` (seconds since the first one), both plain instance
+attributes reset in `_start_nowait()` alongside `_incarnation_started_at`, matching
+`uptime_seconds`'s own precedent exactly: a restart is a fresh instance, so a fresh session too —
+a crash-and-recover genuinely interrupts whatever was happening, treating it as a new session is
+more honest than pretending continuity across a restart.
+
+Only counts real usage — wired into `_report_llm_metrics()`'s existing "nothing reported -> no
+spurious entry" gate (FD-01's established discipline), so an `llm_span()` that never reports
+tokens/cost produces neither a metrics call nor a counted turn. Deliberately does NOT reset on an
+idle gap between calls (accepted simplification, not a gap to close — a real idle-timeout-based
+boundary is part of the separate, tracked, cross-restart session_id concept below, not this
+signal).
+
+Exposed via `/topology`'s existing `_serialize_node()` (same place `uptime_seconds` already is,
+not routed through `MetricsCollector` at all — session tracking works with zero metrics sink
+attached, confirmed by a dedicated test). Rendered in `AgentDetailPanel` as a "session" row
+right after "uptime", only shown once `session_turn_count > 0` (matching this panel's existing
+"no spurious zero entry" discipline for optional fields like `capabilities`).
+
+Verified end-to-end against a REAL running `dashboard_demo` (`ChattyWorker`'s real periodic LLM
+calls), not just unit-tested: `civitas top`'s actual detail pane rendered `['session', '16 turns,
+31s']` for a real live agent, confirmed via the headless Textual pilot reading the ACTUAL
+`DataTable` rows, not a mock.
+
+### Tracked, NOT built here: an explicit, cross-restart `session_id` concept
+
+During this conversation, a genuinely separate, bigger idea was raised and is worth tracking
+properly rather than folding into this small signal: **an explicit `session_id` with real
+boundaries and continuation relationships across restarts** — e.g. "session 2 continues session 1
+after a crash-restart", or a session that ends on an idle timeout even without any restart at all.
+See `docs/milestones.md`'s dedicated tracked-idea entry for the full writeup — it's cross-cutting
+(touches spans/telemetry, not just the dashboard), genuinely bigger than a "Low priority" cosmetic
+signal, and deliberately NOT conflated with `session_turn_count`/`session_duration_seconds` above,
+which remain the simple, always-derived, incarnation-scoped version.
+
+## 17. P1's "network I/O per process" — investigated, declined (v0.9.4)
+
+Investigated properly (empirically, on real systems) rather than assumed straightforward, and
+the conclusion is a deliberate decision NOT to build this — a different category from the
+HITL-wait item's "still blocked, waiting on a prerequisite": there is nothing to wait for here,
+the underlying capability doesn't exist affordably on any target platform.
+
+**Linux**: `/proc/<pid>/net/dev` exists but is byte-for-byte IDENTICAL to system-wide
+`/proc/net/dev` — confirmed directly in a real container, not assumed. It reflects the current
+network NAMESPACE, not the process, for any process sharing the host's default namespace (the
+normal, non-containerized case). Real per-process attribution needs eBPF tracing (root, kernel
+support, genuinely complex tooling) or cgroup network accounting (not universally configured) —
+no simple library call exists.
+
+**macOS**: `nettop -P -L 1 -x` DOES produce real per-process `bytes_in`/`bytes_out` — confirmed by
+actually running it and reading real data for real processes. But it's a private, undocumented CSV
+format from an Apple system binary, not a public API — shelling out and parsing it is inherently
+fragile (no stability contract across macOS versions), and it's macOS-only regardless.
+
+**Windows** (reasoned from established Windows facts, not verified on a Windows machine — none
+available in this environment): no clean per-process network counter exists in the standard
+Performance Counter taxonomy either — network stats are per-NIC, not per-process; real
+attribution needs ETW (Event Tracing for Windows), genuinely complex and typically privileged.
+
+**Decision**: every viable path requires at least one of root/elevated privileges,
+heuristic/approximate packet-capture-based attribution, or shelling out to an undocumented
+platform-specific CLI tool with no stability guarantee — none of which fits this project's lean-
+dependency, no-OS-command-shelling-for-core-features philosophy (the existing resource panel's
+`cpu_percent`/`memory_info`/`create_time` are genuinely cross-platform via `psutil`, with no such
+trade-offs; this metric has no equivalent). Not built, not planned, tracked here as a real,
+investigated "no" rather than a silently dropped backlog item.
+
+## 18. HITL-wait vs. governance-suspend: `SuspendCategory` (built, v0.9.4)
+
+§6's table deferred this ("a distinct cyan HITL signal is explicit P1/v0.9.2, not built now") and
+it was subsequently reclassified as blocked: `suspend()`/`resume()`'s `reason` was a free-form
+string with zero structure, and the entire mechanism was designed for **Presidium**, a separate
+external product, to populate meaningfully (see `docs/design/civitas-presidium-boundary.md` and
+`docs/design/durable-suspension.md`) — civitas has no basis to invent a heuristic distinguishing
+"governance pause" from "HITL approval wait" against a boundary that isn't this repo's to own.
+Confirmed empirically before treating this as blocked: `suspend()`/`resume()` were exercised ONLY
+in unit tests anywhere in this repo, zero real usage to design a signal against.
+
+**Unblocked by a civitas-side API, not an invented heuristic.** `AgentProcess.suspend()` now takes
+an additive `category: SuspendCategory = SuspendCategory.OTHER` parameter alongside the existing
+free-form `reason` — civitas ships the *mechanism* (a structured, optional category), any real
+caller (Presidium or otherwise) still owns the *policy* of what to send and when. Backward
+compatible by construction: an existing caller passing only `reason=` lands in `OTHER` — today's
+only category in effect — unaffected. `Runtime.suspend()` (the cross-process/by-name entry point)
+and the `_agency.suspend` wire payload both carry the same additive `category` field (missing =
+`OTHER`, so an older sender keeps working). A `suspend_for_approval(reason: str = "")` convenience
+wrapper — "a subset of suspend/resume" — sets `category=HITL_APPROVAL` without the caller needing
+to know the enum exists.
+
+**Color correction, caught before implementing, not after**: the original PRD/§6 note called for
+cyan, but §7.1's LATER-ratified category-color rule ("health colors never mixed with category
+colors") had already reserved cyan as `TOPOLOGY_ACCENT` by the time this was built — using it here
+would have violated that rule. Used `blue` instead (confirmed unused anywhere in the palette).
+
+**Persisted correctly, not just in-memory**: `category` is written into the SAME durable suspend
+marker dict `_enter_suspended()` already persists (alongside `reason`/`since`/`approver`), read
+back via a new `suspend_category` property that reads the marker DIRECTLY — not a separate
+in-memory attribute. This matters concretely: an approval pending across a crash/redeploy must
+still render as "awaiting approval" after restore, not silently reset to grey. Found and
+deliberately avoided repeating a related, pre-existing, harmless-today gap while building this:
+`self._suspend_reason` (the in-memory attribute) is never actually synced back from the persisted
+marker after `_restore_state()` — the new `category` field does not repeat that pattern.
+
+**Dashboard wiring**: `/topology`'s `_serialize_node()` (and its 4 sibling call sites) now expose
+`suspend_category` for every agent node; `civitas/dashboard/palette.py`'s `status_color()`/
+`status_markup()` take an additive, optional `suspend_category` parameter that resolves to
+`HITL_ACCENT` (blue) only when `status == "suspended" and suspend_category == "hitl_approval"`;
+`TopologyTree`'s leaf labels and `AgentDetailPanel`'s title both use it, and the detail panel gains
+a `suspended_because` row (readable label, e.g. "awaiting approval (HITL)") shown only while
+actually suspended.
+
+**Verified against real running infrastructure, not just unit tests**: `examples/dashboard_demo/`
+gained a genuine `ApprovalWorker` agent (self-suspends via `suspend_for_approval()` from within
+`handle()`, auto-"approves" itself after ~20s purely for the demo). A real running instance's
+`/topology` endpoint returned `"suspend_category": "hitl_approval"`; a real headless Textual pilot
+confirmed the tree leaf's label carries a `Span(..., 'blue')`, the detail title renders
+`[blue]○ SUSPENDED[/]`, and the exported SVG screenshot contains the resolved hex fill `#0000ff`
+— the actual rendered ink, not just the markup string.
+
+**Real finding while building the demo agent (not assumed)**: calling `suspend_for_approval()`
+from a plain `asyncio.create_task()` background loop — the pattern every other demo agent in this
+file uses — never actually transitions the agent. `suspend()` intentionally only takes effect at
+the message loop's next boundary (S2, `docs/design/durable-suspension.md`), which only re-checks
+when a message arrives; an agent idling with an empty mailbox never wakes up to notice. `resume()`
+is NOT boundary-deferred (it transitions synchronously) so it remains safe to call directly from a
+background task. The demo agent (and this doc) now records the correct shape: self-suspend via a
+self-sent message consumed in `handle()`, matching the realistic HITL pattern of an agent deciding
+mid-request that it needs approval before proceeding.

@@ -57,9 +57,24 @@ TOPOLOGY_ACCENT = "cyan"
 LLM_ACCENT = "magenta"
 RESOURCE_ACCENT = "gold3"
 
+# v0.9.4 (dashboard-v2.md §6/§18): the distinct HITL-wait signal the original
+# §6 table deferred ("a distinct cyan HITL signal is explicit P1/v0.9.2, not
+# built now"). Deliberately NOT cyan -- §7.1's later-ratified rule reserves
+# cyan for TOPOLOGY_ACCENT ("health colors never mixed with category colors"),
+# so the original PRD note is corrected here rather than followed as written.
+HITL_ACCENT = "blue"
 
-def status_color(status: str) -> str:
-    """Color for a `ProcessStatus` value (case-insensitive)."""
+
+def status_color(status: str, suspend_category: str | None = None) -> str:
+    """Color for a `ProcessStatus` value (case-insensitive).
+
+    ``suspend_category`` (v0.9.4, additive/optional) distinguishes a HITL
+    approval wait from an operational governance pause -- both are otherwise
+    the identical SUSPENDED grey. Only takes effect when status is actually
+    "suspended"; harmless to pass for any other status (ignored).
+    """
+    if status.lower() == "suspended" and suspend_category == "hitl_approval":
+        return HITL_ACCENT
     return STATUS_COLORS.get(status.lower(), STATUS_COLORS["unknown"])
 
 
@@ -68,9 +83,13 @@ def status_dot(status: str) -> str:
     return STATUS_DOTS.get(status.lower(), STATUS_DOTS["unknown"])
 
 
-def status_markup(status: str) -> str:
-    """Rich markup fragment for a status: colored dot + label, e.g. '[green]● RUNNING[/]'."""
-    return f"[{status_color(status)}]{status_dot(status)} {status.upper()}[/]"
+def status_markup(status: str, suspend_category: str | None = None) -> str:
+    """Rich markup fragment for a status: colored dot + label, e.g. '[green]● RUNNING[/]'.
+
+    ``suspend_category`` (v0.9.4, additive/optional): see `status_color()`.
+    """
+    color = status_color(status, suspend_category)
+    return f"[{color}]{status_dot(status)} {status.upper()}[/]"
 
 
 def format_uptime(seconds: float) -> str:

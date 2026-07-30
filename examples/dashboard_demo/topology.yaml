@@ -37,3 +37,6 @@ supervision:
 
     - type: examples.dashboard_demo.agents.SpawnerAgent
       name: spawner
+
+    - type: examples.dashboard_demo.agents.ApprovalWorker
+      name: approval_worker

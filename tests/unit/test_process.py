@@ -554,6 +554,63 @@ def test_llm_span_reports_metrics_even_without_a_tracer() -> None:
     agent._metrics.llm_call.assert_called_once_with("tracker", 10, 0, 0.0, model="claude-sonnet")
 
 
+def test_session_turn_count_and_duration_start_at_zero() -> None:
+    """v0.9.4 (design/dashboard-v2.md P1): an agent that has never made an
+    LLM call this incarnation has no session yet."""
+    agent = TrackingAgent()
+    assert agent.session_turn_count == 0
+    assert agent.session_duration_seconds == 0.0
+
+
+def test_session_turn_count_increments_only_on_real_usage() -> None:
+    """Matches FD-01's established discipline exactly: an llm_span() that
+    never reports usage produces neither a metrics call NOR a counted turn."""
+    agent = TrackingAgent()
+
+    with agent.llm_span("claude-sonnet"):
+        pass  # never reports usage
+    assert agent.session_turn_count == 0
+
+    with agent.llm_span("claude-sonnet") as span:
+        span.set_attribute("civitas.llm.tokens_in", 10)
+    assert agent.session_turn_count == 1
+
+    with agent.llm_span("claude-sonnet") as span:
+        span.set_attribute("civitas.llm.cost_usd", 0.01)
+    assert agent.session_turn_count == 2
+
+
+def test_session_duration_is_independent_of_metrics_sink() -> None:
+    """Unlike llm_call() forwarding, session tracking works with NO
+    MetricsSink attached at all -- it's a plain AgentProcess-owned concept
+    the dashboard reads directly, matching uptime_seconds's own precedent."""
+    agent = TrackingAgent()
+    assert agent._metrics is None
+
+    with agent.llm_span("claude-sonnet") as span:
+        span.set_attribute("civitas.llm.tokens_in", 10)
+
+    assert agent.session_turn_count == 1
+    assert agent.session_duration_seconds >= 0.0
+
+
+async def test_session_resets_on_restart_matching_uptime_seconds() -> None:
+    """v0.9.4: deliberately incarnation-scoped, same reset semantic as
+    uptime_seconds -- a restart is a fresh instance, so a fresh session too."""
+    agent = TrackingAgent()
+    with agent.llm_span("claude-sonnet") as span:
+        span.set_attribute("civitas.llm.tokens_in", 10)
+    assert agent.session_turn_count == 1
+
+    # _start_nowait() is what every restart path calls to spin up a fresh
+    # incarnation's run task -- reproduces the reset without a full
+    # supervisor-restart integration test.
+    agent._start_nowait()
+    await agent._stop()
+    assert agent.session_turn_count == 0
+    assert agent.session_duration_seconds == 0.0
+
+
 def test_llm_span_reports_metrics_despite_exception() -> None:
     """v0.9.1 (D-DASH-5): metrics recording happens in the finally block —
     independent of the exception path already covered by set_error."""

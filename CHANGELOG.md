@@ -11,6 +11,61 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+## [0.9.4] — 2026-07-30
+
+Dashboard TUI polish: five small, self-contained additions to the existing live `civitas top`
+TUI, built and verified one item at a time, then shipped together as this one release, matching
+the v0.9.3 precedent. Full per-item detail in `docs/milestones.md` and `docs/design/dashboard-v2.md`.
+
+### Added
+
+- **Focus/expand mode** — a new `f` keybinding widens `AgentDetailPanel` 1fr→3fr (the other two
+  panes shrink but stay visible, never hidden). Verified via real measured widget widths in a
+  headless Textual test.
+- **Multi-cluster / multi-topology view** — `civitas dashboard` now accepts multiple topology
+  files (`topologies: list[str]`, was a single `topology: str`), each attached to and polled
+  concurrently, switchable via tabs, all already-live in the background. The per-cluster
+  view+poll-worker logic was extracted into a new, independently reusable `ClusterView` widget.
+  Verified against two real, concurrently-running `Runtime`+`TopologyServer` processes with
+  genuinely distinct agent sets.
+- **"Session length"** — `AgentProcess.session_turn_count`/`session_duration_seconds`, the
+  current incarnation's LLM engagement (resets on restart, matching `uptime_seconds`'s own
+  precedent). Only counts real LLM usage; exposed via `/topology`, rendered in the detail panel
+  as a "session" row shown only once the agent has made a call this incarnation.
+- **Distinct HITL-wait vs. governance-suspend visual signal** — `AgentProcess.suspend()`/
+  `Runtime.suspend()`/the `_agency.suspend` wire payload all gain an additive, backward-compatible
+  `category: SuspendCategory` parameter (`HITL_APPROVAL`/`GOVERNANCE_PAUSE`/`OTHER`, default
+  `OTHER`), persisted in the same durable suspend marker, plus a `suspend_for_approval(reason)`
+  convenience wrapper. Renders as a distinct **blue** (not cyan, already reserved as
+  `TOPOLOGY_ACCENT`) in the tree/detail panel for `hitl_approval`, alongside a new
+  `suspended_because` detail-panel row. `examples/dashboard_demo/` gained a real `ApprovalWorker`
+  agent demonstrating it end-to-end.
+
+### Fixed
+
+- `docs/design/dashboard-v2.md`'s original P1 "historical charts/sparklines" backlog item was
+  never cross-referenced as done — v0.9.3's B2/B3 (`SQLiteQueryEngine` + `civitas telemetry`)
+  already shipped exactly this, in a different app than originally envisioned. Noted, not
+  rebuilt.
+- `TabbedContent`'s own internal tab-selector bar was found to grab default keyboard focus
+  instead of any tab's content, which would have silently broken the focus/expand `f` binding
+  in multi-cluster mode — confirmed via `app.focused`, not assumed. Fixed by moving focus onto
+  the newly-active tab's tree on `TabbedContent.TabActivated`.
+- Calling `suspend_for_approval()` from a plain `asyncio.create_task()` background loop never
+  actually transitions the agent — `suspend()` only takes effect at the message loop's next
+  boundary (S2), which only re-checks when a message arrives, and an idling agent with an empty
+  mailbox never wakes up to notice. Documented and worked around in `examples/dashboard_demo/`'s
+  new `ApprovalWorker` via the correct self-suspend-from-`handle()` pattern.
+
+### Investigated, declined
+
+- **Network I/O per process** — a genuinely different category from "blocked": there is nothing
+  to wait for, the underlying capability doesn't exist affordably on any target platform. Linux's
+  `/proc/<pid>/net/dev` is byte-for-byte identical to system-wide `/proc/net/dev` for the normal
+  non-containerized case (confirmed in a real container); macOS's `nettop -P -L 1 -x` works but is
+  an undocumented private CSV format with no stability contract; Windows has no clean per-process
+  network counter in the standard taxonomy either. Not built, not planned.
+
 ## [0.9.3] — 2026-07-29
 
 Telemetry: OTEL trace linkage, real Prometheus metrics, a Grafana stack, native SQLite

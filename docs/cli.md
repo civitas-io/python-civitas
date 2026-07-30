@@ -264,12 +264,17 @@ room for real Prometheus text-format exposition at the standard `/metrics` scrap
 [observability.md](observability.md#prometheus-metrics-v0931).)
 
 ```bash
-civitas dashboard <topology.yaml> [--refresh <seconds>]
+civitas dashboard <topology.yaml> [<topology2.yaml> ...] [--refresh <seconds>]
 ```
+
+**v0.9.4: multiple topologies.** Given more than one topology file, each gets its own tab
+(labeled after the file's own name) — all attached to and polled concurrently, switchable
+instantly since every tab's data is already live in the background, not fetched on demand.
+A single topology (the common case) looks exactly as it always has — no tab bar at all.
 
 | Argument / Option | Default | Description |
 |-------------------|---------|-------------|
-| `topology` | — | Path to the topology YAML file (required). Must declare a `topology_server` node. |
+| `topologies` | — | Path(s) to one or more topology YAML files (required, variadic). Each must declare a `topology_server` node. |
 | `--refresh` / `-r` | `1.0` | Poll interval in seconds |
 
 Requires the `dashboard` extra:
@@ -290,13 +295,19 @@ Three equally-sized panes, all visible at once:
   Status dots follow a fixed color convention: green = running, yellow = starting/stopping, red =
   crashed, grey = suspended or stopped. A supervisor's crash count within its restart window, and
   a child's own restart count, render inline in amber when non-zero.
-- **Detail** (middle) — status, uptime, capabilities, restart count, and — for agents reporting
-  LLM usage via `llm_span()` — messages handled/sent, tokens in/out, cost, and last model used,
-  for whichever node is currently focused.
+- **Detail** (middle) — status, uptime, capabilities, restart count, a **session** row (v0.9.4;
+  turn count + duration since this incarnation's first LLM call, only shown once it's made one —
+  see [design/dashboard-v2.md](design/dashboard-v2.md#16-p1s-deferred-session-length-shipped-v094)
+  for the exact definition, including why it deliberately resets on restart), and — for agents
+  reporting LLM usage via `llm_span()` — messages handled/sent, tokens in/out, cost, and last
+  model used, for whichever node is currently focused.
 - **Processes** (right) — one row per OS process (the runtime itself, plus every distinct Worker
   in a multi-process topology), each with a proportional CPU% gauge bar and RSS memory.
 
 Press `Ctrl+P` for Textual's built-in command palette, including a live light/dark theme switcher.
+Press `f` to toggle focus/expand mode (v0.9.4) — widens the detail pane at the expense of the
+other two, which stay visible (not hidden). Requires a node to already be selected; a no-op
+otherwise. Press `f` again to return to the equal three-pane layout.
 Press `q` to quit; the topology you attached to keeps running.
 
 If the topology server becomes unreachable, a banner names the failing endpoint(s) and the

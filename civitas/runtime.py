@@ -28,7 +28,12 @@ from civitas.mcp.types import MCPServerConfig
 from civitas.messages import Message, _new_span_id, _uuid7
 from civitas.observability.otel_agent import run_otel_agent
 from civitas.plugins.loader import load_plugins_from_config
-from civitas.process import DYNAMIC_SUPERVISOR_CAPABILITY, SUPERVISOR_CAPABILITY, AgentProcess
+from civitas.process import (
+    DYNAMIC_SUPERVISOR_CAPABILITY,
+    SUPERVISOR_CAPABILITY,
+    AgentProcess,
+    SuspendCategory,
+)
 from civitas.sandbox.config import SandboxConfig
 from civitas.secrets.substitution import substitute_vars
 from civitas.security.config import GatewayAuthConfig, SecurityConfig
@@ -1212,7 +1217,9 @@ class Runtime:
     # Durable suspension — external entry points (Presidium HITL)
     # ------------------------------------------------------------------
 
-    async def suspend(self, name: str, reason: str = "") -> None:
+    async def suspend(
+        self, name: str, reason: str = "", category: SuspendCategory = SuspendCategory.OTHER
+    ) -> None:
         """Suspend an agent by name (S10).
 
         Delivers a priority ``_agency.suspend`` control message; the agent
@@ -1220,6 +1227,12 @@ class Runtime:
         Suspending an already-suspended agent keeps its original ``since`` and
         updates the reason. ``ask()`` into a suspended agent times out — that is
         intended; use ``send()`` plus polling for long approvals.
+
+        ``category`` (v0.9.4) is the same additive, backward-compatible
+        parameter as ``AgentProcess.suspend()`` — this is the cross-process/
+        by-name entry point, so it needs its own copy of the same parameter;
+        without it, only a same-process direct ``agent.suspend_for_approval()``
+        call could ever categorize a suspend.
         """
         if self._bus is None or self._tracer is None:
             raise RuntimeError("Runtime not started")
@@ -1227,7 +1240,7 @@ class Runtime:
             type="_agency.suspend",
             sender="_runtime",
             recipient=name,
-            payload={"reason": reason},
+            payload={"reason": reason, "category": category.value},
             trace_id=self._tracer.new_trace_id(),
             span_id=_new_span_id(),
             priority=1,

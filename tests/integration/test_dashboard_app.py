@@ -16,7 +16,7 @@ import asyncio
 import pytest
 
 from civitas import DynamicSupervisor, Runtime, Supervisor, TopologyServer
-from civitas.dashboard.app import CivitasDashboardApp
+from civitas.dashboard.app import CivitasDashboardApp, ClusterTarget, ClusterView
 from civitas.dashboard.widgets import (
     AgentDetailPanel,
     ProcessResourcePanel,
@@ -166,3 +166,179 @@ async def test_dashboard_app_processes_panel_populates() -> None:
             await pilot.pause()
     finally:
         await runtime.stop()
+
+
+@pytest.mark.asyncio
+async def test_dashboard_app_focus_mode_widens_detail_pane_and_toggles_off() -> None:
+    """v0.9.4: design §7.0's deferred Mockup A idea -- the "f" key widens
+    AgentDetailPanel at the expense of TopologyTree/ProcessResourcePanel,
+    which stay VISIBLE (not hidden) -- Mockup B's three-equally-first-class-
+    panels philosophy holds even while focused. Verified via real measured
+    widget widths (not just the CSS class flag), and that it toggles back.
+    """
+    ts = TopologyServer(name="topo", port=16956)
+    worker = _Echo("worker-a")
+    runtime = Runtime(supervisor=Supervisor("root", children=[ts, worker]))
+    await runtime.start()
+    try:
+        app = CivitasDashboardApp(host="127.0.0.1", port=16956, refresh=0.1)
+        async with app.run_test(size=(120, 40)) as pilot:
+            tree = app.query_one(TopologyTree)
+            await _wait_until(lambda: len(tree.root.children) > 0)
+            supervision_root = tree.root.children[0]
+            await _wait_until(lambda: len(supervision_root.children) > 0)
+            worker_node = next(n for n in supervision_root.children if n.data == "worker-a")
+            tree.select_node(worker_node)
+            await pilot.pause()
+
+            detail_before = app.query_one(AgentDetailPanel).size.width
+            tree_before = app.query_one(TopologyTree).size.width
+            resource_before = app.query_one(ProcessResourcePanel).size.width
+
+            await pilot.press("f")
+            await pilot.pause()
+
+            detail_after = app.query_one(AgentDetailPanel).size.width
+            tree_after = app.query_one(TopologyTree).size.width
+            resource_after = app.query_one(ProcessResourcePanel).size.width
+            assert detail_after > detail_before
+            assert tree_after < tree_before
+            assert resource_after < resource_before
+            assert tree_after > 0  # still visible, not hidden
+            assert resource_after > 0  # still visible, not hidden
+
+            await pilot.press("f")
+            await pilot.pause()
+            assert app.query_one(AgentDetailPanel).size.width == detail_before
+            assert app.query_one(TopologyTree).size.width == tree_before
+    finally:
+        await runtime.stop()
+
+
+@pytest.mark.asyncio
+async def test_dashboard_app_focus_mode_is_a_noop_with_nothing_selected() -> None:
+    """Expanding an empty placeholder has no real effect worth a keypress --
+    the toggle only engages once a node has actually been selected."""
+    ts = TopologyServer(name="topo", port=16957)
+    runtime = Runtime(supervisor=Supervisor("root", children=[ts]))
+    await runtime.start()
+    try:
+        app = CivitasDashboardApp(host="127.0.0.1", port=16957, refresh=0.1)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            assert app.query_one(ClusterView)._focused_name is None
+
+            await pilot.press("f")
+            await pilot.pause()
+            assert app.query_one("#main").has_class("focused") is False
+    finally:
+        await runtime.stop()
+
+
+@pytest.mark.asyncio
+async def test_dashboard_app_single_cluster_has_no_tab_bar() -> None:
+    """v0.9.4: the single-topology case must look EXACTLY as it did before
+    multi-cluster support existed -- no TabbedContent chrome for the common
+    case that has no use for it."""
+    from textual.widgets import TabbedContent
+
+    ts = TopologyServer(name="topo", port=16958)
+    runtime = Runtime(supervisor=Supervisor("root", children=[ts]))
+    await runtime.start()
+    try:
+        app = CivitasDashboardApp(host="127.0.0.1", port=16958, refresh=0.1)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            assert len(list(app.query(TabbedContent))) == 0
+            assert len(list(app.query(ClusterView))) == 1
+    finally:
+        await runtime.stop()
+
+
+@pytest.mark.asyncio
+async def test_dashboard_app_multi_cluster_shows_a_tab_per_topology() -> None:
+    """v0.9.4: two real, independently-running topologies, each with its
+    own live TopologyServer -- confirms the tab bar appears with the right
+    labels and each tab hosts its own independently-polling ClusterView.
+    """
+    from textual.widgets import TabbedContent
+
+    ts_a = TopologyServer(name="topo-a", port=16959)
+    worker_a = _Echo("worker-a")
+    runtime_a = Runtime(supervisor=Supervisor("root", children=[ts_a, worker_a]))
+    ts_b = TopologyServer(name="topo-b", port=16960)
+    worker_b = _Echo("worker-b")
+    runtime_b = Runtime(supervisor=Supervisor("root", children=[ts_b, worker_b]))
+    await runtime_a.start()
+    await runtime_b.start()
+    try:
+        clusters = [
+            ClusterTarget(label="cluster-a", host="127.0.0.1", port=16959),
+            ClusterTarget(label="cluster-b", host="127.0.0.1", port=16960),
+        ]
+        app = CivitasDashboardApp(clusters=clusters, refresh=0.1)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            tabs = app.query_one(TabbedContent)
+            tab_ids = {tab.id for tab in tabs.query("TabPane")}
+            assert tab_ids == {"cluster-cluster-a", "cluster-cluster-b"}
+
+            views = list(app.query(ClusterView))
+            assert len(views) == 2
+
+            def _both_polled() -> bool:
+                return all(v._topology is not None for v in views)
+
+            await _wait_until(_both_polled)
+
+            # Each ClusterView polled its OWN topology's own agent, not the
+            # other cluster's -- real cross-cluster isolation, not assumed.
+            # (Each tree also includes its own TopologyServer node itself,
+            # e.g. "topo-a" -- membership check, not an exact set, matching
+            # the existing single-cluster test's own established pattern.)
+            trees = list(app.query(TopologyTree))
+            assert len(trees) == 2
+            flat_a = {n.data for n in trees[0].root.children[0].children}
+            flat_b = {n.data for n in trees[1].root.children[0].children}
+            assert "worker-a" in flat_a
+            assert "worker-b" not in flat_a
+            assert "worker-b" in flat_b
+            assert "worker-a" not in flat_b
+    finally:
+        await runtime_a.stop()
+        await runtime_b.stop()
+
+
+@pytest.mark.asyncio
+async def test_dashboard_app_multi_cluster_focus_toggle_is_per_cluster() -> None:
+    """v0.9.4: pressing 'f' in one cluster's tab must not affect a sibling
+    cluster's own focus/expand state -- real per-instance isolation."""
+    ts_a = TopologyServer(name="topo-a", port=16961)
+    worker_a = _Echo("worker-a")
+    runtime_a = Runtime(supervisor=Supervisor("root", children=[ts_a, worker_a]))
+    ts_b = TopologyServer(name="topo-b", port=16962)
+    runtime_b = Runtime(supervisor=Supervisor("root", children=[ts_b]))
+    await runtime_a.start()
+    await runtime_b.start()
+    try:
+        clusters = [
+            ClusterTarget(label="a", host="127.0.0.1", port=16961),
+            ClusterTarget(label="b", host="127.0.0.1", port=16962),
+        ]
+        app = CivitasDashboardApp(clusters=clusters, refresh=0.1)
+        async with app.run_test(size=(120, 40)) as pilot:
+            views = list(app.query(ClusterView))
+            tree_a = views[0].query_one(TopologyTree)
+            await _wait_until(lambda: len(tree_a.root.children) > 0)
+            await _wait_until(lambda: len(tree_a.root.children[0].children) > 0)
+            worker_node = next(n for n in tree_a.root.children[0].children if n.data == "worker-a")
+            tree_a.select_node(worker_node)
+            await pilot.pause()
+
+            await pilot.press("f")
+            await pilot.pause()
+            assert views[0].query_one("#main").has_class("focused") is True
+            assert views[1].query_one("#main").has_class("focused") is False
+    finally:
+        await runtime_a.stop()
+        await runtime_b.stop()

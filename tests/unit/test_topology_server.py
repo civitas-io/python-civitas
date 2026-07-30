@@ -9,9 +9,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from civitas import DynamicSupervisor, Runtime, Supervisor, TopologyServer
+from civitas import AgentProcess, DynamicSupervisor, Runtime, Supervisor, TopologyServer
 from civitas.messages import Message
-from tests.conftest import wait_for
+from civitas.process import ProcessStatus, SuspendCategory
+from tests.conftest import wait_for, wait_for_status
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -21,8 +22,9 @@ from tests.conftest import wait_for
 def _make_mock_agent(name: str, status: str = "RUNNING") -> MagicMock:
     """v0.9.1 (D-DASH-1): sets real, JSON-serializable values for the fields
     TopologyServer's serializers now read (capabilities/capability_metadata/
-    uptime_seconds) — a bare MagicMock() auto-vivifies those as further
-    MagicMocks, which json.dumps() cannot serialize.
+    uptime_seconds, v0.9.4's session_turn_count/session_duration_seconds, and
+    v0.9.4's suspend_category) — a bare MagicMock() auto-vivifies those as
+    further MagicMocks, which json.dumps() cannot serialize.
     """
     agent = MagicMock()
     agent.name = name
@@ -31,6 +33,9 @@ def _make_mock_agent(name: str, status: str = "RUNNING") -> MagicMock:
     agent.capabilities = []
     agent.capability_metadata = {}
     agent.uptime_seconds = 0.0
+    agent.session_turn_count = 0
+    agent.session_duration_seconds = 0.0
+    agent.suspend_category = "other"
     return agent
 
 
@@ -141,9 +146,42 @@ class TestRouteHttp:
 # ---------------------------------------------------------------------------
 
 
+class RecorderAgent(AgentProcess):
+    async def handle(self, message: Message) -> Message | None:
+        if message.type == "please_suspend_for_approval":
+            await self.suspend_for_approval("awaiting spend approval")
+        return None
+
+
 class TestSerializers:
     def setup_method(self) -> None:
         self.ts = TopologyServer(name="ts", port=0)
+
+    async def test_serialize_agent_reflects_real_hitl_suspend_category(self) -> None:
+        """v0.9.4: not just the mock-default "other" case -- a genuinely
+        HITL-suspended REAL AgentProcess (self-suspended via
+        suspend_for_approval(), the same convenience wrapper a real caller
+        would use) surfaces "hitl_approval" through _serialize_node(), the
+        actual serializer the dashboard's /topology endpoint calls.
+        """
+        agent = RecorderAgent("approval-worker")
+        self.ts._agents = {"approval-worker": agent}
+        await agent._start()
+        try:
+            await agent._mailbox.put(Message(type="please_suspend_for_approval"))
+            await wait_for_status(agent, ProcessStatus.SUSPENDED)
+            result = self.ts._serialize_node(agent)
+            assert result["status"] == "SUSPENDED"
+            assert result["suspend_category"] == SuspendCategory.HITL_APPROVAL.value
+            detail = self.ts._build_agent_detail("approval-worker")
+            assert detail is not None
+            assert detail["suspend_category"] == SuspendCategory.HITL_APPROVAL.value
+        finally:
+            await agent._mailbox.put(
+                Message(type="_agency.resume", payload={"approver": "alice"}, priority=1)
+            )
+            await wait_for_status(agent, ProcessStatus.RUNNING)
+            await agent._stop()
 
     def test_serialize_agent(self) -> None:
         agent = _make_mock_agent("worker-1", "RUNNING")
@@ -152,6 +190,10 @@ class TestSerializers:
         # restart_count are new fields on every serialized agent node.
         # process_id (D-DASH addendum, 2026-07-26): no registry wired here, so
         # it falls back to this TopologyServer's own name (same-process case).
+        # session_turn_count/session_duration_seconds (v0.9.4): new fields too.
+        # suspend_category (v0.9.4): new field too -- always present, defaults
+        # to "other" when not suspended, matching suspend_category's own
+        # always-safe-default property contract.
         assert result == {
             "name": "worker-1",
             "type": "agent",
@@ -161,6 +203,9 @@ class TestSerializers:
             "capabilities": [],
             "capability_metadata": {},
             "uptime_seconds": 0.0,
+            "session_turn_count": 0,
+            "session_duration_seconds": 0.0,
+            "suspend_category": "other",
         }
 
     def test_serialize_supervisor(self) -> None:
@@ -246,6 +291,8 @@ class TestSerializers:
         # are new fields on every agent-detail response. process_id (D-DASH
         # addendum, 2026-07-26): no registry wired, falls back to this
         # TopologyServer's own name (same-process case).
+        # session_turn_count/session_duration_seconds (v0.9.4): new fields too.
+        # suspend_category (v0.9.4): new field too, same always-present default.
         assert result == {
             "name": "svc",
             "status": "RUNNING",
@@ -253,6 +300,9 @@ class TestSerializers:
             "capabilities": [],
             "capability_metadata": {},
             "uptime_seconds": 0.0,
+            "session_turn_count": 0,
+            "session_duration_seconds": 0.0,
+            "suspend_category": "other",
         }
 
     def test_build_agent_detail_not_found(self) -> None:
