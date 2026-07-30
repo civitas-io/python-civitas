@@ -40,6 +40,11 @@ class RouteEntry:
     # Optional Pydantic schemas — set via merge_contracts_from()
     request_schema: type[Any] | None = field(default=None, repr=False)
     response_schema: type[Any] | None = field(default=None, repr=False)
+    # v0.9.5 (topology-gateway-merge.md D4): when True, a handle_call() reply
+    # shaped as {"__raw_body__": str, "__content_type__": str} is sent verbatim
+    # instead of JSON-encoded -- the Prometheus /metrics exposition case. Only
+    # auto-registered topology routes set this; ordinary agent routes never do.
+    raw_response: bool = False
     segments: list[tuple[bool, str]] = field(default_factory=list, init=False, repr=False)
 
     def __post_init__(self) -> None:

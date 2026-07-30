@@ -36,12 +36,24 @@ class GatewayResponse:
 
     When ``stream`` is set, the body is delivered incrementally as Server-Sent
     Events (G3); ``status`` and ``headers`` still apply and ``body`` is ignored.
+
+    v0.9.5 (topology-gateway-merge.md D4): when ``raw_body`` is set (not None), it
+    is sent verbatim with ``content_type`` instead of JSON-encoding ``body`` --
+    the one legitimate escape hatch from this gateway's otherwise-universal "every
+    response is a JSON object" rule, needed for Prometheus's plain-text exposition
+    format. Deliberately NOT reachable by an arbitrary handler: only routes with
+    ``RouteEntry.raw_response=True`` (see router.py) have this sentinel honored by
+    ``_result_to_response()`` -- an ordinary agent route returning
+    ``{"__raw_body__": ...}`` in its JSON reply is just a dict with an odd key,
+    unaffected.
     """
 
     status: int = 200
     body: dict[str, Any] = field(default_factory=dict)
     headers: dict[str, str] = field(default_factory=dict)
     stream: AsyncIterator[dict[str, Any]] | None = field(default=None, repr=False)
+    raw_body: bytes | None = field(default=None, repr=False)
+    content_type: str | None = None
 
 
 # Middleware callable: (request, next) → response

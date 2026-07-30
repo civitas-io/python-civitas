@@ -427,7 +427,11 @@ class GatewayASGI:
                 trace_id=trace_id,
             )
             return self._result_to_response(
-                result, response_schema=entry.response_schema, method=method, path=path
+                result,
+                response_schema=entry.response_schema,
+                method=method,
+                path=path,
+                raw_response=entry.raw_response,
             )
 
         # Default route fallback
@@ -472,6 +476,7 @@ class GatewayASGI:
         response_schema: Any | None = None,
         method: str = "",
         path: str = "",
+        raw_response: bool = False,
     ) -> GatewayResponse:
         """Map a normalized DispatchResult onto an HTTP GatewayResponse."""
         if result.status is DispatchStatus.ACCEPTED:
@@ -482,6 +487,16 @@ class GatewayASGI:
             return GatewayResponse(504, {"error": result.error})
         if result.status is DispatchStatus.INTERNAL:
             return GatewayResponse(500, {"error": result.error})
+
+        # v0.9.5 (topology-gateway-merge.md D4): a raw_response route's OK reply
+        # is {"__raw_body__": str, "__content_type__": str} -- sent verbatim, never
+        # JSON-encoded or contract-validated (there is no JSON schema for Prometheus
+        # text exposition). Only reachable when the ROUTE, not the reply shape,
+        # opted in -- an ordinary route returning these keys is unaffected.
+        if raw_response and result.status is DispatchStatus.OK:
+            raw = result.payload.get("__raw_body__", "")
+            content_type = result.payload.get("__content_type__", "text/plain; charset=utf-8")
+            return GatewayResponse(200, raw_body=raw.encode(), content_type=content_type)
 
         # OK or AGENT_ERROR: validate the reply payload before mapping the error.
         if response_schema is not None:
@@ -546,14 +561,26 @@ class GatewayASGI:
         if response.stream is not None:
             await self._respond_stream(send, response, extra_headers)
             return
-        encoded = json.dumps(response.body).encode()
-        headers: list[tuple[bytes, bytes]] = [
-            _CONTENT_TYPE_JSON,
-            (b"content-length", str(len(encoded)).encode()),
-        ]
+        # v0.9.5 (topology-gateway-merge.md D4): raw_body bypasses JSON encoding
+        # entirely -- Prometheus text exposition, not a JSON object.
+        if response.raw_body is not None:
+            encoded = response.raw_body
+            content_type = response.content_type or "text/plain; charset=utf-8"
+            headers = [
+                (b"content-type", content_type.encode()),
+                (b"content-length", str(len(encoded)).encode()),
+            ]
+        else:
+            encoded = json.dumps(response.body).encode()
+            headers = [
+                _CONTENT_TYPE_JSON,
+                (b"content-length", str(len(encoded)).encode()),
+            ]
         if self._config.enable_http3 and self._config.port_quic:
             headers.append((b"alt-svc", f'h3=":{self._config.port_quic}"'.encode()))
         for k, v in response.headers.items():
+            headers.append((k.encode(), v.encode()))
+        for k, v in (extra_headers or {}).items():
             headers.append((k.encode(), v.encode()))
 
         await send({"type": "http.response.start", "status": response.status, "headers": headers})

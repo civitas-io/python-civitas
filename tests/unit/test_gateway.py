@@ -382,6 +382,87 @@ class TestGatewayASGI:
         gateway.ask.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_traceparent_echoed_back_on_non_streaming_response(self) -> None:
+        """v0.9.5: found while extending _respond() for the raw_body escape hatch
+        (topology-gateway-merge.md D4) -- extra_headers (carrying traceparent) was
+        applied to the SSE stream response path but NEVER to the plain JSON
+        response path, a real, previously-untested gap (the existing
+        test_traceparent_propagated above only checks that traceparent gets
+        PARSED for the outgoing dispatch, never that it's echoed back in the
+        response). Fixed as part of this same _respond() edit; regression-tested
+        here rather than silently left in place.
+        """
+        asgi, gateway = _make_asgi()
+        reply = MagicMock(spec=Message)
+        reply.payload = {}
+        gateway.ask = AsyncMock(return_value=reply)
+
+        scope = {
+            "type": "http",
+            "method": "POST",
+            "path": "/agents/foo",
+            "headers": [
+                (b"traceparent", b"00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
+            ],
+        }
+        sent: list[dict] = []
+
+        async def receive() -> dict:
+            return {"body": b"{}", "more_body": False}
+
+        async def send(message: dict) -> None:
+            sent.append(message)
+
+        await asgi(scope, receive, send)
+        start = next(e for e in sent if e["type"] == "http.response.start")
+        headers = {k.decode(): v.decode() for k, v in start["headers"]}
+        assert headers["traceparent"] == "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+
+    @pytest.mark.asyncio
+    async def test_raw_response_route_bypasses_json_encoding(self) -> None:
+        """v0.9.5 (topology-gateway-merge.md D4): a RouteEntry with
+        raw_response=True sends {"__raw_body__", "__content_type__"} verbatim,
+        not JSON-encoded -- the mechanism the merged TopologyServer/HTTPGateway
+        needs for Prometheus's plain-text /metrics exposition. Constructed
+        directly (not via RouteTable.from_config()) since raw_response is
+        deliberately not exposed to user-declared YAML routes (only
+        auto-registered topology routes set it).
+        """
+        entry = RouteEntry(method="GET", path_pattern="/metrics", agent="topo", raw_response=True)
+        route_table = RouteTable([entry])
+        gateway = MagicMock(spec=HTTPGateway)
+        gateway.name = "api"
+        config = GatewayConfig(routes=[])
+        asgi = GatewayASGI(gateway=gateway, route_table=route_table, config=config)
+        reply = MagicMock(spec=Message)
+        reply.payload = {
+            "__raw_body__": "civitas_messages_handled_total 1\n",
+            "__content_type__": "text/plain; version=0.0.4; charset=utf-8",
+        }
+        gateway.ask = AsyncMock(return_value=reply)
+
+        scope = {"type": "http", "method": "GET", "path": "/metrics", "headers": []}
+        sent: list[dict] = []
+
+        async def receive() -> dict:
+            return {"body": b"", "more_body": False}
+
+        async def send(message: dict) -> None:
+            sent.append(message)
+
+        await asgi(scope, receive, send)
+        start = next(e for e in sent if e["type"] == "http.response.start")
+        body_evt = next(e for e in sent if e["type"] == "http.response.body")
+        headers = {k.decode(): v.decode() for k, v in start["headers"]}
+        assert start["status"] == 200
+        assert headers["content-type"] == "text/plain; version=0.0.4; charset=utf-8"
+        assert body_evt["body"] == b"civitas_messages_handled_total 1\n"
+        # Not JSON -- json.loads() on this body would fail, proving the escape
+        # hatch actually bypassed json.dumps(), not just returned lucky-valid JSON.
+        with pytest.raises(json.JSONDecodeError):
+            json.loads(body_evt["body"])
+
+    @pytest.mark.asyncio
     async def test_x_civitas_type_header(self) -> None:
         asgi, gateway = _make_asgi()
         reply = MagicMock(spec=Message)
