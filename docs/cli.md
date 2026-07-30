@@ -297,6 +297,9 @@ Three equally-sized panes, all visible at once:
   in a multi-process topology), each with a proportional CPU% gauge bar and RSS memory.
 
 Press `Ctrl+P` for Textual's built-in command palette, including a live light/dark theme switcher.
+Press `f` to toggle focus/expand mode (v0.9.4) — widens the detail pane at the expense of the
+other two, which stay visible (not hidden). Requires a node to already be selected; a no-op
+otherwise. Press `f` again to return to the equal three-pane layout.
 Press `q` to quit; the topology you attached to keeps running.
 
 If the topology server becomes unreachable, a banner names the failing endpoint(s) and the

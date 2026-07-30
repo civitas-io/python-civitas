@@ -488,3 +488,18 @@ called from anywhere in the runtime — a plainly-running agent's exposed status
 choke point (`_set_status()` in `civitas/process.py`), guarded so a user-supplied custom
 `MetricsSink` that only implements the required Protocol methods (`agent_status_changed` was
 never part of that Protocol) keeps working unchanged.
+
+## 14. §7.0's deferred focus/expand mode — shipped (v0.9.4)
+
+Mockup A's core idea (a wider detail pane), deferred at v0.9.1 sign-off as an opt-in mode rather
+than the default layout, shipped in v0.9.4. Implementation detail worth recording: §7.0's own
+illustrative text ("e.g. pressing Enter on a tree node") turned out not to be directly
+implementable as originally phrased — confirmed by reading Textual's `Tree.NodeSelected` event
+source, which carries no information about which input method (mouse click vs Enter key)
+triggered it, so there's no reliable way to distinguish "select" from "select AND expand" through
+that one event alone. Shipped instead as a dedicated `f` keybinding toggling a CSS class on
+`#main`, which resizes `AgentDetailPanel` from `1fr` to `3fr` at the expense of the other two
+panes (which shrink to `1fr` each but stay fully visible — Mockup B's "three equally first-class
+panels" philosophy holds even while focused; this expands the detail pane, it doesn't replace the
+layout). No-ops with nothing selected yet. Verified via real measured widget widths in a headless
+Textual test (`tests/integration/test_dashboard_app.py`), not just the CSS class flag being set.

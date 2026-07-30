@@ -166,3 +166,70 @@ async def test_dashboard_app_processes_panel_populates() -> None:
             await pilot.pause()
     finally:
         await runtime.stop()
+
+
+@pytest.mark.asyncio
+async def test_dashboard_app_focus_mode_widens_detail_pane_and_toggles_off() -> None:
+    """v0.9.4: design §7.0's deferred Mockup A idea -- the "f" key widens
+    AgentDetailPanel at the expense of TopologyTree/ProcessResourcePanel,
+    which stay VISIBLE (not hidden) -- Mockup B's three-equally-first-class-
+    panels philosophy holds even while focused. Verified via real measured
+    widget widths (not just the CSS class flag), and that it toggles back.
+    """
+    ts = TopologyServer(name="topo", port=16956)
+    worker = _Echo("worker-a")
+    runtime = Runtime(supervisor=Supervisor("root", children=[ts, worker]))
+    await runtime.start()
+    try:
+        app = CivitasDashboardApp(host="127.0.0.1", port=16956, refresh=0.1)
+        async with app.run_test(size=(120, 40)) as pilot:
+            tree = app.query_one(TopologyTree)
+            await _wait_until(lambda: len(tree.root.children) > 0)
+            supervision_root = tree.root.children[0]
+            await _wait_until(lambda: len(supervision_root.children) > 0)
+            worker_node = next(n for n in supervision_root.children if n.data == "worker-a")
+            tree.select_node(worker_node)
+            await pilot.pause()
+
+            detail_before = app.query_one(AgentDetailPanel).size.width
+            tree_before = app.query_one(TopologyTree).size.width
+            resource_before = app.query_one(ProcessResourcePanel).size.width
+
+            await pilot.press("f")
+            await pilot.pause()
+
+            detail_after = app.query_one(AgentDetailPanel).size.width
+            tree_after = app.query_one(TopologyTree).size.width
+            resource_after = app.query_one(ProcessResourcePanel).size.width
+            assert detail_after > detail_before
+            assert tree_after < tree_before
+            assert resource_after < resource_before
+            assert tree_after > 0  # still visible, not hidden
+            assert resource_after > 0  # still visible, not hidden
+
+            await pilot.press("f")
+            await pilot.pause()
+            assert app.query_one(AgentDetailPanel).size.width == detail_before
+            assert app.query_one(TopologyTree).size.width == tree_before
+    finally:
+        await runtime.stop()
+
+
+@pytest.mark.asyncio
+async def test_dashboard_app_focus_mode_is_a_noop_with_nothing_selected() -> None:
+    """Expanding an empty placeholder has no real effect worth a keypress --
+    the toggle only engages once a node has actually been selected."""
+    ts = TopologyServer(name="topo", port=16957)
+    runtime = Runtime(supervisor=Supervisor("root", children=[ts]))
+    await runtime.start()
+    try:
+        app = CivitasDashboardApp(host="127.0.0.1", port=16957, refresh=0.1)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            assert app._focused_name is None
+
+            await pilot.press("f")
+            await pilot.pause()
+            assert app.query_one("#main").has_class("focused") is False
+    finally:
+        await runtime.stop()

@@ -41,7 +41,14 @@ class CivitasDashboardApp(App[None]):
 
     CSS_PATH = _CSS_PATH
     TITLE = "civitas top"
-    BINDINGS = [("q", "quit", "Quit")]
+    # v0.9.4: "f" toggles focus/expand mode (design §7.0's deferred Mockup A
+    # idea -- a wider detail pane, opt-in, not the default layout). A
+    # dedicated key rather than overloading Enter-on-a-tree-node: Textual's
+    # own Tree.NodeSelected carries no information about which input method
+    # (mouse click vs Enter key) triggered it (confirmed by reading its
+    # source), so there is no reliable way to distinguish "select" from
+    # "select AND expand" through that one event alone.
+    BINDINGS = [("q", "quit", "Quit"), ("f", "toggle_focus", "Focus detail")]
 
     def __init__(self, host: str = "127.0.0.1", port: int = 6789, refresh: float = 1.0) -> None:
         super().__init__()
@@ -55,6 +62,8 @@ class CivitasDashboardApp(App[None]):
         self._metrics: dict[str, Any] | None = None
         self._processes: list[dict[str, Any]] | None = None
         self._focused_name: str | None = None
+        # v0.9.4: whether focus/expand mode is currently active (design §7.0).
+        self._focus_mode = False
         # Which endpoint paths are CURRENTLY failing. A set, not a single
         # flag/banner-owned bool: three independent workers share one banner
         # widget, and a naive "clear on any success" would let a healthy
@@ -86,6 +95,22 @@ class CivitasDashboardApp(App[None]):
             return
         self._focused_name = name
         self._refresh_detail_panel()
+
+    def action_toggle_focus(self) -> None:
+        """v0.9.4: toggle focus/expand mode (design §7.0) -- widens
+        AgentDetailPanel at the expense of TopologyTree/ProcessResourcePanel
+        via a CSS class on #main, rather than replacing the three-pane
+        layout entirely (Mockup B's "three equally first-class panels,
+        always visible" philosophy holds even while focused -- this EXPANDS
+        the detail pane, it doesn't hide the other two).
+
+        No-ops with nothing selected yet -- expanding an empty placeholder
+        has no real effect worth a keypress.
+        """
+        if self._focused_name is None:
+            return
+        self._focus_mode = not self._focus_mode
+        self.query_one("#main").set_class(self._focus_mode, "focused")
 
     def _refresh_detail_panel(self) -> None:
         detail = self.query_one(AgentDetailPanel)

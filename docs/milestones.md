@@ -1258,18 +1258,26 @@ too — see Part 1 above (§B1-B3). Remaining Track B items:
 | v0.9.3.8 | **Live tick animation** for `CostChart`/`MessageRateChart` — identified while building B3, not built: today's refresh redraws each chart from scratch on every re-query (correct, but not smoothly animated between ticks) | Low priority, cosmetic |
 | v0.9.3.9 | **Scrollable/paginated `CostBreakdownTable`** — identified while building B3: today's table renders every agent/model row unpaginated; fine at small scale, would overflow one screen for a real deployment with many distinct agents/models | Low priority, only matters at larger cardinality |
 
-### v0.9.4 — Dashboard TUI polish (Planned, after v0.9.3.x)
+### v0.9.4 — Dashboard TUI polish (In progress, after v0.9.3)
 
 Small, self-contained additions to the existing live `civitas top` TUI — no auth needed, no new
-design surface, just more panes/signals on data already available (or cheaply addable).
+design surface, just more panes/signals on data already available (or cheaply addable). Going
+through each item one at a time (2026-07-30 walkthrough); shipped together as one release once
+all are done, matching the v0.9.3 precedent, unless decided otherwise.
 
-| Item | Priority | Source |
-|------|----------|--------|
-| Dashboard: network I/O per process | Low | design/dashboard-v2.md P1 |
-| Dashboard: "session length" (LLM conversation turns/duration) | Low | design/dashboard-v2.md P1 |
-| Dashboard: distinct HITL-wait vs. governance-suspend visual signal | Low | design/dashboard-v2.md §6 option B — blocked on a real HITL flow existing to design against first, not on auth |
-| Dashboard: multi-cluster / multi-topology view | Low | design/dashboard-v2.md P2 |
-| Dashboard layout: optional focus/expand mode for the detail pane (Mockup A's wide-detail idea) | Low | design/dashboard-v2.md §7.0 — Mockup B (dense three-pane grid) shipped as the default in v0.9.1; Mockup A's core idea kept as an opt-in mode, not discarded |
+**Also closed by this walkthrough, not previously cross-referenced**: dashboard-v2.md's original
+P1 item "historical charts/sparklines (message-rate, cost-over-time)" is exactly what v0.9.3's B2
+(`SQLiteQueryEngine.cost_over_time`/`message_rate_over_time`) and B3 (`civitas telemetry`'s real
+charts) shipped — a different app (`civitas telemetry`, not `civitas top`) than originally
+envisioned, but the same underlying need. Considered done, not tracked separately here.
+
+| Item | Priority | Source | Status |
+|------|----------|--------|--------|
+| Dashboard layout: optional focus/expand mode for the detail pane (Mockup A's wide-detail idea) | Low | design/dashboard-v2.md §7.0 (§14 addendum) — Mockup B (dense three-pane grid) shipped as the default in v0.9.1; Mockup A's core idea kept as an opt-in mode, not discarded | ✅ **Done** — a dedicated `f` keybinding (not Enter — confirmed `Tree.NodeSelected` can't distinguish click from Enter), widens `AgentDetailPanel` 1fr→3fr at the expense of the other two panes (which shrink but stay visible, never hidden). Verified via real measured widget widths in a headless Textual test, not just the CSS flag |
+| Dashboard: multi-cluster / multi-topology view | Low | design/dashboard-v2.md P2 | Not started |
+| Dashboard: "session length" (LLM conversation turns/duration) | Low | design/dashboard-v2.md P1 | Not started — needs a small definition decision first: no first-class "session"/"conversation" concept exists anywhere in the runtime today (confirmed by search) |
+| Dashboard: network I/O per process | Low | design/dashboard-v2.md P1 | Not started — real feasibility gap confirmed: `psutil.Process().io_counters()` doesn't exist on macOS at all (only Linux/Windows), unlike the existing resource panel's `cpu_percent`/`memory_info`/`create_time`, which are genuinely cross-platform |
+| Dashboard: distinct HITL-wait vs. governance-suspend visual signal | Low | design/dashboard-v2.md §6 option B — blocked on a real HITL flow existing to design against first, not on auth | Still blocked, confirmed not assumed — `examples/patterns/human_in_the_loop.py` exists now but models HITL entirely at the application/message level, never touching `ProcessStatus.SUSPENDED` at all; there is still no real flow using that status to design the visual distinction against |
 
 ### v0.9.5 — AuthN/AuthZ & dashboard control-plane (Planned, after v0.9.4)
 

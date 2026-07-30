@@ -48,6 +48,24 @@ ProcessResourcePanel {
     padding: 0 1;
 }
 
+/* v0.9.4: focus/expand mode (design §7.0's deferred Mockup A idea) -- widens
+   AgentDetailPanel at the expense of the other two panes, which stay VISIBLE
+   (just narrower), not hidden -- Mockup B's "three equally first-class
+   panels" philosophy holds even while focused. Toggled via the "f" key
+   (CivitasDashboardApp.action_toggle_focus), applied as a class on #main so
+   the ratio-only override lives entirely in CSS, not widget code. */
+#main.focused TopologyTree {
+    width: 1fr;
+}
+
+#main.focused AgentDetailPanel {
+    width: 3fr;
+}
+
+#main.focused ProcessResourcePanel {
+    width: 1fr;
+}
+
 #detail-title,
 #resource-title {
     padding: 0 0 1 0;
