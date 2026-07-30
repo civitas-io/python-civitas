@@ -489,14 +489,19 @@ class GatewayASGI:
             return GatewayResponse(500, {"error": result.error})
 
         # v0.9.5 (topology-gateway-merge.md D4): a raw_response route's OK reply
-        # is {"__raw_body__": str, "__content_type__": str} -- sent verbatim, never
-        # JSON-encoded or contract-validated (there is no JSON schema for Prometheus
-        # text exposition). Only reachable when the ROUTE, not the reply shape,
-        # opted in -- an ordinary route returning these keys is unaffected.
+        # is {"__raw_body__": str, "__content_type__": str, "__status__": int} --
+        # sent verbatim, never JSON-encoded or contract-validated (there is no
+        # JSON schema for Prometheus text exposition, and TopologyAgent's own
+        # 404s -- e.g. an unknown agent name -- need a status other than 200).
+        # Only reachable when the ROUTE, not the reply shape, opted in -- an
+        # ordinary route returning these keys is unaffected. __status__ defaults
+        # to 200 so a raw-response route that never varies its status (like
+        # /health) doesn't need to set it explicitly.
         if raw_response and result.status is DispatchStatus.OK:
             raw = result.payload.get("__raw_body__", "")
             content_type = result.payload.get("__content_type__", "text/plain; charset=utf-8")
-            return GatewayResponse(200, raw_body=raw.encode(), content_type=content_type)
+            status = int(result.payload.get("__status__", 200))
+            return GatewayResponse(status, raw_body=raw.encode(), content_type=content_type)
 
         # OK or AGENT_ERROR: validate the reply payload before mapping the error.
         if response_schema is not None:
