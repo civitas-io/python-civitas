@@ -20,7 +20,7 @@ from civitas import AgentProcess, DynamicSupervisor, Runtime, Supervisor
 from civitas.errors import ErrorAction
 from civitas.messages import Message
 from civitas.plugins.state import InMemoryStateStore
-from civitas.process import Mailbox, ProcessStatus
+from civitas.process import Mailbox, ProcessStatus, SuspendCategory
 from civitas.supervisor import _ChildRec
 from tests.conftest import EchoAgent, wait_for, wait_for_status
 
@@ -62,6 +62,23 @@ class SelfSuspendAgent(RecorderAgent):
         return None
 
 
+class SelfSuspendForApprovalAgent(RecorderAgent):
+    """v0.9.4: suspends itself via suspend_for_approval() -- the direct
+    convenience-wrapper API, not the _agency.suspend wire message -- when it
+    sees a trigger message. Self-suspension is what makes a DIRECT method
+    call (rather than a message) actually observable: calling suspend() from
+    OUTSIDE an idling agent never wakes its message loop to check the
+    boundary flag, but calling it from INSIDE handle() naturally does, at
+    the very next loop iteration after this dispatch completes.
+    """
+
+    async def handle(self, message: Message) -> Message | None:
+        self.handled.append(message.type)
+        if message.type == "please_suspend_for_approval":
+            await self.suspend_for_approval("awaiting spend approval")
+        return None
+
+
 class CrashOnMessageAgent(AgentProcess):
     """Escalates on the first message so a supervisor sees a crash."""
 
@@ -72,10 +89,13 @@ class CrashOnMessageAgent(AgentProcess):
         return ErrorAction.ESCALATE
 
 
-async def _suspend_via_message(agent: AgentProcess, reason: str = "") -> None:
-    await agent._mailbox.put(
-        Message(type="_agency.suspend", payload={"reason": reason}, priority=1)
-    )
+async def _suspend_via_message(
+    agent: AgentProcess, reason: str = "", category: SuspendCategory | None = None
+) -> None:
+    payload: dict[str, Any] = {"reason": reason}
+    if category is not None:
+        payload["category"] = category.value
+    await agent._mailbox.put(Message(type="_agency.suspend", payload=payload, priority=1))
     await wait_for_status(agent, ProcessStatus.SUSPENDED)
 
 
@@ -417,6 +437,166 @@ async def test_restored_suspended_agent_resumes_and_drains():
         await _resume_via_message(agent, approver="alice")
         await wait_for(lambda: "queued" in agent.handled)
     finally:
+        await agent._stop()
+
+
+# ---------------------------------------------------------------------------
+# SuspendCategory (v0.9.4, dashboard-v2.md §6/§18) — HITL-wait vs governance
+# ---------------------------------------------------------------------------
+
+
+async def test_suspend_default_category_is_other():
+    """Backward compatibility: an existing caller passing only reason= lands
+    in OTHER, today's only category in effect -- unaffected by this addition."""
+    agent = RecorderAgent("default-cat")
+    await agent._start()
+    try:
+        await _suspend_via_message(agent, reason="ops pause")
+        assert agent.suspend_category == SuspendCategory.OTHER.value
+    finally:
+        await _resume_via_message(agent, approver="alice")
+        await agent._stop()
+
+
+async def test_suspend_for_approval_sets_hitl_category():
+    """The convenience wrapper -- "a subset of suspend/resume" -- categorizes
+    correctly without the caller needing to know about SuspendCategory at all.
+
+    Exercised via self-suspension (SelfSuspendForApprovalAgent), the correct
+    pattern for a DIRECT method call, not the _agency.suspend wire message --
+    calling suspend_for_approval() from OUTSIDE an idling agent would never
+    wake its loop to check the boundary flag at all (found while writing this
+    test: my first attempt called it directly from outside and the agent
+    never actually transitioned, confirmed by a real TimeoutError, not
+    assumed).
+    """
+    agent = SelfSuspendForApprovalAgent("hitl")
+    await agent._start()
+    try:
+        await agent._mailbox.put(Message(type="please_suspend_for_approval"))
+        await wait_for_status(agent, ProcessStatus.SUSPENDED)
+        assert agent.suspend_category == SuspendCategory.HITL_APPROVAL.value
+    finally:
+        await _resume_via_message(agent, approver="alice")
+        await agent._stop()
+
+
+async def test_suspend_category_survives_a_real_restore():
+    """The actual point of persisting category in the durable marker, not just
+    the in-memory _suspend_category attribute: an approval pending across a
+    crash/redeploy must still show as HITL_APPROVAL after restore, not
+    silently reset to OTHER/grey. A FRESH agent instance restoring from a
+    real marker dict -- not the same object that called suspend() -- proving
+    this is genuinely restore-safe, not just "works because it's the same
+    Python object".
+    """
+    agent = RecorderAgent("restored-hitl")
+    store = AsyncMock()
+    store.get.return_value = {
+        MARKER: {
+            "reason": "r",
+            "since": 1.0,
+            "approver": None,
+            "category": SuspendCategory.HITL_APPROVAL.value,
+        }
+    }
+    agent.store = store
+    await asyncio.wait_for(agent._start(), timeout=2.0)
+    try:
+        assert agent.status == ProcessStatus.SUSPENDED
+        assert agent.suspend_category == SuspendCategory.HITL_APPROVAL.value
+    finally:
+        await _resume_via_message(agent, approver="alice")
+        await agent._stop()
+
+
+async def test_suspend_category_defaults_to_other_for_a_marker_that_predates_it():
+    """A marker persisted before v0.9.4 (no 'category' key at all) must not
+    crash -- defaults to OTHER, matching every other backward-compatibility
+    default in this feature."""
+    agent = RecorderAgent("pre-v094-marker")
+    agent.store = _suspended_store()  # no "category" key, matching the OLD marker shape
+    await asyncio.wait_for(agent._start(), timeout=2.0)
+    try:
+        assert agent.status == ProcessStatus.SUSPENDED
+        assert agent.suspend_category == SuspendCategory.OTHER.value
+    finally:
+        await _resume_via_message(agent, approver="alice")
+        await agent._stop()
+
+
+async def test_suspend_category_not_suspended_at_all_is_other():
+    """A never-suspended agent's suspend_category is OTHER -- a plain,
+    always-safe default, not a crash or a None the caller has to guard."""
+    agent = RecorderAgent("never-suspended")
+    await agent._start()
+    try:
+        assert agent.status == ProcessStatus.RUNNING
+        assert agent.suspend_category == SuspendCategory.OTHER.value
+    finally:
+        await agent._stop()
+
+
+async def test_agency_suspend_message_carries_category_over_the_wire():
+    """The cross-process/by-name entry point (Runtime.suspend(), which sends
+    this exact message shape) needs category to actually reach the target
+    agent -- not just the direct same-process suspend()/suspend_for_approval()
+    calls."""
+    agent = RecorderAgent("wire-category")
+    await agent._start()
+    try:
+        await agent._mailbox.put(
+            Message(
+                type="_agency.suspend",
+                payload={"reason": "policy hold", "category": SuspendCategory.HITL_APPROVAL.value},
+                priority=1,
+            )
+        )
+        await wait_for_status(agent, ProcessStatus.SUSPENDED)
+        assert agent.suspend_category == SuspendCategory.HITL_APPROVAL.value
+    finally:
+        await _resume_via_message(agent, approver="alice")
+        await agent._stop()
+
+
+async def test_agency_suspend_message_without_category_field_is_other():
+    """An older sender (or a real Presidium not yet aware of categories) that
+    never sends a 'category' field at all keeps working unchanged."""
+    agent = RecorderAgent("wire-no-category")
+    await agent._start()
+    try:
+        await agent._mailbox.put(
+            Message(type="_agency.suspend", payload={"reason": "ops pause"}, priority=1)
+        )
+        await wait_for_status(agent, ProcessStatus.SUSPENDED)
+        assert agent.suspend_category == SuspendCategory.OTHER.value
+    finally:
+        await _resume_via_message(agent, approver="alice")
+        await agent._stop()
+
+
+async def test_re_suspend_of_already_suspended_agent_updates_category():
+    """The idempotent re-suspend path (S10, _update_suspend_reason) also
+    updates category when the second suspend request carries one."""
+    agent = RecorderAgent("re-suspend-cat")
+    await agent._start()
+    try:
+        await _suspend_via_message(agent, reason="first")
+        assert agent.suspend_category == SuspendCategory.OTHER.value
+
+        await agent._mailbox.put(
+            Message(
+                type="_agency.suspend",
+                payload={
+                    "reason": "now awaiting approval",
+                    "category": SuspendCategory.HITL_APPROVAL.value,
+                },
+                priority=1,
+            )
+        )
+        await wait_for(lambda: agent.suspend_category == SuspendCategory.HITL_APPROVAL.value)
+    finally:
+        await _resume_via_message(agent, approver="alice")
         await agent._stop()
 
 

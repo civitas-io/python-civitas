@@ -18,6 +18,7 @@ from civitas.process import (
     AgentProcess,
     Mailbox,
     ProcessStatus,
+    SuspendCategory,
 )
 from civitas.registry import reregister_preserving
 from civitas.security.identity import AgentIdentity
@@ -436,8 +437,14 @@ class Supervisor(AgentProcess):
             ],
         }
 
-    async def suspend(self, reason: str = "") -> None:
+    async def suspend(
+        self, reason: str = "", category: SuspendCategory = SuspendCategory.OTHER
+    ) -> None:
         """Rejected — a Supervisor cannot be suspended (Q3, D-E4-9).
+
+        ``category`` (v0.9.4) is accepted only to keep this override's
+        signature compatible with ``AgentProcess.suspend()`` -- irrelevant
+        here since this always raises regardless of category.
 
         Hard reject for the direct-call path: raises immediately (on await)
         rather than accepting and silently no-op'ing, so a caller cannot

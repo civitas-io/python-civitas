@@ -2,9 +2,10 @@
 
 A small, deliberately noisy topology that lights up every part of the v0.9.1
 dashboard: a chatty agent reporting fake LLM cost/tokens, a flaky agent that
-crashes and restarts on a timer, and a spawner that spins dynamic children up
-and down. Not a realistic workload — just enough motion to see the feature
-working.
+crashes and restarts on a timer, a spawner that spins dynamic children up and
+down, and (v0.9.4) an approval worker that periodically self-suspends awaiting
+a human decision. Not a realistic workload — just enough motion to see the
+feature working.
 
 Since v0.9.3, this same topology also feeds a `SQLiteBackend` exporter
 (`plugins.exporters:` in `topology.yaml`) — one live run now serves THREE
@@ -62,6 +63,12 @@ local SQLite directory directly, so it works even after you stop the runtime.
   hosting everything (this demo runs single-process, so there's one row; see
   `examples/deployment/level2_multi_process` for a multi-process topology if
   you want to see more than one row here).
+- **`approval_worker` (v0.9.4)** — watch it flip to a distinct **blue**
+  SUSPENDED (not the grey an ordinary governance pause would use) roughly
+  every 30s, via `suspend_for_approval()`; the detail panel's
+  `suspended_because` row reads "awaiting approval (HITL)". It auto-resumes
+  itself after ~20s purely for the demo's own sake — a real caller would be
+  a human/Presidium via `resume()`.
 - **Ctrl+P** — Textual's built-in command palette, including a live light/dark
   theme switcher (try `catppuccin-latte` for a light theme).
 - **q** — quit the dashboard (the runtime in Terminal 1 keeps running).
@@ -71,6 +78,7 @@ local SQLite directory directly, so it works even after you stop the runtime.
 - `topology.yaml` — the topology; also runnable directly with `civitas run` or
   inspected statically with `civitas topology show`. Declares the
   `SQLiteBackend` exporter (v0.9.3) alongside the `topology_server`.
-- `agents.py` — `ChattyWorker`, `FlakyWorker`, `SpawnerAgent`.
+- `agents.py` — `ChattyWorker`, `FlakyWorker`, `SpawnerAgent`, `ApprovalWorker`
+  (v0.9.4).
 - `civitas_telemetry_demo/` — created at runtime by the `SQLiteBackend`
   exporter (git-ignored, not checked in).

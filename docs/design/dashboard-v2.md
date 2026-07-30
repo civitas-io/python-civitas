@@ -125,7 +125,7 @@ sets them costs nothing and reports nothing, rather than reporting a spurious al
 | `RUNNING` | green | |
 | `INITIALIZING` / `STOPPING` | yellow | transitional |
 | `CRASHED` | red | |
-| `SUSPENDED` | grey | covers both governance-pause and HITL-wait — they are the same mechanism today (see PRD discussion); a distinct cyan HITL signal is explicit P1/v0.9.2, not built now |
+| `SUSPENDED` | grey, or **blue** for a HITL approval wait | §18 (v0.9.4): a `SuspendCategory` distinguishes governance-pause/other (grey, unchanged) from a HITL approval wait (blue) — previously the same grey for both |
 | `STOPPED` | grey (dim) | terminal, distinct dim shade from SUSPENDED in the actual TUI palette |
 
 Elevated **restart rate** (`crashes_in_window` > 0 while status is `RUNNING`) renders as amber
@@ -619,3 +619,65 @@ dependency, no-OS-command-shelling-for-core-features philosophy (the existing re
 `cpu_percent`/`memory_info`/`create_time` are genuinely cross-platform via `psutil`, with no such
 trade-offs; this metric has no equivalent). Not built, not planned, tracked here as a real,
 investigated "no" rather than a silently dropped backlog item.
+
+## 18. HITL-wait vs. governance-suspend: `SuspendCategory` (built, v0.9.4)
+
+§6's table deferred this ("a distinct cyan HITL signal is explicit P1/v0.9.2, not built now") and
+it was subsequently reclassified as blocked: `suspend()`/`resume()`'s `reason` was a free-form
+string with zero structure, and the entire mechanism was designed for **Presidium**, a separate
+external product, to populate meaningfully (see `docs/design/civitas-presidium-boundary.md` and
+`docs/design/durable-suspension.md`) — civitas has no basis to invent a heuristic distinguishing
+"governance pause" from "HITL approval wait" against a boundary that isn't this repo's to own.
+Confirmed empirically before treating this as blocked: `suspend()`/`resume()` were exercised ONLY
+in unit tests anywhere in this repo, zero real usage to design a signal against.
+
+**Unblocked by a civitas-side API, not an invented heuristic.** `AgentProcess.suspend()` now takes
+an additive `category: SuspendCategory = SuspendCategory.OTHER` parameter alongside the existing
+free-form `reason` — civitas ships the *mechanism* (a structured, optional category), any real
+caller (Presidium or otherwise) still owns the *policy* of what to send and when. Backward
+compatible by construction: an existing caller passing only `reason=` lands in `OTHER` — today's
+only category in effect — unaffected. `Runtime.suspend()` (the cross-process/by-name entry point)
+and the `_agency.suspend` wire payload both carry the same additive `category` field (missing =
+`OTHER`, so an older sender keeps working). A `suspend_for_approval(reason: str = "")` convenience
+wrapper — "a subset of suspend/resume" — sets `category=HITL_APPROVAL` without the caller needing
+to know the enum exists.
+
+**Color correction, caught before implementing, not after**: the original PRD/§6 note called for
+cyan, but §7.1's LATER-ratified category-color rule ("health colors never mixed with category
+colors") had already reserved cyan as `TOPOLOGY_ACCENT` by the time this was built — using it here
+would have violated that rule. Used `blue` instead (confirmed unused anywhere in the palette).
+
+**Persisted correctly, not just in-memory**: `category` is written into the SAME durable suspend
+marker dict `_enter_suspended()` already persists (alongside `reason`/`since`/`approver`), read
+back via a new `suspend_category` property that reads the marker DIRECTLY — not a separate
+in-memory attribute. This matters concretely: an approval pending across a crash/redeploy must
+still render as "awaiting approval" after restore, not silently reset to grey. Found and
+deliberately avoided repeating a related, pre-existing, harmless-today gap while building this:
+`self._suspend_reason` (the in-memory attribute) is never actually synced back from the persisted
+marker after `_restore_state()` — the new `category` field does not repeat that pattern.
+
+**Dashboard wiring**: `/topology`'s `_serialize_node()` (and its 4 sibling call sites) now expose
+`suspend_category` for every agent node; `civitas/dashboard/palette.py`'s `status_color()`/
+`status_markup()` take an additive, optional `suspend_category` parameter that resolves to
+`HITL_ACCENT` (blue) only when `status == "suspended" and suspend_category == "hitl_approval"`;
+`TopologyTree`'s leaf labels and `AgentDetailPanel`'s title both use it, and the detail panel gains
+a `suspended_because` row (readable label, e.g. "awaiting approval (HITL)") shown only while
+actually suspended.
+
+**Verified against real running infrastructure, not just unit tests**: `examples/dashboard_demo/`
+gained a genuine `ApprovalWorker` agent (self-suspends via `suspend_for_approval()` from within
+`handle()`, auto-"approves" itself after ~20s purely for the demo). A real running instance's
+`/topology` endpoint returned `"suspend_category": "hitl_approval"`; a real headless Textual pilot
+confirmed the tree leaf's label carries a `Span(..., 'blue')`, the detail title renders
+`[blue]○ SUSPENDED[/]`, and the exported SVG screenshot contains the resolved hex fill `#0000ff`
+— the actual rendered ink, not just the markup string.
+
+**Real finding while building the demo agent (not assumed)**: calling `suspend_for_approval()`
+from a plain `asyncio.create_task()` background loop — the pattern every other demo agent in this
+file uses — never actually transitions the agent. `suspend()` intentionally only takes effect at
+the message loop's next boundary (S2, `docs/design/durable-suspension.md`), which only re-checks
+when a message arrives; an agent idling with an empty mailbox never wakes up to notice. `resume()`
+is NOT boundary-deferred (it transitions synchronously) so it remains safe to call directly from a
+background task. The demo agent (and this doc) now records the correct shape: self-suspend via a
+self-sent message consumed in `handle()`, matching the realistic HITL pattern of an agent deciding
+mid-request that it needs approval before proceeding.

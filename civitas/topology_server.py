@@ -239,6 +239,7 @@ class TopologyServer(GenServer):
                         "uptime_seconds": rec.agent.uptime_seconds,
                         "session_turn_count": rec.agent.session_turn_count,
                         "session_duration_seconds": rec.agent.session_duration_seconds,
+                        "suspend_category": rec.agent.suspend_category,
                     }
                     for n, rec in node._dynamic_children.items()
                 ],
@@ -274,6 +275,7 @@ class TopologyServer(GenServer):
             "uptime_seconds": node.uptime_seconds,
             "session_turn_count": node.session_turn_count,
             "session_duration_seconds": node.session_duration_seconds,
+            "suspend_category": node.suspend_category,
         }
 
     def _build_agents_list(self) -> list[dict[str, Any]]:
@@ -293,6 +295,7 @@ class TopologyServer(GenServer):
                 "uptime_seconds": agent.uptime_seconds,
                 "session_turn_count": agent.session_turn_count,
                 "session_duration_seconds": agent.session_duration_seconds,
+                "suspend_category": agent.suspend_category,
             }
             for name, agent in self._agents.items()
         ]
@@ -315,6 +318,7 @@ class TopologyServer(GenServer):
                         "uptime_seconds": rec.agent.uptime_seconds,
                         "session_turn_count": rec.agent.session_turn_count,
                         "session_duration_seconds": rec.agent.session_duration_seconds,
+                        "suspend_category": rec.agent.suspend_category,
                     }
                 )
         elif isinstance(node, Supervisor):
@@ -336,6 +340,7 @@ class TopologyServer(GenServer):
             "uptime_seconds": agent.uptime_seconds,
             "session_turn_count": agent.session_turn_count,
             "session_duration_seconds": agent.session_duration_seconds,
+            "suspend_category": agent.suspend_category,
         }
 
     def _build_metrics(self) -> tuple[dict[str, Any], int]:

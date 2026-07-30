@@ -9,7 +9,7 @@ from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import TYPE_CHECKING, Any
 
 from civitas.audit.types import AuditEvent, AuditSink
@@ -71,6 +71,29 @@ class ProcessStatus(Enum):
     STOPPING = "STOPPING"
     STOPPED = "STOPPED"
     CRASHED = "CRASHED"
+
+
+class SuspendCategory(StrEnum):
+    """Why an agent is SUSPENDED (v0.9.4, dashboard-v2.md §6/§18).
+
+    `ProcessStatus.SUSPENDED` alone can't distinguish an operational
+    governance pause from a policy-driven HITL approval wait -- both were
+    previously just a free-form ``reason: str``, indistinguishable to the
+    runtime. String-valued (not a plain Enum) so it round-trips cleanly
+    through JSON ("/topology") and StateStore (the durable suspend marker)
+    without custom serialization, matching how callers already treat
+    ``ProcessStatus.value`` as the wire/storage form.
+
+    Additive, not a breaking change to ``suspend()``'s existing ``reason``
+    parameter (still free text) -- ``suspend()``/``resume()`` are a
+    documented public contract with a real external consumer (Presidium,
+    per docs/design/civitas-presidium-boundary.md); OTHER is the default so
+    an existing caller passing only ``reason=`` keeps working unchanged.
+    """
+
+    HITL_APPROVAL = "hitl_approval"
+    GOVERNANCE_PAUSE = "governance_pause"
+    OTHER = "other"
 
 
 class Mailbox:
@@ -350,6 +373,10 @@ class AgentProcess:
         # actioned at the next message-loop boundary. Reason carried alongside.
         self._suspend_requested = False
         self._suspend_reason = ""
+        # v0.9.4: category carried the same way as reason -- see suspend_category
+        # property below for why the DURABLE marker, not this attribute, is the
+        # authoritative read after a restore.
+        self._suspend_category = SuspendCategory.OTHER
 
         self._pending_streams: dict[str, StreamSink] = {}
         self._stream_producers: dict[str, str] = {}
@@ -552,16 +579,38 @@ class AgentProcess:
         """
         return True
 
-    async def suspend(self, reason: str = "") -> None:
+    async def suspend(
+        self, reason: str = "", category: SuspendCategory = SuspendCategory.OTHER
+    ) -> None:
         """Request suspension of this agent. Non-blocking (S2).
 
         Marks intent and returns immediately: the message loop transitions to
         SUSPENDED at its next boundary, before pulling another business message.
         Safe to call from inside handle() (self-suspension) without deadlock —
         the loop, not this call, performs the transition.
+
+        ``category`` (v0.9.4) is additive -- existing callers passing only
+        ``reason`` are unaffected, landing in ``SuspendCategory.OTHER`` (today's
+        only category, in effect). See ``suspend_for_approval()`` for the HITL
+        convenience wrapper.
         """
         self._suspend_requested = True
         self._suspend_reason = reason
+        self._suspend_category = category
+
+    async def suspend_for_approval(self, reason: str = "") -> None:
+        """Convenience wrapper (v0.9.4): ``suspend(reason, category=HITL_APPROVAL)``.
+
+        A subset of ``suspend()``/``resume()`` for the specific, common case of
+        pausing to await a human/policy approval decision -- lets the dashboard
+        (and any other observer) render this distinctly from an operational
+        governance pause, which looks identical to civitas's own runtime
+        otherwise (both are just "SUSPENDED", per dashboard-v2.md §6's original
+        note). ``resume(approver)`` is unchanged and already correctly shaped
+        for "someone approved this" regardless of which category triggered the
+        suspend -- no separate ``approve()`` alias.
+        """
+        await self.suspend(reason=reason, category=SuspendCategory.HITL_APPROVAL)
 
     async def resume(self, approver: str) -> None:
         """Resume a suspended agent. Requires a non-empty approver (S6).
@@ -601,12 +650,19 @@ class AgentProcess:
         stops acting immediately, THEN persist the durable marker. A failed
         persist leaves the agent paused with degraded durability — it never
         falls back to RUNNING, because immediate safety outranks durability.
+
+        v0.9.4: ``category`` is persisted in the SAME durable marker as
+        ``reason`` -- not just kept in the ``self._suspend_category`` in-memory
+        attribute -- so an approval pending across a crash/redeploy still shows
+        as "awaiting approval" after restore, not silently reset to "other"/grey.
+        See ``suspend_category`` property below for the restore-safe read.
         """
         self._set_status(ProcessStatus.SUSPENDED)
         self.state[self._SUSPEND_STATE_KEY] = {
             "reason": reason,
             "since": time.time(),
             "approver": None,
+            "category": self._suspend_category.value,
         }
         try:
             await self.on_suspend(reason)
@@ -616,18 +672,30 @@ class AgentProcess:
             await self.checkpoint()
         except Exception:
             logger.warning("[%s] failed to persist suspend marker; durability degraded", self.name)
-        self._emit_lifecycle_span("civitas.agent.suspend", {"civitas.suspend.reason": reason})
-        await self._emit_audit("agent.suspend", {"reason": reason})
+        self._emit_lifecycle_span(
+            "civitas.agent.suspend",
+            {
+                "civitas.suspend.reason": reason,
+                "civitas.suspend.category": self._suspend_category.value,
+            },
+        )
+        await self._emit_audit(
+            "agent.suspend", {"reason": reason, "category": self._suspend_category.value}
+        )
 
-    async def _update_suspend_reason(self, reason: str) -> None:
+    async def _update_suspend_reason(
+        self, reason: str, category: SuspendCategory | None = None
+    ) -> None:
         """Idempotent re-suspend of an already-suspended agent (S10).
 
-        Keeps the original ``since`` and updates only the reason; does not
-        re-fire on_suspend.
+        Keeps the original ``since`` and updates the reason (and, v0.9.4,
+        category if given); does not re-fire on_suspend.
         """
         marker = self.state.get(self._SUSPEND_STATE_KEY)
         if isinstance(marker, dict):
             marker["reason"] = reason
+            if category is not None:
+                marker["category"] = category.value
             try:
                 await self.checkpoint()
             except Exception:
@@ -635,6 +703,27 @@ class AgentProcess:
                     "[%s] failed to persist updated suspend reason; durability degraded",
                     self.name,
                 )
+
+    @property
+    def suspend_category(self) -> str:
+        """This agent's CURRENT suspend category, restore-safe (v0.9.4).
+
+        Reads the durable marker directly (``self.state[_SUSPEND_STATE_KEY]``),
+        not ``self._suspend_category`` -- the same in-memory attribute pattern
+        already has a known, harmless-today gap for ``reason`` (never synced
+        back from the persisted marker after ``_restore_state()``); the new
+        category field deliberately does NOT repeat that gap, since an
+        approval pending across a redeploy should still show as "awaiting
+        approval" after restore, not silently reset.
+
+        Returns ``SuspendCategory.OTHER.value`` (not the enum itself) when not
+        suspended at all, or if the marker predates this field -- a plain
+        string, matching every other `/topology`-serialized field's shape.
+        """
+        marker = self.state.get(self._SUSPEND_STATE_KEY)
+        if isinstance(marker, dict):
+            return str(marker.get("category", SuspendCategory.OTHER.value))
+        return SuspendCategory.OTHER.value
 
     async def _clear_suspend_marker(self) -> None:
         """Clear the durable marker on permanent removal (S8 zombie prevention).
@@ -1600,11 +1689,20 @@ class AgentProcess:
                         )
                         continue
                     reason = message.payload.get("reason", "")
+                    # v0.9.4: optional wire field, missing = OTHER -- an older
+                    # sender (or a real Presidium, if one exists in production)
+                    # not yet aware of categories keeps working unchanged.
+                    category_value = message.payload.get("category", SuspendCategory.OTHER.value)
+                    try:
+                        category = SuspendCategory(category_value)
+                    except ValueError:
+                        category = SuspendCategory.OTHER
                     if self._status == ProcessStatus.SUSPENDED:
-                        await self._update_suspend_reason(reason)
+                        await self._update_suspend_reason(reason, category)
                     else:
                         self._suspend_requested = True
                         self._suspend_reason = reason
+                        self._suspend_category = category
                     continue
                 if message.type == "_agency.resume":
                     approver = message.payload.get("approver", "")

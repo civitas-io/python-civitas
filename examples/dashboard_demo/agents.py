@@ -87,3 +87,44 @@ class SpawnerAgent(AgentProcess):
             name = f"job-{counter}"
             await self.spawn(ChattyWorker, name)
             live.append(name)
+
+
+class ApprovalWorker(AgentProcess):
+    """v0.9.4: periodically decides mid-``handle()`` that it needs a human
+    approval before proceeding — the realistic HITL pattern (self-suspension
+    from within message handling, not suspended from an external task) —
+    lights up the tree/detail-panel's distinct HITL-approval color (blue),
+    separate from an ordinary governance-pause SUSPENDED (grey), via
+    ``suspend_for_approval()``. Auto-"approves" itself after ~20s purely for
+    the demo's own sake; a real caller would be a human/Presidium via
+    ``resume()``.
+
+    Found while building this demo (not assumed): calling suspend_for_approval()
+    from a plain ``asyncio.create_task()`` background loop (the pattern every
+    OTHER agent in this file uses) never actually transitions the agent —
+    ``suspend()`` intentionally only takes effect at the message loop's next
+    boundary (S2, docs/design/durable-suspension.md), which only re-checks
+    when a message arrives. An agent idling with nothing in its mailbox never
+    wakes up to notice. The self-sent-message pattern below is the correct
+    shape for a periodic/timer-driven self-suspend; ``resume()`` itself is
+    NOT boundary-deferred (it transitions synchronously), so it's safe to call
+    directly from the background task.
+    """
+
+    async def on_start(self) -> None:
+        self._task = asyncio.create_task(self._loop())
+
+    async def on_stop(self) -> None:
+        self._task.cancel()
+
+    async def handle(self, message: Message) -> None:
+        if message.type == "_demo.request_approval":
+            await self.suspend_for_approval("needs $500 spend approval")
+        return None
+
+    async def _loop(self) -> None:
+        while True:
+            await self._mailbox.put(Message(type="_demo.request_approval"))
+            await asyncio.sleep(20.0)
+            await self.resume("demo-auto-approver")
+            await asyncio.sleep(10.0)

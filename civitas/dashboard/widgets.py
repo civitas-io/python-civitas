@@ -92,7 +92,11 @@ class TopologyTree(Tree[str]):
         if node_type == "agent":
             status = node.get("status", "unknown")
             restarts = node.get("restart_count", 0)
-            label = f"[{status_color(status)}]{status_dot(status)}[/] {name}"
+            # v0.9.4: suspend_category distinguishes a HITL approval wait
+            # from an operational governance pause -- both otherwise render
+            # as the identical SUSPENDED grey (dashboard-v2.md §6/§18).
+            category = node.get("suspend_category")
+            label = f"[{status_color(status, category)}]{status_dot(status)}[/] {name}"
             if restarts:
                 label += f"  [yellow]restarts:{restarts}[/]"
             parent.add_leaf(label, data=name)
@@ -144,8 +148,11 @@ class AgentDetailPanel(Static):
         status = topology_node.get("status") or (
             "supervisor" if node_type != "agent" else "unknown"
         )
+        # v0.9.4: see TopologyTree._add_topology_node's own comment above --
+        # same distinct-HITL-color treatment here.
+        category = topology_node.get("suspend_category")
         title.update(
-            f"[b {LLM_ACCENT}]{name}[/]  [{status_color(status)}]{status_dot(status)} {status.upper()}[/]"
+            f"[b {LLM_ACCENT}]{name}[/]  [{status_color(status, category)}]{status_dot(status)} {status.upper()}[/]"
         )
 
         rows: list[tuple[str, str]] = [
@@ -165,6 +172,18 @@ class AgentDetailPanel(Static):
             rows.append(
                 ("session", f"{turn_count} turn{'s' if turn_count != 1 else ''}, {duration}")
             )
+        # v0.9.4: only meaningful (and only shown) while actually SUSPENDED --
+        # matches this panel's own "no spurious entry" discipline (session,
+        # capabilities, above). Readable label, not the raw "hitl_approval"
+        # enum value.
+        if status.lower() == "suspended":
+            category_labels = {
+                "hitl_approval": "awaiting approval (HITL)",
+                "governance_pause": "governance pause",
+                "other": "other",
+            }
+            category_value = topology_node.get("suspend_category", "other")
+            rows.append(("suspended_because", category_labels.get(category_value, category_value)))
         if "restart_count" in topology_node:
             rows.append(("restart_count", str(topology_node["restart_count"])))
         if "crashes_in_window" in topology_node:
