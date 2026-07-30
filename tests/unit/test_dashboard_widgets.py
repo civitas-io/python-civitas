@@ -151,6 +151,79 @@ async def test_agent_detail_panel_joins_topology_and_metrics() -> None:
 
 
 @pytest.mark.asyncio
+async def test_agent_detail_panel_shows_session_when_agent_has_made_llm_calls() -> None:
+    """v0.9.4 (design/dashboard-v2.md P1): session_turn_count/
+    session_duration_seconds, when present and non-zero, render as a
+    'session' row alongside uptime."""
+    panel = AgentDetailPanel()
+    app = _SingleWidgetApp(panel)
+    async with app.run_test():
+        panel.update_detail(
+            "chatty",
+            {
+                "name": "chatty",
+                "type": "agent",
+                "status": "running",
+                "process_id": "topo",
+                "uptime_seconds": 300.0,
+                "session_turn_count": 3,
+                "session_duration_seconds": 90.0,
+            },
+            None,
+        )
+        table = panel.query_one("#detail-table", DataTable)
+        rows = [table.get_row_at(i) for i in range(table.row_count)]
+        fields = {row[0]: row[1] for row in rows}
+        assert fields["session"] == "3 turns, 1m 30s"
+
+
+@pytest.mark.asyncio
+async def test_agent_detail_panel_hides_session_row_with_zero_turns() -> None:
+    """v0.9.4: no spurious 'session' row for an agent that has never made an
+    LLM call this incarnation -- matches this panel's existing "no spurious
+    zero entry" discipline (e.g. capabilities only shown when non-empty)."""
+    panel = AgentDetailPanel()
+    app = _SingleWidgetApp(panel)
+    async with app.run_test():
+        panel.update_detail(
+            "flaky",
+            {
+                "name": "flaky",
+                "type": "agent",
+                "status": "running",
+                "process_id": "topo",
+                "uptime_seconds": 300.0,
+                "session_turn_count": 0,
+                "session_duration_seconds": 0.0,
+            },
+            None,
+        )
+        table = panel.query_one("#detail-table", DataTable)
+        rows = [table.get_row_at(i) for i in range(table.row_count)]
+        fields = {row[0]: row[1] for row in rows}
+        assert "session" not in fields
+
+
+@pytest.mark.asyncio
+async def test_agent_detail_panel_hides_session_row_when_field_absent() -> None:
+    """Backward compatibility: a topology_node dict without session fields at
+    all (e.g. from a not-yet-upgraded remote process) must not crash or show
+    a bogus session row."""
+    panel = AgentDetailPanel()
+    app = _SingleWidgetApp(panel)
+    async with app.run_test():
+        panel.update_detail(
+            "worker-a",
+            {"name": "worker-a", "type": "agent", "status": "running", "process_id": "topo"},
+            None,
+        )
+        table = panel.query_one("#detail-table", DataTable)
+        rows = [table.get_row_at(i) for i in range(table.row_count)]
+        fields = {row[0]: row[1] for row in rows}
+        assert "session" not in fields
+
+
+@pytest.mark.asyncio
 async def test_process_resource_panel_renders_gauge_rows() -> None:
     panel = ProcessResourcePanel()
     app = _SingleWidgetApp(panel)

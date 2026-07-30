@@ -154,6 +154,17 @@ class AgentDetailPanel(Static):
         ]
         if "uptime_seconds" in topology_node:
             rows.append(("uptime", format_uptime(topology_node["uptime_seconds"])))
+        # v0.9.4 (design/dashboard-v2.md P1): incarnation-scoped session
+        # signal -- only shown once the agent has actually made an LLM call
+        # this incarnation (session_turn_count > 0), matching this whole
+        # panel's existing "no spurious zero entry" discipline (e.g.
+        # capabilities only shown when non-empty, above).
+        turn_count = topology_node.get("session_turn_count", 0)
+        if turn_count:
+            duration = format_uptime(topology_node.get("session_duration_seconds", 0.0))
+            rows.append(
+                ("session", f"{turn_count} turn{'s' if turn_count != 1 else ''}, {duration}")
+            )
         if "restart_count" in topology_node:
             rows.append(("restart_count", str(topology_node["restart_count"])))
         if "crashes_in_window" in topology_node:

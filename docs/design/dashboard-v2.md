@@ -543,3 +543,47 @@ sanitized to a safe widget-ID character set, with a numeric suffix for the (unli
 case of two topology files sharing a stem. Verified against two REAL, concurrently-running
 `Runtime`+`TopologyServer` processes (not two mocked endpoints) — confirmed genuine cross-cluster
 data isolation (each `ClusterView` shows only its own topology's own agents, never a sibling's).
+
+## 16. P1's deferred "session length" — shipped (v0.9.4)
+
+Defined and scoped in conversation (2026-07-30) before any code, deliberately reusing an existing
+precedent rather than inventing a new runtime primitive — this section's whole framing ("no auth
+needed, no new design surface") ruled out a genuine explicit session concept, which is real,
+separate, tracked future work instead (`docs/milestones.md`).
+
+**Definition**: a "session" is THIS INCARNATION's LLM engagement — `AgentProcess.session_turn_count`
+(how many LLM calls this incarnation has actually reported usage for) and
+`AgentProcess.session_duration_seconds` (seconds since the first one), both plain instance
+attributes reset in `_start_nowait()` alongside `_incarnation_started_at`, matching
+`uptime_seconds`'s own precedent exactly: a restart is a fresh instance, so a fresh session too —
+a crash-and-recover genuinely interrupts whatever was happening, treating it as a new session is
+more honest than pretending continuity across a restart.
+
+Only counts real usage — wired into `_report_llm_metrics()`'s existing "nothing reported -> no
+spurious entry" gate (FD-01's established discipline), so an `llm_span()` that never reports
+tokens/cost produces neither a metrics call nor a counted turn. Deliberately does NOT reset on an
+idle gap between calls (accepted simplification, not a gap to close — a real idle-timeout-based
+boundary is part of the separate, tracked, cross-restart session_id concept below, not this
+signal).
+
+Exposed via `/topology`'s existing `_serialize_node()` (same place `uptime_seconds` already is,
+not routed through `MetricsCollector` at all — session tracking works with zero metrics sink
+attached, confirmed by a dedicated test). Rendered in `AgentDetailPanel` as a "session" row
+right after "uptime", only shown once `session_turn_count > 0` (matching this panel's existing
+"no spurious zero entry" discipline for optional fields like `capabilities`).
+
+Verified end-to-end against a REAL running `dashboard_demo` (`ChattyWorker`'s real periodic LLM
+calls), not just unit-tested: `civitas top`'s actual detail pane rendered `['session', '16 turns,
+31s']` for a real live agent, confirmed via the headless Textual pilot reading the ACTUAL
+`DataTable` rows, not a mock.
+
+### Tracked, NOT built here: an explicit, cross-restart `session_id` concept
+
+During this conversation, a genuinely separate, bigger idea was raised and is worth tracking
+properly rather than folding into this small signal: **an explicit `session_id` with real
+boundaries and continuation relationships across restarts** — e.g. "session 2 continues session 1
+after a crash-restart", or a session that ends on an idle timeout even without any restart at all.
+See `docs/milestones.md`'s dedicated tracked-idea entry for the full writeup — it's cross-cutting
+(touches spans/telemetry, not just the dashboard), genuinely bigger than a "Low priority" cosmetic
+signal, and deliberately NOT conflated with `session_turn_count`/`session_duration_seconds` above,
+which remain the simple, always-derived, incarnation-scoped version.

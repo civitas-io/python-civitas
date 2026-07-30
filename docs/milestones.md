@@ -1275,9 +1275,61 @@ envisioned, but the same underlying need. Considered done, not tracked separatel
 |------|----------|--------|--------|
 | Dashboard layout: optional focus/expand mode for the detail pane (Mockup A's wide-detail idea) | Low | design/dashboard-v2.md §7.0 (§14 addendum) — Mockup B (dense three-pane grid) shipped as the default in v0.9.1; Mockup A's core idea kept as an opt-in mode, not discarded | ✅ **Done** — a dedicated `f` keybinding (not Enter — confirmed `Tree.NodeSelected` can't distinguish click from Enter), widens `AgentDetailPanel` 1fr→3fr at the expense of the other two panes (which shrink but stay visible, never hidden). Verified via real measured widget widths in a headless Textual test, not just the CSS flag |
 | Dashboard: multi-cluster / multi-topology view | Low | design/dashboard-v2.md P2 (§15 addendum) | ✅ **Done** — `civitas dashboard` accepts multiple topology files, each attached to and polled concurrently, switchable via tabs, all already-live in the background (instant switching, no fetch-on-demand delay). Required extracting the per-cluster view+poll-worker logic into a new, independently reusable `ClusterView` widget. Found and fixed a real, live-discovered gap along the way: `TabbedContent`'s own tab-selector bar grabs default keyboard focus, not any tab's content — confirmed by inspecting `app.focused` directly, not assumed — which would have silently broken the "f" focus-toggle binding (item above) in multi-cluster mode. Verified against two REAL, concurrently-running `Runtime`+`TopologyServer` processes with genuinely distinct agent sets, confirming real cross-cluster data isolation |
-| Dashboard: "session length" (LLM conversation turns/duration) | Low | design/dashboard-v2.md P1 | Not started — needs a small definition decision first: no first-class "session"/"conversation" concept exists anywhere in the runtime today (confirmed by search) |
+| Dashboard: "session length" (LLM conversation turns/duration) | Low | design/dashboard-v2.md P1 (§16 addendum) | ✅ **Done** — defined as THIS INCARNATION's LLM engagement (`AgentProcess.session_turn_count`/`session_duration_seconds`, reset on restart, matching `uptime_seconds`'s own precedent exactly) rather than a genuine cross-restart concept — that bigger idea is real and tracked separately, not folded in here (see "Tracked idea — explicit cross-restart `session_id` concept" below). Only counts real LLM usage (FD-01's discipline); exposed via `/topology` like `uptime_seconds`, not routed through `MetricsCollector`. Verified end-to-end against a real running `dashboard_demo` agent, not just unit-tested |
 | Dashboard: network I/O per process | Low | design/dashboard-v2.md P1 | Not started — real feasibility gap confirmed: `psutil.Process().io_counters()` doesn't exist on macOS at all (only Linux/Windows), unlike the existing resource panel's `cpu_percent`/`memory_info`/`create_time`, which are genuinely cross-platform |
 | Dashboard: distinct HITL-wait vs. governance-suspend visual signal | Low | design/dashboard-v2.md §6 option B — blocked on a real HITL flow existing to design against first, not on auth | Still blocked, confirmed not assumed — `examples/patterns/human_in_the_loop.py` exists now but models HITL entirely at the application/message level, never touching `ProcessStatus.SUSPENDED` at all; there is still no real flow using that status to design the visual distinction against |
+
+### Tracked idea — explicit cross-restart `session_id` concept (not scheduled)
+
+Raised in conversation (2026-07-30) while scoping v0.9.4's simple "session length" signal
+(above) — deliberately NOT folded into that small, incarnation-scoped feature. This is a
+genuinely bigger, cross-cutting idea: real session **identity** with explicit boundaries and
+**continuation relationships across restarts** ("session 2 continues session 1 after a
+crash-restart"), not just "how long has this incarnation been running."
+
+**What it would add, concretely:**
+
+- **A real `session_id`** (likely a UUID) that can PERSIST across restarts when appropriate —
+  the runtime (or the agent) recognizing "this is a continuation of an interrupted session" vs
+  "this is genuinely new," which today's incarnation-scoped signal cannot do (it deliberately
+  resets on every restart, full stop).
+- **Explicit boundary triggers**, plural — today's signal has exactly one (a restart). A real
+  concept needs at least three: (a) idle timeout (no LLM call in N minutes → session ends even
+  without a restart), (b) an explicit agent-declared boundary (e.g. "user said goodbye", "task
+  complete" — an opt-in API, not automatic), (c) restart/crash (today's only signal).
+- **Propagation through the existing message-causality mechanism** — a `civitas.session_id`
+  attribute threaded through messages/spans the same way `trace_id` already propagates via
+  inheritance from `_current_message` in `send()`/`ask()`. This is what would let EVERY message
+  and span in one logical session share an identity, not just the initiating agent.
+- **A real telemetry connection, not just a dashboard cosmetic**: if spans carried
+  `civitas.session_id`, `SQLiteBackend`'s `normalize_span()` (§4) could promote it to a real
+  column, and `SQLiteQueryEngine` could gain a `cost_by_session`/`turns_by_session` query —
+  genuinely more useful paired with the ALREADY-tracked, not-yet-built "trace/span drill-down"
+  candidate method (§13's list): "show me this session's full trace timeline," not just one span.
+- **Cross-restart continuation would need `StateStore`** — persisting `{session_id, ended_at}` on
+  shutdown (graceful or crash-recovery-detected), read back in `on_start()`/`_restore_state()` to
+  decide whether to continue the prior session or start fresh (with some "recent enough to count
+  as interrupted" threshold needing its own decision).
+
+**Real open questions a proper design would need to resolve, not yet decided:**
+
+- **The crux of the whole thing**: does "session" mean "one incarnation's engagement" (today's
+  simple version, and what this whole idea has been implicitly assuming) or "one logical
+  conversation with a specific counterparty" — which a SINGLE incarnation could have MANY of
+  concurrently (e.g. a customer-support agent handling 5 different users' conversations at once)?
+  If the latter (which feels like the more honest, generally-useful definition), `session_id`
+  can't be a single scalar on the agent at all — it needs to be keyed per-correspondent/per-task,
+  a meaningfully different (and bigger) shape than anything sketched above.
+- Who generates/owns the session boundary — automatic runtime heuristics, or an explicit
+  opt-in agent API? Automatic is more "batteries included" but risks getting boundaries wrong for
+  use cases the runtime structurally can't know about (see the per-correspondent question above).
+- Does this belong in core `civitas`, or is it more naturally a `civitas_contrib` pattern/mixin
+  agents opt into? Also possibly touches v0.9.5's AuthN/AuthZ conversation ("who is this
+  conversation with" is an identity-adjacent question too) — worth raising there, not deciding now.
+
+**Not scheduled against any version** — tracked here so the idea isn't lost, deliberately not
+assigned to v0.9.4 (too big, violates that release's own "no new design surface" framing) or
+v0.9.5 (a different kind of design conversation, though possibly a discussion point there too).
 
 ### v0.9.5 — AuthN/AuthZ & dashboard control-plane (Planned, after v0.9.4)
 

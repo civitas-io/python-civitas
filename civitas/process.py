@@ -289,6 +289,16 @@ class AgentProcess:
         # incarnation, including restarts (D1a) — "uptime" means THIS
         # incarnation's age, matching the fresh-instance restart semantic.
         self._incarnation_started_at: float = time.monotonic()
+        # v0.9.4: "session" tracking (design/dashboard-v2.md P1) — deliberately
+        # incarnation-scoped, same reset semantic as _incarnation_started_at
+        # above (a restart is a fresh instance, so a fresh session too — a
+        # crash-and-recover genuinely interrupts whatever was happening). This
+        # is NOT the same concept as an explicit, cross-restart session_id
+        # with continuation relationships -- that's a real, tracked, separate
+        # future idea (docs/milestones.md); this is the small, always-derived-
+        # from-existing-data version scoped for v0.9.4.
+        self._first_llm_call_at: float | None = None
+        self._llm_call_count: int = 0
         self._max_retries = max_retries
         self._shutdown_timeout = shutdown_timeout
         # H6: opt-in per-message watchdog. None (default) = no timeout. When set,
@@ -1339,14 +1349,30 @@ class AgentProcess:
 
     def _report_llm_metrics(self, model: str, span: Span) -> None:
         """v0.9.1 (dashboard-v2, D-DASH-5): forward llm_span()'s reported usage
-        to the metrics sink, if any was actually reported."""
-        if self._metrics is None:
-            return
+        to the metrics sink, if any was actually reported.
+
+        v0.9.4: also updates session_turn_count/session_duration_seconds --
+        deliberately independent of whether a MetricsSink is attached at all
+        (unlike the metrics-sink forwarding below), since session tracking is
+        a plain AgentProcess-owned concept the dashboard reads directly,
+        matching uptime_seconds's own precedent (never routed through
+        MetricsCollector). Both share the same "nothing reported -> no
+        spurious entry" gate (FD-01's established discipline) -- an
+        llm_span() that never reports usage produces neither a metrics call
+        nor a counted turn.
+        """
         tokens_in = span.attributes.get("civitas.llm.tokens_in")
         tokens_out = span.attributes.get("civitas.llm.tokens_out")
         cost_usd = span.attributes.get("civitas.llm.cost_usd")
         if tokens_in is None and tokens_out is None and cost_usd is None:
-            return  # nothing reported — no spurious zero-cost entry
+            return  # nothing reported — no spurious zero-cost entry, no counted turn
+
+        if self._first_llm_call_at is None:
+            self._first_llm_call_at = time.monotonic()
+        self._llm_call_count += 1
+
+        if self._metrics is None:
+            return
         self._metrics.llm_call(
             self.name, tokens_in or 0, tokens_out or 0, cost_usd or 0.0, model=model
         )
@@ -1400,6 +1426,10 @@ class AgentProcess:
         self._reached_loop = False
         self._start_phase = "restore"
         self._incarnation_started_at = time.monotonic()
+        # v0.9.4: reset alongside _incarnation_started_at -- see this class's
+        # __init__ for why session tracking shares uptime's reset semantic.
+        self._first_llm_call_at = None
+        self._llm_call_count = 0
         self._task = asyncio.create_task(self._run(), name=self.name)
         return self._task
 
@@ -1412,6 +1442,34 @@ class AgentProcess:
         age, not the child's lifetime across restarts (that's ``restart_count``).
         """
         return time.monotonic() - self._incarnation_started_at
+
+    @property
+    def session_turn_count(self) -> int:
+        """How many LLM calls THIS incarnation has actually reported usage for
+        (v0.9.4, design/dashboard-v2.md P1) -- 0 if it has never made one.
+
+        Only counts real usage, matching FD-01's established discipline (a
+        span that never reports tokens/cost via llm_span() produces no
+        llm_call() at all) -- this can't be inflated by opening an llm_span()
+        that never actually reports anything.
+        """
+        return self._llm_call_count
+
+    @property
+    def session_duration_seconds(self) -> float:
+        """Seconds since THIS incarnation's FIRST reported LLM call, or 0.0 if
+        it hasn't made one yet (v0.9.4, design/dashboard-v2.md P1).
+
+        Deliberately incarnation-scoped, not cross-restart -- see this
+        class's __init__ docstring note. Deliberately does NOT reset on an
+        idle gap between calls (a known, accepted simplification, not a gap
+        to close) -- a real idle-timeout-based session boundary is part of
+        the separate, tracked, cross-restart session_id concept
+        (docs/milestones.md), not this small incarnation-scoped signal.
+        """
+        if self._first_llm_call_at is None:
+            return 0.0
+        return time.monotonic() - self._first_llm_call_at
 
     async def _run(self) -> None:
         """Run the full start lifecycle inside the agent's own task (R1 · D1)."""

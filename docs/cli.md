@@ -295,9 +295,12 @@ Three equally-sized panes, all visible at once:
   Status dots follow a fixed color convention: green = running, yellow = starting/stopping, red =
   crashed, grey = suspended or stopped. A supervisor's crash count within its restart window, and
   a child's own restart count, render inline in amber when non-zero.
-- **Detail** (middle) — status, uptime, capabilities, restart count, and — for agents reporting
-  LLM usage via `llm_span()` — messages handled/sent, tokens in/out, cost, and last model used,
-  for whichever node is currently focused.
+- **Detail** (middle) — status, uptime, capabilities, restart count, a **session** row (v0.9.4;
+  turn count + duration since this incarnation's first LLM call, only shown once it's made one —
+  see [design/dashboard-v2.md](design/dashboard-v2.md#16-p1s-deferred-session-length-shipped-v094)
+  for the exact definition, including why it deliberately resets on restart), and — for agents
+  reporting LLM usage via `llm_span()` — messages handled/sent, tokens in/out, cost, and last
+  model used, for whichever node is currently focused.
 - **Processes** (right) — one row per OS process (the runtime itself, plus every distinct Worker
   in a multi-process topology), each with a proportional CPU% gauge bar and RSS memory.
 

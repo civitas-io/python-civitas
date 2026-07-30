@@ -21,8 +21,9 @@ from tests.conftest import wait_for
 def _make_mock_agent(name: str, status: str = "RUNNING") -> MagicMock:
     """v0.9.1 (D-DASH-1): sets real, JSON-serializable values for the fields
     TopologyServer's serializers now read (capabilities/capability_metadata/
-    uptime_seconds) — a bare MagicMock() auto-vivifies those as further
-    MagicMocks, which json.dumps() cannot serialize.
+    uptime_seconds, and v0.9.4's session_turn_count/session_duration_seconds)
+    — a bare MagicMock() auto-vivifies those as further MagicMocks, which
+    json.dumps() cannot serialize.
     """
     agent = MagicMock()
     agent.name = name
@@ -31,6 +32,8 @@ def _make_mock_agent(name: str, status: str = "RUNNING") -> MagicMock:
     agent.capabilities = []
     agent.capability_metadata = {}
     agent.uptime_seconds = 0.0
+    agent.session_turn_count = 0
+    agent.session_duration_seconds = 0.0
     return agent
 
 
@@ -152,6 +155,7 @@ class TestSerializers:
         # restart_count are new fields on every serialized agent node.
         # process_id (D-DASH addendum, 2026-07-26): no registry wired here, so
         # it falls back to this TopologyServer's own name (same-process case).
+        # session_turn_count/session_duration_seconds (v0.9.4): new fields too.
         assert result == {
             "name": "worker-1",
             "type": "agent",
@@ -161,6 +165,8 @@ class TestSerializers:
             "capabilities": [],
             "capability_metadata": {},
             "uptime_seconds": 0.0,
+            "session_turn_count": 0,
+            "session_duration_seconds": 0.0,
         }
 
     def test_serialize_supervisor(self) -> None:
@@ -246,6 +252,7 @@ class TestSerializers:
         # are new fields on every agent-detail response. process_id (D-DASH
         # addendum, 2026-07-26): no registry wired, falls back to this
         # TopologyServer's own name (same-process case).
+        # session_turn_count/session_duration_seconds (v0.9.4): new fields too.
         assert result == {
             "name": "svc",
             "status": "RUNNING",
@@ -253,6 +260,8 @@ class TestSerializers:
             "capabilities": [],
             "capability_metadata": {},
             "uptime_seconds": 0.0,
+            "session_turn_count": 0,
+            "session_duration_seconds": 0.0,
         }
 
     def test_build_agent_detail_not_found(self) -> None:
