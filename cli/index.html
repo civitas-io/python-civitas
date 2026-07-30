@@ -2870,8 +2870,12 @@ design). It attaches remotely over HTTP to the topology's <code>topology_server<
 (v0.9.3: <code>/snapshot</code> was <code>/metrics</code> at the time this section was first written — renamed to make
 room for real Prometheus text-format exposition at the standard <code>/metrics</code> scrape path; see
 <a href="../observability/#prometheus-metrics-v0931">observability.md</a>.)</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>civitas<span class="w"> </span>dashboard<span class="w"> </span>&lt;topology.yaml&gt;<span class="w"> </span><span class="o">[</span>--refresh<span class="w"> </span>&lt;seconds&gt;<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>civitas<span class="w"> </span>dashboard<span class="w"> </span>&lt;topology.yaml&gt;<span class="w"> </span><span class="o">[</span>&lt;topology2.yaml&gt;<span class="w"> </span>...<span class="o">]</span><span class="w"> </span><span class="o">[</span>--refresh<span class="w"> </span>&lt;seconds&gt;<span class="o">]</span>
 </span></code></pre></div>
+<p><strong>v0.9.4: multiple topologies.</strong> Given more than one topology file, each gets its own tab
+(labeled after the file's own name) — all attached to and polled concurrently, switchable
+instantly since every tab's data is already live in the background, not fetched on demand.
+A single topology (the common case) looks exactly as it always has — no tab bar at all.</p>
 <table>
 <thead>
 <tr>
@@ -2882,9 +2886,9 @@ room for real Prometheus text-format exposition at the standard <code>/metrics</
 </thead>
 <tbody>
 <tr>
-<td><code>topology</code></td>
+<td><code>topologies</code></td>
 <td>—</td>
-<td>Path to the topology YAML file (required). Must declare a <code>topology_server</code> node.</td>
+<td>Path(s) to one or more topology YAML files (required, variadic). Each must declare a <code>topology_server</code> node.</td>
 </tr>
 <tr>
 <td><code>--refresh</code> / <code>-r</code></td>
@@ -2906,13 +2910,19 @@ moment you try to run it.</p>
   Status dots follow a fixed color convention: green = running, yellow = starting/stopping, red =
   crashed, grey = suspended or stopped. A supervisor's crash count within its restart window, and
   a child's own restart count, render inline in amber when non-zero.</li>
-<li><strong>Detail</strong> (middle) — status, uptime, capabilities, restart count, and — for agents reporting
-  LLM usage via <code>llm_span()</code> — messages handled/sent, tokens in/out, cost, and last model used,
-  for whichever node is currently focused.</li>
+<li><strong>Detail</strong> (middle) — status, uptime, capabilities, restart count, a <strong>session</strong> row (v0.9.4;
+  turn count + duration since this incarnation's first LLM call, only shown once it's made one —
+  see <a href="../design/dashboard-v2/#16-p1s-deferred-session-length-shipped-v094">design/dashboard-v2.md</a>
+  for the exact definition, including why it deliberately resets on restart), and — for agents
+  reporting LLM usage via <code>llm_span()</code> — messages handled/sent, tokens in/out, cost, and last
+  model used, for whichever node is currently focused.</li>
 <li><strong>Processes</strong> (right) — one row per OS process (the runtime itself, plus every distinct Worker
   in a multi-process topology), each with a proportional CPU% gauge bar and RSS memory.</li>
 </ul>
 <p>Press <code>Ctrl+P</code> for Textual's built-in command palette, including a live light/dark theme switcher.
+Press <code>f</code> to toggle focus/expand mode (v0.9.4) — widens the detail pane at the expense of the
+other two, which stay visible (not hidden). Requires a node to already be selected; a no-op
+otherwise. Press <code>f</code> again to return to the equal three-pane layout.
 Press <code>q</code> to quit; the topology you attached to keeps running.</p>
 <p>If the topology server becomes unreachable, a banner names the failing endpoint(s) and the
 dashboard keeps retrying — it does not exit.</p>

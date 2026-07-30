@@ -2292,6 +2292,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#addendum-v094-suspendcategory-an-additive-backward-compatible-categorization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Addendum (v0.9.4) — SuspendCategory: an additive, backward-compatible categorization
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2784,6 +2795,42 @@ crashed and restarted by its supervisor — a deliberately-paused agent gets for
 crash signals). Fix direction: heartbeats ride the priority channel (stopgap) and liveness moves
 out of the per-agent mailbox (structural), per supervision-hardening.md D5. Until then,
 cross-process suspend (already a non-goal for v0.5 above) must remain off.</p>
+<hr />
+<h2 id="addendum-v094-suspendcategory-an-additive-backward-compatible-categorization">Addendum (v0.9.4) — <code>SuspendCategory</code>: an additive, backward-compatible categorization<a class="headerlink" href="#addendum-v094-suspendcategory-an-additive-backward-compatible-categorization" title="Permanent link">&para;</a></h2>
+<p>The original design's <code>reason: str</code> was always free text with zero structure — by design, since
+this whole mechanism exists for <strong>Presidium</strong>, a separate external product, to consume for its
+HITL approval flow (see <code>docs/design/civitas-presidium-boundary.md</code>); civitas was never meant to
+interpret <code>reason</code>'s contents itself. <code>docs/design/dashboard-v2.md</code> §6 wanted to render a HITL
+approval wait differently from an operational governance pause, but had nothing to key off — both
+looked like an identical <code>SUSPENDED</code> with an opaque string.</p>
+<p><strong>Resolution</strong>: <code>suspend()</code> gains an additive <code>category: SuspendCategory = SuspendCategory.OTHER</code>
+parameter (<code>HITL_APPROVAL</code> / <code>GOVERNANCE_PAUSE</code> / <code>OTHER</code>), alongside the unchanged free-form
+<code>reason</code>. This does NOT violate S1-S10 above:</p>
+<ul>
+<li><strong>S2 (non-blocking boundary transition)</strong> — unchanged; <code>category</code> is carried the same way
+  <code>reason</code> already is (<code>self._suspend_category</code>, actioned at the same boundary).</li>
+<li><strong>S4/S5 (durable marker, write-ahead ordering)</strong> — <code>category</code> is written into the SAME marker
+  dict <code>_enter_suspended()</code> already persists (<code>reason</code>/<code>since</code>/<code>approver</code> + now <code>category</code>), in the
+  same write-ahead-ordered checkpoint — no new persistence path, no new failure mode.</li>
+<li><strong>S6 (approver-gated resume)</strong> — unchanged; <code>resume(approver)</code> doesn't need to know which
+  category triggered the suspend.</li>
+<li><strong>S10 (idempotent re-suspend)</strong> — <code>_update_suspend_reason()</code> now also accepts an optional
+  <code>category</code> and updates it in place, same idempotent shape as the existing <code>reason</code> update.</li>
+<li><strong>Restore path</strong> — read via a new <code>suspend_category</code> property that reads the persisted marker
+  DIRECTLY, not a separate in-memory attribute — deliberately more restore-safe than the
+  pre-existing (harmless-today) gap where <code>self._suspend_reason</code> itself is never re-populated from
+  the marker after <code>_restore_state()</code>.</li>
+</ul>
+<p><strong>Backward compatibility</strong> (a hard constraint — <code>suspend()</code>/<code>resume()</code> are a documented
+Civitas-Presidium contract): every new parameter defaults such that an existing caller passing
+only <code>reason=</code> is completely unaffected, landing in <code>SuspendCategory.OTHER</code> — today's only
+category, in effect. The <code>_agency.suspend</code> wire payload's <code>category</code> field is optional; a sender
+that never sends it (an older Presidium, or any other caller) keeps working exactly as before.</p>
+<p><strong>Convenience wrapper</strong>: <code>suspend_for_approval(reason: str = "")</code> — "a subset of suspend/resume"
+— is <code>suspend(reason=reason, category=SuspendCategory.HITL_APPROVAL)</code>. <code>resume(approver)</code> is
+unchanged; no separate <code>approve()</code> alias was added.</p>
+<p>See <code>docs/design/dashboard-v2.md</code> §18 for the dashboard-rendering side of this (the actual
+motivating use case) and its own real end-to-end verification against a running agent.</p>
 
 
 
