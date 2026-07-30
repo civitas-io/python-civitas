@@ -503,3 +503,43 @@ panes (which shrink to `1fr` each but stay fully visible — Mockup B's "three e
 panels" philosophy holds even while focused; this expands the detail pane, it doesn't replace the
 layout). No-ops with nothing selected yet. Verified via real measured widget widths in a headless
 Textual test (`tests/integration/test_dashboard_app.py`), not just the CSS class flag being set.
+
+## 15. P2's deferred multi-cluster view — shipped (v0.9.4)
+
+`civitas dashboard` now accepts multiple topology files, each attached to and polled
+concurrently, switchable via tabs. Required extracting the per-cluster three-pane-view-plus-
+poll-workers logic that used to live directly on `CivitasDashboardApp` into a new, independently
+reusable `ClusterView` widget — the app hosts N of these inside a `TabbedContent` when multiple
+topologies are given, or exactly one directly (byte-for-byte unchanged single-cluster DOM shape
+and behavior) when only one is given.
+
+Two Textual mechanics were confirmed empirically, with small standalone scripts, BEFORE
+committing to this refactor shape, not assumed:
+
+- **A widget's own `query_one()` scopes correctly to its own subtree**, even with sibling
+  instances sharing identical child IDs (e.g. two `ClusterView`s each containing their own
+  `#main` `Horizontal`) — this is what makes N independent `ClusterView` instances safe to host
+  side-by-side without any ID-suffixing scheme.
+- **A widget's own `BINDINGS` dispatch correctly whenever ANY descendant currently has focus**,
+  not just the widget itself — confirmed the binding-resolution chain walks up from the focused
+  widget through its ancestors, checking each level's own `BINDINGS`. This is what lets
+  `ClusterView`'s own "f" focus-toggle binding (§14) keep working unmodified after moving from
+  `CivitasDashboardApp` onto `ClusterView` itself.
+
+**One real, live-discovered gap found while verifying the second mechanic against the ACTUAL
+multi-cluster composition** (not the isolated test scripts above): `TabbedContent`'s own internal
+tab-selector bar (`ContentTabs`) grabs default keyboard focus when the app mounts — not any
+tab's own content. Confirmed by inspecting `app.focused` directly during a real headless run: it
+was `ContentTabs()`, not `TopologyTree()`, meaning `ClusterView`'s "f" binding would have silently
+never fired in multi-cluster mode (nothing in that focus chain includes `ClusterView` as an
+ancestor). Fixed by handling `TabbedContent.TabActivated` at the App level and moving focus onto
+the newly-active tab's own `TopologyTree` — fires for the initially-active tab too, not just
+user-driven switches, closing both gaps with one handler.
+
+Each `ClusterView` owns its own `ReconnectBanner` (not one shared banner disambiguated by cluster
+name) — simpler mental model, avoids cross-cluster banner-text complexity, matches "a cluster's
+own local health status" naturally. Tab labels are derived from each topology file's own name,
+sanitized to a safe widget-ID character set, with a numeric suffix for the (unlikely but real)
+case of two topology files sharing a stem. Verified against two REAL, concurrently-running
+`Runtime`+`TopologyServer` processes (not two mocked endpoints) — confirmed genuine cross-cluster
+data isolation (each `ClusterView` shows only its own topology's own agents, never a sibling's).

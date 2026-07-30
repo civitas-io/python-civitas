@@ -8,6 +8,13 @@ Screen {
     layout: vertical;
 }
 
+/* v0.9.4: ClusterView wraps its own ReconnectBanner + #main vertically --
+   needs to fill available space both as a direct Screen child (single-
+   cluster case) and inside a TabPane (multi-cluster case). */
+ClusterView {
+    height: 1fr;
+}
+
 #main {
     height: 1fr;
 }
@@ -52,8 +59,10 @@ ProcessResourcePanel {
    AgentDetailPanel at the expense of the other two panes, which stay VISIBLE
    (just narrower), not hidden -- Mockup B's "three equally first-class
    panels" philosophy holds even while focused. Toggled via the "f" key
-   (CivitasDashboardApp.action_toggle_focus), applied as a class on #main so
-   the ratio-only override lives entirely in CSS, not widget code. */
+   (ClusterView.action_toggle_focus, v0.9.4: moved here from
+   CivitasDashboardApp as part of the multi-cluster refactor), applied as a
+   class on #main so the ratio-only override lives entirely in CSS, not
+   widget code. */
 #main.focused TopologyTree {
     width: 1fr;
 }

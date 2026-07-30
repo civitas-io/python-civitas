@@ -264,12 +264,17 @@ room for real Prometheus text-format exposition at the standard `/metrics` scrap
 [observability.md](observability.md#prometheus-metrics-v0931).)
 
 ```bash
-civitas dashboard <topology.yaml> [--refresh <seconds>]
+civitas dashboard <topology.yaml> [<topology2.yaml> ...] [--refresh <seconds>]
 ```
+
+**v0.9.4: multiple topologies.** Given more than one topology file, each gets its own tab
+(labeled after the file's own name) — all attached to and polled concurrently, switchable
+instantly since every tab's data is already live in the background, not fetched on demand.
+A single topology (the common case) looks exactly as it always has — no tab bar at all.
 
 | Argument / Option | Default | Description |
 |-------------------|---------|-------------|
-| `topology` | — | Path to the topology YAML file (required). Must declare a `topology_server` node. |
+| `topologies` | — | Path(s) to one or more topology YAML files (required, variadic). Each must declare a `topology_server` node. |
 | `--refresh` / `-r` | `1.0` | Poll interval in seconds |
 
 Requires the `dashboard` extra:
