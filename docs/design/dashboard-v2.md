@@ -587,3 +587,35 @@ See `docs/milestones.md`'s dedicated tracked-idea entry for the full writeup —
 (touches spans/telemetry, not just the dashboard), genuinely bigger than a "Low priority" cosmetic
 signal, and deliberately NOT conflated with `session_turn_count`/`session_duration_seconds` above,
 which remain the simple, always-derived, incarnation-scoped version.
+
+## 17. P1's "network I/O per process" — investigated, declined (v0.9.4)
+
+Investigated properly (empirically, on real systems) rather than assumed straightforward, and
+the conclusion is a deliberate decision NOT to build this — a different category from the
+HITL-wait item's "still blocked, waiting on a prerequisite": there is nothing to wait for here,
+the underlying capability doesn't exist affordably on any target platform.
+
+**Linux**: `/proc/<pid>/net/dev` exists but is byte-for-byte IDENTICAL to system-wide
+`/proc/net/dev` — confirmed directly in a real container, not assumed. It reflects the current
+network NAMESPACE, not the process, for any process sharing the host's default namespace (the
+normal, non-containerized case). Real per-process attribution needs eBPF tracing (root, kernel
+support, genuinely complex tooling) or cgroup network accounting (not universally configured) —
+no simple library call exists.
+
+**macOS**: `nettop -P -L 1 -x` DOES produce real per-process `bytes_in`/`bytes_out` — confirmed by
+actually running it and reading real data for real processes. But it's a private, undocumented CSV
+format from an Apple system binary, not a public API — shelling out and parsing it is inherently
+fragile (no stability contract across macOS versions), and it's macOS-only regardless.
+
+**Windows** (reasoned from established Windows facts, not verified on a Windows machine — none
+available in this environment): no clean per-process network counter exists in the standard
+Performance Counter taxonomy either — network stats are per-NIC, not per-process; real
+attribution needs ETW (Event Tracing for Windows), genuinely complex and typically privileged.
+
+**Decision**: every viable path requires at least one of root/elevated privileges,
+heuristic/approximate packet-capture-based attribution, or shelling out to an undocumented
+platform-specific CLI tool with no stability guarantee — none of which fits this project's lean-
+dependency, no-OS-command-shelling-for-core-features philosophy (the existing resource panel's
+`cpu_percent`/`memory_info`/`create_time` are genuinely cross-platform via `psutil`, with no such
+trade-offs; this metric has no equivalent). Not built, not planned, tracked here as a real,
+investigated "no" rather than a silently dropped backlog item.
