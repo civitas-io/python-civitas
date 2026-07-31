@@ -127,9 +127,6 @@ network controls.
 - Any AuthZ engine, role/scope model, SCIM connector, or IdP integration inside civitas.
 - Per-route auth *tiering* logic in civitas (it's the customer middleware's job; the route table
   already lets them attach different middleware per route).
-- kill / force-restart, mailbox introspection/inject (later v0.9.6 items, built on this same
-  principal→audit binding once suspend/resume proves it).
-- kill / force-restart, mailbox introspection/inject (later v0.9.6 items).
 
 ## 7. D7 — dashboard client sends auth headers (DONE, v0.9.6 slice 2)
 
@@ -140,3 +137,42 @@ The server-side seam made endpoints *able* to require auth; D7 makes civitas's o
 `Authorization: Bearer ...`, `X-API-Key: ...`, or any custom header the operator's middleware
 expects). Verified end-to-end: `fetch_json` against an API-key-protected endpoint returns 401
 without the header, 200 with it.
+
+## 8. Remaining write actions (DONE, v0.9.6 slices 3-4)
+
+All built on the same principal→audit binding (D2), each a POST route auto-registered on the
+introspection gateway, gated by the node's `auth.middleware`:
+
+- **Force-restart / kill** (`POST /agents/{name}/restart`, §6 slice 3). The OTP-idiomatic "let it
+  crash": an `_agency.force_restart` message makes the agent raise out of its task; its supervisor
+  restarts it via the *same* crash path any crash uses (transient/permanent/restart-budget all
+  honored) — no bespoke restart machinery. Records `initiated_by` in an `agent.force_restart`
+  AuditEvent. Gated to controllable leaf agents (a Supervisor subtree-restart is deferred as too
+  blunt).
+- **Mailbox introspection** (`GET /agents/{name}/mailbox`, slice 4). New `Mailbox.peek()` — a
+  non-destructive snapshot (reads `asyncio.Queue`'s backing deque; `get()`/`drain()` consume).
+  Returns message **metadata only** (id/type/sender/priority/timestamp), never payloads (a
+  data-exposure guard). Same-process agents only for v1.
+- **Mailbox inject** (`POST /agents/{name}/mailbox`, slice 4). Injects an application message the
+  target handles; rejects reserved `_agency.`/`civitas.` prefixes (no privilege escalation);
+  audited (`mailbox.inject`) with `initiated_by` and the type, never the payload.
+- **`attach_to`** (D6c, slice 5). A `topology_server` node with `config: {attach_to: <gw-name>}`
+  builds only the `TopologyAgent`; a separately-declared `http_gateway` with
+  `config: {topology_agent: <that name>}` serves its routes on that gateway's own port — one
+  ingress, no dedicated internal gateway. Single-pass wiring, linked by name in YAML (no cross-node
+  mutation).
+
+## 9. Investigated and declined
+
+- **Mailbox: remove one specific in-flight message.** Mechanically feasible (a synchronous
+  drain-filter-refill is atomic within the single event loop), but declined for v1 — a deliberate
+  "no", not "blocked". It breaks the at-most-once/FIFO delivery guarantee and the sender's mental
+  model ("the bus accepted my message" → then it silently vanishes). The main real use case — a
+  poison-pill message wedging an agent — is already covered by **force-restart**, which drops the
+  whole (un-checkpointed) mailbox and restarts the agent fresh. Surgical single-message removal
+  buys only "drop *one* message, keep the rest," a narrow benefit that doesn't justify undermining
+  a core delivery guarantee. Revisit only if a concrete use case emerges that force-restart
+  genuinely can't serve.
+- **Per-agent container awareness beyond `process_id`** (e.g. Docker) — recommended against during
+  the dashboard-v2 discussion (couples the runtime to a deployment concern better owned by
+  container-native tooling); unchanged, still not built.

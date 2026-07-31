@@ -450,3 +450,49 @@ async def test_mailbox_peek_and_inject_end_to_end() -> None:
         assert "messages" in json.loads(peek_body)
     finally:
         await rt.stop()
+
+
+@pytest.mark.asyncio
+async def test_attach_to_serves_introspection_on_an_existing_gateway(tmp_path: Path) -> None:
+    """v0.9.6 (D6c): a topology_server node with attach_to builds only a
+    TopologyAgent; a separately-declared http_gateway with topology_agent
+    serves its routes on that gateway's own port -- one ingress, no dedicated
+    internal gateway. Single-pass wiring, linked by name in YAML.
+    """
+    port = _free_port()
+    yaml_file = tmp_path / "attach.yaml"
+    yaml_file.write_text(
+        textwrap.dedent(f"""\
+        supervision:
+          name: root
+          children:
+            - type: topology_server
+              name: topo
+              config:
+                attach_to: api_gw
+            - type: http_gateway
+              name: api_gw
+              config:
+                host: 127.0.0.1
+                port: {port}
+                topology_agent: topo
+        """)
+    )
+    rt = Runtime.from_config(yaml_file)
+    # The topology_server built only a TopologyAgent (no dedicated gateway); the
+    # http_gateway is the single ingress.
+    from civitas.gateway import HTTPGateway as _GW
+    from civitas.topology_server import TopologyAgent as _TA
+
+    agents = rt.all_agents()
+    assert sum(isinstance(a, _TA) for a in agents) == 1
+    assert sum(isinstance(a, _GW) for a in agents) == 1  # only the user's gateway
+
+    await rt.start()
+    try:
+        await _wait_listening(port)
+        assert await _http_get(port, "/health") == 200
+        data = await _get_with_body(port, "/topology")
+        assert json.loads(data)["name"] == "root"  # served by the attached gateway
+    finally:
+        await rt.stop()

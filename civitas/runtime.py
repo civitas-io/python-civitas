@@ -425,6 +425,14 @@ class Runtime:
                 # default), NOT HTTPGateway's 0.0.0.0 -- behavior-preserving.
                 cfg = node.get("config", {})
                 agent_name = node.get("name", "topology_server")
+                # v0.9.6 (control-plane-writes.md, D6c attach_to): with
+                # attach_to set, build ONLY the TopologyAgent -- no dedicated
+                # gateway. The named http_gateway (declared separately, with
+                # topology_agent: <this name> in its own config) serves the
+                # routes on its existing port. Single-pass, no cross-node
+                # mutation: the link is by name in the gateway's own config.
+                if cfg.get("attach_to"):
+                    return TopologyAgent(name=agent_name)
                 auth_block = cfg.get("auth", {})
                 auth_cfg = GatewayAuthConfig.from_dict(auth_block)
                 topo_agent = TopologyAgent(name=agent_name)
@@ -492,6 +500,15 @@ class Runtime:
                     middleware=cfg_dict.get("middleware", []),
                     docs_enabled=docs_cfg.get("enabled"),
                     docs_path=docs_cfg.get("path", "/docs"),
+                    # v0.9.6 (D6c attach_to): an http_gateway can ALSO serve a
+                    # TopologyAgent's introspection/control routes on its own
+                    # port -- set topology_agent to that agent's name (paired
+                    # with a topology_server node using attach_to: <this
+                    # gateway>). topology_middleware here gates those routes
+                    # (the auth: block gates the user's own routes).
+                    topology_agent=cfg_dict.get("topology_agent"),
+                    topology_prefix=cfg_dict.get("topology_prefix", ""),
+                    topology_middleware=cfg_dict.get("topology_middleware", []),
                 )
                 return HTTPGateway(name=node["name"], config=gw_config)
             elif "agent" in node:

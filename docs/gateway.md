@@ -474,8 +474,12 @@ control-plane **write actions**:
 |---|---|---|
 | `POST` | `/agents/{name}/suspend` | Suspend an agent (optional JSON `{"reason", "category"}`) |
 | `POST` | `/agents/{name}/resume` | Resume a suspended agent |
+| `POST` | `/agents/{name}/restart` | Force-restart (kill) an agent — crashes it; its supervisor restarts it per policy |
+| `GET`  | `/agents/{name}/mailbox` | Non-destructive mailbox peek (message metadata only, never payloads) |
+| `POST` | `/agents/{name}/mailbox` | Inject an application message (reserved `_agency.`/`civitas.` types rejected) |
 
-Both are audited. **civitas does not ship AuthZ** — no roles, scopes, SCIM, or
+Every write action is audited, with the authenticated principal recorded as the actor
+(`initiated_by` / `approver`). **civitas does not ship AuthZ** — no roles, scopes, SCIM, or
 IdP integration. It ships the *seam*, an *honest audit binding*, and a *safe
 default*:
 
