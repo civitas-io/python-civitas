@@ -1041,17 +1041,19 @@ async def test_mcp_connection_error_logged_not_raised() -> None:
 
 
 # ---------------------------------------------------------------------------
-# print_tree() — covers labels for DynamicSupervisor, TopologyServer,
-# EvalAgent, HTTPGateway, GenServer (lines 413-421)
+# print_tree() — covers labels for DynamicSupervisor, TopologyAgent,
+# EvalAgent, HTTPGateway, GenServer
 # ---------------------------------------------------------------------------
 
 
 def test_print_tree_various_node_labels() -> None:
+    # v0.9.5: TopologyServer removed; TopologyAgent (a _TopologyIntrospection)
+    # now carries the [topo] tag.
     from civitas.evalloop import EvalAgent
     from civitas.gateway import GatewayConfig, HTTPGateway
     from civitas.genserver import GenServer
     from civitas.supervisor import DynamicSupervisor
-    from civitas.topology_server import TopologyServer
+    from civitas.topology_server import TopologyAgent
 
     class MyServer(GenServer):
         async def handle_call(self, msg):  # type: ignore[override]
@@ -1059,7 +1061,7 @@ def test_print_tree_various_node_labels() -> None:
 
     children = [
         DynamicSupervisor("dyn"),
-        TopologyServer("topo"),
+        TopologyAgent("topo"),
         EvalAgent("eval_a"),
         HTTPGateway("http_gw", GatewayConfig()),
         MyServer("srv"),

@@ -1,10 +1,12 @@
-"""Tests for TopologyAgent (v0.9.5, docs/design/topology-gateway-merge.md phase 2).
+"""Tests for TopologyAgent (v0.9.5, docs/design/topology-gateway-merge.md).
 
-Byte-for-byte parity is the actual goal of this phase, not just "does it
-respond" — every op is exercised as a REAL side-by-side comparison against
-TopologyServer._route_http()'s existing behavior over the exact same injected
-state, not against a hand-written expected dict that could silently drift
-from what TopologyServer actually produces.
+Originally (phase 2) these compared TopologyAgent.handle_call() against the
+old TopologyServer._route_http() for byte-for-byte parity. TopologyServer was
+removed in phase 6, so they now assert the equivalent property directly:
+handle_call() dispatches to the correct _build_* method and wraps its output
+in the raw-body sentinel verbatim (JSON for every op except Prometheus
+/metrics). Same guarantee -- handle_call adds no drift over the builders --
+without a reference class that no longer exists.
 """
 
 from __future__ import annotations
@@ -14,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from civitas.topology_server import TopologyAgent, TopologyServer
+from civitas.topology_server import TopologyAgent
 from tests.unit.test_topology_server import (
     _make_mock_agent,
     _make_mock_dyn,
@@ -22,10 +24,9 @@ from tests.unit.test_topology_server import (
 )
 
 
-def _wire_same_state(server: TopologyServer, agent: TopologyAgent) -> None:
-    """Inject byte-for-byte identical state into both, mirroring how Runtime
-    wires a real TopologyServer today (runtime.py's isinstance(agent,
-    TopologyServer) loop) — the same shape TopologyAgent's __init__ sets."""
+def _wire_state(agent: TopologyAgent) -> None:
+    """Inject the same privileged state Runtime wires into a real TopologyAgent
+    (runtime.py's isinstance(agent, _TopologyIntrospection) loop)."""
     root = _make_mock_supervisor(
         "root",
         children=[
@@ -33,82 +34,68 @@ def _wire_same_state(server: TopologyServer, agent: TopologyAgent) -> None:
             _make_mock_dyn("workers", dynamic_children={"job-1": _make_mock_agent("job-1")}),
         ],
     )
-    static_agent = _make_mock_agent("static-1")
-    for target in (server, agent):
-        target._root_supervisor = root
-        target._agents = {"static-1": static_agent}
-        target._metrics_collector = None
+    agent._root_supervisor = root
+    agent._agents = {"static-1": _make_mock_agent("static-1")}
+    agent._metrics_collector = None
 
 
-class TestByteForByteParity:
+class TestHandleCallWrapsBuilders:
+    """handle_call() must dispatch to the right _build_* method and wrap its
+    result in the sentinel verbatim -- no drift added on top of the builders."""
+
     def setup_method(self) -> None:
-        # Same name for both: _process_id_for() falls back to self.name when a
-        # target has no registry entry, so a real parity check needs them to
-        # match -- this is a test-fixture confound, not something Runtime would
-        # ever actually do (a real TopologyServer/TopologyAgent instance is
-        # never named identically to its own comparison twin).
-        self.server = TopologyServer(name="shared", port=0)
         self.agent = TopologyAgent(name="shared")
-        _wire_same_state(self.server, self.agent)
+        _wire_state(self.agent)
 
     @pytest.mark.asyncio
-    async def test_health_parity(self) -> None:
-        server_body, server_status, server_ct = await self.server._route_http("/health")
+    async def test_health(self) -> None:
         reply = await self.agent.handle_call({"__op__": "health"}, "tester")
-        assert reply["__raw_body__"] == server_body
-        assert reply["__status__"] == server_status
-        assert reply["__content_type__"] == server_ct
+        assert reply["__raw_body__"] == json.dumps({"status": "ok"})
+        assert reply["__status__"] == 200
+        assert reply["__content_type__"] == "application/json"
 
     @pytest.mark.asyncio
-    async def test_topology_parity(self) -> None:
-        server_body, server_status, _ = await self.server._route_http("/topology")
+    async def test_topology(self) -> None:
         reply = await self.agent.handle_call({"__op__": "topology"}, "tester")
-        assert reply["__raw_body__"] == server_body
-        assert reply["__status__"] == server_status
-        # Round-trips to the exact same structure, not just the same string,
-        # so this survives incidental dict key-ordering differences too.
-        assert json.loads(reply["__raw_body__"]) == json.loads(server_body)
+        assert reply["__raw_body__"] == json.dumps(self.agent._build_topology())
+        assert reply["__status__"] == 200
 
     @pytest.mark.asyncio
-    async def test_agents_parity_including_bare_array_shape(self) -> None:
-        """The one genuinely tricky case: /agents' wire body is a bare JSON
-        ARRAY, not an object — GenServer.handle_call() can't return a list
-        directly (must be a dict), so this proves the raw_body sentinel
-        actually preserves that shape rather than silently wrapping it."""
-        server_body, server_status, _ = await self.server._route_http("/agents")
+    async def test_agents_is_a_bare_array(self) -> None:
+        """The tricky case: /agents' wire body is a bare JSON ARRAY, not an
+        object -- GenServer.handle_call() cannot return a list directly (must
+        be a dict), so this proves the raw_body sentinel preserves that shape
+        rather than wrapping it in an object."""
         reply = await self.agent.handle_call({"__op__": "agents"}, "tester")
-        assert reply["__raw_body__"] == server_body
-        assert reply["__status__"] == server_status
+        assert reply["__raw_body__"] == json.dumps(self.agent._build_agents_list())
         parsed = json.loads(reply["__raw_body__"])
-        assert isinstance(parsed, list)  # bare array, not {"agents": [...]}
+        assert isinstance(parsed, list)
 
     @pytest.mark.asyncio
-    async def test_agent_detail_found_parity(self) -> None:
-        server_body, server_status, _ = await self.server._route_http("/agents/static-1")
+    async def test_agent_detail_found(self) -> None:
         reply = await self.agent.handle_call(
             {"__op__": "agent_detail", "name": "static-1"}, "tester"
         )
-        assert reply["__raw_body__"] == server_body
-        assert reply["__status__"] == server_status == 200
+        assert reply["__raw_body__"] == json.dumps(self.agent._build_agent_detail("static-1"))
+        assert reply["__status__"] == 200
 
     @pytest.mark.asyncio
-    async def test_agent_detail_not_found_parity_including_404(self) -> None:
-        """The other genuinely tricky case: a real, varying (non-200) status
-        code flowing through the raw_body sentinel's __status__ field."""
-        server_body, server_status, _ = await self.server._route_http("/agents/ghost")
+    async def test_agent_detail_not_found_is_404(self) -> None:
+        """A real, varying (non-200) status code flowing through the sentinel's
+        __status__ field."""
         reply = await self.agent.handle_call({"__op__": "agent_detail", "name": "ghost"}, "tester")
-        assert reply["__raw_body__"] == server_body
-        assert reply["__status__"] == server_status == 404
+        assert reply["__status__"] == 404
+        assert json.loads(reply["__raw_body__"]) == {"error": "agent 'ghost' not found"}
 
     @pytest.mark.asyncio
-    async def test_snapshot_parity_no_metrics_collector_404(self) -> None:
-        server_body, server_status, _ = await self.server._route_http("/snapshot")
+    async def test_snapshot_no_collector_is_404(self) -> None:
+        data, code = self.agent._build_metrics()
         reply = await self.agent.handle_call({"__op__": "snapshot"}, "tester")
-        assert reply["__raw_body__"] == server_body
-        assert reply["__status__"] == server_status == 404
+        assert reply["__raw_body__"] == json.dumps(data)
+        assert reply["__status__"] == code == 404
 
     @pytest.mark.asyncio
-    async def test_snapshot_parity_with_metrics_collector(self) -> None:
+    async def test_snapshot_with_collector_is_200(self) -> None:
         collector = MagicMock()
         snapshot = MagicMock()
         snapshot.agents = {}
@@ -117,46 +104,46 @@ class TestByteForByteParity:
         snapshot.uptime_seconds = 12.0
         snapshot.restart_history = []
         collector.snapshot = snapshot
-        self.server._metrics_collector = collector
         self.agent._metrics_collector = collector
 
-        server_body, server_status, _ = await self.server._route_http("/snapshot")
+        data, code = self.agent._build_metrics()
         reply = await self.agent.handle_call({"__op__": "snapshot"}, "tester")
-        assert reply["__raw_body__"] == server_body
-        assert reply["__status__"] == server_status == 200
+        assert reply["__raw_body__"] == json.dumps(data)
+        assert reply["__status__"] == code == 200
 
     @pytest.mark.asyncio
-    async def test_metrics_parity_prometheus_text_not_json(self) -> None:
-        server_body, server_status, server_ct = await self.server._route_http("/metrics")
+    async def test_metrics_is_prometheus_text_not_json(self) -> None:
+        body, status, content_type = self.agent._build_prometheus_metrics()
         reply = await self.agent.handle_call({"__op__": "metrics"}, "tester")
-        assert reply["__raw_body__"] == server_body
-        assert reply["__status__"] == server_status == 200
-        assert reply["__content_type__"] == server_ct
+        assert reply["__raw_body__"] == body
+        assert reply["__status__"] == status == 200
+        assert reply["__content_type__"] == content_type
         assert "application/json" not in reply["__content_type__"]
-        # Genuinely not JSON -- proves this isn't accidentally routed through
-        # the same JSON-wrapping path as every other op.
+        # Genuinely not JSON -- proves metrics isn't accidentally routed through
+        # the JSON-wrapping path every other op uses.
         with pytest.raises(json.JSONDecodeError):
             json.loads(reply["__raw_body__"])
 
     @pytest.mark.asyncio
-    async def test_processes_parity(self) -> None:
-        # Both share the same (real, module-level) process sampler and no bus,
-        # so neither ever finds a Worker to probe — deterministic parity.
-        server_body, server_status, _ = await self.server._route_http("/processes")
+    async def test_processes(self) -> None:
+        # _build_processes() samples live CPU%/uptime, so two calls legitimately
+        # differ -- assert the wrapping shape/keys, not exact live values.
         reply = await self.agent.handle_call({"__op__": "processes"}, "tester")
-        assert reply["__status__"] == server_status == 200
-        assert json.loads(reply["__raw_body__"]).keys() == json.loads(server_body).keys()
+        assert reply["__status__"] == 200
+        assert reply["__content_type__"] == "application/json"
+        body = json.loads(reply["__raw_body__"])
+        assert "processes" in body
+        assert isinstance(body["processes"], list)
 
     @pytest.mark.asyncio
-    async def test_unknown_op_parity_with_unknown_path(self) -> None:
-        server_body, server_status, _ = await self.server._route_http("/nope")
+    async def test_unknown_op_is_404(self) -> None:
         reply = await self.agent.handle_call({"__op__": "nope"}, "tester")
-        assert reply["__raw_body__"] == server_body
-        assert reply["__status__"] == server_status == 404
+        assert reply["__status__"] == 404
+        assert json.loads(reply["__raw_body__"]) == {"error": "not found"}
 
 
 class TestTopologyAgentIsolated:
-    """A few TopologyAgent-only checks not covered by the parity suite above."""
+    """TopologyAgent-only behavioral checks."""
 
     def setup_method(self) -> None:
         self.agent = TopologyAgent(name="ta")
@@ -166,13 +153,13 @@ class TestTopologyAgentIsolated:
         reply = await self.agent.handle_call({"__op__": "topology"}, "tester")
         body = json.loads(reply["__raw_body__"])
         assert body == {"error": "runtime not available"}
-        assert reply["__status__"] == 200  # matches TopologyServer's own /topology shape
+        assert reply["__status__"] == 200  # matches the /topology shape
 
     @pytest.mark.asyncio
     async def test_processes_probes_bus_for_remote_workers(self) -> None:
-        """v0.9.1 D-DASH-3's real-bus-round-trip path still works through
+        """v0.9.1 D-DASH-3's real-bus-round-trip path works through
         TopologyAgent -- GenServer already provides self._bus, no new wiring
-        needed for this one op that isn't a pure same-process read."""
+        needed for the one op that isn't a pure same-process read."""
         self.agent._registry = MagicMock()
         self.agent._registry.all_names.return_value = ["remote"]
         entry = MagicMock()
@@ -191,9 +178,10 @@ class TestTopologyAgentIsolated:
     @pytest.mark.asyncio
     async def test_handle_call_always_returns_a_dict(self) -> None:
         """GenServer's own contract (_do_call raises TypeError otherwise) --
-        every op, including the /agents bare-array case, must still return a
-        dict at the handle_call() level (the array lives inside __raw_body__
-        as a STRING, not as the top-level return value)."""
+        every op, including the /agents bare-array case, must return a dict at
+        the handle_call() level (the array lives inside __raw_body__ as a
+        STRING, not as the top-level return value)."""
+        _wire_state(self.agent)
         for op in ("health", "topology", "agents", "snapshot", "metrics", "processes"):
             reply = await self.agent.handle_call({"__op__": op}, "tester")
             assert isinstance(reply, dict)

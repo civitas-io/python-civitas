@@ -1,32 +1,31 @@
-"""TopologyServer / TopologyAgent — live topology introspection.
+"""TopologyAgent — live topology introspection, served via HTTPGateway.
 
-Declared as ``type: topology_server`` in topology YAML. The CLI's
-``civitas topology show`` pings ``GET /topology`` and renders a live tree;
-it falls back to the static YAML tree when the server is not reachable.
+Declared as ``type: topology_server`` in topology YAML (the YAML node name is
+unchanged for backward compatibility). The CLI's ``civitas topology show``
+pings ``GET /topology`` and renders a live tree; it falls back to the static
+YAML tree when the endpoint is not reachable.
 
-v0.9.3.1: ``/metrics`` now means real Prometheus text-format exposition
-(the standard scrape path every Prometheus deployment defaults to) --
-civitas's own JSON metrics snapshot (used by ``civitas top``) moved to
-``/snapshot`` to make room for it. Breaking change to a documented
-endpoint, done deliberately rather than picking a non-standard Prometheus
-path: "never wise to break standards in OSS projects" (2026-07-29).
+v0.9.3.1: ``/metrics`` means real Prometheus text-format exposition (the
+standard scrape path every Prometheus deployment defaults to) -- civitas's own
+JSON metrics snapshot (used by ``civitas top``) lives at ``/snapshot``.
 
-v0.9.5 (docs/design/topology-gateway-merge.md, migration phase 2/7):
-``TopologyServer``'s HTTP-serving half (its own ``asyncio.start_server``,
-zero auth) and its data half (the actual introspection logic) are being
-split. ``_TopologyIntrospection`` below holds the data half, shared by
-BOTH the old ``TopologyServer`` (still the only thing ``Runtime`` wires up
-today -- unchanged, still zero behavior change) and the new
-``TopologyAgent`` (reached via ``HTTPGateway``'s already-audited AuthN,
-built in this phase but not yet wired into ``Runtime`` -- that's phase 4).
-``TopologyServer`` is deleted entirely once phase 4 lands (phase 6,
-deliberate breaking change, D6) -- at which point this mixin's split stops
-mattering and could be merged directly into ``TopologyAgent``.
+v0.9.5 (docs/design/topology-gateway-merge.md, migration phases 1-6):
+the old ``TopologyServer`` -- a standalone, zero-auth ``asyncio.start_server``
+HTTP server -- has been REMOVED (deliberate breaking change, D6). A
+``type: topology_server`` YAML node now builds a ``TopologyAgent`` (this
+file's data provider, privileged-injected by ``Runtime`` exactly as
+``TopologyServer`` was) plus an internally-owned ``HTTPGateway`` that serves
+the seven fixed introspection routes with the same already-audited AuthN
+stack (API key / JWT / mTLS) as any other gateway. ``_TopologyIntrospection``
+holds the introspection logic; ``TopologyAgent`` exposes it via
+``handle_call()``, reached over the gateway's routes rather than its own
+socket. Direct-construction (non-YAML) callers of the removed
+``TopologyServer`` must migrate to constructing an ``HTTPGateway`` +
+``TopologyAgent`` themselves (or just use the YAML node).
 """
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 from typing import TYPE_CHECKING, Any
@@ -48,16 +47,21 @@ if TYPE_CHECKING:
 
 
 class _TopologyIntrospection:
-    """Shared introspection logic for ``TopologyServer`` and ``TopologyAgent``.
+    """Introspection logic backing ``TopologyAgent`` (and, until v0.9.5's phase
+    6 removal, the old ``TopologyServer``).
 
-    Pure functions over privileged, ``Runtime``-injected same-process state
-    (``_root_supervisor``/``_agents``/``_metrics_collector``) -- a deliberate
-    exemption from this codebase's own "route by name, never by object" rule,
-    unchanged by the v0.9.5 HTTP-serving migration. Expects the concrete class
-    to also be a ``GenServer``/``AgentProcess`` (for ``self.name``, ``self._bus``,
+    Kept as a distinct base rather than folded into ``TopologyAgent`` so
+    ``Runtime`` can dispatch its privileged injection on
+    ``isinstance(agent, _TopologyIntrospection)`` -- one stable predicate for
+    "this agent needs the topology references," independent of the concrete
+    class. Pure functions over privileged, ``Runtime``-injected same-process
+    state (``_root_supervisor``/``_agents``/``_metrics_collector``) -- a
+    deliberate exemption from this codebase's own "route by name, never by
+    object" rule. Expects the concrete class to also be a
+    ``GenServer``/``AgentProcess`` (for ``self.name``, ``self._bus``,
     ``self._registry``) and to set ``_root_supervisor``/``_agents``/
-    ``_metrics_collector``/``_runtime_resource_sampler`` itself (shape shown in
-    both subclasses' ``__init__``).
+    ``_metrics_collector``/``_runtime_resource_sampler`` itself (see
+    ``TopologyAgent.__init__``).
     """
 
     name: str
@@ -367,164 +371,6 @@ class _TopologyIntrospection:
                 if found is not None:
                     return found
         return None
-
-
-class TopologyServer(_TopologyIntrospection, GenServer):
-    """Supervised JSON HTTP server exposing live topology state.
-
-    v0.9.5: DEPRECATED, scheduled for removal in migration phase 6
-    (docs/design/topology-gateway-merge.md D6, a deliberate breaking change)
-    once ``TopologyAgent`` + ``HTTPGateway`` fully replace it (phase 4). Zero
-    authentication — do not add new callers of this class; see the design
-    doc for the migration path.
-
-    Endpoints:
-        GET /health          → JSON {"status": "ok"}
-        GET /topology        → JSON full supervision tree with live dynamic children
-        GET /agents          → JSON flat list of all running agents + status
-        GET /agents/{name}   → JSON single agent status or 404
-        GET /snapshot        → JSON civitas's own metrics snapshot (v0.9.3.1: renamed
-                               from /metrics -- see module docstring)
-        GET /metrics         → Prometheus text-format exposition (v0.9.3.1) -- the
-                               standard scrape path; point a Prometheus
-                               scrape_config at this with no metrics_path override
-        GET /processes       → JSON one row per OS process
-    """
-
-    def __init__(
-        self,
-        name: str = "topology_server",
-        host: str = "127.0.0.1",
-        port: int = 6789,
-        **kwargs: Any,
-    ) -> None:
-        super().__init__(name, **kwargs)
-        self._host = host
-        self._port = port
-        self._server: asyncio.Server | None = None
-
-        # Injected by Runtime before on_start() is called
-        self._root_supervisor: Supervisor | None = None
-        self._agents: dict[str, Any] = {}  # name → AgentProcess
-        # v0.9.1 (dashboard-v2, D-DASH-2/D-DASH-4): injected by Runtime.start()
-        # alongside _root_supervisor/_agents — None when the caller supplied a
-        # non-MetricsCollector metrics= sink of their own (documented, not silently
-        # empty; see /snapshot's "not available" response, v0.9.3.1: renamed from
-        # /metrics to make room for real Prometheus exposition at that path).
-        self._metrics_collector: Any = None
-        # v0.9.1 (D-DASH-3): primed ONCE at construction, reused for every
-        # /processes request — see try_start_process_sampler()'s docstring
-        # for why a fresh handle per-request would be a real bug, not style.
-        self._runtime_resource_sampler = try_start_process_sampler()
-
-    # ------------------------------------------------------------------
-    # Lifecycle
-    # ------------------------------------------------------------------
-
-    async def init(self) -> None:
-        try:
-            self._server = await asyncio.start_server(
-                self._handle_connection,
-                self._host,
-                self._port,
-            )
-            logger.info(
-                "[%s] HTTP management endpoint on http://%s:%d",
-                self.name,
-                self._host,
-                self._port,
-            )
-        except OSError as exc:
-            logger.warning(
-                "[%s] Failed to bind HTTP server on %s:%d: %s",
-                self.name,
-                self._host,
-                self._port,
-                exc,
-            )
-
-    async def on_stop(self) -> None:
-        if self._server is not None:
-            self._server.close()
-            try:
-                await self._server.wait_closed()
-            except Exception:
-                pass
-            self._server = None
-        await super().on_stop()
-
-    # ------------------------------------------------------------------
-    # HTTP connection handler
-    # ------------------------------------------------------------------
-
-    async def _handle_connection(
-        self,
-        reader: asyncio.StreamReader,
-        writer: asyncio.StreamWriter,
-    ) -> None:
-        try:
-            request_line = await asyncio.wait_for(reader.readline(), timeout=5.0)
-            parts = request_line.decode(errors="replace").split()
-            path = parts[1] if len(parts) >= 2 else "/"
-
-            # Drain remaining request headers
-            while True:
-                header_line = await asyncio.wait_for(reader.readline(), timeout=5.0)
-                if header_line in (b"\r\n", b"\n", b""):
-                    break
-
-            body_str, status_code, content_type = await self._route_http(path)
-            body_bytes = body_str.encode()
-            status_text = "200 OK" if status_code == 200 else f"{status_code} Not Found"
-            header = (
-                f"HTTP/1.1 {status_text}\r\n"
-                f"Content-Type: {content_type}\r\n"
-                f"Content-Length: {len(body_bytes)}\r\n"
-                f"Connection: close\r\n"
-                f"\r\n"
-            ).encode()
-            writer.write(header + body_bytes)
-            await writer.drain()
-        except Exception:
-            pass
-        finally:
-            try:
-                writer.close()
-                await writer.wait_closed()
-            except Exception:
-                pass
-
-    async def _route_http(self, path: str) -> tuple[str, int, str]:
-        """Async (v0.9.1, D-DASH-3) — ``/processes`` is the first route that
-        needs real I/O (probing remote Worker health channels over the bus);
-        every other route below stays a plain synchronous call, awaiting
-        nothing — this signature change doesn't alter their behavior.
-
-        v0.9.3.1: returns a content-type alongside body/status now, since
-        ``/metrics`` (Prometheus) is plain text, not JSON like every other
-        route here.
-        """
-        json_type = "application/json"
-        if path == "/health":
-            return json.dumps({"status": "ok"}), 200, json_type
-        if path == "/topology":
-            return json.dumps(self._build_topology()), 200, json_type
-        if path == "/agents":
-            return json.dumps(self._build_agents_list()), 200, json_type
-        if path.startswith("/agents/"):
-            name = path[len("/agents/") :]
-            data = self._build_agent_detail(name)
-            if data is None:
-                return json.dumps({"error": f"agent '{name}' not found"}), 404, json_type
-            return json.dumps(data), 200, json_type
-        if path == "/snapshot":
-            data, code = self._build_metrics()
-            return json.dumps(data), code, json_type
-        if path == "/metrics":
-            return self._build_prometheus_metrics()
-        if path == "/processes":
-            return json.dumps(await self._build_processes()), 200, json_type
-        return json.dumps({"error": "not found"}), 404, json_type
 
 
 class TopologyAgent(_TopologyIntrospection, GenServer):
