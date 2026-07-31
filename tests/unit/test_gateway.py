@@ -1746,12 +1746,14 @@ class TestTopologyAutoRoutes:
             ("GET", "/topology"),
             ("GET", "/agents"),
             ("GET", "/agents/{name}"),
+            ("GET", "/agents/{name}/mailbox"),  # v0.9.6 peek (read)
             ("GET", "/snapshot"),
             ("GET", "/metrics"),
             ("GET", "/processes"),
             ("POST", "/agents/{name}/suspend"),  # v0.9.6 write action
             ("POST", "/agents/{name}/resume"),  # v0.9.6 write action
             ("POST", "/agents/{name}/restart"),  # v0.9.6 write action
+            ("POST", "/agents/{name}/mailbox"),  # v0.9.6 inject (write)
         }
         assert all(e.agent == "topo" for e in entries)
         # Read routes are raw_response; write routes are not (plain JSON ack).
@@ -1775,6 +1777,7 @@ class TestTopologyAutoRoutes:
             "/v1/topology",
             "/v1/agents",
             "/v1/agents/{name}",
+            "/v1/agents/{name}/mailbox",  # GET peek + POST inject share this path
             "/v1/snapshot",
             "/v1/metrics",
             "/v1/processes",
@@ -1812,12 +1815,14 @@ class TestTopologyAutoRoutes:
             ("GET", "/topology"): "topology",
             ("GET", "/agents"): "agents",
             ("GET", "/agents/{name}"): "agent_detail",
+            ("GET", "/agents/{name}/mailbox"): "mailbox_peek",
             ("GET", "/snapshot"): "snapshot",
             ("GET", "/metrics"): "metrics",
             ("GET", "/processes"): "processes",
             ("POST", "/agents/{name}/suspend"): "suspend",
             ("POST", "/agents/{name}/resume"): "resume",
             ("POST", "/agents/{name}/restart"): "restart",
+            ("POST", "/agents/{name}/mailbox"): "mailbox_inject",
         }
 
     def test_topology_routes_coexist_with_user_declared_routes(self) -> None:
@@ -1833,4 +1838,4 @@ class TestTopologyAutoRoutes:
         paths = {(e.method, e.path_pattern) for e in gw._route_table.entries()}
         assert ("POST", "/chat") in paths
         assert ("GET", "/topology") in paths
-        assert len(gw._route_table.entries()) == 11  # 1 user + 7 read + 3 write
+        assert len(gw._route_table.entries()) == 13  # 1 user + 8 read + 4 write

@@ -211,6 +211,15 @@ class Mailbox:
         Worker health responder's snapshot (D5, report-only)."""
         return self._priority_queue.qsize() + self._queue.qsize()
 
+    def peek(self) -> list[Message]:
+        """Non-destructively snapshot all buffered messages (priority first),
+        WITHOUT consuming them (v0.9.6, control-plane-writes.md §6 mailbox
+        introspection). Reads ``asyncio.Queue``'s backing ``collections.deque``
+        (``._queue``) directly -- the only non-consuming way to inspect it;
+        ``get()``/``drain()`` all consume. For introspection/reporting only.
+        """
+        return list(self._priority_queue._queue) + list(self._queue._queue)  # type: ignore[attr-defined]
+
     def drain(self) -> list[Message]:
         """Remove and return all buffered messages, priority queue first."""
         drained: list[Message] = []

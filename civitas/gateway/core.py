@@ -47,6 +47,7 @@ _TOPOLOGY_ROUTE_SPECS: tuple[tuple[str, str, bool], ...] = (
     ("/topology", "topology", False),
     ("/agents", "agents", False),
     ("/agents/{name}", "agent_detail", False),
+    ("/agents/{name}/mailbox", "mailbox_peek", False),  # v0.9.6: non-destructive peek
     ("/snapshot", "snapshot", False),
     ("/metrics", "metrics", False),
     ("/processes", "processes", False),
@@ -61,6 +62,7 @@ _TOPOLOGY_WRITE_ROUTE_SPECS: tuple[tuple[str, str], ...] = (
     ("/agents/{name}/suspend", "suspend"),
     ("/agents/{name}/resume", "resume"),
     ("/agents/{name}/restart", "restart"),  # v0.9.6: force-restart / kill
+    ("/agents/{name}/mailbox", "mailbox_inject"),  # v0.9.6: inject an app message
 )
 
 

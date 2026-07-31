@@ -269,3 +269,67 @@ class TestWriteOps:
         assert msg.priority == 1
         assert msg.payload["initiated_by"] == "carol"
         assert msg.payload["reason"] == "wedged"
+
+    @pytest.mark.asyncio
+    async def test_mailbox_inject_routes_app_message_and_audits(self) -> None:
+        sink = MagicMock()
+        sink.emit = AsyncMock()
+        self.agent._audit_sink = sink
+        reply = await self.agent.handle_call(
+            {
+                "__op__": "mailbox_inject",
+                "name": "worker",
+                "__principal__": {"id": "dave"},
+                "type": "do_work",
+                "payload": {"n": 1},
+            },
+            "tester",
+        )
+        assert reply["status"] == "injected"
+        assert reply["message_type"] == "do_work"
+        assert reply["initiated_by"] == "dave"
+        msg = self.routed[0]
+        assert msg.type == "do_work"
+        assert msg.recipient == "worker"
+        assert msg.payload == {"n": 1}
+        event = sink.emit.call_args[0][0]
+        assert event["event"] == "mailbox.inject"
+        assert event["details"] == {
+            "target": "worker",
+            "message_type": "do_work",
+            "initiated_by": "dave",
+        }
+
+    @pytest.mark.asyncio
+    async def test_mailbox_inject_rejects_reserved_message_types(self) -> None:
+        for bad in ["_agency.suspend", "civitas.stream.chunk"]:
+            reply = await self.agent.handle_call(
+                {"__op__": "mailbox_inject", "name": "worker", "type": bad}, "tester"
+            )
+            assert "error" in reply  # -> HTTP 400; no privilege escalation via reserved prefixes
+            assert len(self.routed) == 0
+
+    @pytest.mark.asyncio
+    async def test_mailbox_peek_returns_metadata_not_payloads(self) -> None:
+        """peek exposes message metadata only -- never payloads (data-exposure guard)."""
+        from civitas.messages import Message as _Msg
+        from civitas.process import AgentProcess
+
+        class _Idle(AgentProcess):
+            async def handle(self, message):  # type: ignore[no-untyped-def]
+                return None
+
+        target = _Idle("worker")
+        await target._mailbox.put(_Msg(type="queued", sender="s", payload={"secret": "x"}))
+        self.agent._agents = {"worker": target}
+        reply = await self.agent.handle_call({"__op__": "mailbox_peek", "name": "worker"}, "tester")
+        body = json.loads(reply["__raw_body__"])
+        assert body["agent"] == "worker"
+        assert body["depth"] == 1
+        assert body["messages"][0]["type"] == "queued"
+        assert "payload" not in body["messages"][0]  # metadata only
+
+    @pytest.mark.asyncio
+    async def test_mailbox_peek_unknown_agent_is_404(self) -> None:
+        reply = await self.agent.handle_call({"__op__": "mailbox_peek", "name": "ghost"}, "tester")
+        assert reply["__status__"] == 404

@@ -391,3 +391,62 @@ async def test_restart_write_action_crashes_and_restarts_recording_principal() -
         assert force[-1]["details"]["initiated_by"] == "alice"
     finally:
         await rt.stop()
+
+
+@pytest.mark.asyncio
+async def test_mailbox_peek_and_inject_end_to_end() -> None:
+    """v0.9.6 §6, end-to-end: GET /agents/{name}/mailbox peeks (metadata only)
+    and POST /agents/{name}/mailbox injects an application message that the
+    target actually handles -- with the inject recorded in the audit."""
+
+    class _Recorder(EchoAgent):
+        def __init__(self, name: str) -> None:
+            super().__init__(name)
+            self.seen: list[str] = []
+
+        async def handle(self, message):  # type: ignore[no-untyped-def]
+            self.seen.append(message.type)
+            return None
+
+    port = _free_port()
+    audit = _CaptureAudit()
+    topo = TopologyAgent("topo")
+    gw = HTTPGateway(
+        "topo_gateway",
+        GatewayConfig(
+            host="127.0.0.1",
+            port=port,
+            topology_agent="topo",
+            topology_middleware=["tests.integration.test_topology_gateway_auth._alice_mw"],
+        ),
+    )
+    worker = _Recorder("worker")
+    rt = Runtime(supervisor=Supervisor("root", children=[topo, gw, worker]))
+    rt._audit_sink = audit
+    await rt.start()
+    try:
+        await _wait_listening(port)
+
+        # Inject an application message; the worker actually handles it.
+        code, body = await _http_post(
+            port, "/agents/worker/mailbox", {"type": "do_work", "payload": {"n": 1}}
+        )
+        assert code == 200
+        assert json.loads(body)["message_type"] == "do_work"
+        await wait_for(lambda: "do_work" in worker.seen, msg="worker handled injected message")
+
+        # Reserved types are rejected (no privilege escalation).
+        code, _ = await _http_post(port, "/agents/worker/mailbox", {"type": "_agency.suspend"})
+        assert code == 400
+
+        # The inject is audited with the authenticated actor.
+        injects = [e for e in audit.events if e["event"] == "mailbox.inject"]
+        assert injects[-1]["details"]["initiated_by"] == "alice"
+        assert injects[-1]["details"]["message_type"] == "do_work"
+
+        # Peek returns metadata (depth 0 here since the worker drained it).
+        assert await _http_get(port, "/agents/worker/mailbox") == 200
+        peek_body = await _get_with_body(port, "/agents/worker/mailbox")
+        assert "messages" in json.loads(peek_body)
+    finally:
+        await rt.stop()

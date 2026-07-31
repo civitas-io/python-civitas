@@ -447,6 +447,10 @@ class TopologyAgent(_TopologyIntrospection, GenServer):
             return await self._op_resume(payload)
         if op == "restart":
             return await self._op_restart(payload)
+        if op == "mailbox_peek":
+            return self._op_mailbox_peek(payload)
+        if op == "mailbox_inject":
+            return await self._op_mailbox_inject(payload)
         return self._raw_json({"error": "not found"}, status=404)
 
     def _principal_id(self, payload: dict[str, Any]) -> str:
@@ -499,6 +503,71 @@ class TopologyAgent(_TopologyIntrospection, GenServer):
         approver = self._principal_id(payload)
         await self._route_control_message("_agency.resume", name, {"approver": approver})
         return {"status": "resume_requested", "agent": name, "approver": approver}
+
+    def _op_mailbox_peek(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Read: non-destructive mailbox snapshot for a SAME-PROCESS agent
+        (v0.9.6). Returns message METADATA only (id/type/sender/priority/ts) --
+        never payloads, a deliberate data-exposure guard. A raw_response GET
+        route, so this returns the sentinel dict."""
+        name = str(payload.get("name", ""))
+        agent = self._agents.get(name) or self._find_dynamic_agent(name)
+        if agent is None:
+            return self._raw_json(
+                {"error": f"agent '{name}' not found (or not in this process)"}, status=404
+            )
+        messages = [
+            {
+                "id": m.id,
+                "type": m.type,
+                "sender": m.sender,
+                "recipient": m.recipient,
+                "priority": m.priority,
+                "timestamp": m.timestamp,
+            }
+            for m in agent._mailbox.peek()
+        ]
+        return self._raw_json(
+            {"agent": name, "depth": agent._mailbox.depth(), "messages": messages}
+        )
+
+    async def _op_mailbox_inject(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Write: inject an application message into an agent's mailbox (v0.9.6).
+        Rejects system/reserved message types (no privilege escalation via the
+        _agency./civitas. prefixes). Audited on THIS control-plane agent (the
+        target just handles a normal message and wouldn't audit it as a control
+        action) -- records the type and the authenticated actor, NOT the payload
+        (data-exposure guard)."""
+        name = str(payload.get("name", ""))
+        if not name:
+            return {"error": "agent name required"}
+        if self._bus is None:
+            return {"error": "runtime not available"}
+        msg_type = str(payload.get("type", ""))
+        if not msg_type:
+            return {"error": "message 'type' required"}
+        if msg_type.startswith("_agency.") or msg_type.startswith("civitas."):
+            return {"error": f"cannot inject reserved/system message type {msg_type!r}"}
+        initiated_by = self._principal_id(payload)
+        body = payload.get("payload")
+        message = Message(
+            type=msg_type,
+            sender=self.name,
+            recipient=name,
+            payload=body if isinstance(body, dict) else {},
+            trace_id=self._tracer.new_trace_id() if self._tracer is not None else "",
+            span_id=_new_span_id(),
+        )
+        await self._bus.route(message)
+        await self._emit_audit(
+            "mailbox.inject",
+            {"target": name, "message_type": msg_type, "initiated_by": initiated_by},
+        )
+        return {
+            "status": "injected",
+            "agent": name,
+            "message_type": msg_type,
+            "initiated_by": initiated_by,
+        }
 
     async def _op_restart(self, payload: dict[str, Any]) -> dict[str, Any]:
         name = str(payload.get("name", ""))
