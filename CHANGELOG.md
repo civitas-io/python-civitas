@@ -11,6 +11,49 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+## [0.9.5] — 2026-07-30
+
+Control-plane auth foundation: the `TopologyServer` (dashboard/observability HTTP endpoint) had
+**zero authentication** and existed as a separate hand-rolled HTTP server reinventing what
+`HTTPGateway` already does with an audited API-key/JWT/mTLS stack. The two are now **merged** —
+`TopologyServer`'s data half became a `TopologyAgent` reached through `HTTPGateway`'s routes,
+inheriting its auth. This is the prerequisite for the dashboard control-plane write actions
+(suspend/resume/kill), now tracked as v0.9.6. Full design + phased migration in
+`docs/design/topology-gateway-merge.md`.
+
+### Changed
+
+- **BREAKING**: the `TopologyServer` class is **removed** — no longer importable from `civitas`
+  or `civitas.topology_server`. **YAML users are unaffected**: a `type: topology_server` node
+  keeps working, now building a `TopologyAgent` + internally-owned `HTTPGateway` (a dedicated
+  sub-supervisor) under the hood, on the same default host/port. **Direct-construction (non-YAML)
+  Python callers** must migrate from `TopologyServer(name, host, port)` to constructing an
+  `HTTPGateway(name, GatewayConfig(host=..., port=..., topology_agent=<agent-name>))` plus a
+  `TopologyAgent(<agent-name>)` (or simply use the YAML node).
+- A `type: topology_server` node's `config:` block gains optional `prefix` (a uniform path prefix
+  for all seven introspection routes, e.g. `/v1`), `auth: {middleware: [...], mtls: {...}}`
+  (reusing the same `GatewayAuthConfig` shape as an `http_gateway` node), and `tls_cert`/`tls_key`.
+  Omitted entirely, behavior is byte-for-byte what v0.9.4 served (no auth, same host/port).
+
+### Added
+
+- **Introspection endpoints now inherit `HTTPGateway`'s AuthN** (API key / JWT / mTLS). Per-route
+  AuthZ falls out of the route table: `/health` stays reachable without auth (liveness probes);
+  `/topology`, `/agents`, `/agents/{name}`, `/snapshot`, `/metrics`, `/processes` are gated by the
+  configured `auth.middleware`. Verified against a real running Runtime (real API-key auth: 401
+  without/with-wrong key, 200 with the correct key; `/health` exempt; no-auth-block stays
+  wide-open).
+- `GatewayResponse` gained a route-scoped raw-body escape hatch (`raw_body`/`content_type`,
+  `RouteEntry.raw_response`) so Prometheus's plain-text `/metrics` exposition passes through a
+  route without JSON-encoding — the one governed exception to the gateway's "every response is a
+  JSON object" rule.
+
+### Fixed
+
+- `HTTPGateway` dropped the W3C `traceparent` header on non-streaming responses (it was only
+  echoed on the SSE stream path) — a real, previously-untested gap found while extending the
+  response layer for the raw-body hatch; now applied to both paths.
+
 ## [0.9.4] — 2026-07-30
 
 Dashboard TUI polish: five small, self-contained additions to the existing live `civitas top`

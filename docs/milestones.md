@@ -1217,6 +1217,37 @@ envisioned, but the same underlying need. Considered done, not tracked separatel
 | Dashboard: network I/O per process | Low | design/dashboard-v2.md P1 (§17 addendum) | ❌ **Investigated, declined** — a genuinely different category from "blocked": there's nothing to wait for, the underlying capability doesn't exist affordably on any platform. Confirmed empirically, not assumed: Linux's `/proc/<pid>/net/dev` is byte-for-byte identical to system-wide `/proc/net/dev` (per-namespace, not per-process, for the normal non-containerized case) — real attribution needs eBPF/root. macOS's `nettop -P -L 1 -x` DOES work (verified with real output) but is an undocumented, private CSV format with no stability contract. Windows has no clean per-process network counter in the standard taxonomy either. Every path needs root, heuristic packet-capture attribution, or fragile undocumented-CLI-parsing — none fit this project's lean-dependency philosophy. Not built, not planned |
 | Dashboard: distinct HITL-wait vs. governance-suspend visual signal | Low | design/dashboard-v2.md §6 option B (§18 addendum) | ✅ **Done** — the cross-repo blocker (Presidium owns the policy that would populate a meaningful `reason`) was broken by a civitas-side API, not an invented heuristic: `AgentProcess.suspend()`/`Runtime.suspend()`/the `_agency.suspend` wire payload all gained an additive, backward-compatible `category: SuspendCategory` parameter (`HITL_APPROVAL`/`GOVERNANCE_PAUSE`/`OTHER`, default `OTHER`), persisted in the same durable suspend marker, plus a `suspend_for_approval()` convenience wrapper. Rendered as a distinct **blue** (not the originally-suggested cyan — already reserved as `TOPOLOGY_ACCENT`) in the tree/detail panel, only for `hitl_approval`. `examples/dashboard_demo/` gained a real `ApprovalWorker` agent; verified end-to-end against it — a real running `/topology` endpoint returning `suspend_category: hitl_approval`, and a real headless Textual pilot + exported SVG confirming the actual rendered blue ink (`#0000ff`), not just markup text |
 
+## v0.9.5 — Control-Plane Auth Foundation: TopologyServer/HTTPGateway Merge (Released)
+
+**Status: ✅ Released 2026-07-30, as a single release.** The prerequisite gate for the v0.9.5
+AuthN/AuthZ backlog (below, now renumbered v0.9.6): `TopologyServer` had **zero authentication**
+and existed as a separate, hand-rolled `asyncio.start_server` HTTP server that reinvented what
+`HTTPGateway` already does with an audited AuthN stack. Rather than bolt a second auth
+implementation onto it, the two were **merged** — `TopologyServer` is now an ordinary agent behind
+`HTTPGateway`, inheriting its API-key/JWT/mTLS auth. Design-first: full investigation, four
+reviewed decisions, and a phased migration plan in
+[`docs/design/topology-gateway-merge.md`](../design/topology-gateway-merge.md).
+
+**Breaking change (deliberate, D6):** the `TopologyServer` class is removed — no longer importable
+from `civitas`. YAML users are unaffected (`type: topology_server` nodes keep working, now building
+a `TopologyAgent` + `HTTPGateway` sub-supervisor under the hood). Direct-construction (non-YAML)
+Python callers migrate to constructing an `HTTPGateway(GatewayConfig(topology_agent=...))` +
+`TopologyAgent` themselves.
+
+| # | Deliverable | Verified |
+|---|-------------|----------|
+| 1 | `GatewayResponse` raw-body escape hatch (route-scoped, for Prometheus `/metrics`' plain text) — plus a real pre-existing bug fixed in passing: `traceparent` was dropped on non-streaming responses | unit |
+| 2 | `TopologyAgent(GenServer)` over a shared `_TopologyIntrospection` base — same privileged `Runtime` injection, reached via `handle_call()` instead of a socket | byte-for-byte builder-parity tests |
+| 3 | `HTTPGateway` auto-registers the seven fixed introspection routes (`topology_agent`/`topology_prefix`/`topology_middleware`), `/health` auth-free by default | unit + ASGI end-to-end |
+| 4 | `type: topology_server` builds a `TopologyAgent` + `HTTPGateway` dedicated sub-supervisor (Option A, addendum D3a) — zero YAML migration for the common case | **real `dashboard_demo` run** (all endpoints, Prometheus `/metrics`, bare-array `/agents`, dashboard client) |
+| 5 | The actual payoff: introspection endpoints inherit real auth — `/topology`/`/metrics` gated (401/200), `/health` exempt, no-auth-block stays wide-open | **real Runtime, real API-key auth** |
+| 6 | `TopologyServer` class removed; ~35 test call-sites migrated to `TopologyAgent`/the real gateway | full suite |
+
+**Deferred, tracked:** `attach_to` (mount introspection routes onto an existing `http_gateway`
+rather than a dedicated internal one) — D6c, not built; and the dashboard client learning to send
+auth headers so `civitas dashboard`/`top` can attach to an auth-protected endpoint end-to-end — D7,
+necessary follow-on for auth to be *usable* from the TUI, tracked under v0.9.6 below.
+
 ---
 
 ## Part 2 — Backlog
@@ -1330,20 +1361,19 @@ crash-restart"), not just "how long has this incarnation been running."
 assigned to v0.9.4 (too big, violates that release's own "no new design surface" framing) or
 v0.9.5 (a different kind of design conversation, though possibly a discussion point there too).
 
-### v0.9.5 — AuthN/AuthZ & dashboard control-plane (Planned, after v0.9.4)
+### v0.9.6 — Dashboard control-plane write actions (Planned, after v0.9.5)
 
-**Design-first, explicitly** — none of the items below get built until there's been a real, deep
-AuthN/AuthZ and access-control design conversation (2026-07-28 decision, in response to an earlier
-"hold off on auth, don't knee-jerk it" instruction). `TopologyServer` has **zero authentication
-today** (verified by grep, not assumed) — everything it currently serves is read-only, which is
-why that's been an acceptable risk so far. The moment any write/control action ships, that risk
-tier changes completely, so the auth design is the prerequisite gate for the whole group below,
-not an afterthought bolted onto one endpoint.
+**The auth prerequisite is now DONE** (shipped as v0.9.5 — the TopologyServer/HTTPGateway merge,
+see Part 1). Every item below is a write/control action that was gated behind "auth must exist
+ first"; they now build directly on the merged, auth-capable introspection gateway, each as a new
+route with its own (stricter) middleware. Still design-first per item, but the foundational
+AuthN/AuthZ conversation and mechanism are settled.
 
 | Item | Priority | Source |
 |------|----------|--------|
-| **`TopologyServer` AuthN/AuthZ + access control design** (prerequisite gate for every item below) | High | found during dashboard-v2 capability discussion (2026-07-26); scheduled as its own dedicated design round (2026-07-28) |
-| Dashboard/API: suspend/resume an agent (write action) | Medium | 2026-07-26 discussion — safest write action to add first: `runtime.suspend()`/`resume()` already exist, already audited (`AuditEvent`), designed as this system's governed HITL pause primitive (not destructive, unlike kill) |
+| **Dashboard client sends auth headers** (D7 follow-on) — so `civitas dashboard`/`top`/`topology show --live` can attach to an auth-protected endpoint end-to-end | High | topology-gateway-merge.md D7 — the merge made endpoints *able* to require auth; the polling client (`civitas/dashboard/client.py`) still sends none, so an auth-protected endpoint isn't yet reachable from the TUI |
+| **`attach_to`: mount introspection routes onto an existing `http_gateway`** (D6c follow-on) | Low | topology-gateway-merge.md D6c — deferred from the base merge; one ingress/port instead of a dedicated internal gateway per topology_server |
+| Dashboard/API: suspend/resume an agent (write action) | Medium | 2026-07-26 discussion — safest write action to add first: `runtime.suspend()`/`resume()` already exist, already audited (`AuditEvent`), designed as this system's governed HITL pause primitive (not destructive, unlike kill). Now a new authenticated route on the merged gateway |
 | Dashboard/API: kill / force-restart an agent manually | Low | 2026-07-26 discussion — mechanically feasible (new "force crash" trigger + existing restart machinery) but real DoS surface without auth first |
 | Mailbox introspection (list/enumerate) | Low | 2026-07-26 discussion — **no non-destructive peek exists anywhere in `Mailbox` today** (only `get()`/consumes-one, `depth()`/count-only, `drain()`/consumes-everything); needs new `Mailbox` API, not just a new endpoint |
 | Mailbox: remove one specific in-flight message | Low | 2026-07-26 discussion — conflicts with the at-most-once/FIFO delivery guarantee this codebase is built around; a real design problem, not a small addition — needs its own conversation, may not be a good idea at all |
