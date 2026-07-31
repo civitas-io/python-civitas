@@ -134,6 +134,42 @@ class TestHandleCallWrapsBuilders:
         body = json.loads(reply["__raw_body__"])
         assert "processes" in body
         assert isinstance(body["processes"], list)
+        # v0.9.6: explicit deployment shape alongside the process rows.
+        assert "deployment" in body
+        assert set(body["deployment"]) == {"transport", "mode"}
+
+
+class TestDeploymentShape:
+    """v0.9.6: the deployment shape is read from the live bus transport -- an
+    EXPLICIT single/multi/distributed signal, not inferred from row counts."""
+
+    def setup_method(self) -> None:
+        self.agent = TopologyAgent(name="ta")
+
+    def test_transport_maps_to_mode(self) -> None:
+        # Local classes named exactly like the real transports (type name is
+        # what _deployment_shape keys on) -- no need to import pyzmq/nats.
+        class InProcessTransport: ...
+
+        class ZMQTransport: ...
+
+        class NATSTransport: ...
+
+        cases = [
+            (InProcessTransport, ("in_process", "single_process")),
+            (ZMQTransport, ("zmq", "multi_process")),
+            (NATSTransport, ("nats", "distributed")),
+        ]
+        for cls, expected in cases:
+            bus = MagicMock()
+            bus._transport = cls()
+            self.agent._bus = bus
+            shape = self.agent._deployment_shape()
+            assert (shape["transport"], shape["mode"]) == expected
+
+    def test_unknown_transport_is_reported_not_crashed(self) -> None:
+        self.agent._bus = None
+        assert self.agent._deployment_shape() == {"transport": "unknown", "mode": "unknown"}
 
     @pytest.mark.asyncio
     async def test_unknown_op_is_404(self) -> None:

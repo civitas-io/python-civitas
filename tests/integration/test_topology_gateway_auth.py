@@ -496,3 +496,30 @@ async def test_attach_to_serves_introspection_on_an_existing_gateway(tmp_path: P
         assert json.loads(data)["name"] == "root"  # served by the attached gateway
     finally:
         await rt.stop()
+
+
+@pytest.mark.asyncio
+async def test_processes_reports_deployment_shape_and_container_hint() -> None:
+    """v0.9.6: /processes exposes an explicit deployment shape (transport/mode)
+    and a per-process container hint -- read-only reporting so a client no
+    longer has to INFER single-vs-multi-process from row counts. Asserts the
+    SHAPE, not the container value (which differs host vs Docker CI)."""
+    port = _free_port()
+    topo = TopologyAgent("topo")
+    gw = HTTPGateway(
+        "topo_gateway",
+        GatewayConfig(host="127.0.0.1", port=port, topology_agent="topo"),
+    )
+    rt = Runtime(supervisor=Supervisor("root", children=[topo, gw]))
+    await rt.start()
+    try:
+        await _wait_listening(port)
+        data = json.loads(await _get_with_body(port, "/processes"))
+        # Explicit deployment shape: this is an in_process runtime -> single.
+        assert data["deployment"] == {"transport": "in_process", "mode": "single_process"}
+        # The runtime's own row carries a container hint (shape, not value).
+        runtime_row = next(p for p in data["processes"] if p["kind"] == "runtime")
+        assert set(runtime_row["container"]) == {"containerized", "orchestrator"}
+        assert isinstance(runtime_row["container"]["containerized"], bool)
+    finally:
+        await rt.stop()

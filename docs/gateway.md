@@ -479,7 +479,15 @@ control-plane **write actions**:
 | `POST` | `/agents/{name}/mailbox` | Inject an application message (reserved `_agency.`/`civitas.` types rejected) |
 
 Every write action is audited, with the authenticated principal recorded as the actor
-(`initiated_by` / `approver`). **civitas does not ship AuthZ** — no roles, scopes, SCIM, or
+(`initiated_by` / `approver`).
+
+`GET /processes` additionally reports the **deployment shape** —
+`{"deployment": {"transport": "in_process"|"zmq"|"nats", "mode":
+"single_process"|"multi_process"|"distributed"}, ...}` — and a per-process
+`container: {"containerized": bool, "orchestrator": ...}` hint, so a client can
+tell single-vs-multi-process (and containerization) explicitly rather than
+inferring it from row counts. Read-only reporting; civitas does not *manage*
+containers. **civitas does not ship AuthZ** — no roles, scopes, SCIM, or
 IdP integration. It ships the *seam*, an *honest audit binding*, and a *safe
 default*:
 

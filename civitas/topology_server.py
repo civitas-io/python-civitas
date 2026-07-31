@@ -305,7 +305,25 @@ class _TopologyIntrospection:
             if worker_sample is not None:
                 processes.append({"kind": "worker", "id": channel, **worker_sample})
 
-        return {"processes": processes}
+        return {"deployment": self._deployment_shape(), "processes": processes}
+
+    def _deployment_shape(self) -> dict[str, Any]:
+        """v0.9.6: the runtime's deployment shape as an EXPLICIT signal, not
+        something a client has to infer from process-row counts. ``transport``
+        is the ground truth (in_process = single process by definition; zmq/nats
+        = multi-process/distributed); ``mode`` is the derived summary. Read from
+        the live bus transport -- no new plumbing.
+        """
+        transport_by_class = {
+            "InProcessTransport": ("in_process", "single_process"),
+            "ZMQTransport": ("zmq", "multi_process"),
+            "NATSTransport": ("nats", "distributed"),
+        }
+        bus = getattr(self, "_bus", None)
+        transport_obj = getattr(bus, "_transport", None) if bus is not None else None
+        cls_name = type(transport_obj).__name__ if transport_obj is not None else ""
+        transport, mode = transport_by_class.get(cls_name, ("unknown", "unknown"))
+        return {"transport": transport, "mode": mode}
 
     def _distinct_health_channels(self) -> set[str]:
         """Every distinct Worker health channel currently known to the

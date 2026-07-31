@@ -162,6 +162,26 @@ introspection gateway, gated by the node's `auth.middleware`:
   ingress, no dedicated internal gateway. Single-pass wiring, linked by name in YAML (no cross-node
   mutation).
 
+## 10. Deployment-shape reporting (DONE, v0.9.6 slice 6)
+
+Surfaced during review: a client couldn't actually *tell* whether a topology was single-process,
+multi-process, or containerized — single-vs-multi was only *inferable* from `/processes` row
+counts (fragile: a multi-process topology before any worker announced looked single-process), the
+transport type (the ground truth) wasn't exposed at all, and containerization was invisible. This
+is pure read-only **reporting** — categorically distinct from the container *management* declined
+below (observability, not orchestration).
+
+- **Explicit deployment shape**: `/processes` now returns
+  `{"deployment": {"transport": "in_process"|"zmq"|"nats", "mode":
+  "single_process"|"multi_process"|"distributed"}, "processes": [...]}`. Read from the live bus
+  transport — no new plumbing, no inference.
+- **Per-process container hint**: each `/processes` row gains
+  `container: {"containerized": bool, "orchestrator": "kubernetes"|"docker"|"containerd"|None}`
+  via cheap, dependency-free, cached heuristics (`KUBERNETES_SERVICE_HOST`, `/.dockerenv`,
+  `/proc/1/cgroup`). Lives in the shared `sample_process()` so BOTH the runtime self-sample and
+  each Worker's health-ack carry it. Cross-platform-safe (absent Linux files → `False`, never
+  raises).
+
 ## 9. Investigated and declined
 
 - **Mailbox: remove one specific in-flight message.** Mechanically feasible (a synchronous
