@@ -464,6 +464,57 @@ Two special headers influence gateway behavior:
 
 ---
 
+## Control-plane write actions & the AuthNZ seam (v0.9.6)
+
+A `topology_server` node (served by `HTTPGateway` since v0.9.5) exposes read-only
+introspection (`/topology`, `/agents`, `/metrics`, …) and, since v0.9.6, two
+control-plane **write actions**:
+
+| Method | Path | Effect |
+|---|---|---|
+| `POST` | `/agents/{name}/suspend` | Suspend an agent (optional JSON `{"reason", "category"}`) |
+| `POST` | `/agents/{name}/resume` | Resume a suspended agent |
+
+Both are audited. **civitas does not ship AuthZ** — no roles, scopes, SCIM, or
+IdP integration. It ships the *seam*, an *honest audit binding*, and a *safe
+default*:
+
+- **The seam is the middleware chain.** Plug in a middleware that authenticates
+  against your own system (SCIM / IdP / OPA / anything), denies with a `403` if
+  it wants (*that* is your AuthZ — civitas never sees a role), and on allow sets
+  one field: `request.auth["principal"] = {"id": "<who this is>"}` (a dict; add
+  any sibling keys you like — civitas reads only `id`). `require_jwt` already
+  sets it from the JWT `sub`.
+- **The honest audit binding.** The authenticated principal — never a
+  client-supplied body field — is recorded as the audited actor
+  (`initiated_by` for suspend, `approver` for resume). A client cannot spoof it
+  by putting `__principal__` in the request body; the gateway injects the
+  authenticated identity last.
+- **The safe default.** With no auth middleware configured, writes still work
+  and the principal is `{"id": "unauthenticated"}` — the localhost bind
+  (`127.0.0.1` by default) is the security control. A single dev needs no
+  ceremony. The gateway logs a loud warning (not a block) if write routes are
+  served on a non-localhost bind with no auth middleware.
+
+Configure it on the `topology_server` node — `auth.middleware` gates every route
+except `/health` (which stays reachable for liveness probes):
+
+```yaml
+- type: topology_server
+  name: topo
+  config:
+    host: 127.0.0.1
+    port: 6789
+    auth:
+      middleware: [myapp.auth.require_my_auth]   # your seam; omit for a single dev
+```
+
+See `examples/control_plane_auth.py` for a runnable "bring your own auth"
+middleware, and [design/control-plane-writes.md](design/control-plane-writes.md)
+for the full rationale.
+
+---
+
 ## See also
 
 - [messaging.md](messaging.md) — call vs. cast semantics, message routing

@@ -85,6 +85,7 @@ The gentlest on-ramp, in order:
 | `http_gateway.py` | HTTP gateway exposing an agent (`curl`-able) |
 | `grpc_gateway.py` | The generic gRPC `Agent` service (`Invoke` over a real `grpc.aio` channel) |
 | `mcp_agent.py` | Consuming tools from an MCP server (needs a real MCP server process) |
+| `control_plane_auth.py` | Control-plane write actions (suspend/resume over HTTP) + the "bring your own auth" seam: your middleware sets `request.auth["principal"]`, civitas records it as the honest audit actor (v0.9.6) |
 
 ## Dashboard
 
