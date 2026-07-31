@@ -1250,6 +1250,32 @@ necessary follow-on for auth to be *usable* from the TUI, tracked under v0.9.6 b
 
 ---
 
+## v0.9.6 — Dashboard Control-Plane Write Actions (Released)
+
+**Status: ✅ Released 2026-07-31, as a single release.**
+
+**The auth prerequisite shipped as v0.9.5** (the TopologyServer/HTTPGateway merge, see Part 1).
+Every item below built directly on the merged, auth-capable introspection gateway, each as an
+auto-registered route carrying the node's auth middleware, with the authenticated principal
+recorded as the audit actor (`control-plane-writes.md` D2 — the honest binding). **civitas ships
+the seam + honest audit + safe localhost default, never AuthZ** (customers bring their own
+SCIM/IdP/OPA middleware; single devs bring nothing). Full design + rationale in
+[`docs/design/control-plane-writes.md`](../design/control-plane-writes.md).
+
+| Item | Priority | Status |
+|------|----------|--------|
+| **AuthNZ integration seam + honest audit binding + safe default** | High | ✅ **Done** — middleware sets `request.auth["principal"]={"id":...}` (bring-your-own-auth); the authenticated principal flows into every write action's `AuditEvent` under a reserved, unspoofable `__principal__` key; no auth → `{"id":"unauthenticated"}` + localhost bind as the control, plus a loud non-localhost-no-auth warning. Reference example `examples/control_plane_auth.py`. Verified: `initiated_by="alice"` recorded even when the body smuggles `"attacker"` |
+| Dashboard/API: suspend/resume an agent | Medium | ✅ **Done** — `POST /agents/{name}/suspend`\|`/resume`; principal → `initiated_by`/`approver` in the audit |
+| Dashboard client sends auth headers (D7) | High | ✅ **Done** — `fetch_json`/`civitas dashboard`/`topology show` gained `--header 'Name: Value'` (scheme-agnostic) so the TUI can attach to an auth-protected endpoint. Verified 401 without / 200 with |
+| Dashboard/API: kill / force-restart an agent | Low | ✅ **Done** — `POST /agents/{name}/restart`; the OTP "let it crash" (`_agency.force_restart` → agent raises → supervisor restarts per its existing policy), audited `agent.force_restart` |
+| Mailbox introspection (peek) | Low | ✅ **Done** — `GET /agents/{name}/mailbox`; new non-destructive `Mailbox.peek()`, returns message **metadata only** (never payloads), same-process agents |
+| Mailbox: inject a message | Low | ✅ **Done** — `POST /agents/{name}/mailbox`; rejects reserved `_agency.`/`civitas.` types (no privilege escalation), audited `mailbox.inject` with the actor + type (never payload) |
+| `attach_to`: mount introspection routes onto an existing `http_gateway` (D6c) | Low | ✅ **Done** — a `topology_server` node with `config:{attach_to:<gw>}` builds only the `TopologyAgent`; a separate `http_gateway` with `config:{topology_agent:<name>}` serves its routes on that gateway's own port. Single-pass, linked by name |
+| Deployment-shape reporting (transport/mode + per-process container hint) | Medium | ✅ **Done** — surfaced in review: single-vs-multi-process was only *inferable* from `/processes` row counts and containerization was invisible. `/processes` now returns an explicit `deployment: {transport, mode}` (read from the live bus transport) and a per-process `container: {containerized, orchestrator}` hint (cheap cached heuristics, cross-platform-safe). Pure read-only **reporting** — distinct from the container *management* declined below |
+| Mailbox: remove one specific in-flight message | Low | ❌ **Investigated, declined** — mechanically feasible but breaks the at-most-once/FIFO delivery guarantee and the sender's mental model. The real use case (poison-pill wedging an agent) is already covered by force-restart (drops the whole mailbox + fresh incarnation); surgical single-message removal doesn't justify undermining a core guarantee. Revisit only with a use case force-restart can't serve |
+| Per-agent process/container awareness beyond `process_id` (e.g. Docker) | Low | ❌ **Declined** — recommended AGAINST (couples the runtime to a deployment concern better owned by container-native tooling); unchanged |
+
+
 ## Part 2 — Backlog
 
 **Status: 🗂️ Tracked** — the active todo list: everything not yet done. New work lands here first
@@ -1360,29 +1386,6 @@ crash-restart"), not just "how long has this incarnation been running."
 **Not scheduled against any version** — tracked here so the idea isn't lost, deliberately not
 assigned to v0.9.4 (too big, violates that release's own "no new design surface" framing) or
 v0.9.5 (a different kind of design conversation, though possibly a discussion point there too).
-
-### v0.9.6 — Dashboard control-plane write actions (Built, release pending)
-
-**The auth prerequisite shipped as v0.9.5** (the TopologyServer/HTTPGateway merge, see Part 1).
-Every item below built directly on the merged, auth-capable introspection gateway, each as an
-auto-registered route carrying the node's auth middleware, with the authenticated principal
-recorded as the audit actor (`control-plane-writes.md` D2 — the honest binding). **civitas ships
-the seam + honest audit + safe localhost default, never AuthZ** (customers bring their own
-SCIM/IdP/OPA middleware; single devs bring nothing). Full design + rationale in
-[`docs/design/control-plane-writes.md`](../design/control-plane-writes.md).
-
-| Item | Priority | Status |
-|------|----------|--------|
-| **AuthNZ integration seam + honest audit binding + safe default** | High | ✅ **Done** — middleware sets `request.auth["principal"]={"id":...}` (bring-your-own-auth); the authenticated principal flows into every write action's `AuditEvent` under a reserved, unspoofable `__principal__` key; no auth → `{"id":"unauthenticated"}` + localhost bind as the control, plus a loud non-localhost-no-auth warning. Reference example `examples/control_plane_auth.py`. Verified: `initiated_by="alice"` recorded even when the body smuggles `"attacker"` |
-| Dashboard/API: suspend/resume an agent | Medium | ✅ **Done** — `POST /agents/{name}/suspend`\|`/resume`; principal → `initiated_by`/`approver` in the audit |
-| Dashboard client sends auth headers (D7) | High | ✅ **Done** — `fetch_json`/`civitas dashboard`/`topology show` gained `--header 'Name: Value'` (scheme-agnostic) so the TUI can attach to an auth-protected endpoint. Verified 401 without / 200 with |
-| Dashboard/API: kill / force-restart an agent | Low | ✅ **Done** — `POST /agents/{name}/restart`; the OTP "let it crash" (`_agency.force_restart` → agent raises → supervisor restarts per its existing policy), audited `agent.force_restart` |
-| Mailbox introspection (peek) | Low | ✅ **Done** — `GET /agents/{name}/mailbox`; new non-destructive `Mailbox.peek()`, returns message **metadata only** (never payloads), same-process agents |
-| Mailbox: inject a message | Low | ✅ **Done** — `POST /agents/{name}/mailbox`; rejects reserved `_agency.`/`civitas.` types (no privilege escalation), audited `mailbox.inject` with the actor + type (never payload) |
-| `attach_to`: mount introspection routes onto an existing `http_gateway` (D6c) | Low | ✅ **Done** — a `topology_server` node with `config:{attach_to:<gw>}` builds only the `TopologyAgent`; a separate `http_gateway` with `config:{topology_agent:<name>}` serves its routes on that gateway's own port. Single-pass, linked by name |
-| Deployment-shape reporting (transport/mode + per-process container hint) | Medium | ✅ **Done** — surfaced in review: single-vs-multi-process was only *inferable* from `/processes` row counts and containerization was invisible. `/processes` now returns an explicit `deployment: {transport, mode}` (read from the live bus transport) and a per-process `container: {containerized, orchestrator}` hint (cheap cached heuristics, cross-platform-safe). Pure read-only **reporting** — distinct from the container *management* declined below |
-| Mailbox: remove one specific in-flight message | Low | ❌ **Investigated, declined** — mechanically feasible but breaks the at-most-once/FIFO delivery guarantee and the sender's mental model. The real use case (poison-pill wedging an agent) is already covered by force-restart (drops the whole mailbox + fresh incarnation); surgical single-message removal doesn't justify undermining a core guarantee. Revisit only with a use case force-restart can't serve |
-| Per-agent process/container awareness beyond `process_id` (e.g. Docker) | Low | ❌ **Declined** — recommended AGAINST (couples the runtime to a deployment concern better owned by container-native tooling); unchanged |
 
 ### v0.10.0 — HITL & Streaming polish (Planned — the Medicus runway)
 
