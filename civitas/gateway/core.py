@@ -14,7 +14,7 @@ from civitas.errors import ConfigurationError
 from civitas.gateway.dispatch import GatewayDispatcher, StreamSink
 from civitas.gateway.jwt_auth import _JWT_MIDDLEWARE_PATH, JwtVerifier
 from civitas.gateway.mtls import _MTLS_MIDDLEWARE_PATH, _load_x509
-from civitas.gateway.router import RouteTable
+from civitas.gateway.router import RouteEntry, RouteTable
 from civitas.messages import Message, _new_span_id
 from civitas.process import _STREAM_CHUNK, _STREAM_END, _STREAM_ERROR, AgentProcess
 
@@ -35,6 +35,48 @@ _AUTH_MIDDLEWARE_PATHS = frozenset(
         _MTLS_MIDDLEWARE_PATH,
     }
 )
+
+# v0.9.5 (topology-gateway-merge.md D2/D6d): the seven fixed introspection
+# routes, byte-for-byte the endpoints the old TopologyServer served. Order is
+# irrelevant (RouteTable matches by exact segment count, so /agents and
+# /agents/{name} never collide). ``is_health`` marks the one route that stays
+# auth-free by default (D5). All are GET, all use raw_response (TopologyAgent
+# returns every op via the __raw_body__ sentinel for wire parity).
+_TOPOLOGY_ROUTE_SPECS: tuple[tuple[str, str, bool], ...] = (
+    ("/health", "health", True),
+    ("/topology", "topology", False),
+    ("/agents", "agents", False),
+    ("/agents/{name}", "agent_detail", False),
+    ("/snapshot", "snapshot", False),
+    ("/metrics", "metrics", False),
+    ("/processes", "processes", False),
+)
+
+
+def _build_topology_routes(agent: str, prefix: str, middleware: list[str]) -> list[RouteEntry]:
+    """Build the seven auto-registered topology routes (D2/D5/D6d).
+
+    ``prefix`` is applied uniformly to every path; ``middleware`` is applied to
+    the six non-/health routes only (``/health`` stays reachable without auth
+    for liveness probes). Every route carries ``__op__`` via ``payload_extra``
+    and ``raw_response=True`` so ``TopologyAgent``'s sentinel replies pass
+    through verbatim.
+    """
+    prefix = prefix.rstrip("/")
+    routes: list[RouteEntry] = []
+    for suffix, op, is_health in _TOPOLOGY_ROUTE_SPECS:
+        routes.append(
+            RouteEntry(
+                method="GET",
+                path_pattern=prefix + suffix,
+                agent=agent,
+                mode="call",
+                middleware=[] if is_health else list(middleware),
+                raw_response=True,
+                payload_extra={"__op__": op},
+            )
+        )
+    return routes
 
 
 @dataclass
@@ -68,6 +110,16 @@ class GatewayConfig:
     stream_queue_maxsize: int = 256
     stream_idle_timeout: float = 300.0
     max_stream_duration: float = 3600.0
+    # v0.9.5 (topology-gateway-merge.md D2/D5/D6d): when set, this gateway
+    # auto-registers the seven fixed topology-introspection routes pointing at
+    # the named agent (a TopologyAgent). topology_prefix is applied uniformly
+    # to all seven paths (e.g. "/v1" -> "/v1/topology"); topology_middleware is
+    # applied as ROUTE middleware to the six non-/health routes (/health stays
+    # auth-free by default -- liveness probes must reach it). Not user-declared
+    # in the routes: list -- see the design doc for why these are fixed.
+    topology_agent: str | None = None
+    topology_prefix: str = ""
+    topology_middleware: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if self.enable_http3 and not (self.tls_cert and self.tls_key):
@@ -164,7 +216,16 @@ class HTTPGateway(AgentProcess):
     ) -> None:
         super().__init__(name, **kwargs)
         self._gw_config = config or GatewayConfig()
-        self._route_table = RouteTable.from_config(self._gw_config.routes)
+        entries = RouteTable.from_config(self._gw_config.routes).entries()
+        # v0.9.5 (topology-gateway-merge.md D2): append the fixed introspection
+        # routes when this gateway is configured to host a TopologyAgent.
+        if self._gw_config.topology_agent:
+            entries += _build_topology_routes(
+                self._gw_config.topology_agent,
+                self._gw_config.topology_prefix,
+                self._gw_config.topology_middleware,
+            )
+        self._route_table = RouteTable(entries)
         self._uvicorn_server: Any = None
         self._server_task: asyncio.Task[None] | None = None
         self._h3_server: Any = None

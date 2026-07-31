@@ -45,6 +45,11 @@ class RouteEntry:
     # instead of JSON-encoded -- the Prometheus /metrics exposition case. Only
     # auto-registered topology routes set this; ordinary agent routes never do.
     raw_response: bool = False
+    # v0.9.5 (topology-gateway-merge.md D2): fixed payload keys merged into the
+    # dispatched request AFTER body+path_params (so a client cannot override
+    # them). Auto-registered topology routes use this to carry {"__op__": ...}
+    # to TopologyAgent.handle_call(); ordinary YAML routes never set it.
+    payload_extra: dict[str, Any] = field(default_factory=dict, repr=False)
     segments: list[tuple[bool, str]] = field(default_factory=list, init=False, repr=False)
 
     def __post_init__(self) -> None:

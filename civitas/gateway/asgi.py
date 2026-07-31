@@ -402,7 +402,10 @@ class GatewayASGI:
         matched = self._route_table.match(method, path)
         if matched is not None:
             entry, path_params = matched
-            payload = {**body, **path_params}
+            # payload_extra (v0.9.5 D2) is merged LAST so a client cannot
+            # override a route's fixed keys (e.g. an auto-registered topology
+            # route's __op__) by sending them in the request body.
+            payload = {**body, **path_params, **entry.payload_extra}
 
             # Request contract validation
             if entry.request_schema is not None:
