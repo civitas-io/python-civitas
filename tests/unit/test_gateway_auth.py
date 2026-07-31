@@ -365,6 +365,10 @@ class TestRequireJwt:
         assert reached
         assert req.auth is not None
         assert req.auth["claims"]["sub"] == "user-1"
+        # v0.9.6 (control-plane-writes.md D1): require_jwt also exposes the
+        # standard principal dict (id = JWT sub) so control-plane write actions
+        # can record an honest actor.
+        assert req.auth["principal"] == {"id": "user-1", "method": "jwt"}
 
     @pytest.mark.asyncio
     async def test_valid_jwks_rs256(self, rsa_keys: tuple[str, str]) -> None:

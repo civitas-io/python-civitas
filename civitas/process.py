@@ -377,6 +377,11 @@ class AgentProcess:
         # property below for why the DURABLE marker, not this attribute, is the
         # authoritative read after a restore.
         self._suspend_category = SuspendCategory.OTHER
+        # v0.9.6 (control-plane-writes.md D2): who initiated a suspend over the
+        # control plane -- carried on the _agency.suspend message from the
+        # authenticated HTTP principal, recorded in the agent.suspend AuditEvent.
+        # Empty for a direct/programmatic suspend() (no HTTP principal).
+        self._suspend_initiated_by = ""
 
         self._pending_streams: dict[str, StreamSink] = {}
         self._stream_producers: dict[str, str] = {}
@@ -680,7 +685,14 @@ class AgentProcess:
             },
         )
         await self._emit_audit(
-            "agent.suspend", {"reason": reason, "category": self._suspend_category.value}
+            "agent.suspend",
+            {
+                "reason": reason,
+                "category": self._suspend_category.value,
+                # v0.9.6: the authenticated control-plane principal (D2), or ""
+                # for a direct/programmatic suspend with no HTTP caller.
+                "initiated_by": self._suspend_initiated_by,
+            },
         )
 
     async def _update_suspend_reason(
@@ -1697,12 +1709,16 @@ class AgentProcess:
                         category = SuspendCategory(category_value)
                     except ValueError:
                         category = SuspendCategory.OTHER
+                    # v0.9.6: who initiated this over the control plane (the
+                    # authenticated HTTP principal), recorded in the audit event.
+                    initiated_by = message.payload.get("initiated_by", "")
                     if self._status == ProcessStatus.SUSPENDED:
                         await self._update_suspend_reason(reason, category)
                     else:
                         self._suspend_requested = True
                         self._suspend_reason = reason
                         self._suspend_category = category
+                        self._suspend_initiated_by = initiated_by
                     continue
                 if message.type == "_agency.resume":
                     approver = message.payload.get("approver", "")

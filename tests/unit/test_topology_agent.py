@@ -185,3 +185,68 @@ class TestTopologyAgentIsolated:
         for op in ("health", "topology", "agents", "snapshot", "metrics", "processes"):
             reply = await self.agent.handle_call({"__op__": op}, "tester")
             assert isinstance(reply, dict)
+
+
+class TestWriteOps:
+    """v0.9.6 (control-plane-writes.md §4): suspend/resume write ops route the
+    right _agency.* control message, carrying the AUTHENTICATED principal (from
+    the injected __principal__, never the client body) as the honest actor."""
+
+    def setup_method(self) -> None:
+        self.agent = TopologyAgent(name="ta")
+        self.routed: list = []
+        self.agent._bus = MagicMock()
+
+        async def _route(msg):
+            self.routed.append(msg)
+
+        self.agent._bus.route = _route
+        self.agent._tracer = None  # trace_id falls back to "" -- fine for the test
+
+    @pytest.mark.asyncio
+    async def test_suspend_routes_agency_suspend_with_principal_as_initiated_by(self) -> None:
+        reply = await self.agent.handle_call(
+            {
+                "__op__": "suspend",
+                "name": "worker",
+                "__principal__": {"id": "alice", "method": "jwt"},
+                "reason": "spend check",
+                "category": "governance_pause",
+            },
+            "tester",
+        )
+        assert reply == {"status": "suspend_requested", "agent": "worker", "initiated_by": "alice"}
+        assert len(self.routed) == 1
+        msg = self.routed[0]
+        assert msg.type == "_agency.suspend"
+        assert msg.recipient == "worker"
+        assert msg.priority == 1
+        assert msg.payload["initiated_by"] == "alice"  # from the principal, not the body
+        assert msg.payload["reason"] == "spend check"
+        assert msg.payload["category"] == "governance_pause"
+
+    @pytest.mark.asyncio
+    async def test_resume_routes_agency_resume_with_principal_as_approver(self) -> None:
+        reply = await self.agent.handle_call(
+            {"__op__": "resume", "name": "worker", "__principal__": {"id": "bob"}}, "tester"
+        )
+        assert reply == {"status": "resume_requested", "agent": "worker", "approver": "bob"}
+        msg = self.routed[0]
+        assert msg.type == "_agency.resume"
+        assert msg.recipient == "worker"
+        assert msg.payload["approver"] == "bob"  # from the principal
+
+    @pytest.mark.asyncio
+    async def test_default_principal_when_unauthenticated(self) -> None:
+        """No __principal__ (single-dev, no auth middleware) -> the documented
+        {"id": "unauthenticated"} default flows into the audit-bound field,
+        never a silent real identity."""
+        reply = await self.agent.handle_call({"__op__": "suspend", "name": "worker"}, "tester")
+        assert reply["initiated_by"] == "unauthenticated"
+        assert self.routed[0].payload["initiated_by"] == "unauthenticated"
+
+    @pytest.mark.asyncio
+    async def test_missing_agent_name_is_error(self) -> None:
+        reply = await self.agent.handle_call({"__op__": "suspend", "name": ""}, "tester")
+        assert "error" in reply  # -> HTTP 400 via the dispatcher's AGENT_ERROR path
+        assert len(self.routed) == 0  # nothing routed

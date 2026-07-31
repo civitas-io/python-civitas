@@ -436,4 +436,64 @@ class TopologyAgent(_TopologyIntrospection, GenServer):
             return {"__raw_body__": body, "__content_type__": content_type, "__status__": status}
         if op == "processes":
             return self._raw_json(await self._build_processes())
+        # v0.9.6 (control-plane-writes.md §4): write actions. These routes are
+        # POST + inject_principal, so the payload carries __principal__ (the
+        # authenticated actor, or {"id": "unauthenticated"} default) -- read
+        # from there, NEVER from the client body (spoofable). Not raw_response,
+        # so a plain-dict JSON ack is returned.
+        if op == "suspend":
+            return await self._op_suspend(payload)
+        if op == "resume":
+            return await self._op_resume(payload)
         return self._raw_json({"error": "not found"}, status=404)
+
+    def _principal_id(self, payload: dict[str, Any]) -> str:
+        principal = payload.get("__principal__") or {"id": "unauthenticated"}
+        return str(principal.get("id", "unauthenticated"))
+
+    async def _route_control_message(
+        self, msg_type: str, recipient: str, body: dict[str, Any]
+    ) -> None:
+        trace_id = self._tracer.new_trace_id() if self._tracer is not None else ""
+        message = Message(
+            type=msg_type,
+            sender=self.name,
+            recipient=recipient,
+            payload=body,
+            trace_id=trace_id,
+            span_id=_new_span_id(),
+            priority=1,
+        )
+        await self._bus.route(message)
+
+    async def _op_suspend(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # Not a raw_response route: a returned {"error": ...} maps to HTTP 400
+        # via the dispatcher's AGENT_ERROR path; a success dict maps to 200.
+        name = str(payload.get("name", ""))
+        if not name:
+            return {"error": "agent name required"}
+        if self._bus is None:
+            return {"error": "runtime not available"}
+        initiated_by = self._principal_id(payload)
+        await self._route_control_message(
+            "_agency.suspend",
+            name,
+            {
+                "reason": str(payload.get("reason", "")),
+                "category": str(payload.get("category", "other")),
+                "initiated_by": initiated_by,
+            },
+        )
+        return {"status": "suspend_requested", "agent": name, "initiated_by": initiated_by}
+
+    async def _op_resume(self, payload: dict[str, Any]) -> dict[str, Any]:
+        name = str(payload.get("name", ""))
+        if not name:
+            return {"error": "agent name required"}
+        if self._bus is None:
+            return {"error": "runtime not available"}
+        # resume REQUIRES a non-empty approver (S6); the authenticated principal
+        # is it -- always non-empty (defaults to "unauthenticated").
+        approver = self._principal_id(payload)
+        await self._route_control_message("_agency.resume", name, {"approver": approver})
+        return {"status": "resume_requested", "agent": name, "approver": approver}

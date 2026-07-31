@@ -52,15 +52,26 @@ _TOPOLOGY_ROUTE_SPECS: tuple[tuple[str, str, bool], ...] = (
     ("/processes", "processes", False),
 )
 
+# v0.9.6 (control-plane-writes.md §4): control-plane WRITE routes. POST (never
+# GET -- writes must not be logged/cached/prefetched/CSRF-prone), carry the
+# same auth middleware as the read routes, inject the authenticated principal
+# (inject_principal), and return a small JSON ack (not raw_response). (suffix,
+# op) -- all are /agents/{name}/<verb>.
+_TOPOLOGY_WRITE_ROUTE_SPECS: tuple[tuple[str, str], ...] = (
+    ("/agents/{name}/suspend", "suspend"),
+    ("/agents/{name}/resume", "resume"),
+)
+
 
 def _build_topology_routes(agent: str, prefix: str, middleware: list[str]) -> list[RouteEntry]:
-    """Build the seven auto-registered topology routes (D2/D5/D6d).
+    """Build the auto-registered topology routes (D2/D5/D6d + v0.9.6 writes).
 
     ``prefix`` is applied uniformly to every path; ``middleware`` is applied to
-    the six non-/health routes only (``/health`` stays reachable without auth
-    for liveness probes). Every route carries ``__op__`` via ``payload_extra``
-    and ``raw_response=True`` so ``TopologyAgent``'s sentinel replies pass
-    through verbatim.
+    every route EXCEPT ``/health`` (which stays reachable without auth for
+    liveness probes). Read routes are GET + ``raw_response`` (TopologyAgent's
+    sentinel replies pass through verbatim); write routes are POST +
+    ``inject_principal`` (the authenticated actor flows into their audit) and
+    return a plain JSON ack.
     """
     prefix = prefix.rstrip("/")
     routes: list[RouteEntry] = []
@@ -74,6 +85,18 @@ def _build_topology_routes(agent: str, prefix: str, middleware: list[str]) -> li
                 middleware=[] if is_health else list(middleware),
                 raw_response=True,
                 payload_extra={"__op__": op},
+            )
+        )
+    for suffix, op in _TOPOLOGY_WRITE_ROUTE_SPECS:
+        routes.append(
+            RouteEntry(
+                method="POST",
+                path_pattern=prefix + suffix,
+                agent=agent,
+                mode="call",
+                middleware=list(middleware),
+                payload_extra={"__op__": op},
+                inject_principal=True,
             )
         )
     return routes
@@ -243,6 +266,29 @@ class HTTPGateway(AgentProcess):
             ) from exc
 
         from civitas.gateway.asgi import GatewayASGI
+
+        # v0.9.6 (control-plane-writes.md D3): control-plane WRITE routes are
+        # exposed (topology_agent set) but on a NON-localhost bind with NO auth
+        # middleware -- refuse to be SILENTLY dangerous. A warning, not a block:
+        # an operator may genuinely want an open control plane behind their own
+        # network controls; civitas does not impose policy, but it will not stay
+        # quiet about an unauthenticated, externally-bound mutation surface.
+        cfg = self._gw_config
+        if (
+            cfg.topology_agent is not None
+            and not cfg.topology_middleware
+            and cfg.host not in ("127.0.0.1", "localhost", "::1")
+        ):
+            logger.warning(
+                "HTTPGateway '%s' serves control-plane WRITE routes (suspend/resume) on %s:%d "
+                "with NO auth middleware -- these mutate the running system and are reachable "
+                "without credentials. Configure the topology_server node's auth.middleware, or "
+                "bind to localhost, unless an open control plane behind your own network controls "
+                "is intended.",
+                self.name,
+                cfg.host,
+                cfg.port,
+            )
 
         # Shared by every transport so HTTP and gRPC route identically (D3).
         dispatcher = GatewayDispatcher(
