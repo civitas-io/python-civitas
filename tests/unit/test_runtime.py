@@ -1121,7 +1121,13 @@ def test_from_config_mcp_sandbox_parsed(tmp_path: Path) -> None:
 
 
 def test_from_config_topology_server_node(tmp_path: Path) -> None:
-    from civitas.topology_server import TopologyServer
+    # v0.9.5 (topology-gateway-merge.md D3/D3a): a topology_server node now
+    # builds a dedicated sub-supervisor over a TopologyAgent (data provider)
+    # AND an internally-owned HTTPGateway (HTTP + auth), replacing the old
+    # single zero-auth TopologyServer. Test updated from asserting "exactly one
+    # TopologyServer" to asserting the new two-process shape.
+    from civitas.gateway import HTTPGateway
+    from civitas.topology_server import TopologyAgent
 
     yaml_file = tmp_path / "t.yaml"
     yaml_file.write_text(
@@ -1138,8 +1144,20 @@ def test_from_config_topology_server_node(tmp_path: Path) -> None:
     )
     rt = Runtime.from_config(yaml_file)
     agents = rt.all_agents()
-    topo_nodes = [a for a in agents if isinstance(a, TopologyServer)]
-    assert len(topo_nodes) == 1
+    topo_agents = [a for a in agents if isinstance(a, TopologyAgent)]
+    gateways = [a for a in agents if isinstance(a, HTTPGateway)]
+    assert len(topo_agents) == 1
+    assert topo_agents[0].name == "topo"
+    # The internally-owned gateway serves the seven fixed routes at the
+    # configured host/port, pointing at the TopologyAgent by name.
+    assert len(gateways) == 1
+    gw = gateways[0]
+    assert gw.name == "topo_gateway"
+    assert gw._gw_config.host == "127.0.0.1"
+    assert gw._gw_config.port == 7000
+    assert gw._gw_config.topology_agent == "topo"
+    # Wrapped in a dedicated sub-supervisor (Option A).
+    assert any(s.name == "topo_supervisor" for s in rt._root_supervisor.all_supervisors())
 
 
 # ---------------------------------------------------------------------------

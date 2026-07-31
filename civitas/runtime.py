@@ -42,7 +42,7 @@ from civitas.security.registry import KeyRegistry
 from civitas.security.signing import MessageSigner, SigningSerializer
 from civitas.serializer import Serializer
 from civitas.supervisor import DynamicSupervisor, Supervisor
-from civitas.topology_server import TopologyServer
+from civitas.topology_server import TopologyAgent, _TopologyIntrospection
 
 logger = logging.getLogger(__name__)
 
@@ -415,11 +415,44 @@ class Runtime:
             if not _node_belongs_to(node):
                 return None
             if node.get("type") == "topology_server":
+                # v0.9.5 (topology-gateway-merge.md D3/D3a): a topology_server
+                # node now builds a dedicated sub-supervisor over a TopologyAgent
+                # (privileged-injected, the data provider) and an
+                # internally-owned HTTPGateway (which serves the seven fixed
+                # introspection routes with the same auth stack as any
+                # http_gateway). The old zero-auth TopologyServer's own HTTP
+                # server is gone. host default stays 127.0.0.1 (TopologyServer's
+                # default), NOT HTTPGateway's 0.0.0.0 -- behavior-preserving.
                 cfg = node.get("config", {})
-                return TopologyServer(
-                    name=node.get("name", "topology_server"),
+                agent_name = node.get("name", "topology_server")
+                auth_block = cfg.get("auth", {})
+                auth_cfg = GatewayAuthConfig.from_dict(auth_block)
+                topo_agent = TopologyAgent(name=agent_name)
+                gw_config = GatewayConfig(
                     host=cfg.get("host", "127.0.0.1"),
                     port=cfg.get("port", 6789),
+                    tls_cert=cfg.get("tls_cert"),
+                    tls_key=cfg.get("tls_key"),
+                    tls_ca_cert=auth_cfg.tls_ca_cert,
+                    client_cert_mode=auth_cfg.client_cert_mode,
+                    mtls_source=auth_cfg.mtls_source,
+                    trusted_proxy_cidrs=auth_cfg.trusted_proxy_cidrs,
+                    topology_agent=agent_name,
+                    topology_prefix=cfg.get("prefix", ""),
+                    # D5: the auth: block's middleware list becomes ROUTE
+                    # middleware on the six non-/health routes (/health stays
+                    # auth-free). NOT global middleware, which would also gate
+                    # /health.
+                    topology_middleware=auth_block.get("middleware", []),
+                    # An introspection endpoint has no user-facing API docs
+                    # surface -- the old TopologyServer served none either.
+                    docs_enabled=False,
+                )
+                gateway = HTTPGateway(name=f"{agent_name}_gateway", config=gw_config)
+                return Supervisor(
+                    name=f"{agent_name}_supervisor",
+                    children=[topo_agent, gateway],
+                    strategy="ONE_FOR_ONE",
                 )
             elif node.get("type") == "dynamic_supervisor" and "name" in node:
                 return DynamicSupervisor(
@@ -624,7 +657,7 @@ class Runtime:
                 status = node.status.value if hasattr(node, "status") else "?"
                 if isinstance(node, DynamicSupervisor):
                     prefix_tag = "[dyn]"
-                elif isinstance(node, TopologyServer):
+                elif isinstance(node, _TopologyIntrospection):
                     prefix_tag = "[topo]"
                 elif isinstance(node, EvalAgent):
                     prefix_tag = "[eval]"
@@ -665,7 +698,9 @@ class Runtime:
             self._metrics is None
             and self._components is None
             and self._root_supervisor is not None
-            and any(isinstance(a, TopologyServer) for a in self._root_supervisor.all_agents())
+            and any(
+                isinstance(a, _TopologyIntrospection) for a in self._root_supervisor.all_agents()
+            )
         ):
             self._metrics = MetricsCollector()
             self._metrics.runtime_started()
@@ -749,9 +784,16 @@ class Runtime:
             identities: dict[str, AgentIdentity] = {}
             for agent in all_agents:
                 # A DynamicSupervisor needs an identity to sign the cluster-wide
-                # child announcements it publishes (R6 · D8); only TopologyServer
-                # (read-only, never signs) is exempt.
-                if isinstance(agent, TopologyServer):
+                # child announcements it publishes (R6 · D8); the topology
+                # introspection unit (read-only, never signs) is exempt. v0.9.5:
+                # that unit is now a TopologyAgent PLUS its internally-owned
+                # HTTPGateway -- exempt the gateway too (identified by its
+                # topology_agent config, so a normal user http_gateway is
+                # unaffected), so a signed non-auto deployment isn't forced to
+                # provision a new key for the auto-created gateway.
+                if isinstance(agent, _TopologyIntrospection):
+                    continue
+                if isinstance(agent, HTTPGateway) and agent._gw_config.topology_agent is not None:
                     continue
                 if self._security_config.identity.mode == "auto":
                     identities[agent.name] = AgentIdentity.load_or_generate(agent.name, key_dir)
@@ -801,7 +843,7 @@ class Runtime:
 
         def _on_child_replaced(name: str, new_agent: AgentProcess) -> None:
             self._agents_by_name[name] = new_agent
-            if isinstance(new_agent, TopologyServer):
+            if isinstance(new_agent, _TopologyIntrospection):
                 new_agent._root_supervisor = self._root_supervisor
                 new_agent._agents = self._agents_by_name
                 new_agent._metrics_collector = (
@@ -849,9 +891,9 @@ class Runtime:
             self._registry.register(agent.name, capabilities=caps, capability_metadata=meta)
         self._agents_by_name = {a.name: a for a in all_agents}
 
-        # Inject topology server references before supervision tree starts
+        # Inject topology introspection references before supervision tree starts
         for agent in all_agents:
-            if isinstance(agent, TopologyServer):
+            if isinstance(agent, _TopologyIntrospection):
                 agent._root_supervisor = self._root_supervisor
                 agent._agents = self._agents_by_name
                 # v0.9.1 (D-DASH-2/D-DASH-4): only a MetricsCollector has the

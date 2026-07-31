@@ -109,6 +109,31 @@ gateway auto-registers those seven routes pointing at that agent, with sane per-
 common case. See D6d for the one confirmed refinement: a whole-surface path prefix is supported,
 per-endpoint remapping is not.
 
+### D3a — Tree placement: a dedicated sub-supervisor (addendum, decided 2026-07-30)
+
+The design didn't originally nail down WHERE the two objects (D3) land in the supervision tree.
+Resolved by review: **Option A — a `topology_server` YAML node builds a dedicated
+`Supervisor(name=f"{name}_supervisor", children=[TopologyAgent(name), HTTPGateway(f"{name}_gateway")])`.**
+The two alternatives (splice as siblings into the parent; or hide the gateway entirely) were
+rejected: siblings inherit the parent's restart strategy (a gateway crash could perturb the user's
+own one_for_all subtree) and require changing `_build_node`'s one-node-in/one-node-out contract;
+hiding the gateway breaks the privileged-injection contract (the `TopologyAgent` MUST be a normal
+supervised tree node to receive `Runtime`/`ComponentSet` wiring). The dedicated sub-supervisor
+gives each half its own `ONE_FOR_ONE` restart, treats the pair as one structural unit (matching
+"internally-owned gateway"), and leaves the user's sibling nodes untouched.
+
+**Observable consequence, accepted**: `/topology` now shows a `{name}_supervisor` node with two
+children (`{name}` the TopologyAgent, `{name}_gateway` the HTTPGateway) where a bare
+`topology_server` node used to show as one agent node. Unavoidable once HTTP-serving is a separate
+process from data-providing. The client side is unaffected — the dashboard/CLI still discover the
+endpoint by `host:port` (unchanged), not by tree shape or node name.
+
+**Injection dispatch**: all of `Runtime`'s `isinstance(agent, TopologyServer)` checks (privileged
+injection loop, auto-`MetricsCollector` provisioning, child-replaced callback, `print_tree` tag)
+become `isinstance(agent, _TopologyIntrospection)` — the shared base of both `TopologyServer` (until
+phase 6) and `TopologyAgent` — so the transition works for both, and keeps working unchanged after
+phase 6 deletes `TopologyServer`.
+
 ### D3 — YAML stays backward compatible: `type: topology_server` keeps existing, reinterpreted
 
 The `topology_server` YAML node type is **not removed**. `Runtime`'s topology loader keeps
