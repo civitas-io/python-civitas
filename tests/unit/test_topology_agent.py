@@ -250,3 +250,22 @@ class TestWriteOps:
         reply = await self.agent.handle_call({"__op__": "suspend", "name": ""}, "tester")
         assert "error" in reply  # -> HTTP 400 via the dispatcher's AGENT_ERROR path
         assert len(self.routed) == 0  # nothing routed
+
+    @pytest.mark.asyncio
+    async def test_restart_routes_agency_force_restart_with_principal(self) -> None:
+        reply = await self.agent.handle_call(
+            {
+                "__op__": "restart",
+                "name": "worker",
+                "__principal__": {"id": "carol"},
+                "reason": "wedged",
+            },
+            "tester",
+        )
+        assert reply == {"status": "restart_requested", "agent": "worker", "initiated_by": "carol"}
+        msg = self.routed[0]
+        assert msg.type == "_agency.force_restart"
+        assert msg.recipient == "worker"
+        assert msg.priority == 1
+        assert msg.payload["initiated_by"] == "carol"
+        assert msg.payload["reason"] == "wedged"

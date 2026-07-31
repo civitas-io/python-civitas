@@ -96,6 +96,14 @@ class SuspendCategory(StrEnum):
     OTHER = "other"
 
 
+class _ForcedRestart(Exception):
+    """Raised by the message loop on an ``_agency.force_restart`` control message
+    (v0.9.6, control-plane-writes.md §6). Propagates out of the agent task so the
+    supervisor's normal crash-detection restarts it per its existing policy --
+    the OTP-idiomatic 'let it crash', not a bespoke restart path.
+    """
+
+
 class Mailbox:
     """Bounded async queue for incoming messages with priority support.
 
@@ -1729,6 +1737,33 @@ class AgentProcess:
                             "[%s] ignoring _agency.resume with empty approver", self.name
                         )
                     continue
+                if message.type == "_agency.force_restart":
+                    # v0.9.6 (control-plane-writes.md §6): force-restart / kill.
+                    # The OTP-idiomatic "let it crash": we raise, the task exits
+                    # with an exception, and the supervisor restarts per its
+                    # existing policy (transient/permanent/budget all honored) --
+                    # no new restart machinery, no reaching into the tree.
+                    # Gated to the same controllable-leaf set as suspend (a
+                    # Supervisor force-crash would restart a whole subtree via
+                    # its parent -- deferred as too blunt for v1).
+                    if not self._suspend_allowed():
+                        logger.warning(
+                            "[%s] rejecting _agency.force_restart — not supported for this "
+                            "process type",
+                            self.name,
+                        )
+                        continue
+                    initiated_by = message.payload.get("initiated_by", "")
+                    reason = message.payload.get("reason", "")
+                    self._set_status(ProcessStatus.CRASHED)
+                    await self._emit_audit(
+                        "agent.force_restart",
+                        {"reason": reason, "initiated_by": initiated_by},
+                    )
+                    raise _ForcedRestart(
+                        f"force-restart requested by {initiated_by or '<unknown>'}"
+                        + (f": {reason}" if reason else "")
+                    )
                 if message.type == "civitas.dynamic.terminated":
                     await self.on_child_terminated(
                         message.payload.get("child_name", ""),

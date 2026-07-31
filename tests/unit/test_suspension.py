@@ -946,3 +946,68 @@ async def test_runtime_suspend_resume_end_to_end():
         await wait_for(lambda: "biz" in agent.handled)
     finally:
         await rt.stop()
+
+
+# ---------------------------------------------------------------------------
+# Force-restart / kill (v0.9.6, control-plane-writes.md §6)
+# ---------------------------------------------------------------------------
+
+
+async def test_force_restart_message_crashes_and_supervisor_restarts() -> None:
+    """An _agency.force_restart message makes the agent raise out of its task;
+    the supervisor restarts it as a FRESH incarnation via the exact same
+    crash-detection path any crash uses (the OTP 'let it crash' -- no bespoke
+    restart machinery)."""
+    agent = RecorderAgent("worker")
+    sup = Supervisor("root", children=[agent], max_restarts=5, backoff_base=0.0)
+    await sup.start()
+    try:
+        old = sup._children_by_name["worker"]
+        old_task = old._task
+        await old._mailbox.put(
+            Message(
+                type="_agency.force_restart",
+                payload={"initiated_by": "alice", "reason": "kill test"},
+                priority=1,
+            )
+        )
+        # Fresh incarnation, back to RUNNING, old loop stopped (observe the
+        # CURRENT object via the supervisor -- the old ref is stale, Q1).
+        await wait_for(
+            lambda: (
+                sup._children_by_name["worker"] is not old
+                and sup._children_by_name["worker"].status == ProcessStatus.RUNNING
+            ),
+            timeout=3.0,
+        )
+        assert old_task is not None and old_task.done()
+    finally:
+        await sup.stop()
+
+
+async def test_force_restart_emits_audit_with_initiated_by() -> None:
+    """The force-restart records the authenticated actor (control-plane-writes.md
+    D2) in an agent.force_restart AuditEvent on the crashing incarnation."""
+    agent = RecorderAgent("worker")
+    sink = AsyncMock()
+    agent._audit_sink = sink
+    sup = Supervisor("root", children=[agent], max_restarts=5, backoff_base=0.0)
+    await sup.start()
+    try:
+        current = sup._children_by_name["worker"]
+        current._audit_sink = sink  # the live incarnation the supervisor started
+        await current._mailbox.put(
+            Message(
+                type="_agency.force_restart",
+                payload={"initiated_by": "alice", "reason": "kill test"},
+                priority=1,
+            )
+        )
+        await wait_for(lambda: sup._children_by_name["worker"] is not current, timeout=3.0)
+        events = [c.args[0] for c in sink.emit.call_args_list]
+        force = [e for e in events if e["event"] == "agent.force_restart"]
+        assert len(force) == 1
+        assert force[0]["details"]["initiated_by"] == "alice"
+        assert force[0]["details"]["reason"] == "kill test"
+    finally:
+        await sup.stop()

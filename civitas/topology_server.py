@@ -445,6 +445,8 @@ class TopologyAgent(_TopologyIntrospection, GenServer):
             return await self._op_suspend(payload)
         if op == "resume":
             return await self._op_resume(payload)
+        if op == "restart":
+            return await self._op_restart(payload)
         return self._raw_json({"error": "not found"}, status=404)
 
     def _principal_id(self, payload: dict[str, Any]) -> str:
@@ -497,3 +499,17 @@ class TopologyAgent(_TopologyIntrospection, GenServer):
         approver = self._principal_id(payload)
         await self._route_control_message("_agency.resume", name, {"approver": approver})
         return {"status": "resume_requested", "agent": name, "approver": approver}
+
+    async def _op_restart(self, payload: dict[str, Any]) -> dict[str, Any]:
+        name = str(payload.get("name", ""))
+        if not name:
+            return {"error": "agent name required"}
+        if self._bus is None:
+            return {"error": "runtime not available"}
+        initiated_by = self._principal_id(payload)
+        await self._route_control_message(
+            "_agency.force_restart",
+            name,
+            {"reason": str(payload.get("reason", "")), "initiated_by": initiated_by},
+        )
+        return {"status": "restart_requested", "agent": name, "initiated_by": initiated_by}

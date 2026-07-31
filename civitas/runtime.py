@@ -1315,3 +1315,27 @@ class Runtime:
             priority=1,
         )
         await self._bus.route(message)
+
+    async def restart_agent(self, name: str, reason: str = "", initiated_by: str = "") -> None:
+        """Force-restart (kill) an agent by name (v0.9.6, control-plane-writes.md §6).
+
+        Delivers a priority ``_agency.force_restart`` control message; the agent
+        raises out of its task and its supervisor restarts it per the SAME
+        policy any crash follows (transient/permanent/restart-budget all
+        honored) -- the OTP-idiomatic 'let it crash', not a bespoke restart
+        path. ``initiated_by`` (the authenticated control-plane actor) is
+        recorded in the agent.force_restart AuditEvent. Not supported for
+        Supervisors (a subtree-wide restart is deferred as too blunt).
+        """
+        if self._bus is None or self._tracer is None:
+            raise RuntimeError("Runtime not started")
+        message = Message(
+            type="_agency.force_restart",
+            sender="_runtime",
+            recipient=name,
+            payload={"reason": reason, "initiated_by": initiated_by},
+            trace_id=self._tracer.new_trace_id(),
+            span_id=_new_span_id(),
+            priority=1,
+        )
+        await self._bus.route(message)

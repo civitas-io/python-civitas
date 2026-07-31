@@ -347,3 +347,47 @@ async def test_dashboard_client_authenticates_with_headers(
         assert data["name"] == "root"
     finally:
         await rt.stop()
+
+
+@pytest.mark.asyncio
+async def test_restart_write_action_crashes_and_restarts_recording_principal() -> None:
+    """v0.9.6 §6, end-to-end: a POST to the control-plane restart route actually
+    force-restarts the agent (fresh incarnation via the supervisor's normal
+    crash path) AND records the authenticated principal in the audit."""
+    port = _free_port()
+    audit = _CaptureAudit()
+    topo = TopologyAgent("topo")
+    gw = HTTPGateway(
+        "topo_gateway",
+        GatewayConfig(
+            host="127.0.0.1",
+            port=port,
+            topology_agent="topo",
+            topology_middleware=["tests.integration.test_topology_gateway_auth._alice_mw"],
+        ),
+    )
+    worker = EchoAgent("worker")
+    root = Supervisor("root", children=[topo, gw, worker], max_restarts=5, backoff_base=0.0)
+    rt = Runtime(supervisor=root)
+    rt._audit_sink = audit
+    await rt.start()
+    try:
+        await _wait_listening(port)
+        old = root._children_by_name["worker"]
+
+        code, body = await _http_post(port, "/agents/worker/restart", {"reason": "wedged"})
+        assert code == 200
+        assert json.loads(body)["initiated_by"] == "alice"
+
+        # Fresh incarnation appears (the supervisor restarted it).
+        await wait_for(
+            lambda: (
+                root._children_by_name["worker"] is not old
+                and root._children_by_name["worker"].status == ProcessStatus.RUNNING
+            ),
+            msg="worker restarted",
+        )
+        force = [e for e in audit.events if e["event"] == "agent.force_restart"]
+        assert force[-1]["details"]["initiated_by"] == "alice"
+    finally:
+        await rt.stop()

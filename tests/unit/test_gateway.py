@@ -1751,6 +1751,7 @@ class TestTopologyAutoRoutes:
             ("GET", "/processes"),
             ("POST", "/agents/{name}/suspend"),  # v0.9.6 write action
             ("POST", "/agents/{name}/resume"),  # v0.9.6 write action
+            ("POST", "/agents/{name}/restart"),  # v0.9.6 write action
         }
         assert all(e.agent == "topo" for e in entries)
         # Read routes are raw_response; write routes are not (plain JSON ack).
@@ -1779,6 +1780,7 @@ class TestTopologyAutoRoutes:
             "/v1/processes",
             "/v1/agents/{name}/suspend",
             "/v1/agents/{name}/resume",
+            "/v1/agents/{name}/restart",
         }
 
     def test_prefix_trailing_slash_normalized(self) -> None:
@@ -1815,6 +1817,7 @@ class TestTopologyAutoRoutes:
             ("GET", "/processes"): "processes",
             ("POST", "/agents/{name}/suspend"): "suspend",
             ("POST", "/agents/{name}/resume"): "resume",
+            ("POST", "/agents/{name}/restart"): "restart",
         }
 
     def test_topology_routes_coexist_with_user_declared_routes(self) -> None:
@@ -1830,4 +1833,4 @@ class TestTopologyAutoRoutes:
         paths = {(e.method, e.path_pattern) for e in gw._route_table.entries()}
         assert ("POST", "/chat") in paths
         assert ("GET", "/topology") in paths
-        assert len(gw._route_table.entries()) == 10  # 1 user + 7 read + 2 write
+        assert len(gw._route_table.entries()) == 11  # 1 user + 7 read + 3 write

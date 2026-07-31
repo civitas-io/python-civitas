@@ -60,6 +60,7 @@ _TOPOLOGY_ROUTE_SPECS: tuple[tuple[str, str, bool], ...] = (
 _TOPOLOGY_WRITE_ROUTE_SPECS: tuple[tuple[str, str], ...] = (
     ("/agents/{name}/suspend", "suspend"),
     ("/agents/{name}/resume", "resume"),
+    ("/agents/{name}/restart", "restart"),  # v0.9.6: force-restart / kill
 )
 
 
