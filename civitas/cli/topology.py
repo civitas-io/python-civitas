@@ -408,10 +408,19 @@ def _count_supervisors(node: dict[str, Any]) -> int:
 _find_topology_server = find_topology_server
 
 
-def _try_live_topology(host: str, port: int) -> dict[str, Any] | None:
-    """GET /topology from a running TopologyServer; return parsed JSON or None."""
+def _try_live_topology(
+    host: str, port: int, headers: dict[str, str] | None = None
+) -> dict[str, Any] | None:
+    """GET /topology from a running introspection endpoint; return parsed JSON or None.
+
+    ``headers`` (v0.9.6) authenticate to an endpoint behind the control-plane
+    auth seam -- e.g. ``{"Authorization": "Bearer <jwt>"}``.
+    """
+    from urllib.request import Request
+
     try:
-        with urlopen(f"http://{host}:{port}/topology", timeout=1.0) as resp:  # noqa: S310
+        req = Request(f"http://{host}:{port}/topology", headers=headers or {})  # noqa: S310
+        with urlopen(req, timeout=1.0) as resp:  # noqa: S310
             data: dict[str, Any] = json.loads(resp.read())
             return data
     except (URLError, OSError, ValueError):
@@ -583,19 +592,40 @@ def topology_validate(
 @topology_app.command("show")
 def topology_show(
     path: str = typer.Argument(help="Path to topology YAML file"),
+    header: list[str] = typer.Option(
+        [],
+        "--header",
+        "-H",
+        help="Auth header for the live query, 'Name: Value' (repeatable). E.g. "
+        "-H 'Authorization: Bearer <token>'.",
+    ),
 ) -> None:
-    """Visualize a topology as a Rich tree (live data when runtime is running)."""
+    """Visualize a topology as a Rich tree (live data when runtime is running).
+
+    Use ``--header`` to authenticate the live ``/topology`` query against an
+    endpoint behind the control-plane auth seam (v0.9.6).
+    """
     topology_path = Path(path)
     if not topology_path.exists():
         err_console.print(f"[red]Error:[/red] File '{path}' not found.")
         raise typer.Exit(1)
+
+    headers: dict[str, str] = {}
+    for raw in header:
+        name, sep, value = raw.partition(":")
+        if not sep or not name.strip():
+            err_console.print(
+                f"[red]Error:[/red] Invalid --header {raw!r}; expected 'Name: Value'."
+            )
+            raise typer.Exit(1)
+        headers[name.strip()] = value.strip()
 
     config = yaml.safe_load(topology_path.read_text())
 
     topo_server = _find_topology_server(config)
     live_data: dict[str, Any] | None = None
     if topo_server:
-        live_data = _try_live_topology(*topo_server)
+        live_data = _try_live_topology(*topo_server, headers=headers)
 
     if live_data:
         console.print(

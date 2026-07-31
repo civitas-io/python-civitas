@@ -96,6 +96,14 @@ class SuspendCategory(StrEnum):
     OTHER = "other"
 
 
+class _ForcedRestart(Exception):
+    """Raised by the message loop on an ``_agency.force_restart`` control message
+    (v0.9.6, control-plane-writes.md §6). Propagates out of the agent task so the
+    supervisor's normal crash-detection restarts it per its existing policy --
+    the OTP-idiomatic 'let it crash', not a bespoke restart path.
+    """
+
+
 class Mailbox:
     """Bounded async queue for incoming messages with priority support.
 
@@ -202,6 +210,15 @@ class Mailbox:
         """Total buffered messages (both queues). Sync-safe — used by the
         Worker health responder's snapshot (D5, report-only)."""
         return self._priority_queue.qsize() + self._queue.qsize()
+
+    def peek(self) -> list[Message]:
+        """Non-destructively snapshot all buffered messages (priority first),
+        WITHOUT consuming them (v0.9.6, control-plane-writes.md §6 mailbox
+        introspection). Reads ``asyncio.Queue``'s backing ``collections.deque``
+        (``._queue``) directly -- the only non-consuming way to inspect it;
+        ``get()``/``drain()`` all consume. For introspection/reporting only.
+        """
+        return list(self._priority_queue._queue) + list(self._queue._queue)  # type: ignore[attr-defined]
 
     def drain(self) -> list[Message]:
         """Remove and return all buffered messages, priority queue first."""
@@ -377,6 +394,11 @@ class AgentProcess:
         # property below for why the DURABLE marker, not this attribute, is the
         # authoritative read after a restore.
         self._suspend_category = SuspendCategory.OTHER
+        # v0.9.6 (control-plane-writes.md D2): who initiated a suspend over the
+        # control plane -- carried on the _agency.suspend message from the
+        # authenticated HTTP principal, recorded in the agent.suspend AuditEvent.
+        # Empty for a direct/programmatic suspend() (no HTTP principal).
+        self._suspend_initiated_by = ""
 
         self._pending_streams: dict[str, StreamSink] = {}
         self._stream_producers: dict[str, str] = {}
@@ -680,7 +702,14 @@ class AgentProcess:
             },
         )
         await self._emit_audit(
-            "agent.suspend", {"reason": reason, "category": self._suspend_category.value}
+            "agent.suspend",
+            {
+                "reason": reason,
+                "category": self._suspend_category.value,
+                # v0.9.6: the authenticated control-plane principal (D2), or ""
+                # for a direct/programmatic suspend with no HTTP caller.
+                "initiated_by": self._suspend_initiated_by,
+            },
         )
 
     async def _update_suspend_reason(
@@ -1697,12 +1726,16 @@ class AgentProcess:
                         category = SuspendCategory(category_value)
                     except ValueError:
                         category = SuspendCategory.OTHER
+                    # v0.9.6: who initiated this over the control plane (the
+                    # authenticated HTTP principal), recorded in the audit event.
+                    initiated_by = message.payload.get("initiated_by", "")
                     if self._status == ProcessStatus.SUSPENDED:
                         await self._update_suspend_reason(reason, category)
                     else:
                         self._suspend_requested = True
                         self._suspend_reason = reason
                         self._suspend_category = category
+                        self._suspend_initiated_by = initiated_by
                     continue
                 if message.type == "_agency.resume":
                     approver = message.payload.get("approver", "")
@@ -1713,6 +1746,33 @@ class AgentProcess:
                             "[%s] ignoring _agency.resume with empty approver", self.name
                         )
                     continue
+                if message.type == "_agency.force_restart":
+                    # v0.9.6 (control-plane-writes.md §6): force-restart / kill.
+                    # The OTP-idiomatic "let it crash": we raise, the task exits
+                    # with an exception, and the supervisor restarts per its
+                    # existing policy (transient/permanent/budget all honored) --
+                    # no new restart machinery, no reaching into the tree.
+                    # Gated to the same controllable-leaf set as suspend (a
+                    # Supervisor force-crash would restart a whole subtree via
+                    # its parent -- deferred as too blunt for v1).
+                    if not self._suspend_allowed():
+                        logger.warning(
+                            "[%s] rejecting _agency.force_restart — not supported for this "
+                            "process type",
+                            self.name,
+                        )
+                        continue
+                    initiated_by = message.payload.get("initiated_by", "")
+                    reason = message.payload.get("reason", "")
+                    self._set_status(ProcessStatus.CRASHED)
+                    await self._emit_audit(
+                        "agent.force_restart",
+                        {"reason": reason, "initiated_by": initiated_by},
+                    )
+                    raise _ForcedRestart(
+                        f"force-restart requested by {initiated_by or '<unknown>'}"
+                        + (f": {reason}" if reason else "")
+                    )
                 if message.type == "civitas.dynamic.terminated":
                     await self.on_child_terminated(
                         message.payload.get("child_name", ""),

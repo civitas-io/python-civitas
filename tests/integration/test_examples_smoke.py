@@ -72,6 +72,7 @@ RUN_TO_COMPLETION = [
     "examples/secured_messaging.py",  # needs civitas[zmq,security], both in CI's dev extras
     "examples/grpc_gateway.py",  # grpcio* ships as part of the dev extra itself
     "examples/gateway_auth.py",  # pyjwt[crypto] ships as part of the dev extra itself
+    "examples/control_plane_auth.py",  # civitas[http] (uvicorn) ships in the dev extra
 ]
 
 # --- Long-running servers: launch, confirm no startup crash, SIGINT, must exit

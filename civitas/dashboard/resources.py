@@ -17,6 +17,48 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+_container_info: dict[str, Any] | None = None
+
+
+def detect_container() -> dict[str, Any]:
+    """Whether THIS process runs in a container, and which orchestrator (v0.9.6).
+
+    Read-only REPORTING only — civitas does not manage containers (that's a
+    deployment concern owned by k8s/Docker/Nomad; deliberately out of scope).
+    Cheap, dependency-free heuristics, cached (a process never changes its
+    container). Cross-platform-safe: on a macOS/Windows/host box the Linux-only
+    files are simply absent, yielding ``containerized: False`` — never raises.
+
+    Returns ``{"containerized": bool, "orchestrator": "kubernetes"|"docker"|
+    "containerd"|None}``.
+    """
+    global _container_info
+    if _container_info is not None:
+        return _container_info
+    containerized = False
+    orchestrator: str | None = None
+    if os.environ.get("KUBERNETES_SERVICE_HOST"):
+        containerized, orchestrator = True, "kubernetes"
+    elif os.path.exists("/.dockerenv"):
+        containerized, orchestrator = True, "docker"
+    else:
+        try:
+            with open("/proc/1/cgroup") as f:
+                cgroup = f.read()
+            if "kubepods" in cgroup:
+                containerized, orchestrator = True, "kubernetes"
+            elif "docker" in cgroup:
+                containerized, orchestrator = True, "docker"
+            elif "containerd" in cgroup:
+                containerized, orchestrator = True, "containerd"
+        except OSError:
+            # No /proc/1/cgroup (macOS/Windows/host) -- not containerized, or
+            # not detectable this way. Reported honestly as False, never a crash.
+            pass
+    _container_info = {"containerized": containerized, "orchestrator": orchestrator}
+    return _container_info
+
+
 def try_start_process_sampler() -> Any | None:
     """Return a primed ``psutil.Process`` handle for THIS process, or ``None``.
 
@@ -53,6 +95,10 @@ def sample_process(proc: Any | None) -> dict[str, Any] | None:
             "cpu_percent": proc.cpu_percent(),
             "rss_bytes": proc.memory_info().rss,
             "uptime_seconds": time.time() - proc.create_time(),
+            # v0.9.6: per-process container hint (read-only reporting). Rides
+            # the same sample both the runtime self-measures and each Worker
+            # includes in its health-ack, so every /processes row carries it.
+            "container": detect_container(),
         }
     except Exception:
         logger.debug("process resource sample failed", exc_info=True)

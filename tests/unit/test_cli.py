@@ -11,6 +11,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
+import pytest
 import yaml
 from typer.testing import CliRunner
 
@@ -387,6 +388,22 @@ def test_state_migrate_rejects_unknown_dsn(tmp_path):
 def test_dashboard_missing_topology_fails():
     result = runner.invoke(app, ["dashboard", "--topology", "/nonexistent/topology.yaml"])
     assert result.exit_code != 0
+
+
+def test_parse_headers_valid_and_invalid():
+    """v0.9.6 (D7): --header 'Name: Value' parsing for the dashboard's auth
+    seam. Scheme-agnostic -- any header the operator's middleware expects."""
+    from civitas.cli.dashboard import _parse_headers
+    from civitas.errors import ConfigurationError
+
+    assert _parse_headers([]) == {}
+    assert _parse_headers(["Authorization: Bearer abc"]) == {"Authorization": "Bearer abc"}
+    # Value may itself contain colons (e.g. a bearer token rarely, but be safe).
+    assert _parse_headers(["X-Thing: a:b:c"]) == {"X-Thing": "a:b:c"}
+    assert _parse_headers(["X-API-Key: k", "X-Trace: t"]) == {"X-API-Key": "k", "X-Trace": "t"}
+    for bad in ["no-colon-here", ": no-name"]:
+        with pytest.raises(ConfigurationError):
+            _parse_headers([bad])
 
 
 TOPOLOGY_WARNINGS = """

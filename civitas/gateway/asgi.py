@@ -406,6 +406,16 @@ class GatewayASGI:
             # override a route's fixed keys (e.g. an auto-registered topology
             # route's __op__) by sending them in the request body.
             payload = {**body, **path_params, **entry.payload_extra}
+            # v0.9.6 (control-plane-writes.md D2): control-plane WRITE routes
+            # carry the AUTHENTICATED principal into the payload under the
+            # reserved __principal__ key -- read from request.auth (set by auth
+            # middleware), NOT the client body (which is spoofable). Injected
+            # last, after payload_extra, so nothing can override it. Absent auth
+            # middleware (single-dev localhost), it defaults to a documented
+            # {"id": "unauthenticated"} -- honest, never a silent real identity.
+            if entry.inject_principal:
+                principal = (request.auth or {}).get("principal") or {"id": "unauthenticated"}
+                payload["__principal__"] = principal
 
             # Request contract validation
             if entry.request_schema is not None:

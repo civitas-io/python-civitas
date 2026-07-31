@@ -28,6 +28,26 @@ from civitas.errors import ConfigurationError
 _SAFE_LABEL_RE = re.compile(r"[^a-zA-Z0-9_-]+")
 
 
+def _parse_headers(header_opts: list[str]) -> dict[str, str]:
+    """Parse repeated ``--header 'Name: Value'`` options into a dict (v0.9.6).
+
+    A general, scheme-agnostic auth mechanism matching the control-plane auth
+    seam: any header the operator's middleware expects
+    (``Authorization: Bearer ...``, ``X-API-Key: ...``, a custom one) goes
+    through verbatim -- civitas privileges no scheme.
+    """
+    headers: dict[str, str] = {}
+    for raw in header_opts:
+        name, sep, value = raw.partition(":")
+        if not sep or not name.strip():
+            raise ConfigurationError(
+                f"Invalid --header {raw!r}; expected 'Name: Value' (e.g. "
+                "'Authorization: Bearer <token>')"
+            )
+        headers[name.strip()] = value.strip()
+    return headers
+
+
 def _label_for(topology_path: Path) -> str:
     """A tab label derived from the topology file's own name -- sanitized to
     a safe Textual widget-ID character set (Tab IDs must be valid CSS
@@ -41,13 +61,23 @@ def _label_for(topology_path: Path) -> str:
 def dashboard(
     topologies: list[str] = typer.Argument(help="Path(s) to topology YAML file(s)"),
     refresh: float = typer.Option(1.0, "--refresh", "-r", help="Poll interval in seconds"),
+    header: list[str] = typer.Option(
+        [],
+        "--header",
+        "-H",
+        help="Auth header to send, 'Name: Value' (repeatable). E.g. "
+        "-H 'Authorization: Bearer <token>' or -H 'X-API-Key: <key>'. "
+        "Applied to every topology.",
+    ),
 ) -> None:
     """Launch the live Textual dashboard for one or more already-running topologies.
 
     Each topology YAML must declare a ``topology_server`` node — this command
     attaches to each remotely and polls; it does not start a runtime of its own.
-    Given more than one topology, each gets its own tab (v0.9.4).
+    Given more than one topology, each gets its own tab (v0.9.4). Use ``--header``
+    to authenticate to an endpoint behind the control-plane auth seam (v0.9.6).
     """
+    headers = _parse_headers(header)
     try:
         from civitas.dashboard.app import CivitasDashboardApp, ClusterTarget
     except ImportError as exc:
@@ -85,6 +115,6 @@ def dashboard(
         seen_labels[label] = seen_labels.get(label, 0) + 1
         if seen_labels[label] > 1:
             label = f"{label}-{seen_labels[label]}"
-        clusters.append(ClusterTarget(label=label, host=host, port=port))
+        clusters.append(ClusterTarget(label=label, host=host, port=port, headers=headers))
 
     CivitasDashboardApp(clusters=clusters, refresh=refresh).run()

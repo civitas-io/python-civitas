@@ -305,7 +305,25 @@ class _TopologyIntrospection:
             if worker_sample is not None:
                 processes.append({"kind": "worker", "id": channel, **worker_sample})
 
-        return {"processes": processes}
+        return {"deployment": self._deployment_shape(), "processes": processes}
+
+    def _deployment_shape(self) -> dict[str, Any]:
+        """v0.9.6: the runtime's deployment shape as an EXPLICIT signal, not
+        something a client has to infer from process-row counts. ``transport``
+        is the ground truth (in_process = single process by definition; zmq/nats
+        = multi-process/distributed); ``mode`` is the derived summary. Read from
+        the live bus transport -- no new plumbing.
+        """
+        transport_by_class = {
+            "InProcessTransport": ("in_process", "single_process"),
+            "ZMQTransport": ("zmq", "multi_process"),
+            "NATSTransport": ("nats", "distributed"),
+        }
+        bus = getattr(self, "_bus", None)
+        transport_obj = getattr(bus, "_transport", None) if bus is not None else None
+        cls_name = type(transport_obj).__name__ if transport_obj is not None else ""
+        transport, mode = transport_by_class.get(cls_name, ("unknown", "unknown"))
+        return {"transport": transport, "mode": mode}
 
     def _distinct_health_channels(self) -> set[str]:
         """Every distinct Worker health channel currently known to the
@@ -436,4 +454,149 @@ class TopologyAgent(_TopologyIntrospection, GenServer):
             return {"__raw_body__": body, "__content_type__": content_type, "__status__": status}
         if op == "processes":
             return self._raw_json(await self._build_processes())
+        # v0.9.6 (control-plane-writes.md §4): write actions. These routes are
+        # POST + inject_principal, so the payload carries __principal__ (the
+        # authenticated actor, or {"id": "unauthenticated"} default) -- read
+        # from there, NEVER from the client body (spoofable). Not raw_response,
+        # so a plain-dict JSON ack is returned.
+        if op == "suspend":
+            return await self._op_suspend(payload)
+        if op == "resume":
+            return await self._op_resume(payload)
+        if op == "restart":
+            return await self._op_restart(payload)
+        if op == "mailbox_peek":
+            return self._op_mailbox_peek(payload)
+        if op == "mailbox_inject":
+            return await self._op_mailbox_inject(payload)
         return self._raw_json({"error": "not found"}, status=404)
+
+    def _principal_id(self, payload: dict[str, Any]) -> str:
+        principal = payload.get("__principal__") or {"id": "unauthenticated"}
+        return str(principal.get("id", "unauthenticated"))
+
+    async def _route_control_message(
+        self, msg_type: str, recipient: str, body: dict[str, Any]
+    ) -> None:
+        trace_id = self._tracer.new_trace_id() if self._tracer is not None else ""
+        message = Message(
+            type=msg_type,
+            sender=self.name,
+            recipient=recipient,
+            payload=body,
+            trace_id=trace_id,
+            span_id=_new_span_id(),
+            priority=1,
+        )
+        await self._bus.route(message)
+
+    async def _op_suspend(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # Not a raw_response route: a returned {"error": ...} maps to HTTP 400
+        # via the dispatcher's AGENT_ERROR path; a success dict maps to 200.
+        name = str(payload.get("name", ""))
+        if not name:
+            return {"error": "agent name required"}
+        if self._bus is None:
+            return {"error": "runtime not available"}
+        initiated_by = self._principal_id(payload)
+        await self._route_control_message(
+            "_agency.suspend",
+            name,
+            {
+                "reason": str(payload.get("reason", "")),
+                "category": str(payload.get("category", "other")),
+                "initiated_by": initiated_by,
+            },
+        )
+        return {"status": "suspend_requested", "agent": name, "initiated_by": initiated_by}
+
+    async def _op_resume(self, payload: dict[str, Any]) -> dict[str, Any]:
+        name = str(payload.get("name", ""))
+        if not name:
+            return {"error": "agent name required"}
+        if self._bus is None:
+            return {"error": "runtime not available"}
+        # resume REQUIRES a non-empty approver (S6); the authenticated principal
+        # is it -- always non-empty (defaults to "unauthenticated").
+        approver = self._principal_id(payload)
+        await self._route_control_message("_agency.resume", name, {"approver": approver})
+        return {"status": "resume_requested", "agent": name, "approver": approver}
+
+    def _op_mailbox_peek(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Read: non-destructive mailbox snapshot for a SAME-PROCESS agent
+        (v0.9.6). Returns message METADATA only (id/type/sender/priority/ts) --
+        never payloads, a deliberate data-exposure guard. A raw_response GET
+        route, so this returns the sentinel dict."""
+        name = str(payload.get("name", ""))
+        agent = self._agents.get(name) or self._find_dynamic_agent(name)
+        if agent is None:
+            return self._raw_json(
+                {"error": f"agent '{name}' not found (or not in this process)"}, status=404
+            )
+        messages = [
+            {
+                "id": m.id,
+                "type": m.type,
+                "sender": m.sender,
+                "recipient": m.recipient,
+                "priority": m.priority,
+                "timestamp": m.timestamp,
+            }
+            for m in agent._mailbox.peek()
+        ]
+        return self._raw_json(
+            {"agent": name, "depth": agent._mailbox.depth(), "messages": messages}
+        )
+
+    async def _op_mailbox_inject(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Write: inject an application message into an agent's mailbox (v0.9.6).
+        Rejects system/reserved message types (no privilege escalation via the
+        _agency./civitas. prefixes). Audited on THIS control-plane agent (the
+        target just handles a normal message and wouldn't audit it as a control
+        action) -- records the type and the authenticated actor, NOT the payload
+        (data-exposure guard)."""
+        name = str(payload.get("name", ""))
+        if not name:
+            return {"error": "agent name required"}
+        if self._bus is None:
+            return {"error": "runtime not available"}
+        msg_type = str(payload.get("type", ""))
+        if not msg_type:
+            return {"error": "message 'type' required"}
+        if msg_type.startswith("_agency.") or msg_type.startswith("civitas."):
+            return {"error": f"cannot inject reserved/system message type {msg_type!r}"}
+        initiated_by = self._principal_id(payload)
+        body = payload.get("payload")
+        message = Message(
+            type=msg_type,
+            sender=self.name,
+            recipient=name,
+            payload=body if isinstance(body, dict) else {},
+            trace_id=self._tracer.new_trace_id() if self._tracer is not None else "",
+            span_id=_new_span_id(),
+        )
+        await self._bus.route(message)
+        await self._emit_audit(
+            "mailbox.inject",
+            {"target": name, "message_type": msg_type, "initiated_by": initiated_by},
+        )
+        return {
+            "status": "injected",
+            "agent": name,
+            "message_type": msg_type,
+            "initiated_by": initiated_by,
+        }
+
+    async def _op_restart(self, payload: dict[str, Any]) -> dict[str, Any]:
+        name = str(payload.get("name", ""))
+        if not name:
+            return {"error": "agent name required"}
+        if self._bus is None:
+            return {"error": "runtime not available"}
+        initiated_by = self._principal_id(payload)
+        await self._route_control_message(
+            "_agency.force_restart",
+            name,
+            {"reason": str(payload.get("reason", "")), "initiated_by": initiated_by},
+        )
+        return {"status": "restart_requested", "agent": name, "initiated_by": initiated_by}

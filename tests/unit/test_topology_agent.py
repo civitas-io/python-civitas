@@ -134,6 +134,42 @@ class TestHandleCallWrapsBuilders:
         body = json.loads(reply["__raw_body__"])
         assert "processes" in body
         assert isinstance(body["processes"], list)
+        # v0.9.6: explicit deployment shape alongside the process rows.
+        assert "deployment" in body
+        assert set(body["deployment"]) == {"transport", "mode"}
+
+
+class TestDeploymentShape:
+    """v0.9.6: the deployment shape is read from the live bus transport -- an
+    EXPLICIT single/multi/distributed signal, not inferred from row counts."""
+
+    def setup_method(self) -> None:
+        self.agent = TopologyAgent(name="ta")
+
+    def test_transport_maps_to_mode(self) -> None:
+        # Local classes named exactly like the real transports (type name is
+        # what _deployment_shape keys on) -- no need to import pyzmq/nats.
+        class InProcessTransport: ...
+
+        class ZMQTransport: ...
+
+        class NATSTransport: ...
+
+        cases = [
+            (InProcessTransport, ("in_process", "single_process")),
+            (ZMQTransport, ("zmq", "multi_process")),
+            (NATSTransport, ("nats", "distributed")),
+        ]
+        for cls, expected in cases:
+            bus = MagicMock()
+            bus._transport = cls()
+            self.agent._bus = bus
+            shape = self.agent._deployment_shape()
+            assert (shape["transport"], shape["mode"]) == expected
+
+    def test_unknown_transport_is_reported_not_crashed(self) -> None:
+        self.agent._bus = None
+        assert self.agent._deployment_shape() == {"transport": "unknown", "mode": "unknown"}
 
     @pytest.mark.asyncio
     async def test_unknown_op_is_404(self) -> None:
@@ -185,3 +221,151 @@ class TestTopologyAgentIsolated:
         for op in ("health", "topology", "agents", "snapshot", "metrics", "processes"):
             reply = await self.agent.handle_call({"__op__": op}, "tester")
             assert isinstance(reply, dict)
+
+
+class TestWriteOps:
+    """v0.9.6 (control-plane-writes.md §4): suspend/resume write ops route the
+    right _agency.* control message, carrying the AUTHENTICATED principal (from
+    the injected __principal__, never the client body) as the honest actor."""
+
+    def setup_method(self) -> None:
+        self.agent = TopologyAgent(name="ta")
+        self.routed: list = []
+        self.agent._bus = MagicMock()
+
+        async def _route(msg):
+            self.routed.append(msg)
+
+        self.agent._bus.route = _route
+        self.agent._tracer = None  # trace_id falls back to "" -- fine for the test
+
+    @pytest.mark.asyncio
+    async def test_suspend_routes_agency_suspend_with_principal_as_initiated_by(self) -> None:
+        reply = await self.agent.handle_call(
+            {
+                "__op__": "suspend",
+                "name": "worker",
+                "__principal__": {"id": "alice", "method": "jwt"},
+                "reason": "spend check",
+                "category": "governance_pause",
+            },
+            "tester",
+        )
+        assert reply == {"status": "suspend_requested", "agent": "worker", "initiated_by": "alice"}
+        assert len(self.routed) == 1
+        msg = self.routed[0]
+        assert msg.type == "_agency.suspend"
+        assert msg.recipient == "worker"
+        assert msg.priority == 1
+        assert msg.payload["initiated_by"] == "alice"  # from the principal, not the body
+        assert msg.payload["reason"] == "spend check"
+        assert msg.payload["category"] == "governance_pause"
+
+    @pytest.mark.asyncio
+    async def test_resume_routes_agency_resume_with_principal_as_approver(self) -> None:
+        reply = await self.agent.handle_call(
+            {"__op__": "resume", "name": "worker", "__principal__": {"id": "bob"}}, "tester"
+        )
+        assert reply == {"status": "resume_requested", "agent": "worker", "approver": "bob"}
+        msg = self.routed[0]
+        assert msg.type == "_agency.resume"
+        assert msg.recipient == "worker"
+        assert msg.payload["approver"] == "bob"  # from the principal
+
+    @pytest.mark.asyncio
+    async def test_default_principal_when_unauthenticated(self) -> None:
+        """No __principal__ (single-dev, no auth middleware) -> the documented
+        {"id": "unauthenticated"} default flows into the audit-bound field,
+        never a silent real identity."""
+        reply = await self.agent.handle_call({"__op__": "suspend", "name": "worker"}, "tester")
+        assert reply["initiated_by"] == "unauthenticated"
+        assert self.routed[0].payload["initiated_by"] == "unauthenticated"
+
+    @pytest.mark.asyncio
+    async def test_missing_agent_name_is_error(self) -> None:
+        reply = await self.agent.handle_call({"__op__": "suspend", "name": ""}, "tester")
+        assert "error" in reply  # -> HTTP 400 via the dispatcher's AGENT_ERROR path
+        assert len(self.routed) == 0  # nothing routed
+
+    @pytest.mark.asyncio
+    async def test_restart_routes_agency_force_restart_with_principal(self) -> None:
+        reply = await self.agent.handle_call(
+            {
+                "__op__": "restart",
+                "name": "worker",
+                "__principal__": {"id": "carol"},
+                "reason": "wedged",
+            },
+            "tester",
+        )
+        assert reply == {"status": "restart_requested", "agent": "worker", "initiated_by": "carol"}
+        msg = self.routed[0]
+        assert msg.type == "_agency.force_restart"
+        assert msg.recipient == "worker"
+        assert msg.priority == 1
+        assert msg.payload["initiated_by"] == "carol"
+        assert msg.payload["reason"] == "wedged"
+
+    @pytest.mark.asyncio
+    async def test_mailbox_inject_routes_app_message_and_audits(self) -> None:
+        sink = MagicMock()
+        sink.emit = AsyncMock()
+        self.agent._audit_sink = sink
+        reply = await self.agent.handle_call(
+            {
+                "__op__": "mailbox_inject",
+                "name": "worker",
+                "__principal__": {"id": "dave"},
+                "type": "do_work",
+                "payload": {"n": 1},
+            },
+            "tester",
+        )
+        assert reply["status"] == "injected"
+        assert reply["message_type"] == "do_work"
+        assert reply["initiated_by"] == "dave"
+        msg = self.routed[0]
+        assert msg.type == "do_work"
+        assert msg.recipient == "worker"
+        assert msg.payload == {"n": 1}
+        event = sink.emit.call_args[0][0]
+        assert event["event"] == "mailbox.inject"
+        assert event["details"] == {
+            "target": "worker",
+            "message_type": "do_work",
+            "initiated_by": "dave",
+        }
+
+    @pytest.mark.asyncio
+    async def test_mailbox_inject_rejects_reserved_message_types(self) -> None:
+        for bad in ["_agency.suspend", "civitas.stream.chunk"]:
+            reply = await self.agent.handle_call(
+                {"__op__": "mailbox_inject", "name": "worker", "type": bad}, "tester"
+            )
+            assert "error" in reply  # -> HTTP 400; no privilege escalation via reserved prefixes
+            assert len(self.routed) == 0
+
+    @pytest.mark.asyncio
+    async def test_mailbox_peek_returns_metadata_not_payloads(self) -> None:
+        """peek exposes message metadata only -- never payloads (data-exposure guard)."""
+        from civitas.messages import Message as _Msg
+        from civitas.process import AgentProcess
+
+        class _Idle(AgentProcess):
+            async def handle(self, message):  # type: ignore[no-untyped-def]
+                return None
+
+        target = _Idle("worker")
+        await target._mailbox.put(_Msg(type="queued", sender="s", payload={"secret": "x"}))
+        self.agent._agents = {"worker": target}
+        reply = await self.agent.handle_call({"__op__": "mailbox_peek", "name": "worker"}, "tester")
+        body = json.loads(reply["__raw_body__"])
+        assert body["agent"] == "worker"
+        assert body["depth"] == 1
+        assert body["messages"][0]["type"] == "queued"
+        assert "payload" not in body["messages"][0]  # metadata only
+
+    @pytest.mark.asyncio
+    async def test_mailbox_peek_unknown_agent_is_404(self) -> None:
+        reply = await self.agent.handle_call({"__op__": "mailbox_peek", "name": "ghost"}, "tester")
+        assert reply["__status__"] == 404

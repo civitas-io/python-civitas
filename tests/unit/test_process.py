@@ -51,6 +51,24 @@ async def test_mailbox_empty_check():
     assert mb.empty()
 
 
+async def test_mailbox_peek_is_non_destructive():
+    """v0.9.6: peek() snapshots buffered messages (priority first) WITHOUT
+    consuming them -- the mailbox is unchanged after, unlike get()/drain()."""
+    mb = Mailbox()
+    await mb.put(Message(type="normal-1"))
+    await mb.put(Message(type="normal-2"))
+    await mb.put(Message(type="ctrl", priority=1))
+
+    snap = mb.peek()
+    assert [m.type for m in snap] == ["ctrl", "normal-1", "normal-2"]  # priority first
+    assert mb.depth() == 3  # nothing consumed
+    # A second peek returns the same thing (idempotent, non-destructive).
+    assert [m.type for m in mb.peek()] == ["ctrl", "normal-1", "normal-2"]
+    # And the messages are still really there to get().
+    assert (await mb.get()).type == "ctrl"
+    assert mb.depth() == 2
+
+
 async def test_mailbox_priority_queue_bounded():
     """Priority queue has a finite bound (F02-2)."""
     mb = Mailbox(maxsize=10)

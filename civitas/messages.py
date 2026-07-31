@@ -135,6 +135,7 @@ SYSTEM_MESSAGE_TYPES: frozenset[str] = frozenset(
         "_agency.deregister",
         "_agency.suspend",
         "_agency.resume",
+        "_agency.force_restart",  # v0.9.6: control-plane force-restart / kill
         "_agency.child_crashed",  # v0.9.0 E4 Phase B (D6): supervisor crash self-trigger
     }
 )

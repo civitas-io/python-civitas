@@ -29,6 +29,16 @@ from civitas.gateway.openapi import build_spec
 from civitas.gateway.router import RouteEntry, RouteTable
 from civitas.messages import Message
 
+
+async def _fake_principal_mw(request, call_next):  # type: ignore[no-untyped-def]
+    """v0.9.6: a stand-in for a customer's 'bring your own auth' middleware --
+    authenticates (trivially, here) and stamps request.auth['principal'] per the
+    D1 convention. Module-level so load_middleware can import it by dotted path.
+    """
+    request.auth = {"principal": {"id": "real-alice", "method": "test"}}
+    return await call_next(request)
+
+
 # ---------------------------------------------------------------------------
 # RouteTable unit tests
 # ---------------------------------------------------------------------------
@@ -529,6 +539,55 @@ class TestGatewayASGI:
         await _http_request(asgi, method="POST", path="/x", body={"__op__": "processes"})
         _, sent_payload = gw.ask.call_args[0]
         assert sent_payload["__op__"] == "topology"  # route's value wins, not the client's
+
+    @pytest.mark.asyncio
+    async def test_inject_principal_default_when_no_auth(self) -> None:
+        """v0.9.6 (control-plane-writes.md D2/D3): an inject_principal route with
+        no auth middleware (request.auth unset) injects the documented
+        {"id": "unauthenticated"} default under __principal__."""
+        entry = RouteEntry(method="POST", path_pattern="/w", agent="topo", inject_principal=True)
+        asgi = GatewayASGI(
+            gateway=(gw := MagicMock(spec=HTTPGateway)),
+            route_table=RouteTable([entry]),
+            config=GatewayConfig(routes=[]),
+        )
+        gw.name = "api"
+        reply = MagicMock(spec=Message)
+        reply.payload = {}
+        gw.ask = AsyncMock(return_value=reply)
+        await _http_request(asgi, method="POST", path="/w", body={})
+        _, sent_payload = gw.ask.call_args[0]
+        assert sent_payload["__principal__"] == {"id": "unauthenticated"}
+
+    @pytest.mark.asyncio
+    async def test_inject_principal_cannot_be_spoofed_from_body(self) -> None:
+        """v0.9.6 (control-plane-writes.md D2): the crux -- a client CANNOT set
+        the audited actor by putting __principal__ in the request body. The
+        dispatch layer injects the authenticated principal (set by middleware
+        on request.auth) LAST, overriding any body value.
+        """
+        entry = RouteEntry(
+            method="POST",
+            path_pattern="/w",
+            agent="topo",
+            inject_principal=True,
+            middleware=["tests.unit.test_gateway._fake_principal_mw"],
+        )
+        asgi = GatewayASGI(
+            gateway=(gw := MagicMock(spec=HTTPGateway)),
+            route_table=RouteTable([entry]),
+            config=GatewayConfig(routes=[]),
+        )
+        gw.name = "api"
+        reply = MagicMock(spec=Message)
+        reply.payload = {}
+        gw.ask = AsyncMock(return_value=reply)
+        # Body tries to smuggle a fake identity.
+        await _http_request(
+            asgi, method="POST", path="/w", body={"__principal__": {"id": "attacker"}}
+        )
+        _, sent_payload = gw.ask.call_args[0]
+        assert sent_payload["__principal__"] == {"id": "real-alice", "method": "test"}
 
     @pytest.mark.asyncio
     async def test_x_civitas_type_header(self) -> None:
@@ -1675,9 +1734,10 @@ class TestHTTPGatewayCore:
 
 class TestTopologyAutoRoutes:
     """v0.9.5 (topology-gateway-merge.md D2/D5/D6d): HTTPGateway auto-registers
-    the seven fixed introspection routes when topology_agent is set."""
+    the fixed introspection routes when topology_agent is set. v0.9.6 adds two
+    POST write routes (suspend/resume)."""
 
-    def test_seven_routes_registered_pointing_at_the_agent(self) -> None:
+    def test_read_and_write_routes_registered_pointing_at_the_agent(self) -> None:
         gw = HTTPGateway("gw", GatewayConfig(topology_agent="topo"))
         entries = gw._route_table.entries()
         paths = {(e.method, e.path_pattern) for e in entries}
@@ -1686,12 +1746,24 @@ class TestTopologyAutoRoutes:
             ("GET", "/topology"),
             ("GET", "/agents"),
             ("GET", "/agents/{name}"),
+            ("GET", "/agents/{name}/mailbox"),  # v0.9.6 peek (read)
             ("GET", "/snapshot"),
             ("GET", "/metrics"),
             ("GET", "/processes"),
+            ("POST", "/agents/{name}/suspend"),  # v0.9.6 write action
+            ("POST", "/agents/{name}/resume"),  # v0.9.6 write action
+            ("POST", "/agents/{name}/restart"),  # v0.9.6 write action
+            ("POST", "/agents/{name}/mailbox"),  # v0.9.6 inject (write)
         }
         assert all(e.agent == "topo" for e in entries)
-        assert all(e.raw_response for e in entries)
+        # Read routes are raw_response; write routes are not (plain JSON ack).
+        reads = [e for e in entries if e.method == "GET"]
+        writes = [e for e in entries if e.method == "POST"]
+        assert all(e.raw_response for e in reads)
+        assert not any(e.raw_response for e in writes)
+        # Only write routes inject the authenticated principal (v0.9.6 D2).
+        assert all(e.inject_principal for e in writes)
+        assert not any(e.inject_principal for e in reads)
 
     def test_no_routes_when_topology_agent_unset(self) -> None:
         gw = HTTPGateway("gw", GatewayConfig())
@@ -1705,9 +1777,13 @@ class TestTopologyAutoRoutes:
             "/v1/topology",
             "/v1/agents",
             "/v1/agents/{name}",
+            "/v1/agents/{name}/mailbox",  # GET peek + POST inject share this path
             "/v1/snapshot",
             "/v1/metrics",
             "/v1/processes",
+            "/v1/agents/{name}/suspend",
+            "/v1/agents/{name}/resume",
+            "/v1/agents/{name}/restart",
         }
 
     def test_prefix_trailing_slash_normalized(self) -> None:
@@ -1733,15 +1809,20 @@ class TestTopologyAutoRoutes:
 
     def test_each_route_carries_its_op_in_payload_extra(self) -> None:
         routes = _build_topology_routes("topo", "", [])
-        op_by_path = {r.path_pattern: r.payload_extra["__op__"] for r in routes}
+        op_by_path = {(r.method, r.path_pattern): r.payload_extra["__op__"] for r in routes}
         assert op_by_path == {
-            "/health": "health",
-            "/topology": "topology",
-            "/agents": "agents",
-            "/agents/{name}": "agent_detail",
-            "/snapshot": "snapshot",
-            "/metrics": "metrics",
-            "/processes": "processes",
+            ("GET", "/health"): "health",
+            ("GET", "/topology"): "topology",
+            ("GET", "/agents"): "agents",
+            ("GET", "/agents/{name}"): "agent_detail",
+            ("GET", "/agents/{name}/mailbox"): "mailbox_peek",
+            ("GET", "/snapshot"): "snapshot",
+            ("GET", "/metrics"): "metrics",
+            ("GET", "/processes"): "processes",
+            ("POST", "/agents/{name}/suspend"): "suspend",
+            ("POST", "/agents/{name}/resume"): "resume",
+            ("POST", "/agents/{name}/restart"): "restart",
+            ("POST", "/agents/{name}/mailbox"): "mailbox_inject",
         }
 
     def test_topology_routes_coexist_with_user_declared_routes(self) -> None:
@@ -1757,4 +1838,4 @@ class TestTopologyAutoRoutes:
         paths = {(e.method, e.path_pattern) for e in gw._route_table.entries()}
         assert ("POST", "/chat") in paths
         assert ("GET", "/topology") in paths
-        assert len(gw._route_table.entries()) == 8  # 1 user + 7 topology
+        assert len(gw._route_table.entries()) == 13  # 1 user + 8 read + 4 write

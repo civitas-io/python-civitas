@@ -11,6 +11,57 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+## [0.9.6] — 2026-07-31
+
+Dashboard control-plane write actions, built on v0.9.5's merged, auth-capable introspection
+gateway. The model: **civitas ships the AuthNZ integration *seam*, an honest *audit binding*, and
+a safe localhost *default* — never AuthZ itself.** Customers plug in their own auth (SCIM / IdP /
+OPA) as gateway middleware; single devs run with zero ceremony. Full design in
+`docs/design/control-plane-writes.md`.
+
+### Added
+
+- **AuthNZ integration seam.** A gateway middleware authenticates against your own system and sets
+  one field — `request.auth["principal"] = {"id": ...}` (a dict, for scalability; civitas reads
+  only `id`). That is the whole contract. `require_jwt` sets it from the JWT `sub`; a customer's
+  SCIM/IdP/OPA middleware sets it the same way. Denials are the middleware's own `403` — civitas
+  never models roles or scopes.
+- **Control-plane write actions**, each an auto-registered route on a `topology_server`/gateway,
+  gated by the node's `auth.middleware`, recording the authenticated principal as the audited
+  actor (never a client-supplied, spoofable value):
+  `POST /agents/{name}/suspend` · `/resume` · `/restart` (force-restart / kill, via the OTP
+  "let it crash" path — the supervisor restarts per its existing policy), and
+  `POST /agents/{name}/mailbox` (inject an application message; reserved `_agency.`/`civitas.`
+  types rejected).
+- **Mailbox introspection**: `GET /agents/{name}/mailbox` — a new non-destructive `Mailbox.peek()`
+  returning message **metadata only**, never payloads.
+- **Dashboard client auth**: `fetch_json`, `civitas dashboard`, and `civitas topology show` gained
+  a repeatable `--header 'Name: Value'` flag (scheme-agnostic) so the TUI/CLI can attach to an
+  auth-protected endpoint.
+- **`attach_to`**: a `topology_server` node with `config: {attach_to: <gw-name>}` builds only the
+  `TopologyAgent`; a separately-declared `http_gateway` with `config: {topology_agent: <name>}`
+  serves its routes on that gateway's own port — one ingress instead of a dedicated internal one.
+- **Deployment-shape reporting**: `GET /processes` now returns an explicit
+  `deployment: {transport, mode}` (single/multi/distributed, read from the live bus transport) and
+  a per-process `container: {containerized, orchestrator}` hint (cheap cached heuristics) — so a
+  client can tell the deployment shape explicitly rather than inferring it. Read-only reporting;
+  civitas does not manage containers.
+- **Reference example** `examples/control_plane_auth.py` — a runnable "bring your own auth"
+  middleware.
+
+### Fixed
+
+- `HTTPGateway` dropped the W3C `traceparent` header on non-streaming responses (only echoed on
+  the SSE path) — now applied to both.
+
+### Note
+
+- **Investigated and declined** (documented, not silently dropped): mailbox removal of one
+  specific in-flight message (breaks the at-most-once/FIFO delivery guarantee; its real use case,
+  a poison-pill wedge, is already covered by force-restart), and per-agent container *management*
+  (a deployment concern owned by container-native tooling — distinct from the container *reporting*
+  that was added).
+
 ## [0.9.5] — 2026-07-30
 
 Control-plane auth foundation: the `TopologyServer` (dashboard/observability HTTP endpoint) had

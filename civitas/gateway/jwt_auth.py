@@ -176,5 +176,12 @@ async def require_jwt(request: GatewayRequest, call_next: NextMiddleware) -> Gat
             body={"error": "invalid token"},
             headers={"WWW-Authenticate": 'Bearer error="invalid_token"'},
         )
-    request.auth = {**(request.auth or {}), "claims": claims}
+    # v0.9.6 (control-plane-writes.md D1): expose a standard principal dict so
+    # control-plane write actions can record an honest actor. "id" is the JWT
+    # subject; "claims" stays alongside for any middleware/handler that wants
+    # more. A middleware that authenticates against a customer's own system
+    # (SCIM/IdP/OPA) sets request.auth["principal"] the same way.
+    sub = claims.get("sub") if isinstance(claims, dict) else None
+    principal = {"id": str(sub), "method": "jwt"} if sub else {"id": "jwt", "method": "jwt"}
+    request.auth = {**(request.auth or {}), "claims": claims, "principal": principal}
     return await call_next(request)

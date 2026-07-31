@@ -50,6 +50,15 @@ class RouteEntry:
     # them). Auto-registered topology routes use this to carry {"__op__": ...}
     # to TopologyAgent.handle_call(); ordinary YAML routes never set it.
     payload_extra: dict[str, Any] = field(default_factory=dict, repr=False)
+    # v0.9.6 (control-plane-writes.md D2): when True, the dispatch layer injects
+    # the authenticated principal (request.auth["principal"], or the
+    # {"id": "unauthenticated"} default) into the payload under the reserved key
+    # "__principal__", merged LAST so a client body cannot spoof it. Only the
+    # auto-registered control-plane WRITE routes set this; read/ordinary routes
+    # never carry the principal into the dispatched payload (preserving the
+    # original "auth is never merged into the payload" intent for everything
+    # except the writes that genuinely need an honest actor in their audit).
+    inject_principal: bool = False
     segments: list[tuple[bool, str]] = field(default_factory=list, init=False, repr=False)
 
     def __post_init__(self) -> None:

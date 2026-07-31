@@ -12,16 +12,47 @@ mechanism (already covered by the gateway's own auth test suites).
 from __future__ import annotations
 
 import asyncio
+import json
 import socket
 import textwrap
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 pytest.importorskip("uvicorn")  # civitas[http]
 
-from civitas import Runtime  # noqa: E402
+from civitas import Runtime, Supervisor  # noqa: E402
+from civitas.audit.types import AuditEvent  # noqa: E402
 from civitas.config import SecretStr, settings  # noqa: E402
+from civitas.gateway import GatewayConfig, HTTPGateway  # noqa: E402
+from civitas.process import ProcessStatus  # noqa: E402
+from civitas.topology_server import TopologyAgent  # noqa: E402
+from tests.conftest import EchoAgent, wait_for  # noqa: E402
+
+
+async def _alice_mw(request, call_next):  # type: ignore[no-untyped-def]
+    """A stand-in for a customer's 'bring your own auth' middleware (the D1 seam):
+    it authenticates (trivially, as everyone = alice) and stamps the principal.
+    A real one would call SCIM/IdP/OPA; civitas only ever reads principal['id'].
+    Module-level so load_middleware can import it by dotted path.
+    """
+    request.auth = {"principal": {"id": "alice", "method": "test"}}
+    return await call_next(request)
+
+
+class _CaptureAudit:
+    """Minimal AuditSink that records every emitted event in memory."""
+
+    def __init__(self) -> None:
+        self.events: list[AuditEvent] = []
+
+    async def emit(self, event: AuditEvent) -> None:
+        self.events.append(event)
+
+    async def flush(self) -> None: ...
+
+    async def close(self) -> None: ...
 
 
 def _free_port() -> int:
@@ -169,5 +200,326 @@ async def test_no_auth_block_is_wide_open_exactly_as_before(
         assert await _http_get(port, "/topology") == 200  # no key needed
         assert await _http_get(port, "/metrics") == 200
         assert await _http_get(port, "/agents") == 200
+    finally:
+        await rt.stop()
+
+
+async def _http_post(port: int, path: str, body: dict[str, Any] | None = None) -> tuple[int, bytes]:
+    """POST with a JSON body; return (status, body-bytes) reading to EOF."""
+    reader, writer = await asyncio.open_connection("127.0.0.1", port)
+    try:
+        payload = json.dumps(body or {}).encode()
+        req = (
+            f"POST {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n"
+            f"Content-Type: application/json\r\nContent-Length: {len(payload)}\r\n"
+            f"Connection: close\r\n\r\n"
+        ).encode() + payload
+        writer.write(req)
+        await writer.drain()
+        chunks: list[bytes] = []
+        while True:
+            chunk = await reader.read(65536)
+            if not chunk:
+                break
+            chunks.append(chunk)
+        raw = b"".join(chunks)
+    finally:
+        writer.close()
+        try:
+            await writer.wait_closed()
+        except Exception:
+            pass
+    status_line = raw.split(b"\r\n", 1)[0].decode(errors="replace")
+    code = int(status_line.split()[1]) if len(status_line.split()) >= 2 else 500
+    end = raw.find(b"\r\n\r\n")
+    return code, (raw[end + 4 :] if end != -1 else b"")
+
+
+@pytest.mark.asyncio
+async def test_suspend_write_action_records_authenticated_principal() -> None:
+    """The v0.9.6 payoff, end-to-end against a REAL running Runtime: a POST to
+    the control-plane suspend route (behind a custom 'bring your own auth'
+    middleware) actually suspends the agent AND records the AUTHENTICATED
+    principal as initiated_by in the AuditEvent -- not a client-supplied value.
+    This is the honest-audit binding (D2) proven for real.
+    """
+    port = _free_port()
+    audit = _CaptureAudit()
+    topo = TopologyAgent("topo")
+    gw = HTTPGateway(
+        "topo_gateway",
+        GatewayConfig(
+            host="127.0.0.1",
+            port=port,
+            topology_agent="topo",
+            topology_middleware=["tests.integration.test_topology_gateway_auth._alice_mw"],
+        ),
+    )
+    worker = EchoAgent("worker")
+    rt = Runtime(supervisor=Supervisor("root", children=[topo, gw, worker]))
+    rt._audit_sink = audit  # wired into every agent via ComponentSet at start()
+    await rt.start()
+    try:
+        await _wait_listening(port)
+
+        # The client even TRIES to smuggle a fake actor in the body; it must lose.
+        code, body = await _http_post(
+            port,
+            "/agents/worker/suspend",
+            {"reason": "spend check", "__principal__": {"id": "attacker"}},
+        )
+        assert code == 200
+        assert json.loads(body)["initiated_by"] == "alice"  # authenticated, not "attacker"
+
+        # The agent actually transitions to SUSPENDED.
+        await wait_for(lambda: worker.status == ProcessStatus.SUSPENDED, msg="worker suspended")
+
+        # The AuditEvent records the AUTHENTICATED principal, not the body value.
+        suspend_events = [e for e in audit.events if e["event"] == "agent.suspend"]
+        assert len(suspend_events) >= 1
+        assert suspend_events[-1]["details"]["initiated_by"] == "alice"
+        assert suspend_events[-1]["details"]["reason"] == "spend check"
+    finally:
+        await rt.stop()
+
+
+@pytest.mark.asyncio
+async def test_resume_write_action_records_principal_as_approver() -> None:
+    """resume over the control plane records the authenticated principal as the
+    audited approver (S6 requires a non-empty approver -- the principal is it)."""
+    port = _free_port()
+    audit = _CaptureAudit()
+    topo = TopologyAgent("topo")
+    gw = HTTPGateway(
+        "topo_gateway",
+        GatewayConfig(
+            host="127.0.0.1",
+            port=port,
+            topology_agent="topo",
+            topology_middleware=["tests.integration.test_topology_gateway_auth._alice_mw"],
+        ),
+    )
+    worker = EchoAgent("worker")
+    rt = Runtime(supervisor=Supervisor("root", children=[topo, gw, worker]))
+    rt._audit_sink = audit
+    await rt.start()
+    try:
+        await _wait_listening(port)
+        await _http_post(port, "/agents/worker/suspend", {})
+        await wait_for(lambda: worker.status == ProcessStatus.SUSPENDED, msg="worker suspended")
+
+        code, body = await _http_post(port, "/agents/worker/resume", {})
+        assert code == 200
+        assert json.loads(body)["approver"] == "alice"
+        await wait_for(lambda: worker.status == ProcessStatus.RUNNING, msg="worker resumed")
+
+        resume_events = [e for e in audit.events if e["event"] == "agent.resume"]
+        assert resume_events[-1]["details"]["approver"] == "alice"
+    finally:
+        await rt.stop()
+
+
+@pytest.mark.asyncio
+async def test_dashboard_client_authenticates_with_headers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """v0.9.6 (D7): the dashboard's own polling client (fetch_json) can attach
+    to an auth-protected endpoint by sending headers -- without them it gets
+    401, with the right one it gets 200. This is what lets civitas dashboard/top
+    drive the endpoints the control-plane auth seam now protects.
+    """
+    from civitas.dashboard.client import fetch_json
+
+    monkeypatch.setattr(settings, "gateway_api_key", SecretStr("secret-123"))
+    port = _free_port()
+    rt = Runtime.from_config(_topology_yaml(tmp_path, port, with_auth=True))
+    await rt.start()
+    try:
+        await _wait_listening(port)
+        # No header -> 401 (fetch_json returns the status, doesn't raise on 401).
+        status, _ = await fetch_json("127.0.0.1", port, "/topology")
+        assert status == 401
+        # Correct header -> 200.
+        status, data = await fetch_json(
+            "127.0.0.1", port, "/topology", headers={"X-API-Key": "secret-123"}
+        )
+        assert status == 200
+        assert data["name"] == "root"
+    finally:
+        await rt.stop()
+
+
+@pytest.mark.asyncio
+async def test_restart_write_action_crashes_and_restarts_recording_principal() -> None:
+    """v0.9.6 §6, end-to-end: a POST to the control-plane restart route actually
+    force-restarts the agent (fresh incarnation via the supervisor's normal
+    crash path) AND records the authenticated principal in the audit."""
+    port = _free_port()
+    audit = _CaptureAudit()
+    topo = TopologyAgent("topo")
+    gw = HTTPGateway(
+        "topo_gateway",
+        GatewayConfig(
+            host="127.0.0.1",
+            port=port,
+            topology_agent="topo",
+            topology_middleware=["tests.integration.test_topology_gateway_auth._alice_mw"],
+        ),
+    )
+    worker = EchoAgent("worker")
+    root = Supervisor("root", children=[topo, gw, worker], max_restarts=5, backoff_base=0.0)
+    rt = Runtime(supervisor=root)
+    rt._audit_sink = audit
+    await rt.start()
+    try:
+        await _wait_listening(port)
+        old = root._children_by_name["worker"]
+
+        code, body = await _http_post(port, "/agents/worker/restart", {"reason": "wedged"})
+        assert code == 200
+        assert json.loads(body)["initiated_by"] == "alice"
+
+        # Fresh incarnation appears (the supervisor restarted it).
+        await wait_for(
+            lambda: (
+                root._children_by_name["worker"] is not old
+                and root._children_by_name["worker"].status == ProcessStatus.RUNNING
+            ),
+            msg="worker restarted",
+        )
+        force = [e for e in audit.events if e["event"] == "agent.force_restart"]
+        assert force[-1]["details"]["initiated_by"] == "alice"
+    finally:
+        await rt.stop()
+
+
+@pytest.mark.asyncio
+async def test_mailbox_peek_and_inject_end_to_end() -> None:
+    """v0.9.6 §6, end-to-end: GET /agents/{name}/mailbox peeks (metadata only)
+    and POST /agents/{name}/mailbox injects an application message that the
+    target actually handles -- with the inject recorded in the audit."""
+
+    class _Recorder(EchoAgent):
+        def __init__(self, name: str) -> None:
+            super().__init__(name)
+            self.seen: list[str] = []
+
+        async def handle(self, message):  # type: ignore[no-untyped-def]
+            self.seen.append(message.type)
+            return None
+
+    port = _free_port()
+    audit = _CaptureAudit()
+    topo = TopologyAgent("topo")
+    gw = HTTPGateway(
+        "topo_gateway",
+        GatewayConfig(
+            host="127.0.0.1",
+            port=port,
+            topology_agent="topo",
+            topology_middleware=["tests.integration.test_topology_gateway_auth._alice_mw"],
+        ),
+    )
+    worker = _Recorder("worker")
+    rt = Runtime(supervisor=Supervisor("root", children=[topo, gw, worker]))
+    rt._audit_sink = audit
+    await rt.start()
+    try:
+        await _wait_listening(port)
+
+        # Inject an application message; the worker actually handles it.
+        code, body = await _http_post(
+            port, "/agents/worker/mailbox", {"type": "do_work", "payload": {"n": 1}}
+        )
+        assert code == 200
+        assert json.loads(body)["message_type"] == "do_work"
+        await wait_for(lambda: "do_work" in worker.seen, msg="worker handled injected message")
+
+        # Reserved types are rejected (no privilege escalation).
+        code, _ = await _http_post(port, "/agents/worker/mailbox", {"type": "_agency.suspend"})
+        assert code == 400
+
+        # The inject is audited with the authenticated actor.
+        injects = [e for e in audit.events if e["event"] == "mailbox.inject"]
+        assert injects[-1]["details"]["initiated_by"] == "alice"
+        assert injects[-1]["details"]["message_type"] == "do_work"
+
+        # Peek returns metadata (depth 0 here since the worker drained it).
+        assert await _http_get(port, "/agents/worker/mailbox") == 200
+        peek_body = await _get_with_body(port, "/agents/worker/mailbox")
+        assert "messages" in json.loads(peek_body)
+    finally:
+        await rt.stop()
+
+
+@pytest.mark.asyncio
+async def test_attach_to_serves_introspection_on_an_existing_gateway(tmp_path: Path) -> None:
+    """v0.9.6 (D6c): a topology_server node with attach_to builds only a
+    TopologyAgent; a separately-declared http_gateway with topology_agent
+    serves its routes on that gateway's own port -- one ingress, no dedicated
+    internal gateway. Single-pass wiring, linked by name in YAML.
+    """
+    port = _free_port()
+    yaml_file = tmp_path / "attach.yaml"
+    yaml_file.write_text(
+        textwrap.dedent(f"""\
+        supervision:
+          name: root
+          children:
+            - type: topology_server
+              name: topo
+              config:
+                attach_to: api_gw
+            - type: http_gateway
+              name: api_gw
+              config:
+                host: 127.0.0.1
+                port: {port}
+                topology_agent: topo
+        """)
+    )
+    rt = Runtime.from_config(yaml_file)
+    # The topology_server built only a TopologyAgent (no dedicated gateway); the
+    # http_gateway is the single ingress.
+    from civitas.gateway import HTTPGateway as _GW
+    from civitas.topology_server import TopologyAgent as _TA
+
+    agents = rt.all_agents()
+    assert sum(isinstance(a, _TA) for a in agents) == 1
+    assert sum(isinstance(a, _GW) for a in agents) == 1  # only the user's gateway
+
+    await rt.start()
+    try:
+        await _wait_listening(port)
+        assert await _http_get(port, "/health") == 200
+        data = await _get_with_body(port, "/topology")
+        assert json.loads(data)["name"] == "root"  # served by the attached gateway
+    finally:
+        await rt.stop()
+
+
+@pytest.mark.asyncio
+async def test_processes_reports_deployment_shape_and_container_hint() -> None:
+    """v0.9.6: /processes exposes an explicit deployment shape (transport/mode)
+    and a per-process container hint -- read-only reporting so a client no
+    longer has to INFER single-vs-multi-process from row counts. Asserts the
+    SHAPE, not the container value (which differs host vs Docker CI)."""
+    port = _free_port()
+    topo = TopologyAgent("topo")
+    gw = HTTPGateway(
+        "topo_gateway",
+        GatewayConfig(host="127.0.0.1", port=port, topology_agent="topo"),
+    )
+    rt = Runtime(supervisor=Supervisor("root", children=[topo, gw]))
+    await rt.start()
+    try:
+        await _wait_listening(port)
+        data = json.loads(await _get_with_body(port, "/processes"))
+        # Explicit deployment shape: this is an in_process runtime -> single.
+        assert data["deployment"] == {"transport": "in_process", "mode": "single_process"}
+        # The runtime's own row carries a container hint (shape, not value).
+        runtime_row = next(p for p in data["processes"] if p["kind"] == "runtime")
+        assert set(runtime_row["container"]) == {"containerized", "orchestrator"}
+        assert isinstance(runtime_row["container"]["containerized"], bool)
     finally:
         await rt.stop()
