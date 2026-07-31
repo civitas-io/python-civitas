@@ -27,8 +27,20 @@ class DashboardConnectionError(Exception):
     """
 
 
-async def fetch_json(host: str, port: int, path: str, timeout: float = 3.0) -> tuple[int, Any]:
+async def fetch_json(
+    host: str,
+    port: int,
+    path: str,
+    timeout: float = 3.0,
+    headers: dict[str, str] | None = None,
+) -> tuple[int, Any]:
     """GET ``path`` from ``host:port`` and return ``(status_code, parsed_json)``.
+
+    ``headers`` (v0.9.6) are extra request headers -- the mechanism by which the
+    dashboard authenticates to an endpoint protected by the control-plane auth
+    seam (e.g. ``{"Authorization": "Bearer <jwt>"}`` or ``{"X-API-Key": "..."}``).
+    civitas privileges no scheme; whatever the operator's middleware expects goes
+    here verbatim.
 
     Raises :class:`DashboardConnectionError` for anything that means "this endpoint
     is not answering right now" (connection refused, timeout, malformed response) —
@@ -43,7 +55,10 @@ async def fetch_json(host: str, port: int, path: str, timeout: float = 3.0) -> t
         raise DashboardConnectionError(f"cannot connect to {host}:{port}: {exc}") from exc
 
     try:
-        request = f"GET {path} HTTP/1.1\r\nHost: {host}:{port}\r\nConnection: close\r\n\r\n"
+        lines = [f"GET {path} HTTP/1.1", f"Host: {host}:{port}", "Connection: close"]
+        for name, value in (headers or {}).items():
+            lines.append(f"{name}: {value}")
+        request = "\r\n".join(lines) + "\r\n\r\n"
         writer.write(request.encode())
         await writer.drain()
 

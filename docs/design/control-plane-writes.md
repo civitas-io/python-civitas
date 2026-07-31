@@ -129,5 +129,14 @@ network controls.
   already lets them attach different middleware per route).
 - kill / force-restart, mailbox introspection/inject (later v0.9.6 items, built on this same
   principal→audit binding once suspend/resume proves it).
-- The dashboard client sending auth headers (D7 from the merge — needed for the TUI to *drive*
-  these writes against an auth-protected endpoint; tracked, separable from the server-side seam).
+- kill / force-restart, mailbox introspection/inject (later v0.9.6 items).
+
+## 7. D7 — dashboard client sends auth headers (DONE, v0.9.6 slice 2)
+
+The server-side seam made endpoints *able* to require auth; D7 makes civitas's own TUI/CLI able to
+*attach* to one. `fetch_json()` gained a `headers` param; `ClusterTarget`/`ClusterView`/
+`CivitasDashboardApp` thread per-cluster headers through every poll; `civitas dashboard` and
+`civitas topology show` gained a repeatable `--header 'Name: Value'` flag (scheme-agnostic —
+`Authorization: Bearer ...`, `X-API-Key: ...`, or any custom header the operator's middleware
+expects). Verified end-to-end: `fetch_json` against an API-key-protected endpoint returns 401
+without the header, 200 with it.

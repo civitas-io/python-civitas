@@ -264,7 +264,7 @@ room for real Prometheus text-format exposition at the standard `/metrics` scrap
 [observability.md](observability.md#prometheus-metrics-v0931).)
 
 ```bash
-civitas dashboard <topology.yaml> [<topology2.yaml> ...] [--refresh <seconds>]
+civitas dashboard <topology.yaml> [<topology2.yaml> ...] [--refresh <seconds>] [--header 'Name: Value']
 ```
 
 **v0.9.4: multiple topologies.** Given more than one topology file, each gets its own tab
@@ -276,6 +276,7 @@ A single topology (the common case) looks exactly as it always has — no tab ba
 |-------------------|---------|-------------|
 | `topologies` | — | Path(s) to one or more topology YAML files (required, variadic). Each must declare a `topology_server` node. |
 | `--refresh` / `-r` | `1.0` | Poll interval in seconds |
+| `--header` / `-H` | `[]` | Auth header to send on every poll, `'Name: Value'` (repeatable), applied to every topology. Use it to attach to an endpoint behind the control-plane auth seam — e.g. `-H 'Authorization: Bearer <token>'` or `-H 'X-API-Key: <key>'`. civitas privileges no scheme (v0.9.6). |
 
 Requires the `dashboard` extra:
 

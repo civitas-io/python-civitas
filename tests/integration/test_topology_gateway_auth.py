@@ -317,3 +317,33 @@ async def test_resume_write_action_records_principal_as_approver() -> None:
         assert resume_events[-1]["details"]["approver"] == "alice"
     finally:
         await rt.stop()
+
+
+@pytest.mark.asyncio
+async def test_dashboard_client_authenticates_with_headers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """v0.9.6 (D7): the dashboard's own polling client (fetch_json) can attach
+    to an auth-protected endpoint by sending headers -- without them it gets
+    401, with the right one it gets 200. This is what lets civitas dashboard/top
+    drive the endpoints the control-plane auth seam now protects.
+    """
+    from civitas.dashboard.client import fetch_json
+
+    monkeypatch.setattr(settings, "gateway_api_key", SecretStr("secret-123"))
+    port = _free_port()
+    rt = Runtime.from_config(_topology_yaml(tmp_path, port, with_auth=True))
+    await rt.start()
+    try:
+        await _wait_listening(port)
+        # No header -> 401 (fetch_json returns the status, doesn't raise on 401).
+        status, _ = await fetch_json("127.0.0.1", port, "/topology")
+        assert status == 401
+        # Correct header -> 200.
+        status, data = await fetch_json(
+            "127.0.0.1", port, "/topology", headers={"X-API-Key": "secret-123"}
+        )
+        assert status == 200
+        assert data["name"] == "root"
+    finally:
+        await rt.stop()

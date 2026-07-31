@@ -35,7 +35,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from textual import work
@@ -60,11 +60,13 @@ _CSS_PATH = "app.tcss"
 @dataclass(frozen=True)
 class ClusterTarget:
     """One topology to attach to — a label (shown on its tab in multi-cluster
-    mode; irrelevant in single-cluster mode) plus its TopologyServer address."""
+    mode; irrelevant in single-cluster mode) plus its introspection-endpoint
+    address and, v0.9.6, the auth headers to send to it (empty = no auth)."""
 
     label: str
     host: str
     port: int
+    headers: dict[str, str] = field(default_factory=dict)
 
 
 class ClusterView(Vertical):
@@ -77,11 +79,16 @@ class ClusterView(Vertical):
 
     BINDINGS = [("f", "toggle_focus", "Focus detail")]
 
-    def __init__(self, host: str, port: int, refresh: float) -> None:
+    def __init__(
+        self, host: str, port: int, refresh: float, headers: dict[str, str] | None = None
+    ) -> None:
         super().__init__()
         self._host = host
         self._port = port
         self._refresh = refresh
+        # v0.9.6: auth headers sent on every poll, so the dashboard can attach
+        # to an endpoint behind the control-plane auth seam. Empty = no auth.
+        self._headers = headers or {}
 
         # Latest snapshot from each endpoint, updated independently by each
         # poll worker below. None means "never successfully fetched yet."
@@ -251,7 +258,9 @@ class ClusterView(Vertical):
 
         while True:
             try:
-                _status, data = await fetch_json(self._host, self._port, path)
+                _status, data = await fetch_json(
+                    self._host, self._port, path, headers=self._headers
+                )
                 self._mark_ok(path)
                 yield data
             except DashboardConnectionError:
@@ -275,14 +284,19 @@ class CivitasDashboardApp(App[None]):
         *,
         host: str = "127.0.0.1",
         port: int = 6789,
+        headers: dict[str, str] | None = None,
     ) -> None:
-        """``clusters`` is the v0.9.4 multi-topology API. ``host``/``port``
-        are kept as a backward-compatible single-cluster convenience (the
-        v0.9.1-v0.9.3 constructor shape) — used only when ``clusters`` is
+        """``clusters`` is the v0.9.4 multi-topology API. ``host``/``port``/
+        ``headers`` are kept as a backward-compatible single-cluster convenience
+        (the v0.9.1-v0.9.3 constructor shape) — used only when ``clusters`` is
         not given, so no existing direct-construction call site breaks.
+        ``headers`` (v0.9.6) auth the single-cluster case; multi-cluster carries
+        per-cluster headers on each ClusterTarget.
         """
         super().__init__()
-        self._clusters = clusters or [ClusterTarget(label="default", host=host, port=port)]
+        self._clusters = clusters or [
+            ClusterTarget(label="default", host=host, port=port, headers=headers or {})
+        ]
         self._refresh = refresh
 
     def compose(self) -> ComposeResult:
@@ -292,12 +306,14 @@ class CivitasDashboardApp(App[None]):
             # topology — the common case shouldn't carry multi-cluster UI
             # chrome it has no use for.
             cluster = self._clusters[0]
-            yield ClusterView(cluster.host, cluster.port, self._refresh)
+            yield ClusterView(cluster.host, cluster.port, self._refresh, cluster.headers)
         else:
             with TabbedContent():
                 for cluster in self._clusters:
                     with TabPane(cluster.label, id=f"cluster-{cluster.label}"):
-                        yield ClusterView(cluster.host, cluster.port, self._refresh)
+                        yield ClusterView(
+                            cluster.host, cluster.port, self._refresh, cluster.headers
+                        )
         yield Footer()
 
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
