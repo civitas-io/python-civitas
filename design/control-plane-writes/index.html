@@ -10,13 +10,9 @@
       
       
       
-        <link rel="canonical" href="https://civitas-io.github.io/python-civitas/api/messages/">
+        <link rel="canonical" href="https://civitas-io.github.io/python-civitas/design/control-plane-writes/">
       
       
-        <link rel="prev" href="../runtime/">
-      
-      
-        <link rel="next" href="../bus/">
       
       
         
@@ -27,7 +23,7 @@
     
     
       
-        <title>Message - civitas</title>
+        <title>Control-plane write actions + the AuthNZ integration seam — design (v0.9.6) - civitas</title>
       
     
     
@@ -90,7 +86,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#message" class="md-skip">
+        <a href="#control-plane-write-actions-the-authnz-integration-seam-design-v096" class="md-skip">
           Skip to content
         </a>
       
@@ -126,7 +122,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Message
+              Control-plane write actions + the AuthNZ integration seam — design (v0.9.6)
             
           </span>
         </div>
@@ -332,12 +328,10 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
+      <li class="md-tabs__item">
         <a href="../../architecture/" class="md-tabs__link">
           
   
@@ -379,7 +373,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../design/mcp-integration/" class="md-tabs__link">
+        <a href="../mcp-integration/" class="md-tabs__link">
           
   
   
@@ -1266,10 +1260,8 @@
       
   
   
-    
   
   
-  
     
     
       
@@ -1283,22 +1275,21 @@
     
     
       
-        
-        
-      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
             
   
   
@@ -1316,7 +1307,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1387,10 +1378,8 @@
                 
   
   
-    
   
   
-  
     
     
       
@@ -1417,21 +1406,20 @@
     
       
       
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
         
           
-          
         
-      
-    
-    
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_3" checked>
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6_3" >
         
           
-          <label class="md-nav__link" for="__nav_6_3" id="__nav_6_3_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6_3" id="__nav_6_3_label" tabindex="0">
             
   
   
@@ -1449,7 +1437,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_3_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_3_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_6_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1467,7 +1455,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../process/" class="md-nav__link">
+      <a href="../../api/process/" class="md-nav__link">
         
   
   
@@ -1495,7 +1483,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../genserver/" class="md-nav__link">
+      <a href="../../api/genserver/" class="md-nav__link">
         
   
   
@@ -1523,7 +1511,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../supervisor/" class="md-nav__link">
+      <a href="../../api/supervisor/" class="md-nav__link">
         
   
   
@@ -1551,7 +1539,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../runtime/" class="md-nav__link">
+      <a href="../../api/runtime/" class="md-nav__link">
         
   
   
@@ -1576,37 +1564,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Message
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../api/messages/" class="md-nav__link">
         
   
   
@@ -1622,87 +1583,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#civitas.messages.Message" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Message
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label=" Message">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#civitas.messages.Message.to_dict" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;to_dict
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#civitas.messages.Message.from_dict" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;from_dict
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#system-message-types" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        System message types
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#civitas.messages.SYSTEM_MESSAGE_TYPES" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;SYSTEM_MESSAGE_TYPES
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1715,7 +1595,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../bus/" class="md-nav__link">
+      <a href="../../api/bus/" class="md-nav__link">
         
   
   
@@ -1743,7 +1623,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../transport/" class="md-nav__link">
+      <a href="../../api/transport/" class="md-nav__link">
         
   
   
@@ -1771,7 +1651,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../observability/" class="md-nav__link">
+      <a href="../../api/observability/" class="md-nav__link">
         
   
   
@@ -1799,7 +1679,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plugins/" class="md-nav__link">
+      <a href="../../api/plugins/" class="md-nav__link">
         
   
   
@@ -1933,7 +1813,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/mcp-integration/" class="md-nav__link">
+      <a href="../mcp-integration/" class="md-nav__link">
         
   
   
@@ -1961,7 +1841,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/genserver/" class="md-nav__link">
+      <a href="../genserver/" class="md-nav__link">
         
   
   
@@ -1989,7 +1869,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/http-gateway/" class="md-nav__link">
+      <a href="../http-gateway/" class="md-nav__link">
         
   
   
@@ -2017,7 +1897,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/gateway-api-surface/" class="md-nav__link">
+      <a href="../gateway-api-surface/" class="md-nav__link">
         
   
   
@@ -2192,22 +2072,44 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#civitas.messages.Message" class="md-nav__link">
+  <a href="#1-the-decision-that-shapes-everything-civitas-ships-mechanism-not-policy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Message
+        1. The decision that shapes everything: civitas ships mechanism, not policy
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label=" Message">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-what-already-exists-verified-not-assumed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. What already exists (verified, not assumed)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-the-three-things-civitas-needs-to-add-the-minimal-ground" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. The three things civitas needs to add (the minimal ground)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. The three things civitas needs to add (the minimal ground)">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#civitas.messages.Message.to_dict" class="md-nav__link">
+  <a href="#d1-convention-middleware-sets-requestauthprincipal-a-dict-resolved" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;to_dict
+        D1 — Convention: middleware sets request.auth["principal"] (a dict) — RESOLVED
       
     </span>
   </a>
@@ -2215,10 +2117,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#civitas.messages.Message.from_dict" class="md-nav__link">
+  <a href="#d2-the-honest-audit-binding-the-one-real-new-wire" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;from_dict
+        D2 — The honest audit binding (the one real new wire)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d3-safe-zero-config-default-for-the-single-dev" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D3 — Safe zero-config default for the single dev
       
     </span>
   </a>
@@ -2231,10 +2144,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#system-message-types" class="md-nav__link">
+  <a href="#4-first-slice-suspend-resume-as-post-routes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        System message types
+        4. First slice: suspend / resume as POST routes
       
     </span>
   </a>
@@ -2242,10 +2155,65 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#civitas.messages.SYSTEM_MESSAGE_TYPES" class="md-nav__link">
+  <a href="#5-open-details-resolved-2026-07-31-review" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;SYSTEM_MESSAGE_TYPES
+        5. Open details — RESOLVED (2026-07-31 review)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-explicitly-not-in-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Explicitly NOT in scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-d7-dashboard-client-sends-auth-headers-done-v096-slice-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. D7 — dashboard client sends auth headers (DONE, v0.9.6 slice 2)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-remaining-write-actions-done-v096-slices-3-4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Remaining write actions (DONE, v0.9.6 slices 3-4)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-deployment-shape-reporting-done-v096-slice-6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Deployment-shape reporting (DONE, v0.9.6 slice 6)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-investigated-and-declined" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Investigated and declined
       
     </span>
   </a>
@@ -2272,190 +2240,188 @@
   
 
 
-<h1 id="message">Message<a class="headerlink" href="#message" title="Permanent link">&para;</a></h1>
-<p>The standard message envelope passed between agents and through the runtime.</p>
-<p>See <a href="../../messaging/">Messaging</a> for routing semantics and payload rules.</p>
-<hr />
-
-
-<div class="doc doc-object doc-class">
-
-
-
-<h2 id="civitas.messages.Message" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">civitas</span><span class="o">.</span><span class="n">messages</span><span class="o">.</span><span class="n">Message</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="n">_uuid7</span><span class="p">(),</span> <span class="nb">type</span><span class="o">=</span><span class="s1">&#39;message&#39;</span><span class="p">,</span> <span class="n">sender</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">recipient</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">correlation_id</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">reply_to</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">payload</span><span class="o">=</span><span class="nb">dict</span><span class="p">(),</span> <span class="n">timestamp</span><span class="o">=</span><span class="n">_now</span><span class="p">(),</span> <span class="n">trace_id</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">span_id</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">parent_span_id</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">attempt</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">ttl</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">seq</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
-
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
-  </span>
-
-<a href="#civitas.messages.Message" class="headerlink" title="Permanent link">&para;</a></h2>
-
-
-    <div class="doc doc-contents first">
-
-
-
-        <p>Standard message envelope for all inter-agent communication.</p>
-<p>Every message in Civitas is wrapped in this envelope. The envelope carries
-routing and observability metadata. The payload carries application data.</p>
-
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="civitas.messages.Message.to_dict" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">to_dict</span><span class="p">()</span></code>
-
-<a href="#civitas.messages.Message.to_dict" class="headerlink" title="Permanent link">&para;</a></h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Convert to a plain dict for serialization.</p>
-<p>Includes <code>schema_version</code> so receivers can detect and handle schema
-evolution. Unknown keys in received dicts are filtered by <code>from_dict</code>.</p>
-
-
-            <details class="mkdocstrings-source">
-              <summary>Source code in <code>civitas/messages.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-89"> 89</a></span>
-<span class="normal"><a href="#__codelineno-0-90"> 90</a></span>
-<span class="normal"><a href="#__codelineno-0-91"> 91</a></span>
-<span class="normal"><a href="#__codelineno-0-92"> 92</a></span>
-<span class="normal"><a href="#__codelineno-0-93"> 93</a></span>
-<span class="normal"><a href="#__codelineno-0-94"> 94</a></span>
-<span class="normal"><a href="#__codelineno-0-95"> 95</a></span>
-<span class="normal"><a href="#__codelineno-0-96"> 96</a></span>
-<span class="normal"><a href="#__codelineno-0-97"> 97</a></span>
-<span class="normal"><a href="#__codelineno-0-98"> 98</a></span>
-<span class="normal"><a href="#__codelineno-0-99"> 99</a></span>
-<span class="normal"><a href="#__codelineno-0-100">100</a></span>
-<span class="normal"><a href="#__codelineno-0-101">101</a></span>
-<span class="normal"><a href="#__codelineno-0-102">102</a></span>
-<span class="normal"><a href="#__codelineno-0-103">103</a></span>
-<span class="normal"><a href="#__codelineno-0-104">104</a></span>
-<span class="normal"><a href="#__codelineno-0-105">105</a></span>
-<span class="normal"><a href="#__codelineno-0-106">106</a></span>
-<span class="normal"><a href="#__codelineno-0-107">107</a></span>
-<span class="normal"><a href="#__codelineno-0-108">108</a></span>
-<span class="normal"><a href="#__codelineno-0-109">109</a></span>
-<span class="normal"><a href="#__codelineno-0-110">110</a></span>
-<span class="normal"><a href="#__codelineno-0-111">111</a></span>
-<span class="normal"><a href="#__codelineno-0-112">112</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-89"><a id="__codelineno-0-89" name="__codelineno-0-89"></a><span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
-</span><span id="__span-0-90"><a id="__codelineno-0-90" name="__codelineno-0-90"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert to a plain dict for serialization.</span>
-</span><span id="__span-0-91"><a id="__codelineno-0-91" name="__codelineno-0-91"></a>
-</span><span id="__span-0-92"><a id="__codelineno-0-92" name="__codelineno-0-92"></a><span class="sd">    Includes ``schema_version`` so receivers can detect and handle schema</span>
-</span><span id="__span-0-93"><a id="__codelineno-0-93" name="__codelineno-0-93"></a><span class="sd">    evolution. Unknown keys in received dicts are filtered by ``from_dict``.</span>
-</span><span id="__span-0-94"><a id="__codelineno-0-94" name="__codelineno-0-94"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-95"><a id="__codelineno-0-95" name="__codelineno-0-95"></a>    <span class="k">return</span> <span class="p">{</span>
-</span><span id="__span-0-96"><a id="__codelineno-0-96" name="__codelineno-0-96"></a>        <span class="s2">&quot;schema_version&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
-</span><span id="__span-0-97"><a id="__codelineno-0-97" name="__codelineno-0-97"></a>        <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
-</span><span id="__span-0-98"><a id="__codelineno-0-98" name="__codelineno-0-98"></a>        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">type</span><span class="p">,</span>
-</span><span id="__span-0-99"><a id="__codelineno-0-99" name="__codelineno-0-99"></a>        <span class="s2">&quot;sender&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">sender</span><span class="p">,</span>
-</span><span id="__span-0-100"><a id="__codelineno-0-100" name="__codelineno-0-100"></a>        <span class="s2">&quot;recipient&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">recipient</span><span class="p">,</span>
-</span><span id="__span-0-101"><a id="__codelineno-0-101" name="__codelineno-0-101"></a>        <span class="s2">&quot;correlation_id&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">correlation_id</span><span class="p">,</span>
-</span><span id="__span-0-102"><a id="__codelineno-0-102" name="__codelineno-0-102"></a>        <span class="s2">&quot;reply_to&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">reply_to</span><span class="p">,</span>
-</span><span id="__span-0-103"><a id="__codelineno-0-103" name="__codelineno-0-103"></a>        <span class="s2">&quot;payload&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">payload</span><span class="p">,</span>
-</span><span id="__span-0-104"><a id="__codelineno-0-104" name="__codelineno-0-104"></a>        <span class="s2">&quot;timestamp&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span><span class="p">,</span>
-</span><span id="__span-0-105"><a id="__codelineno-0-105" name="__codelineno-0-105"></a>        <span class="s2">&quot;trace_id&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">trace_id</span><span class="p">,</span>
-</span><span id="__span-0-106"><a id="__codelineno-0-106" name="__codelineno-0-106"></a>        <span class="s2">&quot;span_id&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">span_id</span><span class="p">,</span>
-</span><span id="__span-0-107"><a id="__codelineno-0-107" name="__codelineno-0-107"></a>        <span class="s2">&quot;parent_span_id&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">parent_span_id</span><span class="p">,</span>
-</span><span id="__span-0-108"><a id="__codelineno-0-108" name="__codelineno-0-108"></a>        <span class="s2">&quot;attempt&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">attempt</span><span class="p">,</span>
-</span><span id="__span-0-109"><a id="__codelineno-0-109" name="__codelineno-0-109"></a>        <span class="s2">&quot;priority&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">priority</span><span class="p">,</span>
-</span><span id="__span-0-110"><a id="__codelineno-0-110" name="__codelineno-0-110"></a>        <span class="s2">&quot;ttl&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">ttl</span><span class="p">,</span>
-</span><span id="__span-0-111"><a id="__codelineno-0-111" name="__codelineno-0-111"></a>        <span class="s2">&quot;seq&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">seq</span><span class="p">,</span>
-</span><span id="__span-0-112"><a id="__codelineno-0-112" name="__codelineno-0-112"></a>    <span class="p">}</span>
-</span></code></pre></div></td></tr></table></div>
-            </details>
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="civitas.messages.Message.from_dict" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">from_dict</span><span class="p">(</span><span class="n">data</span><span class="p">)</span></code>
-
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
-  </span>
-
-<a href="#civitas.messages.Message.from_dict" class="headerlink" title="Permanent link">&para;</a></h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Reconstruct a Message from a plain dict.</p>
-
-
-            <details class="mkdocstrings-source">
-              <summary>Source code in <code>civitas/messages.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-114">114</a></span>
-<span class="normal"><a href="#__codelineno-0-115">115</a></span>
-<span class="normal"><a href="#__codelineno-0-116">116</a></span>
-<span class="normal"><a href="#__codelineno-0-117">117</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-114"><a id="__codelineno-0-114" name="__codelineno-0-114"></a><span class="nd">@classmethod</span>
-</span><span id="__span-0-115"><a id="__codelineno-0-115" name="__codelineno-0-115"></a><span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Message</span><span class="p">:</span>
-</span><span id="__span-0-116"><a id="__codelineno-0-116" name="__codelineno-0-116"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Reconstruct a Message from a plain dict.&quot;&quot;&quot;</span>
-</span><span id="__span-0-117"><a id="__codelineno-0-117" name="__codelineno-0-117"></a>    <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="o">**</span><span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">_MESSAGE_FIELDS</span><span class="p">})</span>
-</span></code></pre></div></td></tr></table></div>
-            </details>
-    </div>
-
-</div>
-
-
-
-  </div>
-
-    </div>
-
-</div><hr />
-<h2 id="system-message-types">System message types<a class="headerlink" href="#system-message-types" title="Permanent link">&para;</a></h2>
-<p>Messages with types prefixed <code>_agency.</code> are reserved for runtime internals.
-Application code must not use this prefix.</p>
-
-
-<div class="doc doc-object doc-attribute">
-
-
-
-<h2 id="civitas.messages.SYSTEM_MESSAGE_TYPES" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">civitas</span><span class="o">.</span><span class="n">messages</span><span class="o">.</span><span class="n">SYSTEM_MESSAGE_TYPES</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span><span class="s1">&#39;_agency.heartbeat&#39;</span><span class="p">,</span> <span class="s1">&#39;_agency.heartbeat_ack&#39;</span><span class="p">,</span> <span class="s1">&#39;_agency.health_probe&#39;</span><span class="p">,</span> <span class="s1">&#39;_agency.health_ack&#39;</span><span class="p">,</span> <span class="s1">&#39;_agency.shutdown&#39;</span><span class="p">,</span> <span class="s1">&#39;_agency.restart&#39;</span><span class="p">,</span> <span class="s1">&#39;_agency.register&#39;</span><span class="p">,</span> <span class="s1">&#39;_agency.deregister&#39;</span><span class="p">,</span> <span class="s1">&#39;_agency.suspend&#39;</span><span class="p">,</span> <span class="s1">&#39;_agency.resume&#39;</span><span class="p">,</span> <span class="s1">&#39;_agency.force_restart&#39;</span><span class="p">,</span> <span class="s1">&#39;_agency.child_crashed&#39;</span><span class="p">})</span></code>
-
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-module-attribute"><code>module-attribute</code></small>
-  </span>
-
-<a href="#civitas.messages.SYSTEM_MESSAGE_TYPES" class="headerlink" title="Permanent link">&para;</a></h2>
-
-
-    <div class="doc doc-contents first">
-
-    </div>
-
-</div>
+<h1 id="control-plane-write-actions-the-authnz-integration-seam-design-v096">Control-plane write actions + the AuthNZ integration seam — design (v0.9.6)<a class="headerlink" href="#control-plane-write-actions-the-authnz-integration-seam-design-v096" title="Permanent link">&para;</a></h1>
+<p><strong>Status: design draft, not yet implemented.</strong> First write-action slice for the dashboard
+control-plane, building on v0.9.5's TopologyServer/HTTPGateway merge
+(<a href="../topology-gateway-merge/"><code>topology-gateway-merge.md</code></a>). Design-first per repo convention
+(control-plane mutation).</p>
+<h2 id="1-the-decision-that-shapes-everything-civitas-ships-mechanism-not-policy">1. The decision that shapes everything: civitas ships mechanism, not policy<a class="headerlink" href="#1-the-decision-that-shapes-everything-civitas-ships-mechanism-not-policy" title="Permanent link">&para;</a></h2>
+<p><strong>civitas will not build AuthZ.</strong> No roles, no scopes, no SCIM connector, no IdP integration.
+Customers already have their own AuthN/AuthZ (SCIM, IdPs, OPA, …); civitas's job is to provide a
+clean <strong>seam</strong> to plug those in, an <strong>honest audit binding</strong> so the authenticated identity (not a
+spoofable client field) is what gets recorded, and a <strong>safe zero-config default</strong> so a single dev
+can run with no ceremony at all.</p>
+<p>Same "mechanism, not policy" split already applied to Presidium (civitas ships the <code>suspend</code>
+primitive; Presidium owns the HITL policy) and to <code>SuspendCategory</code> (civitas ships the structured
+category; the caller owns what to send).</p>
+<blockquote>
+<p><strong>The model in one line:</strong> civitas ships the middleware <strong>seam</strong>, a <strong>principal</strong> convention, an
+honest <strong>audit binding</strong>, and a <strong>safe localhost default</strong>. The customer brings their middleware
+(= their AuthN <em>and</em> AuthZ). A single dev brings nothing.</p>
+</blockquote>
+<h2 id="2-what-already-exists-verified-not-assumed">2. What already exists (verified, not assumed)<a class="headerlink" href="#2-what-already-exists-verified-not-assumed" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>The seam is <code>HTTPGateway</code>'s middleware chain.</strong> A middleware is <code>async (request, next) -&gt;
+  response</code>. It authenticates against whatever the customer runs, decides allow/deny (returns 403
+  itself on deny — <em>that is their AuthZ; civitas never sees a role or scope</em>), and on allow calls
+  <code>next()</code>. civitas runs whatever middleware a route carries. Per-route middleware already works
+  (v0.9.5 phase 3), so write routes can carry stricter middleware than read routes purely by the
+  customer's configuration — civitas models no tiers itself.</li>
+<li><strong><code>GatewayRequest.auth: dict[str, Any] | None</code></strong> already exists, built for exactly this
+  ("verified identity from auth middleware; never merged into the dispatched payload to avoid
+  reserved-key collisions").</li>
+<li><strong><code>require_jwt</code> already populates it</strong>: <code>request.auth = {**(request.auth or {}), "claims":
+  claims}</code>. <strong><code>require_api_key</code> does not</strong> (a shared secret has no per-user identity).</li>
+<li><strong><code>suspend</code>/<code>resume</code> already exist and are already audited</strong> (<code>_agency.suspend</code>/<code>_agency.resume</code>
+  priority messages; <code>resume</code> carries an <code>approver</code> recorded in the <code>agent.resume</code> AuditEvent;
+  <code>suspend</code> records <code>reason</code>/<code>category</code>). <code>Runtime.suspend()</code>/<code>resume()</code> just <code>self._bus.route(...)</code>
+  those messages — and <code>TopologyAgent</code> already holds <code>self._bus</code>.</li>
+</ul>
+<p>So the write action is mostly <strong>wiring existing pieces</strong>; the genuinely new part is the principal
+→ audit binding and the safe default.</p>
+<h2 id="3-the-three-things-civitas-needs-to-add-the-minimal-ground">3. The three things civitas needs to add (the minimal ground)<a class="headerlink" href="#3-the-three-things-civitas-needs-to-add-the-minimal-ground" title="Permanent link">&para;</a></h2>
+<h3 id="d1-convention-middleware-sets-requestauthprincipal-a-dict-resolved">D1 — Convention: middleware sets <code>request.auth["principal"]</code> (a dict) — RESOLVED<a class="headerlink" href="#d1-convention-middleware-sets-requestauthprincipal-a-dict-resolved" title="Permanent link">&para;</a></h3>
+<p>The entire contract civitas asks of an integrator: <em>tell me who this is.</em> A middleware that
+authenticates a caller sets <code>request.auth["principal"]</code> to a <strong>dict</strong> (chosen over a bare string
+for scalability — fields can be added without changing the contract) with one required key:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">request</span><span class="o">.</span><span class="n">auth</span><span class="p">[</span><span class="s2">&quot;principal&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="s2">&quot;alice&quot;</span><span class="p">,</span> <span class="s2">&quot;method&quot;</span><span class="p">:</span> <span class="s2">&quot;jwt&quot;</span><span class="p">}</span>  <span class="c1"># id required; anything else optional</span>
+</span></code></pre></div>
+<ul>
+<li><code>"id"</code> is the stable identity string (username, service-account id, cert DN — whatever is
+  meaningful in the customer's system). This is the only field civitas reads.</li>
+<li>
+<p>Middleware may add any sibling keys it likes (<code>method</code>, <code>email</code>, <code>groups</code>, …); civitas carries
+  them through untouched but does not interpret them (that would be AuthZ).</p>
+</li>
+<li>
+<p><code>require_jwt</code> will set <code>request.auth["principal"] = {"id": &lt;sub&gt;, "method": "jwt"}</code> (it already
+  has the claims in hand; <code>claims</code> stays alongside).</p>
+</li>
+<li><code>require_api_key</code> stays principal-less (a shared secret identifies no person) — a request
+  authenticated only by API key has no <code>principal</code>, and falls to the default (D3).</li>
+<li>A customer's SCIM/OPA/IdP middleware sets <code>principal</code> from their verified user. <strong>That is the
+  whole integration.</strong></li>
+</ul>
+<h3 id="d2-the-honest-audit-binding-the-one-real-new-wire">D2 — The honest audit binding (the one real new wire)<a class="headerlink" href="#d2-the-honest-audit-binding-the-one-real-new-wire" title="Permanent link">&para;</a></h3>
+<p>Today the dispatched message payload is <code>{**body, **path_params, **payload_extra}</code> — <code>request.auth</code>
+is deliberately excluded. A write route must carry the authenticated principal into the
+<code>_agency.suspend</code>/<code>_agency.resume</code> message → the <code>AuditEvent</code>, under a <strong>reserved key the client
+cannot set</strong> (never a body field — that is trivially spoofable: <code>{"approver": "whoever_i_say"}</code>).</p>
+<p>Concretely: the ASGI dispatch path injects <code>request.auth</code>'s principal <strong>dict</strong> into the dispatched
+payload under a reserved key <code>__principal__</code>, the same way <code>payload_extra</code> injects <code>__op__</code> — merged
+<strong>last</strong> so a client body value can't override it. <code>TopologyAgent</code>'s write handler reads
+<code>__principal__</code> (never <code>body</code>), takes <code>principal["id"]</code> as the scalar recorded value, and uses it as
+the <code>approver</code> (resume) / <code>initiated_by</code> (suspend) field in the message that becomes the
+AuditEvent. The whole principal dict is threaded through so future write actions can use richer
+fields without re-plumbing; v1 records the <code>id</code> string.</p>
+<p><strong>This is the crux of the whole feature.</strong> "alice suspended agent X" is only true if "alice" came
+from the authenticated identity. Get this wrong and the audit trail is fiction. It works with
+<em>any</em> auth middleware — first-party or a customer's — because civitas only ever reads
+<code>request.auth["principal"]</code>, never interprets <em>how</em> the middleware decided it.</p>
+<h3 id="d3-safe-zero-config-default-for-the-single-dev">D3 — Safe zero-config default for the single dev<a class="headerlink" href="#d3-safe-zero-config-default-for-the-single-dev" title="Permanent link">&para;</a></h3>
+<p>No auth middleware configured → write routes still work, and the principal defaults to a documented
+honest value: <strong><code>{"id": "unauthenticated"}</code></strong> (RESOLVED — chosen over <code>"local"</code>/<code>"anonymous"</code> as
+the most honest label in an audit log). The <strong>network boundary is the security control</strong>: the
+introspection gateway already default-binds <code>127.0.0.1</code>. A single dev on localhost gets
+suspend/resume with zero ceremony; the audit log honestly reads <code>approver: "local"</code>.</p>
+<p>The one guardrail civitas adds: <strong>a loud startup warning</strong> (not a block — matching the gateway's
+existing footgun-warning pattern, e.g. core.py's WS-mTLS warning) when <strong>write routes are served on
+a non-localhost bind with no auth middleware</strong>. civitas refuses to be <em>silently</em> dangerous, but
+does not impose policy on a deployment that genuinely wants an open control plane behind its own
+network controls.</p>
+<h2 id="4-first-slice-suspend-resume-as-post-routes">4. First slice: suspend / resume as POST routes<a class="headerlink" href="#4-first-slice-suspend-resume-as-post-routes" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>POST /agents/{name}/suspend</code> — body optional <code>{"reason": "...", "category": "..."}</code>; principal
+  from <code>__principal__</code> recorded as the actor. Sends <code>_agency.suspend</code>.</li>
+<li><code>POST /agents/{name}/resume</code> — principal from <code>__principal__</code> becomes the required <code>approver</code>.
+  Sends <code>_agency.resume</code>. (Note: <code>resume</code> <em>requires</em> a non-empty approver — with the <code>"local"</code>
+  default this is always satisfied; a customer middleware supplies the real one.)</li>
+<li>POST, never GET (GETs are logged/cached/prefetched/CSRF-prone; writes must be POST).</li>
+<li>Both are already idempotent-safe (redundant suspend/resume are safe no-ops).</li>
+<li>Auto-registered like the read routes (v0.9.5 D2), but POST and <strong>not</strong> <code>raw_response</code> (they
+  return a small JSON ack). They carry whatever <code>topology_middleware</code> the node configures — a
+  customer puts their auth middleware there; a single dev configures none.</li>
+</ul>
+<h2 id="5-open-details-resolved-2026-07-31-review">5. Open details — RESOLVED (2026-07-31 review)<a class="headerlink" href="#5-open-details-resolved-2026-07-31-review" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Default principal</strong> — <code>{"id": "unauthenticated"}</code> (chosen over <code>"local"</code>/<code>"anonymous"</code>).</li>
+<li><strong><code>request.auth["principal"]</code> shape</strong> — a <strong>dict</strong> (<code>{"id": ..., ...}</code>), for scalability;
+   civitas reads only <code>"id"</code>, carries the rest through untouched.</li>
+<li><strong>Suspend's actor field in the audit <code>details</code></strong> — <strong><code>initiated_by</code></strong> (resume keeps <code>approver</code>).</li>
+<li><strong>Warning scope</strong> — scoped to the topology write routes for this slice; a general
+   "unauthenticated write route" detector is a possible later addition, not built now.</li>
+</ol>
+<h2 id="6-explicitly-not-in-scope">6. Explicitly NOT in scope<a class="headerlink" href="#6-explicitly-not-in-scope" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Any AuthZ engine, role/scope model, SCIM connector, or IdP integration inside civitas.</li>
+<li>Per-route auth <em>tiering</em> logic in civitas (it's the customer middleware's job; the route table
+  already lets them attach different middleware per route).</li>
+</ul>
+<h2 id="7-d7-dashboard-client-sends-auth-headers-done-v096-slice-2">7. D7 — dashboard client sends auth headers (DONE, v0.9.6 slice 2)<a class="headerlink" href="#7-d7-dashboard-client-sends-auth-headers-done-v096-slice-2" title="Permanent link">&para;</a></h2>
+<p>The server-side seam made endpoints <em>able</em> to require auth; D7 makes civitas's own TUI/CLI able to
+<em>attach</em> to one. <code>fetch_json()</code> gained a <code>headers</code> param; <code>ClusterTarget</code>/<code>ClusterView</code>/
+<code>CivitasDashboardApp</code> thread per-cluster headers through every poll; <code>civitas dashboard</code> and
+<code>civitas topology show</code> gained a repeatable <code>--header 'Name: Value'</code> flag (scheme-agnostic —
+<code>Authorization: Bearer ...</code>, <code>X-API-Key: ...</code>, or any custom header the operator's middleware
+expects). Verified end-to-end: <code>fetch_json</code> against an API-key-protected endpoint returns 401
+without the header, 200 with it.</p>
+<h2 id="8-remaining-write-actions-done-v096-slices-3-4">8. Remaining write actions (DONE, v0.9.6 slices 3-4)<a class="headerlink" href="#8-remaining-write-actions-done-v096-slices-3-4" title="Permanent link">&para;</a></h2>
+<p>All built on the same principal→audit binding (D2), each a POST route auto-registered on the
+introspection gateway, gated by the node's <code>auth.middleware</code>:</p>
+<ul>
+<li><strong>Force-restart / kill</strong> (<code>POST /agents/{name}/restart</code>, §6 slice 3). The OTP-idiomatic "let it
+  crash": an <code>_agency.force_restart</code> message makes the agent raise out of its task; its supervisor
+  restarts it via the <em>same</em> crash path any crash uses (transient/permanent/restart-budget all
+  honored) — no bespoke restart machinery. Records <code>initiated_by</code> in an <code>agent.force_restart</code>
+  AuditEvent. Gated to controllable leaf agents (a Supervisor subtree-restart is deferred as too
+  blunt).</li>
+<li><strong>Mailbox introspection</strong> (<code>GET /agents/{name}/mailbox</code>, slice 4). New <code>Mailbox.peek()</code> — a
+  non-destructive snapshot (reads <code>asyncio.Queue</code>'s backing deque; <code>get()</code>/<code>drain()</code> consume).
+  Returns message <strong>metadata only</strong> (id/type/sender/priority/timestamp), never payloads (a
+  data-exposure guard). Same-process agents only for v1.</li>
+<li><strong>Mailbox inject</strong> (<code>POST /agents/{name}/mailbox</code>, slice 4). Injects an application message the
+  target handles; rejects reserved <code>_agency.</code>/<code>civitas.</code> prefixes (no privilege escalation);
+  audited (<code>mailbox.inject</code>) with <code>initiated_by</code> and the type, never the payload.</li>
+<li><strong><code>attach_to</code></strong> (D6c, slice 5). A <code>topology_server</code> node with <code>config: {attach_to: &lt;gw-name&gt;}</code>
+  builds only the <code>TopologyAgent</code>; a separately-declared <code>http_gateway</code> with
+  <code>config: {topology_agent: &lt;that name&gt;}</code> serves its routes on that gateway's own port — one
+  ingress, no dedicated internal gateway. Single-pass wiring, linked by name in YAML (no cross-node
+  mutation).</li>
+</ul>
+<h2 id="10-deployment-shape-reporting-done-v096-slice-6">10. Deployment-shape reporting (DONE, v0.9.6 slice 6)<a class="headerlink" href="#10-deployment-shape-reporting-done-v096-slice-6" title="Permanent link">&para;</a></h2>
+<p>Surfaced during review: a client couldn't actually <em>tell</em> whether a topology was single-process,
+multi-process, or containerized — single-vs-multi was only <em>inferable</em> from <code>/processes</code> row
+counts (fragile: a multi-process topology before any worker announced looked single-process), the
+transport type (the ground truth) wasn't exposed at all, and containerization was invisible. This
+is pure read-only <strong>reporting</strong> — categorically distinct from the container <em>management</em> declined
+below (observability, not orchestration).</p>
+<ul>
+<li><strong>Explicit deployment shape</strong>: <code>/processes</code> now returns
+  <code>{"deployment": {"transport": "in_process"|"zmq"|"nats", "mode":
+  "single_process"|"multi_process"|"distributed"}, "processes": [...]}</code>. Read from the live bus
+  transport — no new plumbing, no inference.</li>
+<li><strong>Per-process container hint</strong>: each <code>/processes</code> row gains
+  <code>container: {"containerized": bool, "orchestrator": "kubernetes"|"docker"|"containerd"|None}</code>
+  via cheap, dependency-free, cached heuristics (<code>KUBERNETES_SERVICE_HOST</code>, <code>/.dockerenv</code>,
+  <code>/proc/1/cgroup</code>). Lives in the shared <code>sample_process()</code> so BOTH the runtime self-sample and
+  each Worker's health-ack carry it. Cross-platform-safe (absent Linux files → <code>False</code>, never
+  raises).</li>
+</ul>
+<h2 id="9-investigated-and-declined">9. Investigated and declined<a class="headerlink" href="#9-investigated-and-declined" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Mailbox: remove one specific in-flight message.</strong> Mechanically feasible (a synchronous
+  drain-filter-refill is atomic within the single event loop), but declined for v1 — a deliberate
+  "no", not "blocked". It breaks the at-most-once/FIFO delivery guarantee and the sender's mental
+  model ("the bus accepted my message" → then it silently vanishes). The main real use case — a
+  poison-pill message wedging an agent — is already covered by <strong>force-restart</strong>, which drops the
+  whole (un-checkpointed) mailbox and restarts the agent fresh. Surgical single-message removal
+  buys only "drop <em>one</em> message, keep the rest," a narrow benefit that doesn't justify undermining
+  a core delivery guarantee. Revisit only if a concrete use case emerges that force-restart
+  genuinely can't serve.</li>
+<li><strong>Per-agent container awareness beyond <code>process_id</code></strong> (e.g. Docker) — recommended against during
+  the dashboard-v2 discussion (couples the runtime to a deployment concern better owned by
+  container-native tooling); unchanged, still not built.</li>
+</ul>
 
 
 

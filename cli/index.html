@@ -2870,7 +2870,7 @@ design). It attaches remotely over HTTP to the topology's <code>topology_server<
 (v0.9.3: <code>/snapshot</code> was <code>/metrics</code> at the time this section was first written — renamed to make
 room for real Prometheus text-format exposition at the standard <code>/metrics</code> scrape path; see
 <a href="../observability/#prometheus-metrics-v0931">observability.md</a>.)</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>civitas<span class="w"> </span>dashboard<span class="w"> </span>&lt;topology.yaml&gt;<span class="w"> </span><span class="o">[</span>&lt;topology2.yaml&gt;<span class="w"> </span>...<span class="o">]</span><span class="w"> </span><span class="o">[</span>--refresh<span class="w"> </span>&lt;seconds&gt;<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>civitas<span class="w"> </span>dashboard<span class="w"> </span>&lt;topology.yaml&gt;<span class="w"> </span><span class="o">[</span>&lt;topology2.yaml&gt;<span class="w"> </span>...<span class="o">]</span><span class="w"> </span><span class="o">[</span>--refresh<span class="w"> </span>&lt;seconds&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--header<span class="w"> </span><span class="s1">&#39;Name: Value&#39;</span><span class="o">]</span>
 </span></code></pre></div>
 <p><strong>v0.9.4: multiple topologies.</strong> Given more than one topology file, each gets its own tab
 (labeled after the file's own name) — all attached to and polled concurrently, switchable
@@ -2894,6 +2894,11 @@ A single topology (the common case) looks exactly as it always has — no tab ba
 <td><code>--refresh</code> / <code>-r</code></td>
 <td><code>1.0</code></td>
 <td>Poll interval in seconds</td>
+</tr>
+<tr>
+<td><code>--header</code> / <code>-H</code></td>
+<td><code>[]</code></td>
+<td>Auth header to send on every poll, <code>'Name: Value'</code> (repeatable), applied to every topology. Use it to attach to an endpoint behind the control-plane auth seam — e.g. <code>-H 'Authorization: Bearer &lt;token&gt;'</code> or <code>-H 'X-API-Key: &lt;key&gt;'</code>. civitas privileges no scheme (v0.9.6).</td>
 </tr>
 </tbody>
 </table>

@@ -2341,6 +2341,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#v096-dashboard-control-plane-write-actions-released" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.9.6 — Dashboard Control-Plane Write Actions (Released)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#part-2-backlog" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3252,6 +3263,17 @@
     <span class="md-ellipsis">
       
         v0.9.5 — Control-Plane Auth Foundation: TopologyServer/HTTPGateway Merge (Released)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v096-dashboard-control-plane-write-actions-released" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.9.6 — Dashboard Control-Plane Write Actions (Released)
       
     </span>
   </a>
@@ -5932,6 +5954,76 @@ rather than a dedicated internal one) — D6c, not built; and the dashboard clie
 auth headers so <code>civitas dashboard</code>/<code>top</code> can attach to an auth-protected endpoint end-to-end — D7,
 necessary follow-on for auth to be <em>usable</em> from the TUI, tracked under v0.9.6 below.</p>
 <hr />
+<h2 id="v096-dashboard-control-plane-write-actions-released">v0.9.6 — Dashboard Control-Plane Write Actions (Released)<a class="headerlink" href="#v096-dashboard-control-plane-write-actions-released" title="Permanent link">&para;</a></h2>
+<p><strong>Status: ✅ Released 2026-07-31, as a single release.</strong></p>
+<p><strong>The auth prerequisite shipped as v0.9.5</strong> (the TopologyServer/HTTPGateway merge, see Part 1).
+Every item below built directly on the merged, auth-capable introspection gateway, each as an
+auto-registered route carrying the node's auth middleware, with the authenticated principal
+recorded as the audit actor (<code>control-plane-writes.md</code> D2 — the honest binding). <strong>civitas ships
+the seam + honest audit + safe localhost default, never AuthZ</strong> (customers bring their own
+SCIM/IdP/OPA middleware; single devs bring nothing). Full design + rationale in
+<a href="../design/control-plane-writes.md"><code>docs/design/control-plane-writes.md</code></a>.</p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Priority</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>AuthNZ integration seam + honest audit binding + safe default</strong></td>
+<td>High</td>
+<td>✅ <strong>Done</strong> — middleware sets <code>request.auth["principal"]={"id":...}</code> (bring-your-own-auth); the authenticated principal flows into every write action's <code>AuditEvent</code> under a reserved, unspoofable <code>__principal__</code> key; no auth → <code>{"id":"unauthenticated"}</code> + localhost bind as the control, plus a loud non-localhost-no-auth warning. Reference example <code>examples/control_plane_auth.py</code>. Verified: <code>initiated_by="alice"</code> recorded even when the body smuggles <code>"attacker"</code></td>
+</tr>
+<tr>
+<td>Dashboard/API: suspend/resume an agent</td>
+<td>Medium</td>
+<td>✅ <strong>Done</strong> — <code>POST /agents/{name}/suspend</code>|<code>/resume</code>; principal → <code>initiated_by</code>/<code>approver</code> in the audit</td>
+</tr>
+<tr>
+<td>Dashboard client sends auth headers (D7)</td>
+<td>High</td>
+<td>✅ <strong>Done</strong> — <code>fetch_json</code>/<code>civitas dashboard</code>/<code>topology show</code> gained <code>--header 'Name: Value'</code> (scheme-agnostic) so the TUI can attach to an auth-protected endpoint. Verified 401 without / 200 with</td>
+</tr>
+<tr>
+<td>Dashboard/API: kill / force-restart an agent</td>
+<td>Low</td>
+<td>✅ <strong>Done</strong> — <code>POST /agents/{name}/restart</code>; the OTP "let it crash" (<code>_agency.force_restart</code> → agent raises → supervisor restarts per its existing policy), audited <code>agent.force_restart</code></td>
+</tr>
+<tr>
+<td>Mailbox introspection (peek)</td>
+<td>Low</td>
+<td>✅ <strong>Done</strong> — <code>GET /agents/{name}/mailbox</code>; new non-destructive <code>Mailbox.peek()</code>, returns message <strong>metadata only</strong> (never payloads), same-process agents</td>
+</tr>
+<tr>
+<td>Mailbox: inject a message</td>
+<td>Low</td>
+<td>✅ <strong>Done</strong> — <code>POST /agents/{name}/mailbox</code>; rejects reserved <code>_agency.</code>/<code>civitas.</code> types (no privilege escalation), audited <code>mailbox.inject</code> with the actor + type (never payload)</td>
+</tr>
+<tr>
+<td><code>attach_to</code>: mount introspection routes onto an existing <code>http_gateway</code> (D6c)</td>
+<td>Low</td>
+<td>✅ <strong>Done</strong> — a <code>topology_server</code> node with <code>config:{attach_to:&lt;gw&gt;}</code> builds only the <code>TopologyAgent</code>; a separate <code>http_gateway</code> with <code>config:{topology_agent:&lt;name&gt;}</code> serves its routes on that gateway's own port. Single-pass, linked by name</td>
+</tr>
+<tr>
+<td>Deployment-shape reporting (transport/mode + per-process container hint)</td>
+<td>Medium</td>
+<td>✅ <strong>Done</strong> — surfaced in review: single-vs-multi-process was only <em>inferable</em> from <code>/processes</code> row counts and containerization was invisible. <code>/processes</code> now returns an explicit <code>deployment: {transport, mode}</code> (read from the live bus transport) and a per-process <code>container: {containerized, orchestrator}</code> hint (cheap cached heuristics, cross-platform-safe). Pure read-only <strong>reporting</strong> — distinct from the container <em>management</em> declined below</td>
+</tr>
+<tr>
+<td>Mailbox: remove one specific in-flight message</td>
+<td>Low</td>
+<td>❌ <strong>Investigated, declined</strong> — mechanically feasible but breaks the at-most-once/FIFO delivery guarantee and the sender's mental model. The real use case (poison-pill wedging an agent) is already covered by force-restart (drops the whole mailbox + fresh incarnation); surgical single-message removal doesn't justify undermining a core guarantee. Revisit only with a use case force-restart can't serve</td>
+</tr>
+<tr>
+<td>Per-agent process/container awareness beyond <code>process_id</code> (e.g. Docker)</td>
+<td>Low</td>
+<td>❌ <strong>Declined</strong> — recommended AGAINST (couples the runtime to a deployment concern better owned by container-native tooling); unchanged</td>
+</tr>
+</tbody>
+</table>
 <h2 id="part-2-backlog">Part 2 — Backlog<a class="headerlink" href="#part-2-backlog" title="Permanent link">&para;</a></h2>
 <p><strong>Status: 🗂️ Tracked</strong> — the active todo list: everything not yet done. New work lands here first
 (a design doc if warranted), then moves into <a href="#part-1-shipped">Part 1 — Shipped</a> once released.
@@ -6069,63 +6161,6 @@ crash-restart"), not just "how long has this incarnation been running."</p>
 <p><strong>Not scheduled against any version</strong> — tracked here so the idea isn't lost, deliberately not
 assigned to v0.9.4 (too big, violates that release's own "no new design surface" framing) or
 v0.9.5 (a different kind of design conversation, though possibly a discussion point there too).</p>
-<h3 id="v096-dashboard-control-plane-write-actions-planned-after-v095">v0.9.6 — Dashboard control-plane write actions (Planned, after v0.9.5)<a class="headerlink" href="#v096-dashboard-control-plane-write-actions-planned-after-v095" title="Permanent link">&para;</a></h3>
-<p><strong>The auth prerequisite is now DONE</strong> (shipped as v0.9.5 — the TopologyServer/HTTPGateway merge,
-see Part 1). Every item below is a write/control action that was gated behind "auth must exist
- first"; they now build directly on the merged, auth-capable introspection gateway, each as a new
-route with its own (stricter) middleware. Still design-first per item, but the foundational
-AuthN/AuthZ conversation and mechanism are settled.</p>
-<table>
-<thead>
-<tr>
-<th>Item</th>
-<th>Priority</th>
-<th>Source</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>Dashboard client sends auth headers</strong> (D7 follow-on) — so <code>civitas dashboard</code>/<code>top</code>/<code>topology show --live</code> can attach to an auth-protected endpoint end-to-end</td>
-<td>High</td>
-<td>topology-gateway-merge.md D7 — the merge made endpoints <em>able</em> to require auth; the polling client (<code>civitas/dashboard/client.py</code>) still sends none, so an auth-protected endpoint isn't yet reachable from the TUI</td>
-</tr>
-<tr>
-<td><strong><code>attach_to</code>: mount introspection routes onto an existing <code>http_gateway</code></strong> (D6c follow-on)</td>
-<td>Low</td>
-<td>topology-gateway-merge.md D6c — deferred from the base merge; one ingress/port instead of a dedicated internal gateway per topology_server</td>
-</tr>
-<tr>
-<td>Dashboard/API: suspend/resume an agent (write action)</td>
-<td>Medium</td>
-<td>2026-07-26 discussion — safest write action to add first: <code>runtime.suspend()</code>/<code>resume()</code> already exist, already audited (<code>AuditEvent</code>), designed as this system's governed HITL pause primitive (not destructive, unlike kill). Now a new authenticated route on the merged gateway</td>
-</tr>
-<tr>
-<td>Dashboard/API: kill / force-restart an agent manually</td>
-<td>Low</td>
-<td>2026-07-26 discussion — mechanically feasible (new "force crash" trigger + existing restart machinery) but real DoS surface without auth first</td>
-</tr>
-<tr>
-<td>Mailbox introspection (list/enumerate)</td>
-<td>Low</td>
-<td>2026-07-26 discussion — <strong>no non-destructive peek exists anywhere in <code>Mailbox</code> today</strong> (only <code>get()</code>/consumes-one, <code>depth()</code>/count-only, <code>drain()</code>/consumes-everything); needs new <code>Mailbox</code> API, not just a new endpoint</td>
-</tr>
-<tr>
-<td>Mailbox: remove one specific in-flight message</td>
-<td>Low</td>
-<td>2026-07-26 discussion — conflicts with the at-most-once/FIFO delivery guarantee this codebase is built around; a real design problem, not a small addition — needs its own conversation, may not be a good idea at all</td>
-</tr>
-<tr>
-<td>Mailbox: inject a message (add)</td>
-<td>Low</td>
-<td>2026-07-26 discussion — mechanically <code>send()</code> exposed through a new surface, but payload content is a real data-exposure concern over an unauthenticated endpoint</td>
-</tr>
-<tr>
-<td>Per-agent process/container awareness beyond <code>process_id</code> (e.g. Docker)</td>
-<td>Low</td>
-<td>2026-07-26 discussion — recommended AGAINST building container-awareness into civitas itself (couples the runtime to a deployment concern better owned by container-native tooling); revisit only if a concrete use case emerges</td>
-</tr>
-</tbody>
-</table>
 <h3 id="v0100-hitl-streaming-polish-planned-the-medicus-runway">v0.10.0 — HITL &amp; Streaming polish (Planned — the Medicus runway)<a class="headerlink" href="#v0100-hitl-streaming-polish-planned-the-medicus-runway" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
