@@ -2330,6 +2330,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#v095-control-plane-auth-foundation-topologyserverhttpgateway-merge-released" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.9.5 — Control-Plane Auth Foundation: TopologyServer/HTTPGateway Merge (Released)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#part-2-backlog" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3230,6 +3241,17 @@
     <span class="md-ellipsis">
       
         v0.9.4 — Dashboard TUI Polish (Released)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v095-control-plane-auth-foundation-topologyserverhttpgateway-merge-released" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.9.5 — Control-Plane Auth Foundation: TopologyServer/HTTPGateway Merge (Released)
       
     </span>
   </a>
@@ -5850,6 +5872,65 @@ envisioned, but the same underlying need. Considered done, not tracked separatel
 </tr>
 </tbody>
 </table>
+<h2 id="v095-control-plane-auth-foundation-topologyserverhttpgateway-merge-released">v0.9.5 — Control-Plane Auth Foundation: TopologyServer/HTTPGateway Merge (Released)<a class="headerlink" href="#v095-control-plane-auth-foundation-topologyserverhttpgateway-merge-released" title="Permanent link">&para;</a></h2>
+<p><strong>Status: ✅ Released 2026-07-30, as a single release.</strong> The prerequisite gate for the v0.9.5
+AuthN/AuthZ backlog (below, now renumbered v0.9.6): <code>TopologyServer</code> had <strong>zero authentication</strong>
+and existed as a separate, hand-rolled <code>asyncio.start_server</code> HTTP server that reinvented what
+<code>HTTPGateway</code> already does with an audited AuthN stack. Rather than bolt a second auth
+implementation onto it, the two were <strong>merged</strong> — <code>TopologyServer</code> is now an ordinary agent behind
+<code>HTTPGateway</code>, inheriting its API-key/JWT/mTLS auth. Design-first: full investigation, four
+reviewed decisions, and a phased migration plan in
+<a href="../design/topology-gateway-merge.md"><code>docs/design/topology-gateway-merge.md</code></a>.</p>
+<p><strong>Breaking change (deliberate, D6):</strong> the <code>TopologyServer</code> class is removed — no longer importable
+from <code>civitas</code>. YAML users are unaffected (<code>type: topology_server</code> nodes keep working, now building
+a <code>TopologyAgent</code> + <code>HTTPGateway</code> sub-supervisor under the hood). Direct-construction (non-YAML)
+Python callers migrate to constructing an <code>HTTPGateway(GatewayConfig(topology_agent=...))</code> +
+<code>TopologyAgent</code> themselves.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Deliverable</th>
+<th>Verified</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>GatewayResponse</code> raw-body escape hatch (route-scoped, for Prometheus <code>/metrics</code>' plain text) — plus a real pre-existing bug fixed in passing: <code>traceparent</code> was dropped on non-streaming responses</td>
+<td>unit</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>TopologyAgent(GenServer)</code> over a shared <code>_TopologyIntrospection</code> base — same privileged <code>Runtime</code> injection, reached via <code>handle_call()</code> instead of a socket</td>
+<td>byte-for-byte builder-parity tests</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>HTTPGateway</code> auto-registers the seven fixed introspection routes (<code>topology_agent</code>/<code>topology_prefix</code>/<code>topology_middleware</code>), <code>/health</code> auth-free by default</td>
+<td>unit + ASGI end-to-end</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>type: topology_server</code> builds a <code>TopologyAgent</code> + <code>HTTPGateway</code> dedicated sub-supervisor (Option A, addendum D3a) — zero YAML migration for the common case</td>
+<td><strong>real <code>dashboard_demo</code> run</strong> (all endpoints, Prometheus <code>/metrics</code>, bare-array <code>/agents</code>, dashboard client)</td>
+</tr>
+<tr>
+<td>5</td>
+<td>The actual payoff: introspection endpoints inherit real auth — <code>/topology</code>/<code>/metrics</code> gated (401/200), <code>/health</code> exempt, no-auth-block stays wide-open</td>
+<td><strong>real Runtime, real API-key auth</strong></td>
+</tr>
+<tr>
+<td>6</td>
+<td><code>TopologyServer</code> class removed; ~35 test call-sites migrated to <code>TopologyAgent</code>/the real gateway</td>
+<td>full suite</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Deferred, tracked:</strong> <code>attach_to</code> (mount introspection routes onto an existing <code>http_gateway</code>
+rather than a dedicated internal one) — D6c, not built; and the dashboard client learning to send
+auth headers so <code>civitas dashboard</code>/<code>top</code> can attach to an auth-protected endpoint end-to-end — D7,
+necessary follow-on for auth to be <em>usable</em> from the TUI, tracked under v0.9.6 below.</p>
 <hr />
 <h2 id="part-2-backlog">Part 2 — Backlog<a class="headerlink" href="#part-2-backlog" title="Permanent link">&para;</a></h2>
 <p><strong>Status: 🗂️ Tracked</strong> — the active todo list: everything not yet done. New work lands here first
@@ -5988,14 +6069,12 @@ crash-restart"), not just "how long has this incarnation been running."</p>
 <p><strong>Not scheduled against any version</strong> — tracked here so the idea isn't lost, deliberately not
 assigned to v0.9.4 (too big, violates that release's own "no new design surface" framing) or
 v0.9.5 (a different kind of design conversation, though possibly a discussion point there too).</p>
-<h3 id="v095-authnauthz-dashboard-control-plane-planned-after-v094">v0.9.5 — AuthN/AuthZ &amp; dashboard control-plane (Planned, after v0.9.4)<a class="headerlink" href="#v095-authnauthz-dashboard-control-plane-planned-after-v094" title="Permanent link">&para;</a></h3>
-<p><strong>Design-first, explicitly</strong> — none of the items below get built until there's been a real, deep
-AuthN/AuthZ and access-control design conversation (2026-07-28 decision, in response to an earlier
-"hold off on auth, don't knee-jerk it" instruction). <code>TopologyServer</code> has <strong>zero authentication
-today</strong> (verified by grep, not assumed) — everything it currently serves is read-only, which is
-why that's been an acceptable risk so far. The moment any write/control action ships, that risk
-tier changes completely, so the auth design is the prerequisite gate for the whole group below,
-not an afterthought bolted onto one endpoint.</p>
+<h3 id="v096-dashboard-control-plane-write-actions-planned-after-v095">v0.9.6 — Dashboard control-plane write actions (Planned, after v0.9.5)<a class="headerlink" href="#v096-dashboard-control-plane-write-actions-planned-after-v095" title="Permanent link">&para;</a></h3>
+<p><strong>The auth prerequisite is now DONE</strong> (shipped as v0.9.5 — the TopologyServer/HTTPGateway merge,
+see Part 1). Every item below is a write/control action that was gated behind "auth must exist
+ first"; they now build directly on the merged, auth-capable introspection gateway, each as a new
+route with its own (stricter) middleware. Still design-first per item, but the foundational
+AuthN/AuthZ conversation and mechanism are settled.</p>
 <table>
 <thead>
 <tr>
@@ -6006,14 +6085,19 @@ not an afterthought bolted onto one endpoint.</p>
 </thead>
 <tbody>
 <tr>
-<td><strong><code>TopologyServer</code> AuthN/AuthZ + access control design</strong> (prerequisite gate for every item below)</td>
+<td><strong>Dashboard client sends auth headers</strong> (D7 follow-on) — so <code>civitas dashboard</code>/<code>top</code>/<code>topology show --live</code> can attach to an auth-protected endpoint end-to-end</td>
 <td>High</td>
-<td>found during dashboard-v2 capability discussion (2026-07-26); scheduled as its own dedicated design round (2026-07-28)</td>
+<td>topology-gateway-merge.md D7 — the merge made endpoints <em>able</em> to require auth; the polling client (<code>civitas/dashboard/client.py</code>) still sends none, so an auth-protected endpoint isn't yet reachable from the TUI</td>
+</tr>
+<tr>
+<td><strong><code>attach_to</code>: mount introspection routes onto an existing <code>http_gateway</code></strong> (D6c follow-on)</td>
+<td>Low</td>
+<td>topology-gateway-merge.md D6c — deferred from the base merge; one ingress/port instead of a dedicated internal gateway per topology_server</td>
 </tr>
 <tr>
 <td>Dashboard/API: suspend/resume an agent (write action)</td>
 <td>Medium</td>
-<td>2026-07-26 discussion — safest write action to add first: <code>runtime.suspend()</code>/<code>resume()</code> already exist, already audited (<code>AuditEvent</code>), designed as this system's governed HITL pause primitive (not destructive, unlike kill)</td>
+<td>2026-07-26 discussion — safest write action to add first: <code>runtime.suspend()</code>/<code>resume()</code> already exist, already audited (<code>AuditEvent</code>), designed as this system's governed HITL pause primitive (not destructive, unlike kill). Now a new authenticated route on the merged gateway</td>
 </tr>
 <tr>
 <td>Dashboard/API: kill / force-restart an agent manually</td>
