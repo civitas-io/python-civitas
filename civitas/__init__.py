@@ -64,7 +64,7 @@ from civitas.sandbox import FilesystemMount, SandboxConfig
 from civitas.secrets import SecretsProvider, substitute_vars
 from civitas.security.config import SecurityConfig
 from civitas.supervisor import DynamicSupervisor, Supervisor
-from civitas.topology_server import TopologyServer
+from civitas.topology_server import TopologyAgent
 from civitas.worker import Worker
 
 __all__ = [
@@ -107,7 +107,7 @@ __all__ = [
     "StreamTimeout",
     "Supervisor",
     "SyslogSink",
-    "TopologyServer",
+    "TopologyAgent",
     "Worker",
     "substitute_vars",
 ]

@@ -4,9 +4,15 @@ Phase E). Design \u00a710: "used for the handful of interaction tests that matte
 widget" \u2014 widget-level rendering is already covered by
 tests/unit/test_dashboard_widgets.py; these prove the app WIRES the three
 independent pollers, the tree-click-to-detail flow, and the reconnect banner
-against a REAL TopologyServer (real ZMQ-free HTTP loop, not a mock), matching
-this codebase's standing preference for real infra over mocks wherever
+against a REAL introspection endpoint (real ZMQ-free HTTP loop, not a mock),
+matching this codebase's standing preference for real infra over mocks wherever
 practical.
+
+v0.9.5 (topology-gateway-merge.md phase 6): TopologyServer was removed; the
+endpoint is now a real TopologyAgent + HTTPGateway pair, built by the ``_topo``
+helper below as the same dedicated-sub-supervisor subtree ``Runtime`` builds
+from a ``type: topology_server`` YAML node (so ``children=[ts, ...]`` lines are
+unchanged -- ``ts`` is now that subtree Supervisor).
 """
 
 from __future__ import annotations
@@ -15,7 +21,7 @@ import asyncio
 
 import pytest
 
-from civitas import DynamicSupervisor, Runtime, Supervisor, TopologyServer
+from civitas import DynamicSupervisor, Runtime, Supervisor
 from civitas.dashboard.app import CivitasDashboardApp, ClusterTarget, ClusterView
 from civitas.dashboard.widgets import (
     AgentDetailPanel,
@@ -23,13 +29,32 @@ from civitas.dashboard.widgets import (
     ReconnectBanner,
     TopologyTree,
 )
+from civitas.gateway import GatewayConfig, HTTPGateway
 from civitas.messages import Message
 from civitas.process import AgentProcess
+from civitas.topology_server import TopologyAgent
 
 
 class _Echo(AgentProcess):
     async def handle(self, message: Message) -> Message | None:
         return None
+
+
+def _topo(name: str, port: int) -> Supervisor:
+    """The TopologyAgent + HTTPGateway sub-supervisor a ``type: topology_server``
+    YAML node builds (topology-gateway-merge.md D3a) -- returned as one subtree
+    so existing ``children=[ts, ...]`` call sites stay unchanged. The gateway
+    listens on ``port``; the dashboard app connects there exactly as before."""
+    return Supervisor(
+        f"{name}_supervisor",
+        children=[
+            TopologyAgent(name),
+            HTTPGateway(
+                f"{name}_gateway",
+                GatewayConfig(host="127.0.0.1", port=port, topology_agent=name),
+            ),
+        ],
+    )
 
 
 async def _wait_until(predicate, timeout: float = 5.0) -> None:
@@ -46,7 +71,7 @@ async def _wait_until(predicate, timeout: float = 5.0) -> None:
 
 @pytest.mark.asyncio
 async def test_dashboard_app_polls_topology_and_renders_tree() -> None:
-    ts = TopologyServer(name="topo", port=16950)
+    ts = _topo(name="topo", port=16950)
     worker = _Echo("worker-a")
     runtime = Runtime(supervisor=Supervisor("root", children=[ts, worker]))
     await runtime.start()
@@ -68,7 +93,7 @@ async def test_dashboard_app_click_to_focus_updates_detail_panel() -> None:
     """The actual click-to-focus contract (design \u00a710): selecting a tree node
     must populate the detail panel with THAT node's data, not stay blank or
     show a different node's data."""
-    ts = TopologyServer(name="topo", port=16951)
+    ts = _topo(name="topo", port=16951)
     worker = _Echo("worker-a")
     runtime = Runtime(supervisor=Supervisor("root", children=[ts, worker]))
     await runtime.start()
@@ -96,7 +121,7 @@ async def test_dashboard_app_dynamic_children_appear() -> None:
     """Dynamically-spawned children (invisible to a static snapshot) must
     still show up \u2014 proves the app rides real live /topology data, not a
     frozen one-shot fetch."""
-    ts = TopologyServer(name="topo", port=16952)
+    ts = _topo(name="topo", port=16952)
     dyn = DynamicSupervisor("workers")
     spawner = _Echo("spawner")
     runtime = Runtime(supervisor=Supervisor("root", children=[ts, dyn, spawner]))
@@ -142,11 +167,15 @@ async def test_dashboard_app_reconnect_banner_clears_once_reachable() -> None:
         banner = app.query_one(ReconnectBanner)
         await _wait_until(lambda: banner.display is True)
 
-        ts = TopologyServer(name="topo", port=16954)
+        ts = _topo(name="topo", port=16954)
         runtime = Runtime(supervisor=Supervisor("root", children=[ts]))
         await runtime.start()
         try:
-            await _wait_until(lambda: banner.display is False, timeout=5.0)
+            # v0.9.5: the gateway binds uvicorn ASYNCHRONOUSLY (the old
+            # TopologyServer bound its socket synchronously inside start()), so
+            # the banner-clear can lag the runtime.start() return by uvicorn's
+            # bind time -- a more generous timeout absorbs that under CI load.
+            await _wait_until(lambda: banner.display is False, timeout=10.0)
             await pilot.pause()
         finally:
             await runtime.stop()
@@ -154,7 +183,7 @@ async def test_dashboard_app_reconnect_banner_clears_once_reachable() -> None:
 
 @pytest.mark.asyncio
 async def test_dashboard_app_processes_panel_populates() -> None:
-    ts = TopologyServer(name="topo", port=16955)
+    ts = _topo(name="topo", port=16955)
     runtime = Runtime(supervisor=Supervisor("root", children=[ts]))
     await runtime.start()
     try:
@@ -176,7 +205,7 @@ async def test_dashboard_app_focus_mode_widens_detail_pane_and_toggles_off() -> 
     panels philosophy holds even while focused. Verified via real measured
     widget widths (not just the CSS class flag), and that it toggles back.
     """
-    ts = TopologyServer(name="topo", port=16956)
+    ts = _topo(name="topo", port=16956)
     worker = _Echo("worker-a")
     runtime = Runtime(supervisor=Supervisor("root", children=[ts, worker]))
     await runtime.start()
@@ -219,7 +248,7 @@ async def test_dashboard_app_focus_mode_widens_detail_pane_and_toggles_off() -> 
 async def test_dashboard_app_focus_mode_is_a_noop_with_nothing_selected() -> None:
     """Expanding an empty placeholder has no real effect worth a keypress --
     the toggle only engages once a node has actually been selected."""
-    ts = TopologyServer(name="topo", port=16957)
+    ts = _topo(name="topo", port=16957)
     runtime = Runtime(supervisor=Supervisor("root", children=[ts]))
     await runtime.start()
     try:
@@ -242,7 +271,7 @@ async def test_dashboard_app_single_cluster_has_no_tab_bar() -> None:
     case that has no use for it."""
     from textual.widgets import TabbedContent
 
-    ts = TopologyServer(name="topo", port=16958)
+    ts = _topo(name="topo", port=16958)
     runtime = Runtime(supervisor=Supervisor("root", children=[ts]))
     await runtime.start()
     try:
@@ -263,10 +292,10 @@ async def test_dashboard_app_multi_cluster_shows_a_tab_per_topology() -> None:
     """
     from textual.widgets import TabbedContent
 
-    ts_a = TopologyServer(name="topo-a", port=16959)
+    ts_a = _topo(name="topo-a", port=16959)
     worker_a = _Echo("worker-a")
     runtime_a = Runtime(supervisor=Supervisor("root", children=[ts_a, worker_a]))
-    ts_b = TopologyServer(name="topo-b", port=16960)
+    ts_b = _topo(name="topo-b", port=16960)
     worker_b = _Echo("worker-b")
     runtime_b = Runtime(supervisor=Supervisor("root", children=[ts_b, worker_b]))
     await runtime_a.start()
@@ -313,10 +342,10 @@ async def test_dashboard_app_multi_cluster_shows_a_tab_per_topology() -> None:
 async def test_dashboard_app_multi_cluster_focus_toggle_is_per_cluster() -> None:
     """v0.9.4: pressing 'f' in one cluster's tab must not affect a sibling
     cluster's own focus/expand state -- real per-instance isolation."""
-    ts_a = TopologyServer(name="topo-a", port=16961)
+    ts_a = _topo(name="topo-a", port=16961)
     worker_a = _Echo("worker-a")
     runtime_a = Runtime(supervisor=Supervisor("root", children=[ts_a, worker_a]))
-    ts_b = TopologyServer(name="topo-b", port=16962)
+    ts_b = _topo(name="topo-b", port=16962)
     runtime_b = Runtime(supervisor=Supervisor("root", children=[ts_b]))
     await runtime_a.start()
     await runtime_b.start()
