@@ -1387,6 +1387,29 @@ crash-restart"), not just "how long has this incarnation been running."
 assigned to v0.9.4 (too big, violates that release's own "no new design surface" framing) or
 v0.9.5 (a different kind of design conversation, though possibly a discussion point there too).
 
+### Tracked — architecture decomposition / refactor pass (not scheduled)
+
+Raised 2026-07-31. The runtime has grown organically across the whole v0.7–v0.9 arc; several core
+modules have accreted multiple responsibilities and are now large enough that a **deliberate
+decomposition pass** is worth a dedicated session (design-first, behavior-preserving — the
+~1.6:1 test-to-source ratio makes this safe to do under a green suite). Grounded in real size, not
+a vibe:
+
+| Module | Lines | Responsibilities that have accreted |
+|--------|-------|-------------------------------------|
+| `civitas/process.py` | ~1975 | `AgentProcess` + `Mailbox` + `ProcessStatus`/`SuspendCategory`/`_ForcedRestart` + the message loop + `_dispatch`/retry + suspend/resume/force-restart + durable-state restore + MCP client wiring + streaming hooks — a genuine god-module |
+| `civitas/supervisor.py` | ~1705 | `Supervisor` + `DynamicSupervisor` + restart-engine wiring + heartbeat monitor + remote-child (D5) probing + crash-event queue |
+| `civitas/runtime.py` | ~1360 | `Runtime` + the whole `from_config` YAML loader (`_build_node`, now 6+ node types incl. the v0.9.5/6 topology_server pair + attach_to) + component wiring + control-plane entry points |
+
+Together ~5k lines (~27% of source). **Candidate cuts** (to be designed, not prejudged): split
+`Mailbox` and the suspend/force-restart control machinery out of `process.py`; separate
+`DynamicSupervisor` and the heartbeat/remote-liveness concern from `supervisor.py`; extract the
+`from_config` topology loader (the `_build_node` dispatch) out of `runtime.py` into its own
+loader module. **Explicitly NOT a rewrite** — a decomposition of already-working, already-tested
+code, one behavior-preserving move at a time, each verified against the existing suite. Not
+scheduled against a version yet; a natural fit before the v1.0.0 GA gates (an external security
+auditor reviewing 2k-line god-modules is a worse experience than reviewing focused ones).
+
 ### v0.10.0 — HITL & Streaming polish (Planned — the Medicus runway)
 
 | Item | Priority | Source |
