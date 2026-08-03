@@ -6161,6 +6161,46 @@ crash-restart"), not just "how long has this incarnation been running."</p>
 <p><strong>Not scheduled against any version</strong> — tracked here so the idea isn't lost, deliberately not
 assigned to v0.9.4 (too big, violates that release's own "no new design surface" framing) or
 v0.9.5 (a different kind of design conversation, though possibly a discussion point there too).</p>
+<h3 id="tracked-architecture-decomposition-refactor-pass-not-scheduled">Tracked — architecture decomposition / refactor pass (not scheduled)<a class="headerlink" href="#tracked-architecture-decomposition-refactor-pass-not-scheduled" title="Permanent link">&para;</a></h3>
+<p>Raised 2026-07-31. The runtime has grown organically across the whole v0.7–v0.9 arc; several core
+modules have accreted multiple responsibilities and are now large enough that a <strong>deliberate
+decomposition pass</strong> is worth a dedicated session (design-first, behavior-preserving — the
+~1.6:1 test-to-source ratio makes this safe to do under a green suite). Grounded in real size, not
+a vibe:</p>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Lines</th>
+<th>Responsibilities that have accreted</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>civitas/process.py</code></td>
+<td>~1975</td>
+<td><code>AgentProcess</code> + <code>Mailbox</code> + <code>ProcessStatus</code>/<code>SuspendCategory</code>/<code>_ForcedRestart</code> + the message loop + <code>_dispatch</code>/retry + suspend/resume/force-restart + durable-state restore + MCP client wiring + streaming hooks — a genuine god-module</td>
+</tr>
+<tr>
+<td><code>civitas/supervisor.py</code></td>
+<td>~1705</td>
+<td><code>Supervisor</code> + <code>DynamicSupervisor</code> + restart-engine wiring + heartbeat monitor + remote-child (D5) probing + crash-event queue</td>
+</tr>
+<tr>
+<td><code>civitas/runtime.py</code></td>
+<td>~1360</td>
+<td><code>Runtime</code> + the whole <code>from_config</code> YAML loader (<code>_build_node</code>, now 6+ node types incl. the v0.9.&#8538; topology_server pair + attach_to) + component wiring + control-plane entry points</td>
+</tr>
+</tbody>
+</table>
+<p>Together ~5k lines (~27% of source). <strong>Candidate cuts</strong> (to be designed, not prejudged): split
+<code>Mailbox</code> and the suspend/force-restart control machinery out of <code>process.py</code>; separate
+<code>DynamicSupervisor</code> and the heartbeat/remote-liveness concern from <code>supervisor.py</code>; extract the
+<code>from_config</code> topology loader (the <code>_build_node</code> dispatch) out of <code>runtime.py</code> into its own
+loader module. <strong>Explicitly NOT a rewrite</strong> — a decomposition of already-working, already-tested
+code, one behavior-preserving move at a time, each verified against the existing suite. Not
+scheduled against a version yet; a natural fit before the v1.0.0 GA gates (an external security
+auditor reviewing 2k-line god-modules is a worse experience than reviewing focused ones).</p>
 <h3 id="v0100-hitl-streaming-polish-planned-the-medicus-runway">v0.10.0 — HITL &amp; Streaming polish (Planned — the Medicus runway)<a class="headerlink" href="#v0100-hitl-streaming-polish-planned-the-medicus-runway" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
