@@ -2814,23 +2814,23 @@ monitored via periodic heartbeat pings instead of task callbacks.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>civitas/supervisor.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-906">906</a></span>
-<span class="normal"><a href="#__codelineno-0-907">907</a></span>
-<span class="normal"><a href="#__codelineno-0-908">908</a></span>
-<span class="normal"><a href="#__codelineno-0-909">909</a></span>
-<span class="normal"><a href="#__codelineno-0-910">910</a></span>
-<span class="normal"><a href="#__codelineno-0-911">911</a></span>
-<span class="normal"><a href="#__codelineno-0-912">912</a></span>
-<span class="normal"><a href="#__codelineno-0-913">913</a></span>
-<span class="normal"><a href="#__codelineno-0-914">914</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-906"><a id="__codelineno-0-906" name="__codelineno-0-906"></a><span class="k">def</span><span class="w"> </span><span class="nf">all_agents</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">AgentProcess</span><span class="p">]:</span>
-</span><span id="__span-0-907"><a id="__codelineno-0-907" name="__codelineno-0-907"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Recursively collect all AgentProcess instances in the tree.&quot;&quot;&quot;</span>
-</span><span id="__span-0-908"><a id="__codelineno-0-908" name="__codelineno-0-908"></a>    <span class="n">agents</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">AgentProcess</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
-</span><span id="__span-0-909"><a id="__codelineno-0-909" name="__codelineno-0-909"></a>    <span class="k">for</span> <span class="n">child</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">children</span><span class="p">:</span>
-</span><span id="__span-0-910"><a id="__codelineno-0-910" name="__codelineno-0-910"></a>        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">child</span><span class="p">,</span> <span class="n">Supervisor</span><span class="p">):</span>
-</span><span id="__span-0-911"><a id="__codelineno-0-911" name="__codelineno-0-911"></a>            <span class="n">agents</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">child</span><span class="o">.</span><span class="n">all_agents</span><span class="p">())</span>
-</span><span id="__span-0-912"><a id="__codelineno-0-912" name="__codelineno-0-912"></a>        <span class="k">else</span><span class="p">:</span>
-</span><span id="__span-0-913"><a id="__codelineno-0-913" name="__codelineno-0-913"></a>            <span class="n">agents</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">child</span><span class="p">)</span>
-</span><span id="__span-0-914"><a id="__codelineno-0-914" name="__codelineno-0-914"></a>    <span class="k">return</span> <span class="n">agents</span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-916">916</a></span>
+<span class="normal"><a href="#__codelineno-0-917">917</a></span>
+<span class="normal"><a href="#__codelineno-0-918">918</a></span>
+<span class="normal"><a href="#__codelineno-0-919">919</a></span>
+<span class="normal"><a href="#__codelineno-0-920">920</a></span>
+<span class="normal"><a href="#__codelineno-0-921">921</a></span>
+<span class="normal"><a href="#__codelineno-0-922">922</a></span>
+<span class="normal"><a href="#__codelineno-0-923">923</a></span>
+<span class="normal"><a href="#__codelineno-0-924">924</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-916"><a id="__codelineno-0-916" name="__codelineno-0-916"></a><span class="k">def</span><span class="w"> </span><span class="nf">all_agents</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">AgentProcess</span><span class="p">]:</span>
+</span><span id="__span-0-917"><a id="__codelineno-0-917" name="__codelineno-0-917"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Recursively collect all AgentProcess instances in the tree.&quot;&quot;&quot;</span>
+</span><span id="__span-0-918"><a id="__codelineno-0-918" name="__codelineno-0-918"></a>    <span class="n">agents</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">AgentProcess</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+</span><span id="__span-0-919"><a id="__codelineno-0-919" name="__codelineno-0-919"></a>    <span class="k">for</span> <span class="n">child</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">children</span><span class="p">:</span>
+</span><span id="__span-0-920"><a id="__codelineno-0-920" name="__codelineno-0-920"></a>        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">child</span><span class="p">,</span> <span class="n">Supervisor</span><span class="p">):</span>
+</span><span id="__span-0-921"><a id="__codelineno-0-921" name="__codelineno-0-921"></a>            <span class="n">agents</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">child</span><span class="o">.</span><span class="n">all_agents</span><span class="p">())</span>
+</span><span id="__span-0-922"><a id="__codelineno-0-922" name="__codelineno-0-922"></a>        <span class="k">else</span><span class="p">:</span>
+</span><span id="__span-0-923"><a id="__codelineno-0-923" name="__codelineno-0-923"></a>            <span class="n">agents</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">child</span><span class="p">)</span>
+</span><span id="__span-0-924"><a id="__codelineno-0-924" name="__codelineno-0-924"></a>    <span class="k">return</span> <span class="n">agents</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -2853,19 +2853,19 @@ monitored via periodic heartbeat pings instead of task callbacks.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>civitas/supervisor.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-916">916</a></span>
-<span class="normal"><a href="#__codelineno-0-917">917</a></span>
-<span class="normal"><a href="#__codelineno-0-918">918</a></span>
-<span class="normal"><a href="#__codelineno-0-919">919</a></span>
-<span class="normal"><a href="#__codelineno-0-920">920</a></span>
-<span class="normal"><a href="#__codelineno-0-921">921</a></span>
-<span class="normal"><a href="#__codelineno-0-922">922</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-916"><a id="__codelineno-0-916" name="__codelineno-0-916"></a><span class="k">def</span><span class="w"> </span><span class="nf">all_supervisors</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Supervisor</span><span class="p">]:</span>
-</span><span id="__span-0-917"><a id="__codelineno-0-917" name="__codelineno-0-917"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Recursively collect all Supervisor instances (including self).&quot;&quot;&quot;</span>
-</span><span id="__span-0-918"><a id="__codelineno-0-918" name="__codelineno-0-918"></a>    <span class="n">supervisors</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Supervisor</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="p">]</span>
-</span><span id="__span-0-919"><a id="__codelineno-0-919" name="__codelineno-0-919"></a>    <span class="k">for</span> <span class="n">child</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">children</span><span class="p">:</span>
-</span><span id="__span-0-920"><a id="__codelineno-0-920" name="__codelineno-0-920"></a>        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">child</span><span class="p">,</span> <span class="n">Supervisor</span><span class="p">):</span>
-</span><span id="__span-0-921"><a id="__codelineno-0-921" name="__codelineno-0-921"></a>            <span class="n">supervisors</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">child</span><span class="o">.</span><span class="n">all_supervisors</span><span class="p">())</span>
-</span><span id="__span-0-922"><a id="__codelineno-0-922" name="__codelineno-0-922"></a>    <span class="k">return</span> <span class="n">supervisors</span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-926">926</a></span>
+<span class="normal"><a href="#__codelineno-0-927">927</a></span>
+<span class="normal"><a href="#__codelineno-0-928">928</a></span>
+<span class="normal"><a href="#__codelineno-0-929">929</a></span>
+<span class="normal"><a href="#__codelineno-0-930">930</a></span>
+<span class="normal"><a href="#__codelineno-0-931">931</a></span>
+<span class="normal"><a href="#__codelineno-0-932">932</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-926"><a id="__codelineno-0-926" name="__codelineno-0-926"></a><span class="k">def</span><span class="w"> </span><span class="nf">all_supervisors</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Supervisor</span><span class="p">]:</span>
+</span><span id="__span-0-927"><a id="__codelineno-0-927" name="__codelineno-0-927"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Recursively collect all Supervisor instances (including self).&quot;&quot;&quot;</span>
+</span><span id="__span-0-928"><a id="__codelineno-0-928" name="__codelineno-0-928"></a>    <span class="n">supervisors</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Supervisor</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="p">]</span>
+</span><span id="__span-0-929"><a id="__codelineno-0-929" name="__codelineno-0-929"></a>    <span class="k">for</span> <span class="n">child</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">children</span><span class="p">:</span>
+</span><span id="__span-0-930"><a id="__codelineno-0-930" name="__codelineno-0-930"></a>        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">child</span><span class="p">,</span> <span class="n">Supervisor</span><span class="p">):</span>
+</span><span id="__span-0-931"><a id="__codelineno-0-931" name="__codelineno-0-931"></a>            <span class="n">supervisors</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">child</span><span class="o">.</span><span class="n">all_supervisors</span><span class="p">())</span>
+</span><span id="__span-0-932"><a id="__codelineno-0-932" name="__codelineno-0-932"></a>    <span class="k">return</span> <span class="n">supervisors</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -3022,17 +3022,7 @@ single spawner's concurrent and lifetime spawns, in addition to the supervisor-w
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>civitas/supervisor.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-976"> 976</a></span>
-<span class="normal"><a href="#__codelineno-0-977"> 977</a></span>
-<span class="normal"><a href="#__codelineno-0-978"> 978</a></span>
-<span class="normal"><a href="#__codelineno-0-979"> 979</a></span>
-<span class="normal"><a href="#__codelineno-0-980"> 980</a></span>
-<span class="normal"><a href="#__codelineno-0-981"> 981</a></span>
-<span class="normal"><a href="#__codelineno-0-982"> 982</a></span>
-<span class="normal"><a href="#__codelineno-0-983"> 983</a></span>
-<span class="normal"><a href="#__codelineno-0-984"> 984</a></span>
-<span class="normal"><a href="#__codelineno-0-985"> 985</a></span>
-<span class="normal"><a href="#__codelineno-0-986"> 986</a></span>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-986"> 986</a></span>
 <span class="normal"><a href="#__codelineno-0-987"> 987</a></span>
 <span class="normal"><a href="#__codelineno-0-988"> 988</a></span>
 <span class="normal"><a href="#__codelineno-0-989"> 989</a></span>
@@ -3059,44 +3049,54 @@ single spawner's concurrent and lifetime spawns, in addition to the supervisor-w
 <span class="normal"><a href="#__codelineno-0-1010">1010</a></span>
 <span class="normal"><a href="#__codelineno-0-1011">1011</a></span>
 <span class="normal"><a href="#__codelineno-0-1012">1012</a></span>
-<span class="normal"><a href="#__codelineno-0-1013">1013</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-976"><a id="__codelineno-0-976" name="__codelineno-0-976"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
-</span><span id="__span-0-977"><a id="__codelineno-0-977" name="__codelineno-0-977"></a>    <span class="bp">self</span><span class="p">,</span>
-</span><span id="__span-0-978"><a id="__codelineno-0-978" name="__codelineno-0-978"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-</span><span id="__span-0-979"><a id="__codelineno-0-979" name="__codelineno-0-979"></a>    <span class="n">max_children</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-980"><a id="__codelineno-0-980" name="__codelineno-0-980"></a>    <span class="n">max_total_spawns</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-981"><a id="__codelineno-0-981" name="__codelineno-0-981"></a>    <span class="n">restart</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;transient&quot;</span><span class="p">,</span>
-</span><span id="__span-0-982"><a id="__codelineno-0-982" name="__codelineno-0-982"></a>    <span class="n">max_restarts</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span>
-</span><span id="__span-0-983"><a id="__codelineno-0-983" name="__codelineno-0-983"></a>    <span class="n">restart_window</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">60.0</span><span class="p">,</span>
-</span><span id="__span-0-984"><a id="__codelineno-0-984" name="__codelineno-0-984"></a>    <span class="n">spawner_allowlist</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-985"><a id="__codelineno-0-985" name="__codelineno-0-985"></a>    <span class="n">max_children_per_spawner</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-986"><a id="__codelineno-0-986" name="__codelineno-0-986"></a>    <span class="n">max_total_spawns_per_spawner</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-987"><a id="__codelineno-0-987" name="__codelineno-0-987"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-</span><span id="__span-0-988"><a id="__codelineno-0-988" name="__codelineno-0-988"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-0-989"><a id="__codelineno-0-989" name="__codelineno-0-989"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-</span><span id="__span-0-990"><a id="__codelineno-0-990" name="__codelineno-0-990"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">max_children</span> <span class="o">=</span> <span class="n">max_children</span>
-</span><span id="__span-0-991"><a id="__codelineno-0-991" name="__codelineno-0-991"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">max_total_spawns</span> <span class="o">=</span> <span class="n">max_total_spawns</span>
-</span><span id="__span-0-992"><a id="__codelineno-0-992" name="__codelineno-0-992"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_restart_mode</span> <span class="o">=</span> <span class="n">RestartMode</span><span class="p">(</span><span class="n">restart</span><span class="p">)</span>
-</span><span id="__span-0-993"><a id="__codelineno-0-993" name="__codelineno-0-993"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_ds_max_restarts</span> <span class="o">=</span> <span class="n">max_restarts</span>
-</span><span id="__span-0-994"><a id="__codelineno-0-994" name="__codelineno-0-994"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_ds_restart_window</span> <span class="o">=</span> <span class="n">restart_window</span>
-</span><span id="__span-0-995"><a id="__codelineno-0-995" name="__codelineno-0-995"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">spawner_allowlist</span> <span class="o">=</span> <span class="n">spawner_allowlist</span>
-</span><span id="__span-0-996"><a id="__codelineno-0-996" name="__codelineno-0-996"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">max_children_per_spawner</span> <span class="o">=</span> <span class="n">max_children_per_spawner</span>
-</span><span id="__span-0-997"><a id="__codelineno-0-997" name="__codelineno-0-997"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">max_total_spawns_per_spawner</span> <span class="o">=</span> <span class="n">max_total_spawns_per_spawner</span>
-</span><span id="__span-0-998"><a id="__codelineno-0-998" name="__codelineno-0-998"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_current_spawner</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
-</span><span id="__span-0-999"><a id="__codelineno-0-999" name="__codelineno-0-999"></a>
-</span><span id="__span-0-1000"><a id="__codelineno-0-1000" name="__codelineno-0-1000"></a>    <span class="c1"># Live child tracking</span>
-</span><span id="__span-0-1001"><a id="__codelineno-0-1001" name="__codelineno-0-1001"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_dynamic_children</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">_ChildRec</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
-</span><span id="__span-0-1002"><a id="__codelineno-0-1002" name="__codelineno-0-1002"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_child_tasks</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">Task</span><span class="p">[</span><span class="kc">None</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
-</span><span id="__span-0-1003"><a id="__codelineno-0-1003" name="__codelineno-0-1003"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_spawner_names</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
-</span><span id="__span-0-1004"><a id="__codelineno-0-1004" name="__codelineno-0-1004"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_child_restart_counts</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
-</span><span id="__span-0-1005"><a id="__codelineno-0-1005" name="__codelineno-0-1005"></a>    <span class="c1"># E1: one RestartEngine per dynamic child (per-child budgets — the</span>
-</span><span id="__span-0-1006"><a id="__codelineno-0-1006" name="__codelineno-0-1006"></a>    <span class="c1"># pre-existing DynSup semantics; backoff=None — DynSup never delayed).</span>
-</span><span id="__span-0-1007"><a id="__codelineno-0-1007" name="__codelineno-0-1007"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_child_engines</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">RestartEngine</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
-</span><span id="__span-0-1008"><a id="__codelineno-0-1008" name="__codelineno-0-1008"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_total_spawns</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
-</span><span id="__span-0-1009"><a id="__codelineno-0-1009" name="__codelineno-0-1009"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_spawner_total_counts</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
-</span><span id="__span-0-1010"><a id="__codelineno-0-1010" name="__codelineno-0-1010"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_pending_child_tasks</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="n">asyncio</span><span class="o">.</span><span class="n">Task</span><span class="p">[</span><span class="kc">None</span><span class="p">]]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
-</span><span id="__span-0-1011"><a id="__codelineno-0-1011" name="__codelineno-0-1011"></a>    <span class="c1"># Monotonic incarnation counter stamped on each child&#39;s cluster-wide</span>
-</span><span id="__span-0-1012"><a id="__codelineno-0-1012" name="__codelineno-0-1012"></a>    <span class="c1"># announcement so peers can reject stale/reordered register/deregister (D13).</span>
-</span><span id="__span-0-1013"><a id="__codelineno-0-1013" name="__codelineno-0-1013"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_spawn_epoch</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="normal"><a href="#__codelineno-0-1013">1013</a></span>
+<span class="normal"><a href="#__codelineno-0-1014">1014</a></span>
+<span class="normal"><a href="#__codelineno-0-1015">1015</a></span>
+<span class="normal"><a href="#__codelineno-0-1016">1016</a></span>
+<span class="normal"><a href="#__codelineno-0-1017">1017</a></span>
+<span class="normal"><a href="#__codelineno-0-1018">1018</a></span>
+<span class="normal"><a href="#__codelineno-0-1019">1019</a></span>
+<span class="normal"><a href="#__codelineno-0-1020">1020</a></span>
+<span class="normal"><a href="#__codelineno-0-1021">1021</a></span>
+<span class="normal"><a href="#__codelineno-0-1022">1022</a></span>
+<span class="normal"><a href="#__codelineno-0-1023">1023</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-986"><a id="__codelineno-0-986" name="__codelineno-0-986"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+</span><span id="__span-0-987"><a id="__codelineno-0-987" name="__codelineno-0-987"></a>    <span class="bp">self</span><span class="p">,</span>
+</span><span id="__span-0-988"><a id="__codelineno-0-988" name="__codelineno-0-988"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+</span><span id="__span-0-989"><a id="__codelineno-0-989" name="__codelineno-0-989"></a>    <span class="n">max_children</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-990"><a id="__codelineno-0-990" name="__codelineno-0-990"></a>    <span class="n">max_total_spawns</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-991"><a id="__codelineno-0-991" name="__codelineno-0-991"></a>    <span class="n">restart</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;transient&quot;</span><span class="p">,</span>
+</span><span id="__span-0-992"><a id="__codelineno-0-992" name="__codelineno-0-992"></a>    <span class="n">max_restarts</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span>
+</span><span id="__span-0-993"><a id="__codelineno-0-993" name="__codelineno-0-993"></a>    <span class="n">restart_window</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">60.0</span><span class="p">,</span>
+</span><span id="__span-0-994"><a id="__codelineno-0-994" name="__codelineno-0-994"></a>    <span class="n">spawner_allowlist</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-995"><a id="__codelineno-0-995" name="__codelineno-0-995"></a>    <span class="n">max_children_per_spawner</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-996"><a id="__codelineno-0-996" name="__codelineno-0-996"></a>    <span class="n">max_total_spawns_per_spawner</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-997"><a id="__codelineno-0-997" name="__codelineno-0-997"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+</span><span id="__span-0-998"><a id="__codelineno-0-998" name="__codelineno-0-998"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-999"><a id="__codelineno-0-999" name="__codelineno-0-999"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</span><span id="__span-0-1000"><a id="__codelineno-0-1000" name="__codelineno-0-1000"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">max_children</span> <span class="o">=</span> <span class="n">max_children</span>
+</span><span id="__span-0-1001"><a id="__codelineno-0-1001" name="__codelineno-0-1001"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">max_total_spawns</span> <span class="o">=</span> <span class="n">max_total_spawns</span>
+</span><span id="__span-0-1002"><a id="__codelineno-0-1002" name="__codelineno-0-1002"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_restart_mode</span> <span class="o">=</span> <span class="n">RestartMode</span><span class="p">(</span><span class="n">restart</span><span class="p">)</span>
+</span><span id="__span-0-1003"><a id="__codelineno-0-1003" name="__codelineno-0-1003"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_ds_max_restarts</span> <span class="o">=</span> <span class="n">max_restarts</span>
+</span><span id="__span-0-1004"><a id="__codelineno-0-1004" name="__codelineno-0-1004"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_ds_restart_window</span> <span class="o">=</span> <span class="n">restart_window</span>
+</span><span id="__span-0-1005"><a id="__codelineno-0-1005" name="__codelineno-0-1005"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">spawner_allowlist</span> <span class="o">=</span> <span class="n">spawner_allowlist</span>
+</span><span id="__span-0-1006"><a id="__codelineno-0-1006" name="__codelineno-0-1006"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">max_children_per_spawner</span> <span class="o">=</span> <span class="n">max_children_per_spawner</span>
+</span><span id="__span-0-1007"><a id="__codelineno-0-1007" name="__codelineno-0-1007"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">max_total_spawns_per_spawner</span> <span class="o">=</span> <span class="n">max_total_spawns_per_spawner</span>
+</span><span id="__span-0-1008"><a id="__codelineno-0-1008" name="__codelineno-0-1008"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_current_spawner</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-0-1009"><a id="__codelineno-0-1009" name="__codelineno-0-1009"></a>
+</span><span id="__span-0-1010"><a id="__codelineno-0-1010" name="__codelineno-0-1010"></a>    <span class="c1"># Live child tracking</span>
+</span><span id="__span-0-1011"><a id="__codelineno-0-1011" name="__codelineno-0-1011"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_dynamic_children</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">_ChildRec</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+</span><span id="__span-0-1012"><a id="__codelineno-0-1012" name="__codelineno-0-1012"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_child_tasks</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">Task</span><span class="p">[</span><span class="kc">None</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+</span><span id="__span-0-1013"><a id="__codelineno-0-1013" name="__codelineno-0-1013"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_spawner_names</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+</span><span id="__span-0-1014"><a id="__codelineno-0-1014" name="__codelineno-0-1014"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_child_restart_counts</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+</span><span id="__span-0-1015"><a id="__codelineno-0-1015" name="__codelineno-0-1015"></a>    <span class="c1"># E1: one RestartEngine per dynamic child (per-child budgets — the</span>
+</span><span id="__span-0-1016"><a id="__codelineno-0-1016" name="__codelineno-0-1016"></a>    <span class="c1"># pre-existing DynSup semantics; backoff=None — DynSup never delayed).</span>
+</span><span id="__span-0-1017"><a id="__codelineno-0-1017" name="__codelineno-0-1017"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_child_engines</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">RestartEngine</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+</span><span id="__span-0-1018"><a id="__codelineno-0-1018" name="__codelineno-0-1018"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_total_spawns</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+</span><span id="__span-0-1019"><a id="__codelineno-0-1019" name="__codelineno-0-1019"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_spawner_total_counts</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+</span><span id="__span-0-1020"><a id="__codelineno-0-1020" name="__codelineno-0-1020"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_pending_child_tasks</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="n">asyncio</span><span class="o">.</span><span class="n">Task</span><span class="p">[</span><span class="kc">None</span><span class="p">]]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+</span><span id="__span-0-1021"><a id="__codelineno-0-1021" name="__codelineno-0-1021"></a>    <span class="c1"># Monotonic incarnation counter stamped on each child&#39;s cluster-wide</span>
+</span><span id="__span-0-1022"><a id="__codelineno-0-1022" name="__codelineno-0-1022"></a>    <span class="c1"># announcement so peers can reject stale/reordered register/deregister (D13).</span>
+</span><span id="__span-0-1023"><a id="__codelineno-0-1023" name="__codelineno-0-1023"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_spawn_epoch</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 
@@ -3136,25 +3136,25 @@ inside this hook to authorize by the requesting agent's name.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>civitas/supervisor.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1019">1019</a></span>
-<span class="normal"><a href="#__codelineno-0-1020">1020</a></span>
-<span class="normal"><a href="#__codelineno-0-1021">1021</a></span>
-<span class="normal"><a href="#__codelineno-0-1022">1022</a></span>
-<span class="normal"><a href="#__codelineno-0-1023">1023</a></span>
-<span class="normal"><a href="#__codelineno-0-1024">1024</a></span>
-<span class="normal"><a href="#__codelineno-0-1025">1025</a></span>
-<span class="normal"><a href="#__codelineno-0-1026">1026</a></span>
-<span class="normal"><a href="#__codelineno-0-1027">1027</a></span>
-<span class="normal"><a href="#__codelineno-0-1028">1028</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-1019"><a id="__codelineno-0-1019" name="__codelineno-0-1019"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_spawn_requested</span><span class="p">(</span>
-</span><span id="__span-0-1020"><a id="__codelineno-0-1020" name="__codelineno-0-1020"></a>    <span class="bp">self</span><span class="p">,</span> <span class="n">agent_class</span><span class="p">:</span> <span class="nb">type</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span>
-</span><span id="__span-0-1021"><a id="__codelineno-0-1021" name="__codelineno-0-1021"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-</span><span id="__span-0-1022"><a id="__codelineno-0-1022" name="__codelineno-0-1022"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Governance veto hook. Return False to deny the spawn request.</span>
-</span><span id="__span-0-1023"><a id="__codelineno-0-1023" name="__codelineno-0-1023"></a>
-</span><span id="__span-0-1024"><a id="__codelineno-0-1024" name="__codelineno-0-1024"></a><span class="sd">    Default implementation approves all requests. Subclass to enforce</span>
-</span><span id="__span-0-1025"><a id="__codelineno-0-1025" name="__codelineno-0-1025"></a><span class="sd">    allowlists, rate limits, or policy checks. Read :attr:`current_spawner`</span>
-</span><span id="__span-0-1026"><a id="__codelineno-0-1026" name="__codelineno-0-1026"></a><span class="sd">    inside this hook to authorize by the requesting agent&#39;s name.</span>
-</span><span id="__span-0-1027"><a id="__codelineno-0-1027" name="__codelineno-0-1027"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-1028"><a id="__codelineno-0-1028" name="__codelineno-0-1028"></a>    <span class="k">return</span> <span class="kc">True</span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1029">1029</a></span>
+<span class="normal"><a href="#__codelineno-0-1030">1030</a></span>
+<span class="normal"><a href="#__codelineno-0-1031">1031</a></span>
+<span class="normal"><a href="#__codelineno-0-1032">1032</a></span>
+<span class="normal"><a href="#__codelineno-0-1033">1033</a></span>
+<span class="normal"><a href="#__codelineno-0-1034">1034</a></span>
+<span class="normal"><a href="#__codelineno-0-1035">1035</a></span>
+<span class="normal"><a href="#__codelineno-0-1036">1036</a></span>
+<span class="normal"><a href="#__codelineno-0-1037">1037</a></span>
+<span class="normal"><a href="#__codelineno-0-1038">1038</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-1029"><a id="__codelineno-0-1029" name="__codelineno-0-1029"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_spawn_requested</span><span class="p">(</span>
+</span><span id="__span-0-1030"><a id="__codelineno-0-1030" name="__codelineno-0-1030"></a>    <span class="bp">self</span><span class="p">,</span> <span class="n">agent_class</span><span class="p">:</span> <span class="nb">type</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span>
+</span><span id="__span-0-1031"><a id="__codelineno-0-1031" name="__codelineno-0-1031"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+</span><span id="__span-0-1032"><a id="__codelineno-0-1032" name="__codelineno-0-1032"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Governance veto hook. Return False to deny the spawn request.</span>
+</span><span id="__span-0-1033"><a id="__codelineno-0-1033" name="__codelineno-0-1033"></a>
+</span><span id="__span-0-1034"><a id="__codelineno-0-1034" name="__codelineno-0-1034"></a><span class="sd">    Default implementation approves all requests. Subclass to enforce</span>
+</span><span id="__span-0-1035"><a id="__codelineno-0-1035" name="__codelineno-0-1035"></a><span class="sd">    allowlists, rate limits, or policy checks. Read :attr:`current_spawner`</span>
+</span><span id="__span-0-1036"><a id="__codelineno-0-1036" name="__codelineno-0-1036"></a><span class="sd">    inside this hook to authorize by the requesting agent&#39;s name.</span>
+</span><span id="__span-0-1037"><a id="__codelineno-0-1037" name="__codelineno-0-1037"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-1038"><a id="__codelineno-0-1038" name="__codelineno-0-1038"></a>    <span class="k">return</span> <span class="kc">True</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -3177,11 +3177,11 @@ inside this hook to authorize by the requesting agent's name.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>civitas/supervisor.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1683">1683</a></span>
-<span class="normal"><a href="#__codelineno-0-1684">1684</a></span>
-<span class="normal"><a href="#__codelineno-0-1685">1685</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-1683"><a id="__codelineno-0-1683" name="__codelineno-0-1683"></a><span class="k">def</span><span class="w"> </span><span class="nf">all_dynamic_agents</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">AgentProcess</span><span class="p">]:</span>
-</span><span id="__span-0-1684"><a id="__codelineno-0-1684" name="__codelineno-0-1684"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the currently live dynamic children.&quot;&quot;&quot;</span>
-</span><span id="__span-0-1685"><a id="__codelineno-0-1685" name="__codelineno-0-1685"></a>    <span class="k">return</span> <span class="p">[</span><span class="n">rec</span><span class="o">.</span><span class="n">agent</span> <span class="k">for</span> <span class="n">rec</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_dynamic_children</span><span class="o">.</span><span class="n">values</span><span class="p">()]</span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1699">1699</a></span>
+<span class="normal"><a href="#__codelineno-0-1700">1700</a></span>
+<span class="normal"><a href="#__codelineno-0-1701">1701</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-1699"><a id="__codelineno-0-1699" name="__codelineno-0-1699"></a><span class="k">def</span><span class="w"> </span><span class="nf">all_dynamic_agents</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">AgentProcess</span><span class="p">]:</span>
+</span><span id="__span-0-1700"><a id="__codelineno-0-1700" name="__codelineno-0-1700"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the currently live dynamic children.&quot;&quot;&quot;</span>
+</span><span id="__span-0-1701"><a id="__codelineno-0-1701" name="__codelineno-0-1701"></a>    <span class="k">return</span> <span class="p">[</span><span class="n">rec</span><span class="o">.</span><span class="n">agent</span> <span class="k">for</span> <span class="n">rec</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_dynamic_children</span><span class="o">.</span><span class="n">values</span><span class="p">()]</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -3208,35 +3208,35 @@ inside this hook to authorize by the requesting agent's name.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>civitas/supervisor.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1691">1691</a></span>
-<span class="normal"><a href="#__codelineno-0-1692">1692</a></span>
-<span class="normal"><a href="#__codelineno-0-1693">1693</a></span>
-<span class="normal"><a href="#__codelineno-0-1694">1694</a></span>
-<span class="normal"><a href="#__codelineno-0-1695">1695</a></span>
-<span class="normal"><a href="#__codelineno-0-1696">1696</a></span>
-<span class="normal"><a href="#__codelineno-0-1697">1697</a></span>
-<span class="normal"><a href="#__codelineno-0-1698">1698</a></span>
-<span class="normal"><a href="#__codelineno-0-1699">1699</a></span>
-<span class="normal"><a href="#__codelineno-0-1700">1700</a></span>
-<span class="normal"><a href="#__codelineno-0-1701">1701</a></span>
-<span class="normal"><a href="#__codelineno-0-1702">1702</a></span>
-<span class="normal"><a href="#__codelineno-0-1703">1703</a></span>
-<span class="normal"><a href="#__codelineno-0-1704">1704</a></span>
-<span class="normal"><a href="#__codelineno-0-1705">1705</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-1691"><a id="__codelineno-0-1691" name="__codelineno-0-1691"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_stop</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-0-1692"><a id="__codelineno-0-1692" name="__codelineno-0-1692"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Cancel all dynamic children on shutdown.&quot;&quot;&quot;</span>
-</span><span id="__span-0-1693"><a id="__codelineno-0-1693" name="__codelineno-0-1693"></a>    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">_rec</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_dynamic_children</span><span class="o">.</span><span class="n">items</span><span class="p">()):</span>
-</span><span id="__span-0-1694"><a id="__codelineno-0-1694" name="__codelineno-0-1694"></a>        <span class="n">task</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_child_tasks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
-</span><span id="__span-0-1695"><a id="__codelineno-0-1695" name="__codelineno-0-1695"></a>        <span class="k">if</span> <span class="n">task</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">task</span><span class="o">.</span><span class="n">done</span><span class="p">():</span>
-</span><span id="__span-0-1696"><a id="__codelineno-0-1696" name="__codelineno-0-1696"></a>            <span class="n">task</span><span class="o">.</span><span class="n">cancel</span><span class="p">()</span>
-</span><span id="__span-0-1697"><a id="__codelineno-0-1697" name="__codelineno-0-1697"></a>            <span class="k">try</span><span class="p">:</span>
-</span><span id="__span-0-1698"><a id="__codelineno-0-1698" name="__codelineno-0-1698"></a>                <span class="k">await</span> <span class="n">task</span>
-</span><span id="__span-0-1699"><a id="__codelineno-0-1699" name="__codelineno-0-1699"></a>            <span class="k">except</span> <span class="p">(</span><span class="n">asyncio</span><span class="o">.</span><span class="n">CancelledError</span><span class="p">,</span> <span class="ne">Exception</span><span class="p">):</span>
-</span><span id="__span-0-1700"><a id="__codelineno-0-1700" name="__codelineno-0-1700"></a>                <span class="k">pass</span>
-</span><span id="__span-0-1701"><a id="__codelineno-0-1701" name="__codelineno-0-1701"></a>
-</span><span id="__span-0-1702"><a id="__codelineno-0-1702" name="__codelineno-0-1702"></a>    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_pending_child_tasks</span><span class="p">):</span>
-</span><span id="__span-0-1703"><a id="__codelineno-0-1703" name="__codelineno-0-1703"></a>        <span class="n">t</span><span class="o">.</span><span class="n">cancel</span><span class="p">()</span>
-</span><span id="__span-0-1704"><a id="__codelineno-0-1704" name="__codelineno-0-1704"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pending_child_tasks</span><span class="p">:</span>
-</span><span id="__span-0-1705"><a id="__codelineno-0-1705" name="__codelineno-0-1705"></a>        <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">gather</span><span class="p">(</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">_pending_child_tasks</span><span class="p">,</span> <span class="n">return_exceptions</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1707">1707</a></span>
+<span class="normal"><a href="#__codelineno-0-1708">1708</a></span>
+<span class="normal"><a href="#__codelineno-0-1709">1709</a></span>
+<span class="normal"><a href="#__codelineno-0-1710">1710</a></span>
+<span class="normal"><a href="#__codelineno-0-1711">1711</a></span>
+<span class="normal"><a href="#__codelineno-0-1712">1712</a></span>
+<span class="normal"><a href="#__codelineno-0-1713">1713</a></span>
+<span class="normal"><a href="#__codelineno-0-1714">1714</a></span>
+<span class="normal"><a href="#__codelineno-0-1715">1715</a></span>
+<span class="normal"><a href="#__codelineno-0-1716">1716</a></span>
+<span class="normal"><a href="#__codelineno-0-1717">1717</a></span>
+<span class="normal"><a href="#__codelineno-0-1718">1718</a></span>
+<span class="normal"><a href="#__codelineno-0-1719">1719</a></span>
+<span class="normal"><a href="#__codelineno-0-1720">1720</a></span>
+<span class="normal"><a href="#__codelineno-0-1721">1721</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-1707"><a id="__codelineno-0-1707" name="__codelineno-0-1707"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_stop</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-1708"><a id="__codelineno-0-1708" name="__codelineno-0-1708"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Cancel all dynamic children on shutdown.&quot;&quot;&quot;</span>
+</span><span id="__span-0-1709"><a id="__codelineno-0-1709" name="__codelineno-0-1709"></a>    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">_rec</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_dynamic_children</span><span class="o">.</span><span class="n">items</span><span class="p">()):</span>
+</span><span id="__span-0-1710"><a id="__codelineno-0-1710" name="__codelineno-0-1710"></a>        <span class="n">task</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_child_tasks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+</span><span id="__span-0-1711"><a id="__codelineno-0-1711" name="__codelineno-0-1711"></a>        <span class="k">if</span> <span class="n">task</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">task</span><span class="o">.</span><span class="n">done</span><span class="p">():</span>
+</span><span id="__span-0-1712"><a id="__codelineno-0-1712" name="__codelineno-0-1712"></a>            <span class="n">task</span><span class="o">.</span><span class="n">cancel</span><span class="p">()</span>
+</span><span id="__span-0-1713"><a id="__codelineno-0-1713" name="__codelineno-0-1713"></a>            <span class="k">try</span><span class="p">:</span>
+</span><span id="__span-0-1714"><a id="__codelineno-0-1714" name="__codelineno-0-1714"></a>                <span class="k">await</span> <span class="n">task</span>
+</span><span id="__span-0-1715"><a id="__codelineno-0-1715" name="__codelineno-0-1715"></a>            <span class="k">except</span> <span class="p">(</span><span class="n">asyncio</span><span class="o">.</span><span class="n">CancelledError</span><span class="p">,</span> <span class="ne">Exception</span><span class="p">):</span>
+</span><span id="__span-0-1716"><a id="__codelineno-0-1716" name="__codelineno-0-1716"></a>                <span class="k">pass</span>
+</span><span id="__span-0-1717"><a id="__codelineno-0-1717" name="__codelineno-0-1717"></a>
+</span><span id="__span-0-1718"><a id="__codelineno-0-1718" name="__codelineno-0-1718"></a>    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_pending_child_tasks</span><span class="p">):</span>
+</span><span id="__span-0-1719"><a id="__codelineno-0-1719" name="__codelineno-0-1719"></a>        <span class="n">t</span><span class="o">.</span><span class="n">cancel</span><span class="p">()</span>
+</span><span id="__span-0-1720"><a id="__codelineno-0-1720" name="__codelineno-0-1720"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pending_child_tasks</span><span class="p">:</span>
+</span><span id="__span-0-1721"><a id="__codelineno-0-1721" name="__codelineno-0-1721"></a>        <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">gather</span><span class="p">(</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">_pending_child_tasks</span><span class="p">,</span> <span class="n">return_exceptions</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>

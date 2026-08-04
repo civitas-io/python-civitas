@@ -2352,6 +2352,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#v0100-hitl-polish-released" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.10.0 — HITL Polish (Released)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#part-2-backlog" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3274,6 +3285,17 @@
     <span class="md-ellipsis">
       
         v0.9.6 — Dashboard Control-Plane Write Actions (Released)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v0100-hitl-polish-released" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.10.0 — HITL Polish (Released)
       
     </span>
   </a>
@@ -6024,6 +6046,33 @@ SCIM/IdP/OPA middleware; single devs bring nothing). Full design + rationale in
 </tr>
 </tbody>
 </table>
+<h2 id="v0100-hitl-polish-released">v0.10.0 — HITL Polish (Released)<a class="headerlink" href="#v0100-hitl-polish-released" title="Permanent link">&para;</a></h2>
+<p><strong>Status: ✅ Released 2026-07-31, as a single release</strong> (HITL half of the original "HITL &amp; Streaming
+polish" bundle; the streaming R7 items are split out to their own future release — see Part 2).
+Three orthogonal HITL rough-edges on the durable-suspension primitive; full design in
+<a href="../design/hitl-polish.md"><code>docs/design/hitl-polish.md</code></a>.</p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Durable suspension: <strong>indefinite</strong> <code>ask()</code> (HITL approvals take hours/days)</td>
+<td>✅ <strong>Done (D1)</strong> — <code>ask()</code>/<code>Runtime.ask()</code>/<code>bus.request()</code>/all 3 transports widen <code>timeout: float \| None</code>; <code>None</code>/<code>-1</code>/<code>&lt;=0</code> = wait indefinitely; default 30s unchanged. Uniform because every transport already funnels through <code>asyncio.timeout(None)</code>. Verified end-to-end: an indefinite ask into a SUSPENDED agent stays pending, then returns the real reply on resume</td>
+</tr>
+<tr>
+<td>Durable suspension: fail-fast <code>ask()</code> into a suspended agent</td>
+<td>✅ <strong>Done (D2)</strong> — opt-in <code>ask(..., fail_if_suspended=True)</code> raises the new <code>AgentSuspendedError</code> instantly instead of buffering; default off (strictly additive). Registry learns suspension via a name set updated at the single <code>_set_status()</code> choke point; consulted only when the flag is set</td>
+</tr>
+<tr>
+<td>Durable suspension: crash-while-suspended restart-budget exemption</td>
+<td>✅ <strong>Done (D3)</strong> — <code>RestartEngine.exempt_verdict()</code>; both static + dynamic crash paths skip the budget window for a crash whose incarnation carried the durable suspend marker (restart still happens, into SUSPENDED). Scoped — a RUNNING crash still counts</td>
+</tr>
+</tbody>
+</table>
 <h2 id="part-2-backlog">Part 2 — Backlog<a class="headerlink" href="#part-2-backlog" title="Permanent link">&para;</a></h2>
 <p><strong>Status: 🗂️ Tracked</strong> — the active todo list: everything not yet done. New work lands here first
 (a design doc if warranted), then moves into <a href="#part-1-shipped">Part 1 — Shipped</a> once released.
@@ -6201,7 +6250,9 @@ loader module. <strong>Explicitly NOT a rewrite</strong> — a decomposition of 
 code, one behavior-preserving move at a time, each verified against the existing suite. Not
 scheduled against a version yet; a natural fit before the v1.0.0 GA gates (an external security
 auditor reviewing 2k-line god-modules is a worse experience than reviewing focused ones).</p>
-<h3 id="v0100-hitl-streaming-polish-planned-the-medicus-runway">v0.10.0 — HITL &amp; Streaming polish (Planned — the Medicus runway)<a class="headerlink" href="#v0100-hitl-streaming-polish-planned-the-medicus-runway" title="Permanent link">&para;</a></h3>
+<h3 id="bus-native-streaming-polish-r7-remainder-planned">Bus-native streaming polish (R7 remainder) (Planned)<a class="headerlink" href="#bus-native-streaming-polish-r7-remainder-planned" title="Permanent link">&para;</a></h3>
+<p>Split from the original v0.10.0 "HITL &amp; Streaming" bundle when the HITL half shipped as v0.10.0
+(Part 1). Both refine the already-shipped bus-native streaming feature; neither is a defect.</p>
 <table>
 <thead>
 <tr>
@@ -6212,23 +6263,13 @@ auditor reviewing 2k-line god-modules is a worse experience than reviewing focus
 </thead>
 <tbody>
 <tr>
-<td>Durable suspension: fail-fast <code>ask()</code> into a suspended agent (times out today)</td>
-<td>🟡 Medium</td>
-<td>design/durable-suspension.md Non-Goals</td>
-</tr>
-<tr>
-<td>Durable suspension: crash-while-suspended restart-budget exemption</td>
-<td>🟡 Medium</td>
-<td>supervisor.py (S8 finding #5)</td>
-</tr>
-<tr>
 <td>R7: credit-based stream backpressure (<code>civitas.stream.credit</code> reserved)</td>
-<td>🟢 Low</td>
+<td>Low</td>
 <td>design/bus-native-streaming.md §8 Q5</td>
 </tr>
 <tr>
 <td>R7: immediate <code>StreamInterrupted</code> on producer loss</td>
-<td>🟢 Low</td>
+<td>Low</td>
 <td>design/bus-native-streaming.md D6</td>
 </tr>
 </tbody>
