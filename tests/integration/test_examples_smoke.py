@@ -98,7 +98,7 @@ EXCLUDED_EXAMPLES = {
     "examples/frameworks/openai_sdk_on_civitas.py": "needs the openai-agents package installed",
     "examples/deployment/level3_distributed/run_supervisor.py": "needs a real NATS server",
     "examples/deployment/level3_distributed/run_worker.py": "needs a real NATS server",
-    "examples/stateful_workflow.py": "needs civitas-contrib (SQLiteStateStore) — see the fix that gave it a real import path this same release",
+    "examples/stateful_workflow.py": "writes a persistent civitas_state.db to cwd (its whole point is on-disk crash recovery); running in-tree would leave a state artifact. Imports core now, not contrib (v0.11.0 B4)",
 }
 
 # examples/deployment/level4_docker/agents.py is intentionally absent from every

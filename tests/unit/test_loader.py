@@ -61,6 +61,14 @@ def test_resolve_entrypoint_name_mismatch_falls_through() -> None:
     wrong_ep.load.assert_not_called()
 
 
+def test_resolve_sqlite_state_store_is_core_not_contrib() -> None:
+    """v0.11.0 (B4): SQLiteStateStore moved to core, so `type: sqlite` resolves
+    to the core module and works WITHOUT civitas-contrib installed."""
+    cls = resolve_plugin_class("state", "sqlite")
+    assert cls.__module__ == "civitas.plugins.sqlite_store"
+    assert cls.__name__ == "SQLiteStateStore"
+
+
 def test_import_dotted_no_module_part_raises() -> None:
     """A dotted path with an empty module part (e.g. '.MyClass') raises PluginError."""
     # "." in ".MyClass" is True, so resolve_plugin_class will call _import_dotted,

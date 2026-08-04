@@ -16,20 +16,15 @@ from typer.testing import CliRunner
 
 from civitas.cli import app
 
-# `civitas state` operates on SQLite databases via the contrib store (cli/state.py
-# lazy-imports it), so the state tests genuinely require civitas-contrib (#40).
-# Everything else in this module is core-only and runs unconditionally.
-try:
-    from civitas_contrib.plugins.sqlite_store import SQLiteStateStore
-
-    _HAS_CONTRIB_SQLITE = True
-except ImportError:
-    SQLiteStateStore = None  # type: ignore[assignment, misc]
-    _HAS_CONTRIB_SQLITE = False
+# `civitas state` operates on SQLite databases via SQLiteStateStore, which moved
+# to core in v0.11.0 (B4) -- always available now, so these tests run
+# unconditionally (the marker is kept as a no-op so the per-test decorators need
+# not change).
+from civitas.plugins.sqlite_store import SQLiteStateStore
 
 requires_sqlite = pytest.mark.skipif(
-    not _HAS_CONTRIB_SQLITE,
-    reason="requires civitas-contrib (sqlite state store used by `civitas state`)",
+    False,
+    reason="SQLiteStateStore is in core since v0.11.0",
 )
 
 runner = CliRunner()

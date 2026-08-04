@@ -11,19 +11,15 @@ import tempfile
 
 import pytest
 
-# The SQLite state store moved to civitas-contrib in the core/contrib split (#40):
-# this module integration-tests persistence against it and skips cleanly without
-# contrib (InMemory checkpoint behavior is unit-covered in tests/unit).
-pytest.importorskip(
-    "civitas_contrib.plugins.sqlite_store",
-    reason="civitas-contrib not installed — skipping SQLite state-persistence integration tests",
-)
-
-from civitas_contrib.plugins.sqlite_store import SQLiteStateStore
-
 from civitas import AgentProcess, Runtime, Supervisor
 from civitas.messages import Message
 from civitas.plugins.loader import load_plugin
+
+# SQLiteStateStore moved BACK to core in v0.11.0 (B4): SQLite is stdlib, so it
+# adds no third-party dependency and belongs in core under the contrib boundary
+# rule (docs/design/spanstore-and-contrib-boundary.md). No importorskip needed --
+# it is always available now. (It briefly lived in civitas-contrib after #40.)
+from civitas.plugins.sqlite_store import SQLiteStateStore
 from civitas.plugins.state import InMemoryStateStore
 
 # ---------------------------------------------------------------------------
@@ -114,7 +110,7 @@ async def test_sqlite_store_set_and_get():
 
         result = await store.get("agent_a")
         assert result == {"count": 42, "data": [1, 2, 3]}
-        store.close()
+        await store.close()
     finally:
         os.unlink(db_path)
 
@@ -128,7 +124,7 @@ async def test_sqlite_store_get_missing():
         store = SQLiteStateStore(db_path)
         result = await store.get("nonexistent")
         assert result is None
-        store.close()
+        await store.close()
     finally:
         os.unlink(db_path)
 
@@ -145,7 +141,7 @@ async def test_sqlite_store_upsert():
 
         result = await store.get("agent_a")
         assert result == {"v": 2}
-        store.close()
+        await store.close()
     finally:
         os.unlink(db_path)
 
@@ -162,7 +158,7 @@ async def test_sqlite_store_delete():
 
         result = await store.get("agent_a")
         assert result is None
-        store.close()
+        await store.close()
     finally:
         os.unlink(db_path)
 
@@ -183,7 +179,7 @@ async def test_sqlite_store_scoped_per_agent():
         await store.delete("agent_a")
         assert await store.get("agent_a") is None
         assert await store.get("agent_b") == {"y": 2}
-        store.close()
+        await store.close()
     finally:
         os.unlink(db_path)
 
@@ -201,7 +197,7 @@ async def test_sqlite_store_list_agents():
 
         agents = await store.list_agents()
         assert agents == ["alice", "bob", "charlie"]  # alphabetical
-        store.close()
+        await store.close()
     finally:
         os.unlink(db_path)
 
@@ -215,13 +211,13 @@ async def test_sqlite_store_survives_reopen():
         # Write state
         store1 = SQLiteStateStore(db_path)
         await store1.set("agent_a", {"step": 3, "data": "hello"})
-        store1.close()
+        await store1.close()
 
         # Reopen and read
         store2 = SQLiteStateStore(db_path)
         result = await store2.get("agent_a")
         assert result == {"step": 3, "data": "hello"}
-        store2.close()
+        await store2.close()
     finally:
         os.unlink(db_path)
 
@@ -252,7 +248,7 @@ async def test_agent_checkpoint_saves_state():
             assert saved == {"count": 2}
         finally:
             await runtime.stop()
-            store.close()
+            await store.close()
     finally:
         os.unlink(db_path)
 
@@ -274,7 +270,7 @@ async def test_agent_restores_from_checkpoint():
         await runtime1.ask("counter", {})
         await runtime1.ask("counter", {})
         await runtime1.stop()
-        store1.close()
+        await store1.close()
 
         # Second run — should resume from count=3
         store2 = SQLiteStateStore(db_path)
@@ -288,7 +284,7 @@ async def test_agent_restores_from_checkpoint():
             assert result.payload["count"] == 4  # resumed from 3, incremented to 4
         finally:
             await runtime2.stop()
-            store2.close()
+            await store2.close()
     finally:
         os.unlink(db_path)
 
@@ -343,7 +339,7 @@ async def test_supervisor_restart_triggers_state_restore():
             assert result.payload["processed"] == 2
         finally:
             await runtime.stop()
-            store.close()
+            await store.close()
     finally:
         os.unlink(db_path)
 
@@ -369,7 +365,7 @@ async def test_stateless_agent_unaffected():
             assert saved is None
         finally:
             await runtime.stop()
-            store.close()
+            await store.close()
     finally:
         os.unlink(db_path)
 
@@ -383,7 +379,7 @@ async def test_workflow_resumes_from_checkpoint():
         # Simulate partial completion by writing state directly
         store1 = SQLiteStateStore(db_path)
         await store1.set("workflow", {"step": 2, "results": ["step_1", "step_2"]})
-        store1.close()
+        await store1.close()
 
         # Start runtime — agent should resume from step 2
         store2 = SQLiteStateStore(db_path)
@@ -399,7 +395,7 @@ async def test_workflow_resumes_from_checkpoint():
             assert result.payload["results"] == ["step_1", "step_2", "step_3", "step_4", "step_5"]
         finally:
             await runtime.stop()
-            store2.close()
+            await store2.close()
     finally:
         os.unlink(db_path)
 
@@ -432,6 +428,6 @@ async def test_sqlite_store_loads_via_plugin_system():
         assert isinstance(store, SQLiteStateStore)
         await store.set("test", {"v": 1})
         assert await store.get("test") == {"v": 1}
-        store.close()
+        await store.close()
     finally:
         os.unlink(db_path)

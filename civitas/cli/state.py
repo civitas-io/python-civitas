@@ -13,10 +13,9 @@ from rich.table import Table
 from civitas.cli.app import console, error, info, success, warn
 from civitas.plugins.encrypted_store import ENVELOPE_KEY
 
-try:
-    from civitas_contrib.plugins.sqlite_store import SQLiteStateStore
-except ImportError:
-    SQLiteStateStore = None
+# SQLiteStateStore moved to core in v0.11.0 (B4) -- import directly, no longer a
+# contrib-optional dependency (SQLite is stdlib).
+from civitas.plugins.sqlite_store import SQLiteStateStore
 
 state_app = typer.Typer(
     name="state",
