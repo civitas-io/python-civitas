@@ -200,9 +200,9 @@ python my_agent.py
 Trace context propagates automatically across process and machine boundaries — including across
 process and transport boundaries (verified with a real 2-OS-process ZMQ round trip).
 
-**Prometheus** is also a first-class scrape target — `GET /metrics` on any running
-`TopologyServer` is real Prometheus text-format exposition at the standard path, no
-`metrics_path` override needed:
+**Prometheus** is also a first-class scrape target — `GET /metrics` on a topology's
+introspection endpoint (the `topology_server` node) is real Prometheus text-format exposition at
+the standard path, no `metrics_path` override needed:
 
 ```yaml
 # prometheus.yml
@@ -224,6 +224,29 @@ per-agent/per-model breakdown table in your terminal:
 pip install 'civitas[telemetry]'
 civitas telemetry ./civitas_telemetry
 ```
+
+---
+
+## Control plane
+
+Beyond *observing* a running system, Civitas can safely **act** on it over the same HTTP
+endpoint — suspend, resume, and force-restart agents; peek and inject mailbox messages — each
+audited with the authenticated caller recorded as the actor:
+
+```bash
+curl -XPOST http://127.0.0.1:6789/agents/worker/suspend
+curl -XPOST http://127.0.0.1:6789/agents/worker/resume
+```
+
+Civitas ships the **integration seam, not an auth system**: plug in your own middleware
+(SCIM / IdP / OPA) that sets the caller's identity, and Civitas records it in the audit trail.
+Denials are your middleware's call; Civitas never models roles or scopes. With no middleware, on
+localhost, it needs zero configuration — see [`examples/control_plane_auth.py`](examples/control_plane_auth.py).
+
+**Human-in-the-loop** is a first-class case: an agent calls `suspend_for_approval()` and durably
+pauses (surviving restarts); a human approves via `resume`; and a caller can
+`ask(agent, payload, timeout=-1)` to block for however long the approval takes — hours or days —
+then receive the real result.
 
 ---
 
@@ -364,7 +387,7 @@ civitas run          — start a topology (supervisor or worker process)
 civitas topology     — validate, visualise, and diff topology files
 civitas state        — inspect and manage persisted agent state
 civitas dashboard    — civitas top: live Textual dashboard for a running topology
-civitas telemetry    — live Textual TUI over B1's native SQLite cost/rate history
+civitas telemetry    — live Textual TUI over the native SQLite cost/rate history
 civitas deploy       — generate Docker Compose deployment artifacts
 civitas version      — show the installed version
 ```
