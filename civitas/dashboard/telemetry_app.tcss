@@ -17,6 +17,13 @@ Screen {
     height: 1fr;
 }
 
+/* v0.10.1 (B3.7): the log/event feed -- full-width row under the breakdowns. */
+#events {
+    height: 1fr;
+    border: round $primary;
+    border-title-color: $primary;
+}
+
 CostChart {
     width: 1fr;
     height: 1fr;

@@ -232,9 +232,15 @@ class Mailbox:
 
 @dataclass
 class _OutStream:
-    """Producer-side state for one outbound stream (R7): seq counter, cap, cancel flag."""
+    """Producer-side state for one outbound stream (R7): seq counter, cap, cancel flag.
+
+    ``recipient`` (v0.10.1, D6) is the consumer this stream is flowing to, so the
+    producer can send an immediate ``StreamInterrupted`` to it on teardown
+    instead of leaving it to time out.
+    """
 
     started_at: float
+    recipient: str = ""
     max_frames: int | None = None
     max_duration: float | None = None
     seq: int = 0
@@ -1250,7 +1256,10 @@ class AgentProcess:
         seq: int | None = None
         if stream_type == _STREAM_CHUNK:
             if ostream is None and cid is not None:
-                ostream = _OutStream(started_at=time.monotonic())
+                ostream = _OutStream(
+                    started_at=time.monotonic(),
+                    recipient=message.reply_to or message.sender,
+                )
                 self._out_streams[cid] = ostream
             if ostream is not None:
                 seq = ostream.seq
@@ -1403,13 +1412,51 @@ class AgentProcess:
         for sink in list(self._pending_streams.values()):
             sink.fail(reason)
 
+    async def _interrupt_out_streams(self) -> None:
+        """Notify every active-outbound-stream consumer that this producer is
+        gone (v0.10.1, D6), so their sinks fail with ``StreamInterrupted``
+        immediately instead of waiting out ``idle_timeout``.
+
+        This is the producer→consumer half the design deferred at v1 (D6·a):
+        ``_fail_local_streams`` handles this agent's own CONSUMER sinks; this
+        handles the CONSUMERS of the streams this agent was PRODUCING. Runs in
+        the message-loop teardown while the bus is still wired, so it covers a
+        graceful stop, a force-restart, and a crash alike (all exit the loop).
+        Best-effort per consumer — one unroutable recipient must not block the
+        rest, and the consumer's idle_timeout remains the backstop.
+        """
+        if self._bus is None:
+            return
+        for cid, ostream in list(self._out_streams.items()):
+            if not ostream.recipient:
+                continue
+            frame = Message(
+                type=_STREAM_ERROR,
+                sender=self.name,
+                recipient=ostream.recipient,
+                payload={"error": "producer_stopped"},
+                correlation_id=cid,
+                seq=ostream.seq,
+                span_id=_new_span_id(),
+            )
+            try:
+                await self._bus.route(frame)
+            except Exception:
+                logger.debug(
+                    "[%s] could not interrupt stream consumer %r on teardown",
+                    self.name,
+                    ostream.recipient,
+                    exc_info=True,
+                )
+        self._out_streams.clear()
+
     @staticmethod
     def _stream_error(reason: str) -> StreamError:
         if reason == "slow_consumer":
             return SlowConsumerError(reason)
         if reason in ("stream idle timeout", "max_stream_duration exceeded"):
             return StreamTimeout(reason)
-        if reason == "agent_stopped":
+        if reason in ("agent_stopped", "producer_stopped"):
             return StreamInterrupted(reason)
         return StreamError(reason)
 
@@ -1813,6 +1860,11 @@ class AgentProcess:
             self._current_message = None
             self._current_handle_span = None
             self._fail_local_streams("agent_stopped")
+            # v0.10.1 (D6): also tell the consumers of the streams WE were
+            # producing that we're gone, so they fail fast instead of waiting
+            # out idle_timeout. Bus is still wired here (teardown runs before
+            # bus teardown), covering stop/force-restart/crash.
+            await self._interrupt_out_streams()
             # Preserve CRASHED — only move to STOPPING for normal/requested exits
             crashed = self._status == ProcessStatus.CRASHED
             if not crashed:

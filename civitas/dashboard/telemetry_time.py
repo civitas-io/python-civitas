@@ -38,6 +38,30 @@ class TimeRange:
             return self.fixed_since
         return now - (self.duration_seconds or DEFAULT_DURATION_SECONDS)
 
+    def bucket_seconds(self, now: float) -> int:
+        """Chart bucket granularity that FOLLOWS the visible window (v0.10.1).
+
+        Without this the queries default to a fixed bucket (1 day for cost),
+        so a 1h view collapsed the whole hour into a single point and the
+        chart looked dead. Here the bucket scales with the effective span so
+        every view shows ~24-90 real aggregate points connected by straight
+        lines -- honest data at a sensible density, NOT interpolated frames.
+
+        Tiered to human-round buckets (1m/5m/1h/6h/1d) rather than a raw
+        formula. Uses the effective span (``now - since(now)``) so a fixed
+        ``--since`` start gets a sensible bucket as its window grows too.
+        """
+        span = now - self.since(now)
+        if span <= 90 * 60:  # <= 90 min -> 1-minute buckets
+            return 60
+        if span <= 6 * 3600:  # <= 6 h    -> 5-minute buckets
+            return 300
+        if span <= 36 * 3600:  # <= 36 h  -> hourly buckets
+            return 3600
+        if span <= 10 * 86400:  # <= 10 d -> 6-hour buckets
+            return 6 * 3600
+        return 86400  # otherwise -> daily buckets
+
     @classmethod
     def preset(cls, code: str) -> TimeRange:
         """A named preset -- matches the TUI's h/d/w/m keybindings exactly."""

@@ -22,6 +22,7 @@ from civitas.dashboard.telemetry_time import TimeRange
 from civitas.dashboard.telemetry_widgets import (
     CostBreakdownTable,
     CostChart,
+    EventLogTable,
     MessageRateChart,
     StatPanel,
     TimeRangeBar,
@@ -83,6 +84,10 @@ async def test_telemetry_app_renders_real_runtime_output(tmp_path: Path) -> None
         stat_text = str(app.query_one(StatPanel).render())
         assert "$0.05" in stat_text
         assert "chatty" in stat_text
+
+        # v0.10.1 (B3.7): the event feed populated from the same real run.
+        events = app.query_one(EventLogTable)
+        assert events.row_count > 0
 
 
 @pytest.mark.asyncio

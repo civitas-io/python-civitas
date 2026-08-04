@@ -15,7 +15,7 @@ from civitas.errors import (
     StreamTimeout,
 )
 from civitas.messages import STREAM_MESSAGE_TYPES, Message
-from civitas.process import _STREAM_CHUNK, _STREAM_END
+from civitas.process import _STREAM_CHUNK, _STREAM_END, _STREAM_ERROR
 from civitas.streaming import StreamSink, _StreamClosed
 
 
@@ -67,6 +67,27 @@ class _Consumer(AgentProcess):
         return self.reply({"chunks": chunks})
 
 
+class _LeakyProducer(AgentProcess):
+    """Opens a stream (one chunk) and returns WITHOUT ending it -- so the
+    outbound stream stays active in _out_streams, simulating a producer that is
+    mid-stream when it later stops (v0.10.1 D6)."""
+
+    async def handle(self, message: Message) -> Message | None:
+        await self.emit({"i": 0})
+        return None
+
+
+class _InterruptConsumer(AgentProcess):
+    async def handle(self, message: Message) -> Message | None:
+        try:
+            async with aclosing(self.stream("prod", {}, idle_timeout=300.0)) as stream:
+                async for _chunk in stream:
+                    pass
+            return self.reply({"result": "completed"})
+        except StreamInterrupted:
+            return self.reply({"result": "interrupted"})
+
+
 async def _run(*children: AgentProcess) -> Runtime:
     runtime = Runtime(supervisor=Supervisor("root", children=list(children)))
     await runtime.start()
@@ -85,6 +106,31 @@ class TestBusStreaming:
         try:
             reply = await runtime.ask("cons", {"target": "prod", "n": 3}, timeout=5.0)
             assert reply.payload["chunks"] == [{"i": 0}, {"i": 1}, {"i": 2}]
+        finally:
+            await runtime.stop()
+
+    @pytest.mark.asyncio
+    async def test_producer_stop_interrupts_consumer_immediately(self) -> None:
+        """v0.10.1 (D6): a consumer mid-stream when its producer stops gets
+        StreamInterrupted FAST -- not after the (300s) idle_timeout. Real two-
+        agent runtime: the producer opens a stream and idles; stopping it fires
+        the producer->consumer interrupt."""
+        runtime = await _run(_LeakyProducer("prod"), _InterruptConsumer("cons"))
+        try:
+            task = asyncio.create_task(runtime.ask("cons", {}, timeout=10.0))
+            # Wait until the producer actually has an active outbound stream
+            # (the consumer started and chunk 0 flowed).
+            prod = runtime._root_supervisor._children_by_name["prod"]
+            for _ in range(200):
+                if prod._out_streams:
+                    break
+                await asyncio.sleep(0.01)
+            assert prod._out_streams  # stream is live
+
+            # Stop just the producer -> its teardown interrupts the consumer.
+            await prod._stop()
+            reply = await asyncio.wait_for(task, timeout=3.0)  # << idle_timeout=300
+            assert reply.payload["result"] == "interrupted"
         finally:
             await runtime.stop()
 
@@ -236,4 +282,31 @@ class TestReservedAndEnvelope:
         assert isinstance(AgentProcess._stream_error("slow_consumer"), SlowConsumerError)
         assert isinstance(AgentProcess._stream_error("stream idle timeout"), StreamTimeout)
         assert isinstance(AgentProcess._stream_error("agent_stopped"), StreamInterrupted)
+        # v0.10.1 (D6): a producer that stops mid-stream interrupts its consumers.
+        assert isinstance(AgentProcess._stream_error("producer_stopped"), StreamInterrupted)
         assert isinstance(AgentProcess._stream_error("boom"), StreamError)
+
+    @pytest.mark.asyncio
+    async def test_interrupt_out_streams_routes_producer_stopped_to_each_consumer(self) -> None:
+        """v0.10.1 (D6): on teardown, the producer sends a producer_stopped
+        stream-error to every active outbound stream's consumer, then clears
+        its registry."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        from civitas.process import _OutStream
+
+        prod = _Producer("prod")
+        prod._bus = MagicMock()
+        prod._bus.route = AsyncMock()
+        prod._out_streams["cid-1"] = _OutStream(started_at=0.0, recipient="cons-a", seq=3)
+        prod._out_streams["cid-2"] = _OutStream(started_at=0.0, recipient="cons-b", seq=1)
+
+        await prod._interrupt_out_streams()
+
+        routed = [c.args[0] for c in prod._bus.route.call_args_list]
+        by_recipient = {m.recipient: m for m in routed}
+        assert set(by_recipient) == {"cons-a", "cons-b"}
+        for m in routed:
+            assert m.type == _STREAM_ERROR
+            assert m.payload == {"error": "producer_stopped"}
+        assert prod._out_streams == {}  # registry cleared

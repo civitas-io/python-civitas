@@ -359,8 +359,11 @@ moment you try to run it.
   `textual-plotext`), one series per agent (+ model, for cost). Capped at the top 6 series by
   total value — a real multi-agent/multi-model deployment's full cardinality would make a terminal
   legend unreadable well before that.
-- **Totals** / **Breakdown** (bottom row) — at-a-glance total spend/messages/top-agent, and a
-  per-agent + per-model cost table.
+- **Totals** / **Breakdown** (middle row) — at-a-glance total spend/messages/top-agent, and a
+  per-agent + per-model cost table (its title shows the agent/model count; it scrolls at any
+  cardinality).
+- **Events** (bottom row, v0.10.1) — a chronological event feed: the most recent spans, newest
+  first (time, event name, agent, status, duration), backed by `SQLiteQueryEngine.recent_spans()`.
 
 Time range: press `h`/`d`/`w`/`m` to switch between 1h/24h/7d/30d presets interactively (recomputed
 against "now" each refresh), or `r` for an immediate manual refresh. `q` to quit.
