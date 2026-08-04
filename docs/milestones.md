@@ -1431,7 +1431,7 @@ Split from the original v0.10.0 "HITL & Streaming" bundle when the HITL half shi
 | Item | Priority | Source |
 |------|----------|--------|
 | R7: credit-based stream backpressure (`civitas.stream.credit` reserved) | Low | design/bus-native-streaming.md §8 Q5 |
-| R7: immediate `StreamInterrupted` on producer loss | Low | design/bus-native-streaming.md D6 |
+| R7: immediate `StreamInterrupted` on producer loss | ✅ **Done (v0.10.1)** | design/bus-native-streaming.md §8b addendum — producer keeps a per-stream `recipient` index; on teardown (stop/force-restart/crash) sends `producer_stopped` → `StreamInterrupted` to each consumer, so a consumer mid-stream fails immediately instead of waiting out `idle_timeout` (still the backstop for a hard-killed peer). Verified end-to-end |
 
 
 ### v1.0.0 — GA gates (Planned)

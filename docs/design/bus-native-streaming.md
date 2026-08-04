@@ -101,9 +101,26 @@ async def handle(self, message: Message) -> None:
 
 Oracle agreed with the v1 leans on **Q2** (defer producer opt-in; D8 only), **Q4** (`AsyncIterator[dict]`), **Q5** (defer credit; reserve `civitas.stream.credit`), **Q6** (share `StreamSink` now, guard with G2/G3 suites).
 
-- ✅ **A — D6 scope = (a):** `idle_timeout`/`max_duration` is the peer-loss bound for v1; immediate `StreamInterrupted` via a bidirectional producer→sink index is deferred.
+- ✅ **A — D6 scope = (a):** `idle_timeout`/`max_duration` is the peer-loss bound for v1; immediate `StreamInterrupted` via a bidirectional producer→sink index is deferred. **[v0.10.1: now built — see addendum below.]**
 - ✅ **B — `seq` placement = `Message.seq: int | None` envelope field** (not a `__seq__` payload key), so the yielded dict is never mutated; `from_dict` already filters unknown keys → back-compat both directions.
 - ✅ **C — producer cap** added: a producer-side `max_frames`/`max_duration` bound so a lost cancel or dead consumer can't run the producer forever.
+
+## 8b. Addendum (v0.10.1) — immediate `StreamInterrupted` on producer loss (D6 upgraded)
+
+The D6·a deferral is lifted. The producer already keeps a per-outbound-stream registry
+(`_out_streams: dict[cid, _OutStream]`); `_OutStream` now also carries the `recipient` (captured
+when the stream's first chunk is emitted). On the producer's message-loop teardown — which covers a
+graceful stop, a force-restart, and a crash alike (all exit the loop, and the bus is still wired at
+that point) — `_interrupt_out_streams()` sends a `civitas.stream.error` frame carrying
+`{"error": "producer_stopped"}` to each active stream's `recipient`, then clears the registry.
+`_stream_error("producer_stopped")` maps to `StreamInterrupted`, so a consumer mid-stream fails
+**immediately** instead of waiting out its `idle_timeout`.
+
+This is the producer→consumer half; `_fail_local_streams` (unchanged) remains the consumer's own
+local-stop half. `idle_timeout`/`max_duration` stay as the backstop for a genuinely-unreachable
+peer (a killed process that never runs teardown, or a dropped transport) — the immediate interrupt
+is best-effort per consumer and never blocks teardown. Same-process and any transport where the
+producer runs teardown; a hard `kill -9` still falls back to the timeout, as it must.
 
 ## 9. Test plan (outline)
 
