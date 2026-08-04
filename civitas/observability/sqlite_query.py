@@ -54,6 +54,47 @@ class MessageRateBucket:
     message_count: int
 
 
+@dataclasses.dataclass
+class SpanRecord:
+    """One span/event row (v0.10.1, §13 trace/span drill-down + log viewer).
+
+    Surfaces the promoted hot columns + timing/trace identity, NOT the raw
+    ``attributes_json`` blob (that's the design's "how much to surface"
+    decision: the promoted columns cover what a log/event feed shows; the full
+    blob stays in the DB for deeper drill-down if a later cut needs it).
+    """
+
+    name: str
+    trace_id: str
+    span_id: str
+    parent_span_id: str | None
+    start_time: float
+    end_time: float
+    status: str
+    error_message: str | None
+    agent_name: str | None
+    llm_model: str | None
+    llm_tokens_in: int | None
+    llm_tokens_out: int | None
+    llm_cost_usd: float | None
+
+    @property
+    def duration_ms(self) -> float:
+        return (self.end_time - self.start_time) * 1000.0
+
+
+# Column list + order shared by recent_spans/spans_in_trace and _row_to_span --
+# kept in one place so the SELECT and the tuple-unpacking can never drift.
+_SPAN_COLS = (
+    "name, trace_id, span_id, parent_span_id, start_time, end_time, status, "
+    "error_message, agent_name, llm_model, llm_tokens_in, llm_tokens_out, llm_cost_usd"
+)
+
+
+def _row_to_span(row: tuple[Any, ...]) -> SpanRecord:
+    return SpanRecord(*row)
+
+
 class SQLiteQueryEngine:
     """Read-only queries over SQLiteBackend's time-windowed spans tables.
 
@@ -190,6 +231,41 @@ class SQLiteQueryEngine:
             since, until, sql_per_window, outer_sql, (since, until)
         )
         return {row[0]: row[1] or 0.0 for row in rows}
+
+    async def recent_spans(self, since: float, until: float, limit: int = 200) -> list[SpanRecord]:
+        """The most recent spans in [since, until], newest first (v0.10.1).
+
+        A chronological event feed for the log/event viewer (§14/B3.7) — unlike
+        the aggregate queries, this returns individual span rows. ``limit`` is
+        an int cast into the SQL (safe — not user-supplied text) since the
+        cross-window helper binds only the per-window range params.
+        """
+        sql_per_window = (
+            f"SELECT {_SPAN_COLS} FROM {{alias}}.spans WHERE start_time >= ? AND start_time <= ?"
+        )
+        outer_sql = "SELECT * FROM ({union}) ORDER BY start_time DESC LIMIT " + str(int(limit))
+        rows = await self._query_across_windows(
+            since, until, sql_per_window, outer_sql, (since, until)
+        )
+        return [_row_to_span(row) for row in rows]
+
+    async def spans_in_trace(self, trace_id: str, since: float, until: float) -> list[SpanRecord]:
+        """Every span in one trace, oldest first (v0.10.1, §13 drill-down).
+
+        "Show me every span in trace X" — the per-trace timeline. Chronological
+        (ASC) so a trace reads top-to-bottom. Bounded by [since, until] so it
+        only attaches the relevant window files (a trace lives in one window in
+        practice, but the range keeps the cross-window helper honest).
+        """
+        sql_per_window = (
+            f"SELECT {_SPAN_COLS} FROM {{alias}}.spans "
+            "WHERE trace_id = ? AND start_time >= ? AND start_time <= ?"
+        )
+        outer_sql = "SELECT * FROM ({union}) ORDER BY start_time ASC"
+        rows = await self._query_across_windows(
+            since, until, sql_per_window, outer_sql, (trace_id, since, until)
+        )
+        return [_row_to_span(row) for row in rows]
 
     # ------------------------------------------------------------------
     # Internal

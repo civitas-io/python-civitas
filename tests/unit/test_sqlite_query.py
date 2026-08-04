@@ -233,3 +233,60 @@ async def test_files_in_range_excludes_windows_outside_the_requested_range(tmp_p
     engine = SQLiteQueryEngine(db_dir=str(tmp_path))
     result = await engine.cost_by_agent(now - 10, now + 10)  # NOT the far-future range
     assert result == {}
+
+
+def _span(name: str, trace: str, start_time: float, agent: str | None = None) -> SpanData:
+    # NB: agent_name is only PROMOTED to a column for civitas.agent.*/llm.chat
+    # span names (normalize_span) -- arbitrary-named spans here get agent_name
+    # None, which is correct. These feed/drill-down tests assert on ordering and
+    # trace identity, not agent promotion (covered by the cost_by_agent tests).
+    attrs: dict = {}
+    if agent is not None:
+        attrs["civitas.agent.name"] = agent
+    return SpanData(
+        name=name,
+        trace_id=trace,
+        span_id=f"{start_time:016.0f}"[:16],
+        parent_span_id=None,
+        start_time=start_time,
+        end_time=start_time + 0.05,
+        attributes=attrs,
+        status="ok",
+    )
+
+
+async def test_recent_spans_returns_newest_first_bounded_by_limit(tmp_path: Path):
+    """v0.10.1: the log/event feed -- individual span rows, newest first, capped."""
+    now = time.time()
+    backend = SQLiteBackend(db_dir=str(tmp_path))
+    await backend.export([_span(f"evt-{i}", "t" * 32, now + i, agent="w") for i in range(5)])
+    await backend.shutdown()
+
+    engine = SQLiteQueryEngine(db_dir=str(tmp_path))
+    rows = await engine.recent_spans(now - 10, now + 100, limit=3)
+    assert [r.name for r in rows] == ["evt-4", "evt-3", "evt-2"]  # newest first, limit 3
+    assert rows[0].duration_ms == pytest.approx(50.0)
+
+
+async def test_spans_in_trace_returns_that_trace_oldest_first(tmp_path: Path):
+    """v0.10.1 (§13 drill-down): every span in trace X, chronological."""
+    now = time.time()
+    backend = SQLiteBackend(db_dir=str(tmp_path))
+    await backend.export(
+        [
+            _span("root", "trace-A" + "0" * 25, now, agent="orch"),
+            _span("child", "trace-A" + "0" * 25, now + 1, agent="worker"),
+            _span("noise", "trace-B" + "0" * 25, now, agent="other"),
+        ]
+    )
+    await backend.shutdown()
+
+    engine = SQLiteQueryEngine(db_dir=str(tmp_path))
+    rows = await engine.spans_in_trace("trace-A" + "0" * 25, now - 10, now + 10)
+    assert [r.name for r in rows] == ["root", "child"]  # only trace-A, oldest first
+    assert all(r.trace_id == "trace-A" + "0" * 25 for r in rows)
+
+
+async def test_recent_spans_empty_when_no_files(tmp_path: Path):
+    engine = SQLiteQueryEngine(db_dir=str(tmp_path))
+    assert await engine.recent_spans(time.time() - 10, time.time() + 10) == []
