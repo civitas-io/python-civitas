@@ -1070,3 +1070,72 @@ async def test_none_timeout_also_means_indefinite() -> None:
         assert await asyncio.wait_for(ask_task, timeout=2.0) is not None
     finally:
         await rt.stop()
+
+
+# ---------------------------------------------------------------------------
+# Opt-in fail-fast ask() (v0.10.0, hitl-polish.md D2)
+# ---------------------------------------------------------------------------
+
+
+async def test_fail_if_suspended_raises_immediately_not_after_timeout() -> None:
+    """The opposite intent from indefinite: fail_if_suspended=True raises
+    AgentSuspendedError instantly when the target is suspended, instead of
+    buffering the ask until resume."""
+    from civitas.errors import AgentSuspendedError
+    from tests.conftest import EchoAgent
+
+    agent = EchoAgent("worker")
+    rt = Runtime(
+        supervisor=Supervisor("root", children=[agent]),
+        state_store=InMemoryStateStore(),
+    )
+    await rt.start()
+    try:
+        await rt.suspend("worker", reason="approval")
+        await wait_for_status(agent, ProcessStatus.SUSPENDED)
+        with pytest.raises(AgentSuspendedError):
+            await rt.ask("worker", {"q": 1}, fail_if_suspended=True)
+    finally:
+        await rt.stop()
+
+
+async def test_fail_if_suspended_default_off_still_buffers() -> None:
+    """Default (fail_if_suspended=False) is unchanged: the ask buffers and is
+    delivered on resume -- proving the fast-fail is strictly additive."""
+    from tests.conftest import EchoAgent
+
+    agent = EchoAgent("worker")
+    rt = Runtime(
+        supervisor=Supervisor("root", children=[agent]),
+        state_store=InMemoryStateStore(),
+    )
+    await rt.start()
+    try:
+        await rt.suspend("worker", reason="approval")
+        await wait_for_status(agent, ProcessStatus.SUSPENDED)
+        task = asyncio.create_task(rt.ask("worker", {"q": 1}, timeout=-1))
+        await asyncio.sleep(0.15)
+        assert not task.done()  # buffered, not failed
+        await rt.resume("worker", approver="alice")
+        assert await asyncio.wait_for(task, timeout=2.0) is not None
+    finally:
+        await rt.stop()
+
+
+async def test_registry_suspension_flag_tracks_transitions_incl_restore() -> None:
+    """The registry's suspended flag follows suspend -> resume, and a
+    restart that restores an agent into SUSPENDED (S7) re-sets it."""
+    agent = RecorderAgent("worker")
+    agent.store = InMemoryStateStore()
+    rt = Runtime(supervisor=Supervisor("root", children=[agent]))
+    await rt.start()
+    try:
+        assert rt._registry.is_suspended("worker") is False
+        await rt.suspend("worker", reason="approval")
+        await wait_for_status(agent, ProcessStatus.SUSPENDED)
+        assert rt._registry.is_suspended("worker") is True
+        await rt.resume("worker", approver="alice")
+        await wait_for_status(agent, ProcessStatus.RUNNING)
+        assert rt._registry.is_suspended("worker") is False
+    finally:
+        await rt.stop()

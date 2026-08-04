@@ -1155,12 +1155,17 @@ class Runtime:
         payload: dict[str, Any],
         timeout: float | None = 30.0,
         message_type: str = "message",
+        *,
+        fail_if_suspended: bool = False,
     ) -> Message:
         """Send a message to an agent and await a reply.
 
         ``timeout`` (v0.10.0): ``None``/``-1``/any value ``<= 0`` waits
         indefinitely — the HITL case (ask an agent that suspends for approval;
         the reply arrives hours/days later on resume). See ``AgentProcess.ask``.
+
+        ``fail_if_suspended`` (v0.10.0, D2): raise ``AgentSuspendedError``
+        immediately instead of waiting, if the target is suspended.
         """
         if self._bus is None or self._tracer is None:
             raise RuntimeError("Runtime not started")
@@ -1175,7 +1180,10 @@ class Runtime:
             trace_id=trace_id,
             span_id=_new_span_id(),
         )
-        return cast(Message, await self._bus.request(message, timeout=timeout))
+        return cast(
+            Message,
+            await self._bus.request(message, timeout=timeout, fail_if_suspended=fail_if_suspended),
+        )
 
     async def send(
         self,

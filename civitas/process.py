@@ -434,6 +434,14 @@ class AgentProcess:
         if status_hook is not None:
             status_hook(self.name, new_status.value)
 
+        # v0.10.0 (hitl-polish.md D2): keep the registry's suspension flag in
+        # sync at the SAME single choke point -- so every transition (suspend,
+        # resume, restore-into-SUSPENDED on restart) updates it, and a future
+        # transition can't silently forget. Consulted only by an opt-in
+        # fail_if_suspended ask(). Guarded: a bare agent (tests) has no registry.
+        if self._registry is not None:
+            self._registry.set_suspended(self.name, new_status is ProcessStatus.SUSPENDED)
+
     # ------------------------------------------------------------------
     # Credential helpers (M4.2c)
     # ------------------------------------------------------------------
@@ -836,6 +844,8 @@ class AgentProcess:
         payload: dict[str, Any],
         message_type: str = "message",
         timeout: float | None = 30.0,
+        *,
+        fail_if_suspended: bool = False,
     ) -> Message:
         """Request-reply: send a message and await a response.
 
@@ -875,7 +885,9 @@ class AgentProcess:
         )
         if self._metrics is not None:
             self._metrics.message_sent(self.name)
-        return await self._bus.request(message, timeout=timeout)
+        return await self._bus.request(
+            message, timeout=timeout, fail_if_suspended=fail_if_suspended
+        )
 
     async def send_capable(
         self,

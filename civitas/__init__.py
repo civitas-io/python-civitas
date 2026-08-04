@@ -40,6 +40,7 @@ from __future__ import annotations
 from civitas.audit import AuditEvent, AuditSink, JsonlFileSink, NullSink, OtlpSink, SyslogSink
 from civitas.components import ComponentSet
 from civitas.errors import (
+    AgentSuspendedError,
     CapabilityNotFoundError,
     CivitasError,
     ErrorAction,
@@ -100,6 +101,7 @@ __all__ = [
     "SecretsProvider",
     "SignatureError",
     "SlowConsumerError",
+    "AgentSuspendedError",
     "SpawnError",
     "StateStore",
     "StreamError",

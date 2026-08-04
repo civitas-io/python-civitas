@@ -40,6 +40,14 @@ class MessageRoutingError(CivitasError):
     """A message could not be routed (e.g. unknown recipient)."""
 
 
+class AgentSuspendedError(CivitasError):
+    """An opt-in ``ask(..., fail_if_suspended=True)`` targeted a SUSPENDED agent
+    (v0.10.0, hitl-polish.md D2). Raised immediately instead of buffering the
+    request for the timeout — for callers that do not want to wait for a
+    (possibly hours/days-long) HITL approval. The default ``ask()`` still buffers
+    and delivers on resume; only ``fail_if_suspended=True`` raises this."""
+
+
 class ConfigurationError(CivitasError):
     """Invalid or missing runtime configuration."""
 
