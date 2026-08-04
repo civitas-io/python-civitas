@@ -141,6 +141,7 @@ nav:
     - GenServer (M3.5): design/genserver.md
     - HTTP Gateway (M4.x): design/http-gateway.md
     - Gateway API Surface (M4.x): design/gateway-api-surface.md
+    - SpanStore & Contrib Boundary (B4): design/spanstore-and-contrib-boundary.md
 
   - RFCs:
     - RFC 0001 — Selective Tool Retrieval: rfc/0001-tool-retrieval.md

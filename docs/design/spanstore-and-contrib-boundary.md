@@ -1,6 +1,6 @@
 # Design: `SpanStore` protocol + the contrib boundary rule (B4)
 
-**Status:** Draft — awaiting sign-off
+**Status:** Accepted — implemented in v0.11.0 (core phases 1–2); contrib shim (phase 3) ships as a separate civitas-contrib release gated on core v0.11.0
 **Supersedes:** `telemetry-native.md` §12 (B4 placement/pluggability addendum)
 **Touches:** `python-civitas` (core) and `civitas-contrib`
 

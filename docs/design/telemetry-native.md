@@ -221,6 +221,15 @@ new `telemetry` extra) green except the one confirmed pre-existing `test_python_
 
 ## 12. Addendum (2026-07-29) — two real follow-up questions, deferred and tracked
 
+> **RESOLVED in v0.11.0 (B4).** Both questions below were answered and implemented — see
+> [`docs/design/spanstore-and-contrib-boundary.md`](spanstore-and-contrib-boundary.md). In short:
+> `SpanStore` extends `ExportBackend` with the query surface (one protocol per backend, no schema
+> drift); `normalize_span()` is now public API every backend imports; `SQLiteBackend` +
+> `SQLiteQueryEngine` merged into `SQLiteSpanStore` (aliases kept); and the placement question was
+> settled by a new contrib boundary rule (*needs a third-party runtime dependency* → contrib), which
+> keeps `SQLiteSpanStore` in core and moved `SQLiteStateStore` back to core too. The original
+> analysis is retained below for history.
+
 Two legitimate design questions surfaced in conversation immediately after B1 shipped. Explicit
 decision: **document both here and in `docs/milestones.md` (v0.9.3.6, B4) rather than refactor
 already-working, already-tested code mid-flight.** Neither is a defect in what shipped — both are
