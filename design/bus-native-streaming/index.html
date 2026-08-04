@@ -2160,6 +2160,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#8b-addendum-v0101-immediate-streaminterrupted-on-producer-loss-d6-upgraded" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8b. Addendum (v0.10.1) — immediate StreamInterrupted on producer loss (D6 upgraded)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#9-test-plan-outline" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2354,10 +2365,24 @@
 <h2 id="8-resolved-decisions-maintainer-sign-off-2026-07-05-go-with-recommendations">8. Resolved decisions (maintainer sign-off — 2026-07-05: "go with recommendations")<a class="headerlink" href="#8-resolved-decisions-maintainer-sign-off-2026-07-05-go-with-recommendations" title="Permanent link">&para;</a></h2>
 <p>Oracle agreed with the v1 leans on <strong>Q2</strong> (defer producer opt-in; D8 only), <strong>Q4</strong> (<code>AsyncIterator[dict]</code>), <strong>Q5</strong> (defer credit; reserve <code>civitas.stream.credit</code>), <strong>Q6</strong> (share <code>StreamSink</code> now, guard with G2/G3 suites).</p>
 <ul>
-<li>✅ <strong>A — D6 scope = (a):</strong> <code>idle_timeout</code>/<code>max_duration</code> is the peer-loss bound for v1; immediate <code>StreamInterrupted</code> via a bidirectional producer→sink index is deferred.</li>
+<li>✅ <strong>A — D6 scope = (a):</strong> <code>idle_timeout</code>/<code>max_duration</code> is the peer-loss bound for v1; immediate <code>StreamInterrupted</code> via a bidirectional producer→sink index is deferred. <strong>[v0.10.1: now built — see addendum below.]</strong></li>
 <li>✅ <strong>B — <code>seq</code> placement = <code>Message.seq: int | None</code> envelope field</strong> (not a <code>__seq__</code> payload key), so the yielded dict is never mutated; <code>from_dict</code> already filters unknown keys → back-compat both directions.</li>
 <li>✅ <strong>C — producer cap</strong> added: a producer-side <code>max_frames</code>/<code>max_duration</code> bound so a lost cancel or dead consumer can't run the producer forever.</li>
 </ul>
+<h2 id="8b-addendum-v0101-immediate-streaminterrupted-on-producer-loss-d6-upgraded">8b. Addendum (v0.10.1) — immediate <code>StreamInterrupted</code> on producer loss (D6 upgraded)<a class="headerlink" href="#8b-addendum-v0101-immediate-streaminterrupted-on-producer-loss-d6-upgraded" title="Permanent link">&para;</a></h2>
+<p>The D6·a deferral is lifted. The producer already keeps a per-outbound-stream registry
+(<code>_out_streams: dict[cid, _OutStream]</code>); <code>_OutStream</code> now also carries the <code>recipient</code> (captured
+when the stream's first chunk is emitted). On the producer's message-loop teardown — which covers a
+graceful stop, a force-restart, and a crash alike (all exit the loop, and the bus is still wired at
+that point) — <code>_interrupt_out_streams()</code> sends a <code>civitas.stream.error</code> frame carrying
+<code>{"error": "producer_stopped"}</code> to each active stream's <code>recipient</code>, then clears the registry.
+<code>_stream_error("producer_stopped")</code> maps to <code>StreamInterrupted</code>, so a consumer mid-stream fails
+<strong>immediately</strong> instead of waiting out its <code>idle_timeout</code>.</p>
+<p>This is the producer→consumer half; <code>_fail_local_streams</code> (unchanged) remains the consumer's own
+local-stop half. <code>idle_timeout</code>/<code>max_duration</code> stay as the backstop for a genuinely-unreachable
+peer (a killed process that never runs teardown, or a dropped transport) — the immediate interrupt
+is best-effort per consumer and never blocks teardown. Same-process and any transport where the
+producer runs teardown; a hard <code>kill -9</code> still falls back to the timeout, as it must.</p>
 <h2 id="9-test-plan-outline">9. Test plan (outline)<a class="headerlink" href="#9-test-plan-outline" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Deadlock regression (the BLOCKER):</strong> consume a stream <em>inside</em> <code>handle()</code> → completes, does <strong>not</strong> raise <code>StreamTimeout</code>.</li>

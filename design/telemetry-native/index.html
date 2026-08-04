@@ -2656,12 +2656,26 @@ via CLI, no separate one-shot-only fallback needed for v1.</p>
 <p><strong>New dependency</strong>: <code>textual-plotext</code>, folded into the existing <code>civitas[telemetry]</code> extra (not a
 separate one) — per-conversation, since the TUI is meaningless without the SQLite store it reads
 from anyway.</p>
-<p><strong>Deferred, tracked</strong> (<code>docs/milestones.md</code>): the log/event viewer (browsing individual
-spans/traces) — needs the "trace/span drill-down" query method from §13's candidate list, not yet
-built. Also newly identified and tracked during B3's build, not built now: per-second/per-minute
-live tick animation for the charts (today's refresh redraws the whole chart from scratch, which is
-correct but not smoothly animated), and a scrollable/paginated view for <code>CostBreakdownTable</code> once a
-real deployment has enough distinct agents/models to overflow one screen.</p>
+<p><strong>Follow-up outcomes (v0.10.1):</strong>
+- <strong>Log/event viewer — DONE.</strong> Added the individual-span query methods it needed (<code>recent_spans</code>
+  feed + <code>spans_in_trace</code> — the §13 "trace/span drill-down" candidate — returning a <code>SpanRecord</code>),
+  then an <code>EventLogTable</code> panel wired into <code>civitas telemetry</code>. The §13 "how much of
+  <code>attributes_json</code> to surface" question was resolved: surface the promoted hot columns +
+  timing/trace identity, not the raw blob (which stays in the DB for deeper drill-down later).
+- <strong>Scrollable/paginated <code>CostBreakdownTable</code> — DONE (differently than framed).</strong> The "would
+  overflow" premise was inaccurate — <code>DataTable</code> is a <code>ScrollView</code> and already scrolls natively;
+  the real gap was a scroll affordance, added as a cardinality count in the title.
+- <strong>Live tick chart animation — split into two findings.</strong>
+  - <em>Tweened intra-poll frames — DECLINED.</em> A terminal <code>plotext</code> chart redraws with real data each
+    poll; interpolating <em>fake</em> cost/rate values between polls is dishonest on a cost dashboard. The
+    charts already draw straight line segments between real points only (<code>plt.plot</code>), so the honest
+    representation was already there.
+  - <em>Range-adaptive bucket granularity — DONE.</em> The real reason the chart looked static was a bug,
+    not missing animation: both queries defaulted to a fixed bucket (1 day for cost, 1 h for rate)
+    regardless of the selected range, so a 1h view collapsed the whole hour into a single point.
+    <code>TimeRange.bucket_seconds()</code> now scales the bucket with the visible window (1m/5m/1h/6h/1d),
+    threaded into both queries — every view shows ~24-90 real aggregate points connected by
+    straight lines. Verified end-to-end (12 spans over an hour → 12 points, vs. 1 before).</p>
 
 
 
