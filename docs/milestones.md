@@ -1412,12 +1412,16 @@ auditor reviewing 2k-line god-modules is a worse experience than reviewing focus
 
 ### v0.10.0 — HITL & Streaming polish (Planned — the Medicus runway)
 
-| Item | Priority | Source |
+**HITL polish built (release pending)** — see [`docs/design/hitl-polish.md`](../design/hitl-polish.md).
+Streaming (R7) items remain.
+
+| Item | Priority | Status |
 |------|----------|--------|
-| Durable suspension: fail-fast `ask()` into a suspended agent (times out today) | 🟡 Medium | design/durable-suspension.md Non-Goals |
-| Durable suspension: crash-while-suspended restart-budget exemption | 🟡 Medium | supervisor.py (S8 finding #5) |
-| R7: credit-based stream backpressure (`civitas.stream.credit` reserved) | 🟢 Low | design/bus-native-streaming.md §8 Q5 |
-| R7: immediate `StreamInterrupted` on producer loss | 🟢 Low | design/bus-native-streaming.md D6 |
+| Durable suspension: **indefinite** `ask()` (HITL approvals take hours/days) | Medium | ✅ **Done (D1)** — `ask()`/`Runtime.ask()`/`bus.request()`/all 3 transports widen `timeout: float \| None`; `None`/`-1`/`<=0` = wait indefinitely; default 30s unchanged. Every transport already funnels through `asyncio.timeout(None)` = forever, so uniform. Verified: an indefinite ask into a SUSPENDED agent stays pending, then returns the real reply on resume |
+| Durable suspension: fail-fast `ask()` into a suspended agent | Medium | ✅ **Done (D2)** — opt-in `ask(..., fail_if_suspended=True)` raises the new `AgentSuspendedError` instantly instead of buffering; default off (strictly additive). Registry learns suspension via a name set updated at the single `_set_status()` choke point; consulted only when the flag is set |
+| Durable suspension: crash-while-suspended restart-budget exemption | Medium | ✅ **Done (D3)** — `RestartEngine.exempt_verdict()`; both static + dynamic crash paths skip the budget window for a crash whose incarnation carried the durable suspend marker (restart still happens, into SUSPENDED). Scoped — a RUNNING crash still counts |
+| R7: credit-based stream backpressure (`civitas.stream.credit` reserved) | Low | design/bus-native-streaming.md §8 Q5 |
+| R7: immediate `StreamInterrupted` on producer loss | Low | design/bus-native-streaming.md D6 |
 
 ### v1.0.0 — GA gates (Planned)
 
