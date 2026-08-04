@@ -351,9 +351,15 @@ via CLI, no separate one-shot-only fallback needed for v1.
 separate one) — per-conversation, since the TUI is meaningless without the SQLite store it reads
 from anyway.
 
-**Deferred, tracked** (`docs/milestones.md`): the log/event viewer (browsing individual
-spans/traces) — needs the "trace/span drill-down" query method from §13's candidate list, not yet
-built. Also newly identified and tracked during B3's build, not built now: per-second/per-minute
-live tick animation for the charts (today's refresh redraws the whole chart from scratch, which is
-correct but not smoothly animated), and a scrollable/paginated view for `CostBreakdownTable` once a
-real deployment has enough distinct agents/models to overflow one screen.
+**Follow-up outcomes (v0.10.1):**
+- **Log/event viewer — DONE.** Added the individual-span query methods it needed (`recent_spans`
+  feed + `spans_in_trace` — the §13 "trace/span drill-down" candidate — returning a `SpanRecord`),
+  then an `EventLogTable` panel wired into `civitas telemetry`. The §13 "how much of
+  `attributes_json` to surface" question was resolved: surface the promoted hot columns +
+  timing/trace identity, not the raw blob (which stays in the DB for deeper drill-down later).
+- **Scrollable/paginated `CostBreakdownTable` — DONE (differently than framed).** The "would
+  overflow" premise was inaccurate — `DataTable` is a `ScrollView` and already scrolls natively;
+  the real gap was a scroll affordance, added as a cardinality count in the title.
+- **Live tick chart animation — DECLINED.** A terminal `plotext` chart redraws with real data each
+  poll; "animating between ticks" would interpolate *fake* cost/rate frames — dishonest data on a
+  cost dashboard.

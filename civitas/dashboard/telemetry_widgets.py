@@ -14,7 +14,7 @@ from textual.widgets import DataTable, Static
 from textual_plotext import PlotextPlot
 
 from civitas.dashboard.palette import format_cost
-from civitas.observability.sqlite_query import CostBucket, MessageRateBucket
+from civitas.observability.sqlite_query import CostBucket, MessageRateBucket, SpanRecord
 
 
 class CostChart(PlotextPlot):
@@ -142,6 +142,34 @@ class CostBreakdownTable(DataTable[str]):
         # agents/models a user can't tell there's more below the fold. The
         # count in the title is that signal.
         self.border_title = f"Breakdown ({len(by_agent)} agents, {len(by_model)} models)"
+
+
+class EventLogTable(DataTable[str]):
+    """A chronological event feed (v0.10.1, B3.7) -- the most recent spans,
+    newest first: time, event name, agent, status, duration. The log/event
+    viewer the design deferred until the trace/span drill-down query existed
+    (§14); built on SQLiteQueryEngine.recent_spans(). A DataTable (ScrollView),
+    so it scrolls natively at any volume.
+    """
+
+    def on_mount(self) -> None:
+        self.border_title = "Events"
+        self.add_columns("Time", "Event", "Agent", "Status", "Dur")
+        self.cursor_type = "row"
+
+    def update_events(self, spans: list[SpanRecord]) -> None:
+        self.clear()
+        for s in spans:
+            when = dt.datetime.fromtimestamp(s.start_time).strftime("%H:%M:%S")
+            # Strip the noisy "civitas." prefix for readability; keep the rest.
+            event = s.name.removeprefix("civitas.")
+            # Span status is "ok"/"error" (not a ProcessStatus) -- simple inline
+            # colour rather than reusing palette.status_color (that's for the
+            # lifecycle-status vocabulary).
+            colour = "green" if s.status == "ok" else "red"
+            status = f"[{colour}]{s.status}[/]"
+            self.add_row(when, event, s.agent_name or "-", status, f"{s.duration_ms:.0f}ms")
+        self.border_title = f"Events ({len(spans)})"
 
 
 class TimeRangeBar(Static):

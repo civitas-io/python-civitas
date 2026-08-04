@@ -27,6 +27,7 @@ from civitas.dashboard.telemetry_time import TimeRange
 from civitas.dashboard.telemetry_widgets import (
     CostBreakdownTable,
     CostChart,
+    EventLogTable,
     MessageRateChart,
     StatPanel,
     TimeRangeBar,
@@ -75,6 +76,7 @@ class CivitasTelemetryApp(App[None]):
             with Horizontal(id="lower"):
                 yield StatPanel()
                 yield CostBreakdownTable()
+            yield EventLogTable(id="events")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -127,6 +129,7 @@ class CivitasTelemetryApp(App[None]):
         rate_buckets = await self._engine.message_rate_over_time(since, now)
         by_agent = await self._engine.cost_by_agent(since, now)
         by_model = await self._engine.cost_by_model(since, now)
+        recent = await self._engine.recent_spans(since, now, limit=200)
 
         if not self.is_running:
             return
@@ -136,6 +139,7 @@ class CivitasTelemetryApp(App[None]):
         top_agent = max(by_agent.items(), key=lambda kv: kv[1]) if by_agent else None
         self.query_one(StatPanel).update_stats(sum(by_agent.values()), total_messages, top_agent)
         self.query_one(CostBreakdownTable).update_breakdown(by_agent, by_model)
+        self.query_one(EventLogTable).update_events(recent)
 
 
 __all__ = ["CivitasTelemetryApp"]
