@@ -41,8 +41,35 @@ from typing import Any
 import aiosqlite
 
 from civitas.observability.span_queue import SpanData
+from civitas.observability.span_store import (
+    CostBucket,
+    MessageRateBucket,
+    SpanRecord,
+    normalize_span,
+)
 
 logger = logging.getLogger(__name__)
+
+__all__ = [
+    "SQLiteSpanStore",
+    "SQLiteBackend",
+    "normalize_span",
+    "window_index",
+    "window_filename",
+    "index_from_filename",
+]
+
+# Column list + order shared by recent_spans/spans_in_trace and _row_to_span --
+# kept in one place so the SELECT and the tuple-unpacking can never drift.
+_SPAN_COLS = (
+    "name, trace_id, span_id, parent_span_id, start_time, end_time, status, "
+    "error_message, agent_name, llm_model, llm_tokens_in, llm_tokens_out, llm_cost_usd"
+)
+
+
+def _row_to_span(row: tuple[Any, ...]) -> SpanRecord:
+    return SpanRecord(*row)
+
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS spans (
@@ -66,65 +93,6 @@ CREATE INDEX IF NOT EXISTS idx_spans_start_time ON spans(start_time);
 CREATE INDEX IF NOT EXISTS idx_spans_trace_id ON spans(trace_id);
 CREATE INDEX IF NOT EXISTS idx_spans_agent_name ON spans(agent_name);
 """
-
-
-def normalize_span(span: SpanData) -> dict[str, Any]:
-    """Map a SpanData's attributes onto the promoted columns.
-
-    Design doc §4's normalization table, checked in order (first match
-    wins) — different span KINDS use different attribute keys for "which
-    agent is this about"; there is no single universal key. A span that
-    matches none of these patterns gets agent_name=None, not a guess.
-    """
-    attrs = span.attributes
-    agent_name: str | None = None
-    llm_model: str | None = None
-    llm_tokens_in: int | None = None
-    llm_tokens_out: int | None = None
-    llm_cost_usd: float | None = None
-
-    if span.name.startswith("civitas.agent."):
-        agent_name = attrs.get("civitas.agent.name")
-    elif span.name == "civitas.llm.chat":
-        # AgentProcess.llm_span() -- the actually-used, ergonomic API real
-        # agent code calls (confirmed via examples/dashboard_demo/agents.py).
-        # civitas.agent.name was ADDED to this span's attributes as part of
-        # this same change (civitas/process.py) after discovering, while
-        # writing this normalization function, that no civitas.llm.chat span
-        # had EVER carried any agent identity -- a real, silent gap, fixed at
-        # the root rather than worked around here.
-        agent_name = attrs.get("civitas.agent.name")
-        llm_model = attrs.get("civitas.llm.model")
-        llm_tokens_in = attrs.get("civitas.llm.tokens_in")
-        llm_tokens_out = attrs.get("civitas.llm.tokens_out")
-        llm_cost_usd = attrs.get("civitas.llm.cost_usd")
-    elif span.name.startswith("llm.chat "):
-        # Tracer.start_llm_span()/end_llm_span() -- a lower-level, standalone
-        # API (examples/research_assistant.py, examples/observable_pipeline.py)
-        # called directly on a bare Tracer with no AgentProcess/"self" context
-        # at all -- architecturally, it has no agent identity to attach
-        # (unlike AgentProcess.llm_span() above, which DOES have `self.name`
-        # available and was missing it as a genuine oversight, now fixed).
-        # agent_name stays None here deliberately -- not a guess, and not the
-        # same class of bug as civitas.llm.chat's.
-        llm_model = attrs.get("llm.model")
-        llm_tokens_in = attrs.get("llm.tokens_in")
-        llm_tokens_out = attrs.get("llm.tokens_out")
-        llm_cost_usd = attrs.get("llm.cost_usd")
-    elif span.name.startswith(("send ", "recv ")):
-        agent_name = attrs.get("civitas.sender")
-    elif span.name.startswith("tool.execute"):
-        agent_name = attrs.get("civitas.sender")
-    elif span.name == "supervisor.restart":
-        agent_name = attrs.get("civitas.child")
-
-    return {
-        "agent_name": agent_name,
-        "llm_model": llm_model,
-        "llm_tokens_in": llm_tokens_in,
-        "llm_tokens_out": llm_tokens_out,
-        "llm_cost_usd": llm_cost_usd,
-    }
 
 
 def window_index(timestamp: float, window_days: int) -> int:
@@ -163,12 +131,19 @@ def index_from_filename(filename: str, window_days: int) -> int | None:
     return int(dt.timestamp() // (window_days * 86400))
 
 
-class SQLiteBackend:
-    """Time-windowed, civitas-native persistent span store.
+class SQLiteSpanStore:
+    """Time-windowed, civitas-native persistent span store (B4).
 
-    Conforms to the ExportBackend protocol (export/shutdown) — used exactly
-    like any other exporter, via `exporters=[SQLiteBackend(...)]` or inside
-    a FanOutBackend alongside others.
+    Implements the full ``SpanStore`` protocol — the write side (``export``/
+    ``shutdown``, from the ``ExportBackend`` contract) AND the read side
+    (``cost_over_time``/``recent_spans``/... ) over one shared schema, so the
+    two can never drift. Used like any other exporter via
+    ``exporters=[SQLiteSpanStore(...)]`` (or inside a ``FanOutBackend``), and
+    queried directly for the dashboard/CLI.
+
+    ``SQLiteBackend`` (write-only name) and ``SQLiteQueryEngine`` (read-only
+    name) remain as back-compat aliases — see the bottom of this module and
+    ``sqlite_query.py``.
     """
 
     def __init__(
@@ -239,8 +214,198 @@ class SQLiteBackend:
         self._connections.clear()
 
     # ------------------------------------------------------------------
+    # Read side (SpanStore query surface) -- was SQLiteQueryEngine (B2)
+    # ------------------------------------------------------------------
+
+    async def cost_over_time(
+        self, since: float, until: float, bucket_seconds: int = 86400
+    ) -> list[CostBucket]:
+        """LLM cost/tokens bucketed by time, broken down by agent + model.
+
+        Double GROUP BY (once per attached window file, once in the outer
+        merge) -- a bucket straddling a window-file boundary would otherwise
+        be split into two separate rows instead of one correctly-merged one.
+        """
+        sql_per_window = f"""
+            SELECT
+                CAST(start_time / {bucket_seconds} AS INTEGER) * {bucket_seconds} AS bucket_start,
+                agent_name,
+                llm_model,
+                SUM(llm_cost_usd) AS total_cost_usd,
+                SUM(llm_tokens_in) AS total_tokens_in,
+                SUM(llm_tokens_out) AS total_tokens_out
+            FROM {{alias}}.spans
+            WHERE llm_cost_usd IS NOT NULL AND start_time >= ? AND start_time <= ?
+            GROUP BY bucket_start, agent_name, llm_model
+        """
+        outer_sql = """
+            SELECT bucket_start, agent_name, llm_model,
+                   SUM(total_cost_usd), SUM(total_tokens_in), SUM(total_tokens_out)
+            FROM ({union})
+            GROUP BY bucket_start, agent_name, llm_model
+            ORDER BY bucket_start
+        """
+        rows = await self._query_across_windows(
+            since, until, sql_per_window, outer_sql, (since, until)
+        )
+        return [
+            CostBucket(
+                bucket_start=row[0],
+                agent_name=row[1],
+                model=row[2],
+                total_cost_usd=row[3] or 0.0,
+                total_tokens_in=row[4] or 0,
+                total_tokens_out=row[5] or 0,
+            )
+            for row in rows
+        ]
+
+    async def message_rate_over_time(
+        self, since: float, until: float, bucket_seconds: int = 3600
+    ) -> list[MessageRateBucket]:
+        """Message-handling rate bucketed by time, per agent.
+
+        Counts `civitas.agent.handle` spans specifically -- one per message an
+        agent actually processed -- matching the same semantic Prometheus
+        exposition and the dashboard use, not a raw count of every span kind.
+        """
+        sql_per_window = f"""
+            SELECT
+                CAST(start_time / {bucket_seconds} AS INTEGER) * {bucket_seconds} AS bucket_start,
+                agent_name,
+                COUNT(*) AS message_count
+            FROM {{alias}}.spans
+            WHERE name = 'civitas.agent.handle' AND start_time >= ? AND start_time <= ?
+            GROUP BY bucket_start, agent_name
+        """
+        outer_sql = """
+            SELECT bucket_start, agent_name, SUM(message_count)
+            FROM ({union})
+            GROUP BY bucket_start, agent_name
+            ORDER BY bucket_start
+        """
+        rows = await self._query_across_windows(
+            since, until, sql_per_window, outer_sql, (since, until)
+        )
+        return [
+            MessageRateBucket(bucket_start=row[0], agent_name=row[1], message_count=row[2] or 0)
+            for row in rows
+        ]
+
+    async def cost_by_agent(self, since: float, until: float) -> dict[str, float]:
+        """Total LLM cost per agent over the whole range (no time bucketing).
+
+        Rows with agent_name IS NULL are excluded -- a dict keyed by agent name
+        can't meaningfully represent "no agent".
+        """
+        sql_per_window = """
+            SELECT agent_name, SUM(llm_cost_usd) AS cost
+            FROM {alias}.spans
+            WHERE llm_cost_usd IS NOT NULL AND agent_name IS NOT NULL
+              AND start_time >= ? AND start_time <= ?
+            GROUP BY agent_name
+        """
+        outer_sql = """
+            SELECT agent_name, SUM(cost)
+            FROM ({union})
+            GROUP BY agent_name
+        """
+        rows = await self._query_across_windows(
+            since, until, sql_per_window, outer_sql, (since, until)
+        )
+        return {row[0]: row[1] or 0.0 for row in rows}
+
+    async def cost_by_model(self, since: float, until: float) -> dict[str, float]:
+        """Total LLM cost per model over the whole range. NULL model excluded."""
+        sql_per_window = """
+            SELECT llm_model, SUM(llm_cost_usd) AS cost
+            FROM {alias}.spans
+            WHERE llm_cost_usd IS NOT NULL AND llm_model IS NOT NULL
+              AND start_time >= ? AND start_time <= ?
+            GROUP BY llm_model
+        """
+        outer_sql = """
+            SELECT llm_model, SUM(cost)
+            FROM ({union})
+            GROUP BY llm_model
+        """
+        rows = await self._query_across_windows(
+            since, until, sql_per_window, outer_sql, (since, until)
+        )
+        return {row[0]: row[1] or 0.0 for row in rows}
+
+    async def recent_spans(self, since: float, until: float, limit: int = 200) -> list[SpanRecord]:
+        """The most recent spans in [since, until], newest first. ``limit`` is
+        an int cast into the SQL (safe -- not user text) since the cross-window
+        helper binds only the per-window range params."""
+        sql_per_window = (
+            f"SELECT {_SPAN_COLS} FROM {{alias}}.spans WHERE start_time >= ? AND start_time <= ?"
+        )
+        outer_sql = "SELECT * FROM ({union}) ORDER BY start_time DESC LIMIT " + str(int(limit))
+        rows = await self._query_across_windows(
+            since, until, sql_per_window, outer_sql, (since, until)
+        )
+        return [_row_to_span(row) for row in rows]
+
+    async def spans_in_trace(self, trace_id: str, since: float, until: float) -> list[SpanRecord]:
+        """Every span in one trace, oldest first (the per-trace timeline)."""
+        sql_per_window = (
+            f"SELECT {_SPAN_COLS} FROM {{alias}}.spans "
+            "WHERE trace_id = ? AND start_time >= ? AND start_time <= ?"
+        )
+        outer_sql = "SELECT * FROM ({union}) ORDER BY start_time ASC"
+        rows = await self._query_across_windows(
+            since, until, sql_per_window, outer_sql, (trace_id, since, until)
+        )
+        return [_row_to_span(row) for row in rows]
+
+    # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------
+
+    def _files_in_range(self, since: float, until: float) -> list[Path]:
+        """Which window files (that exist on disk) fall within [since, until] --
+        computed from the range's own window indices, not by opening files."""
+        if not self._db_dir.exists():
+            return []
+        since_idx = window_index(since, self._window_days)
+        until_idx = window_index(until, self._window_days)
+        matches = []
+        for path in self._db_dir.glob("civitas_spans_*.db"):
+            idx = index_from_filename(path.name, self._window_days)
+            if idx is not None and since_idx <= idx <= until_idx:
+                matches.append((idx, path))
+        return [path for _, path in sorted(matches)]
+
+    async def _query_across_windows(
+        self,
+        since: float,
+        until: float,
+        sql_per_window: str,
+        outer_sql: str,
+        params: tuple[Any, ...],
+    ) -> list[tuple[Any, ...]]:
+        """ATTACH every window file in range to one connection, run one
+        UNION ALL query across them wrapped in outer_sql's re-aggregation
+        (a single time bucket can straddle a window-file boundary). Returns []
+        with no connection opened at all if no window files fall in range.
+        """
+        files = self._files_in_range(since, until)
+        if not files:
+            return []
+        conn = await aiosqlite.connect(":memory:")
+        try:
+            per_window_selects = []
+            for i, path in enumerate(files):
+                alias = f"w{i}"
+                await conn.execute("ATTACH DATABASE ? AS " + alias, (str(path),))
+                per_window_selects.append(sql_per_window.format(alias=alias))
+            union_sql = " UNION ALL ".join(per_window_selects)
+            full_sql = outer_sql.format(union=union_sql)
+            cursor = await conn.execute(full_sql, params * len(files))
+            return [tuple(row) for row in await cursor.fetchall()]
+        finally:
+            await conn.close()
 
     async def _connection_for(self, idx: int) -> aiosqlite.Connection:
         conn = self._connections.get(idx)
@@ -280,3 +445,9 @@ class SQLiteBackend:
         if not self._db_dir.exists():
             return []
         return sorted(self._db_dir.glob("civitas_spans_*.db"))
+
+
+# Back-compat alias (B4): the write-only name predating the SpanStore merge.
+# SQLiteSpanStore IS the ExportBackend; existing `exporters=[SQLiteBackend(...)]`
+# and `from ...sqlite_backend import SQLiteBackend` keep working unchanged.
+SQLiteBackend = SQLiteSpanStore
