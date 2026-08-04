@@ -716,7 +716,17 @@ class Supervisor(AgentProcess):
         self._restart_counts.setdefault(name, 0)
         self._restart_counts[name] += 1
 
-        verdict = self._engine.record_crash()
+        # v0.10.0 (hitl-polish.md D3): a crash of an agent that was SUSPENDED
+        # (durable marker present -- an established suspension, not a transient
+        # transition) is EXEMPT from the restart-intensity budget. It still
+        # restarts (back into SUSPENDED via the marker); it just doesn't burn
+        # the crash-loop window a working agent's crash would. Signal is the
+        # persisted marker, not _status (which is CRASHED by now).
+        child = self._find_child(name)
+        was_suspended = child is not None and AgentProcess._SUSPEND_STATE_KEY in getattr(
+            child, "state", {}
+        )
+        verdict = self._engine.exempt_verdict() if was_suspended else self._engine.record_crash()
 
         for callback in self._crash_callbacks:
             try:
@@ -1466,7 +1476,12 @@ class DynamicSupervisor(AgentProcess):
                 backoff=None,
             ),
         )
-        verdict = engine.record_crash()
+        # v0.10.0 (hitl-polish.md D3): crash-while-SUSPENDED is exempt from the
+        # budget here too (same rationale as the static supervisor path) -- it
+        # restarts back into SUSPENDED via its marker, without counting toward
+        # this dynamic child's restart window.
+        was_suspended = AgentProcess._SUSPEND_STATE_KEY in getattr(rec.agent, "state", {})
+        verdict = engine.exempt_verdict() if was_suspended else engine.record_crash()
 
         if verdict.action == "exhausted":
             # Exhausted — remove and notify spawner; do NOT escalate to parent supervisor
@@ -1495,7 +1510,8 @@ class DynamicSupervisor(AgentProcess):
         # exactly as _handle_spawn does (the target supervisor equips its
         # children), re-subscribe the bus to the NEW object, carry the mailbox.
         # A child crashed while SUSPENDED restarts back into SUSPENDED (its
-        # marker rides the checkpoint); budget exemption (S8 #5) deferred to v1.
+        # marker rides the checkpoint); that crash is budget-exempt (v0.10.0 D3,
+        # applied above via engine.exempt_verdict()).
         try:
             fresh = _fresh_incarnation(old)
             fresh._bus = self._bus

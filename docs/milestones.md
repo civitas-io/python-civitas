@@ -1276,6 +1276,19 @@ SCIM/IdP/OPA middleware; single devs bring nothing). Full design + rationale in
 | Per-agent process/container awareness beyond `process_id` (e.g. Docker) | Low | ❌ **Declined** — recommended AGAINST (couples the runtime to a deployment concern better owned by container-native tooling); unchanged |
 
 
+## v0.10.0 — HITL Polish (Released)
+
+**Status: ✅ Released 2026-07-31, as a single release** (HITL half of the original "HITL & Streaming
+polish" bundle; the streaming R7 items are split out to their own future release — see Part 2).
+Three orthogonal HITL rough-edges on the durable-suspension primitive; full design in
+[`docs/design/hitl-polish.md`](../design/hitl-polish.md).
+
+| Item | Status |
+|------|--------|
+| Durable suspension: **indefinite** `ask()` (HITL approvals take hours/days) | ✅ **Done (D1)** — `ask()`/`Runtime.ask()`/`bus.request()`/all 3 transports widen `timeout: float \| None`; `None`/`-1`/`<=0` = wait indefinitely; default 30s unchanged. Uniform because every transport already funnels through `asyncio.timeout(None)`. Verified end-to-end: an indefinite ask into a SUSPENDED agent stays pending, then returns the real reply on resume |
+| Durable suspension: fail-fast `ask()` into a suspended agent | ✅ **Done (D2)** — opt-in `ask(..., fail_if_suspended=True)` raises the new `AgentSuspendedError` instantly instead of buffering; default off (strictly additive). Registry learns suspension via a name set updated at the single `_set_status()` choke point; consulted only when the flag is set |
+| Durable suspension: crash-while-suspended restart-budget exemption | ✅ **Done (D3)** — `RestartEngine.exempt_verdict()`; both static + dynamic crash paths skip the budget window for a crash whose incarnation carried the durable suspend marker (restart still happens, into SUSPENDED). Scoped — a RUNNING crash still counts |
+
 ## Part 2 — Backlog
 
 **Status: 🗂️ Tracked** — the active todo list: everything not yet done. New work lands here first
@@ -1410,14 +1423,16 @@ code, one behavior-preserving move at a time, each verified against the existing
 scheduled against a version yet; a natural fit before the v1.0.0 GA gates (an external security
 auditor reviewing 2k-line god-modules is a worse experience than reviewing focused ones).
 
-### v0.10.0 — HITL & Streaming polish (Planned — the Medicus runway)
+### Bus-native streaming polish (R7 remainder) (Planned)
+
+Split from the original v0.10.0 "HITL & Streaming" bundle when the HITL half shipped as v0.10.0
+(Part 1). Both refine the already-shipped bus-native streaming feature; neither is a defect.
 
 | Item | Priority | Source |
 |------|----------|--------|
-| Durable suspension: fail-fast `ask()` into a suspended agent (times out today) | 🟡 Medium | design/durable-suspension.md Non-Goals |
-| Durable suspension: crash-while-suspended restart-budget exemption | 🟡 Medium | supervisor.py (S8 finding #5) |
-| R7: credit-based stream backpressure (`civitas.stream.credit` reserved) | 🟢 Low | design/bus-native-streaming.md §8 Q5 |
-| R7: immediate `StreamInterrupted` on producer loss | 🟢 Low | design/bus-native-streaming.md D6 |
+| R7: credit-based stream backpressure (`civitas.stream.credit` reserved) | Low | design/bus-native-streaming.md §8 Q5 |
+| R7: immediate `StreamInterrupted` on producer loss | Low | design/bus-native-streaming.md D6 |
+
 
 ### v1.0.0 — GA gates (Planned)
 

@@ -90,6 +90,18 @@ class RestartEngine:
             crashes_in_window=occupancy,
         )
 
+    def exempt_verdict(self) -> RestartVerdict:
+        """A ``restart`` verdict WITHOUT recording the crash against the budget
+        (v0.10.0, hitl-polish.md D3).
+
+        For a crash of an agent that was SUSPENDED: it should restart (back into
+        SUSPENDED via its durable marker) but must NOT count toward the
+        restart-intensity window — a paused-for-approval agent that gets poked is
+        not crash-looping. No backoff, and the window is left untouched (so
+        occupancy reflects only genuine crash activity).
+        """
+        return RestartVerdict(action="restart", delay=0.0, crashes_in_window=len(self.window))
+
     def compute_backoff(self, restart_count: int) -> float:
         """Backoff for the Nth crash (N = window occupancy under B3).
 

@@ -259,7 +259,7 @@ class ZMQTransport:
         topic = address.encode() + _TOPIC_SEP
         await self._pub.send_multipart([topic, data])
 
-    async def request(self, address: str, data: bytes, timeout: float) -> bytes:
+    async def request(self, address: str, data: bytes, timeout: float | None) -> bytes:
         """Send a request and await a reply over PUB/SUB.
 
         Creates a temporary reply topic, subscribes to it, injects reply_to

@@ -11,6 +11,41 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-07-31
+
+HITL (human-in-the-loop) polish on the durable-suspension primitive. HITL approvals can take hours
+or days; these three orthogonal changes make the caller and supervision ergonomics match that
+reality. (The streaming half of the original "HITL & Streaming" milestone is split to a later
+release.) Full design in `docs/design/hitl-polish.md`.
+
+### Added
+
+- **Indefinite `ask()`** — `ask()`, `Runtime.ask()`, `bus.request()`, and all three transports
+  widen `timeout: float` to `timeout: float | None`. `None`, or `-1`/any value `<= 0`, means
+  **wait indefinitely** (block until the recipient replies — the HITL case: ask an agent that
+  suspends for approval and get the real result hours/days later on resume). A positive value is a
+  bounded wait; **default `30.0` unchanged** (backward compatible). Every transport already funnels
+  through `asyncio.timeout()`, so `None` = wait-forever works uniformly with no per-transport code.
+- **Opt-in fail-fast `ask()`** — `ask(..., fail_if_suspended=True)` raises the new
+  `AgentSuspendedError` immediately instead of buffering the request, for callers who don't want to
+  wait on an approval. Opt-in and strictly additive — the default preserves the wait-for-approval
+  behavior. The registry learns suspension state (a name set updated at the single `_set_status()`
+  choke point, covering suspend/resume/restore) and is consulted only when the flag is set.
+
+### Changed
+
+- A crash of an agent that was **SUSPENDED** is now **exempt from the restart-intensity budget**
+  (`crashes_in_window`) — it still restarts (back into SUSPENDED via its durable marker), but a
+  paused-for-approval agent that gets poked no longer burns the crash-loop budget a working agent
+  would. Scoped: a `RUNNING` agent's crash still counts as before.
+
+### Note
+
+- An indefinite `ask()` holds resources (the pending reply, and on ZMQ/NATS an open subscription)
+  for the whole wait — fine for a background worker driving a HITL flow, but a request-scoped
+  caller (e.g. an HTTP handler) should use `send()` + poll/webhook rather than block a connection
+  for days. Documented in `ask()`'s docstring.
+
 ## [0.9.6] — 2026-07-31
 
 Dashboard control-plane write actions, built on v0.9.5's merged, auth-capable introspection

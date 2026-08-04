@@ -434,6 +434,14 @@ class AgentProcess:
         if status_hook is not None:
             status_hook(self.name, new_status.value)
 
+        # v0.10.0 (hitl-polish.md D2): keep the registry's suspension flag in
+        # sync at the SAME single choke point -- so every transition (suspend,
+        # resume, restore-into-SUSPENDED on restart) updates it, and a future
+        # transition can't silently forget. Consulted only by an opt-in
+        # fail_if_suspended ask(). Guarded: a bare agent (tests) has no registry.
+        if self._registry is not None:
+            self._registry.set_suspended(self.name, new_status is ProcessStatus.SUSPENDED)
+
     # ------------------------------------------------------------------
     # Credential helpers (M4.2c)
     # ------------------------------------------------------------------
@@ -835,9 +843,26 @@ class AgentProcess:
         recipient: str,
         payload: dict[str, Any],
         message_type: str = "message",
-        timeout: float = 30.0,
+        timeout: float | None = 30.0,
+        *,
+        fail_if_suspended: bool = False,
     ) -> Message:
-        """Request-reply: send a message and await a response."""
+        """Request-reply: send a message and await a response.
+
+        ``timeout`` (v0.10.0): a positive value is a bounded wait (default 30s,
+        unchanged). ``None`` — or ``-1``/any value ``<= 0`` — means **wait
+        INDEFINITELY** until the recipient replies. This is the HITL case: an
+        ``ask()`` to an agent that suspends for approval buffers until the agent
+        is resumed (hours/days later), then returns the real reply. The
+        suspension itself has always been indefinite; this lets the caller wait
+        it out.
+
+        Caveat: an indefinite ask() holds resources (the pending reply, and on
+        ZMQ/NATS an open subscription) for the whole wait. Fine for a background
+        worker driving a HITL flow; a request-scoped caller (e.g. an HTTP
+        handler) must NOT block a connection for days — use ``send()`` + poll/
+        webhook instead.
+        """
         self._reject_reserved_type(message_type)
         if self._bus is None:
             raise RuntimeError("AgentProcess not wired to a MessageBus")
@@ -860,7 +885,9 @@ class AgentProcess:
         )
         if self._metrics is not None:
             self._metrics.message_sent(self.name)
-        return await self._bus.request(message, timeout=timeout)
+        return await self._bus.request(
+            message, timeout=timeout, fail_if_suspended=fail_if_suspended
+        )
 
     async def send_capable(
         self,

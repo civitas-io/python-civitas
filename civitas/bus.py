@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from civitas.audit.types import AuditEvent, AuditSink
-from civitas.errors import MessageRoutingError, MessageValidationError
+from civitas.errors import AgentSuspendedError, MessageRoutingError, MessageValidationError
 from civitas.messages import SYSTEM_MESSAGE_TYPES, Message, _new_span_id
 from civitas.observability.tracer import Tracer
 from civitas.registry import Registry, RoutingEntry
@@ -172,13 +172,36 @@ class MessageBus:
                 )
             )
 
-    async def request(self, message: Message, timeout: float = 30.0) -> Message:
+    async def request(
+        self,
+        message: Message,
+        timeout: float | None = 30.0,
+        *,
+        fail_if_suspended: bool = False,
+    ) -> Message:
         """Send a request message and await a reply.
 
         Used by ask() — delegates to transport.request() which handles
         correlation and reply routing.
+
+        ``timeout`` (v0.10.0): ``None`` — or any value ``<= 0`` (canonically
+        ``-1``) — means **wait indefinitely** (HITL approvals can take
+        hours/days; the agent stays SUSPENDED until resumed). Normalized to
+        ``None`` here so every transport's ``asyncio.timeout(None)`` waits
+        forever uniformly. A positive value is a bounded wait, as before.
+
+        ``fail_if_suspended`` (v0.10.0, D2): when True, raise
+        ``AgentSuspendedError`` immediately if the recipient is SUSPENDED,
+        instead of buffering the request until resume. Opt-in — the default path
+        never consults suspension state (no cost, no behavior change).
         """
         self._validate_message_type(message)
+        if timeout is not None and timeout <= 0:
+            timeout = None
+        if fail_if_suspended and self._registry.is_suspended(message.recipient):
+            raise AgentSuspendedError(
+                f"agent {message.recipient!r} is suspended; not waiting (fail_if_suspended=True)"
+            )
 
         entry = self._registry.lookup(message.recipient)
         if entry is None:

@@ -214,7 +214,7 @@ class NATSTransport:
         subject = self._to_subject(address)
         await self._nc.publish(subject, data)
 
-    async def request(self, address: str, data: bytes, timeout: float) -> bytes:
+    async def request(self, address: str, data: bytes, timeout: float | None) -> bytes:
         """Send a request and await a reply.
 
         Creates a temporary reply address, subscribes to it, injects reply_to

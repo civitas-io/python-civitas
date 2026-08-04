@@ -88,6 +88,12 @@ class Registry(Protocol):  # pragma: no cover
     def has(self, name: str) -> bool: ...
     def all_names(self) -> list[str]: ...
     def find_by_capability(self, tag: str) -> list[RoutingEntry]: ...
+    # v0.10.0 (hitl-polish.md D2): lightweight suspension visibility so the bus
+    # can fail an opt-in ask() fast instead of buffering it for the timeout.
+    # Tracked as a name set (RoutingEntry is frozen) -- consulted only when a
+    # caller passes fail_if_suspended=True.
+    def set_suspended(self, name: str, suspended: bool) -> None: ...
+    def is_suspended(self, name: str) -> bool: ...
 
 
 class LocalRegistry:
@@ -116,6 +122,20 @@ class LocalRegistry:
         # Persists across deregister so a reordered late register cannot
         # resurrect a dead name (R6 · D13).
         self._remote_epochs: dict[str, int] = {}
+        # v0.10.0 (hitl-polish.md D2): names currently SUSPENDED, for opt-in
+        # fail-fast ask(). A set, not a RoutingEntry field (that's frozen).
+        self._suspended: set[str] = set()
+
+    def set_suspended(self, name: str, suspended: bool) -> None:
+        """Mark ``name`` suspended/resumed (v0.10.0, D2). Idempotent."""
+        if suspended:
+            self._suspended.add(name)
+        else:
+            self._suspended.discard(name)
+
+    def is_suspended(self, name: str) -> bool:
+        """Whether ``name`` is currently SUSPENDED (v0.10.0, D2)."""
+        return name in self._suspended
 
     # ------------------------------------------------------------------
     # Registration
@@ -153,6 +173,7 @@ class LocalRegistry:
     def deregister(self, name: str) -> None:
         """Remove an agent. No-op if not registered."""
         entry = self._entries.pop(name, None)
+        self._suspended.discard(name)  # v0.10.0: a removed name is not suspended
         if entry is not None:
             self._fire_listeners(entry, "deregister")
 
