@@ -116,6 +116,24 @@ async def test_cost_breakdown_table_shows_agent_and_model_rows():
 
 
 @pytest.mark.asyncio
+async def test_cost_breakdown_table_title_shows_cardinality_count():
+    """v0.10.1: the table already scrolls natively (it's a ScrollView), so the
+    real large-deployment improvement is a scroll affordance -- the count in the
+    border title tells a user how many agents/models there are to scroll
+    through."""
+    table = CostBreakdownTable()
+    app = _SingleWidgetApp(table)
+    async with app.run_test():
+        table.update_breakdown(
+            {f"agent-{i}": float(i) for i in range(30)},
+            {f"model-{i}": float(i) for i in range(12)},
+        )
+        assert table.border_title == "Breakdown (30 agents, 12 models)"
+        # And it genuinely scrolls (the "overflow" premise was wrong).
+        assert table.row_count == 42
+
+
+@pytest.mark.asyncio
 async def test_cost_breakdown_table_sorts_by_cost_descending():
     table = CostBreakdownTable()
     app = _SingleWidgetApp(table)

@@ -135,6 +135,13 @@ class CostBreakdownTable(DataTable[str]):
             self.add_row("agent", name, format_cost(cost))
         for name, cost in sorted(by_model.items(), key=lambda kv: kv[1], reverse=True):
             self.add_row("model", name, format_cost(cost))
+        # v0.10.1: the table (a ScrollView) already scrolls natively at any
+        # cardinality -- the backlog's "would overflow" premise was inaccurate
+        # (verified: 100 rows in a 20-row viewport scroll fine). The real
+        # large-deployment gap was a *scroll affordance*: with dozens of
+        # agents/models a user can't tell there's more below the fold. The
+        # count in the title is that signal.
+        self.border_title = f"Breakdown ({len(by_agent)} agents, {len(by_model)} models)"
 
 
 class TimeRangeBar(Static):
