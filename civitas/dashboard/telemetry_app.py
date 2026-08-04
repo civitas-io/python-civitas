@@ -125,8 +125,9 @@ class CivitasTelemetryApp(App[None]):
         now = time.time()
         since = self._time_range.since(now)
 
-        cost_buckets = await self._engine.cost_over_time(since, now)
-        rate_buckets = await self._engine.message_rate_over_time(since, now)
+        bucket = self._time_range.bucket_seconds(now)
+        cost_buckets = await self._engine.cost_over_time(since, now, bucket_seconds=bucket)
+        rate_buckets = await self._engine.message_rate_over_time(since, now, bucket_seconds=bucket)
         by_agent = await self._engine.cost_by_agent(since, now)
         by_model = await self._engine.cost_by_model(since, now)
         recent = await self._engine.recent_spans(since, now, limit=200)

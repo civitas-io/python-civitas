@@ -77,3 +77,35 @@ def test_parse_since_absolute_iso_datetime_is_a_fixed_start():
 def test_parse_since_rejects_garbage_with_a_clear_error_not_a_silent_fallback():
     with pytest.raises(ValueError, match="Could not parse --since"):
         parse_since("not-a-real-value")
+
+
+def test_bucket_seconds_follows_the_selected_preset_window():
+    """v0.10.1: the chart bucket scales with the range so each view shows a
+    sensible number of REAL points (not a fixed 1-day bucket that flattens a
+    1h view to a single point)."""
+    now = time.time()
+    # 1h -> ~1-min buckets (~60 pts); 24h -> hourly (~24); 7d -> 6h (~28);
+    # 30d -> daily (~30).
+    assert TimeRange.preset("h").bucket_seconds(now) == 60
+    assert TimeRange.preset("d").bucket_seconds(now) == 3600
+    assert TimeRange.preset("w").bucket_seconds(now) == 6 * 3600
+    assert TimeRange.preset("m").bucket_seconds(now) == 86400
+
+
+def test_bucket_seconds_point_counts_stay_in_a_readable_range():
+    """Every preset yields a terminal-readable point count (roughly 24-90),
+    never 1 (dead chart) and never thousands (unreadable)."""
+    now = time.time()
+    for code in ("h", "d", "w", "m"):
+        tr = TimeRange.preset(code)
+        span = now - tr.since(now)
+        points = span / tr.bucket_seconds(now)
+        assert 20 <= points <= 90
+
+
+def test_bucket_seconds_handles_fixed_since_by_effective_span():
+    """A fixed --since start still gets a sensible bucket from how wide its
+    window currently is, not a hard-coded default."""
+    now = time.time()
+    tr = TimeRange(fixed_since=now - 3600, label="fixed")  # 1h wide right now
+    assert tr.bucket_seconds(now) == 60

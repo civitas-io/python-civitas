@@ -360,6 +360,14 @@ from anyway.
 - **Scrollable/paginated `CostBreakdownTable` — DONE (differently than framed).** The "would
   overflow" premise was inaccurate — `DataTable` is a `ScrollView` and already scrolls natively;
   the real gap was a scroll affordance, added as a cardinality count in the title.
-- **Live tick chart animation — DECLINED.** A terminal `plotext` chart redraws with real data each
-  poll; "animating between ticks" would interpolate *fake* cost/rate frames — dishonest data on a
-  cost dashboard.
+- **Live tick chart animation — split into two findings.**
+  - *Tweened intra-poll frames — DECLINED.* A terminal `plotext` chart redraws with real data each
+    poll; interpolating *fake* cost/rate values between polls is dishonest on a cost dashboard. The
+    charts already draw straight line segments between real points only (`plt.plot`), so the honest
+    representation was already there.
+  - *Range-adaptive bucket granularity — DONE.* The real reason the chart looked static was a bug,
+    not missing animation: both queries defaulted to a fixed bucket (1 day for cost, 1 h for rate)
+    regardless of the selected range, so a 1h view collapsed the whole hour into a single point.
+    `TimeRange.bucket_seconds()` now scales the bucket with the visible window (1m/5m/1h/6h/1d),
+    threaded into both queries — every view shows ~24-90 real aggregate points connected by
+    straight lines. Verified end-to-end (12 spans over an hour → 12 points, vs. 1 before).
