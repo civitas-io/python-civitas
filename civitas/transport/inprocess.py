@@ -53,7 +53,7 @@ class InProcessTransport:
         if handler is not None:
             await handler(data)
 
-    async def request(self, address: str, data: bytes, timeout: float) -> bytes:
+    async def request(self, address: str, data: bytes, timeout: float | None) -> bytes:
         """Send a request and await a reply.
 
         Creates a temporary reply address, injects reply_to into the message,

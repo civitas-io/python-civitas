@@ -36,7 +36,7 @@ class Transport(Protocol):
         """Send a message to an address (fire-and-forget)."""
         ...
 
-    async def request(self, address: str, data: bytes, timeout: float) -> bytes:
+    async def request(self, address: str, data: bytes, timeout: float | None) -> bytes:
         """Send a message and await a reply (request-reply)."""
         ...
 

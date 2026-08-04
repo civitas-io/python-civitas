@@ -835,9 +835,24 @@ class AgentProcess:
         recipient: str,
         payload: dict[str, Any],
         message_type: str = "message",
-        timeout: float = 30.0,
+        timeout: float | None = 30.0,
     ) -> Message:
-        """Request-reply: send a message and await a response."""
+        """Request-reply: send a message and await a response.
+
+        ``timeout`` (v0.10.0): a positive value is a bounded wait (default 30s,
+        unchanged). ``None`` — or ``-1``/any value ``<= 0`` — means **wait
+        INDEFINITELY** until the recipient replies. This is the HITL case: an
+        ``ask()`` to an agent that suspends for approval buffers until the agent
+        is resumed (hours/days later), then returns the real reply. The
+        suspension itself has always been indefinite; this lets the caller wait
+        it out.
+
+        Caveat: an indefinite ask() holds resources (the pending reply, and on
+        ZMQ/NATS an open subscription) for the whole wait. Fine for a background
+        worker driving a HITL flow; a request-scoped caller (e.g. an HTTP
+        handler) must NOT block a connection for days — use ``send()`` + poll/
+        webhook instead.
+        """
         self._reject_reserved_type(message_type)
         if self._bus is None:
             raise RuntimeError("AgentProcess not wired to a MessageBus")

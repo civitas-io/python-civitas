@@ -1011,3 +1011,62 @@ async def test_force_restart_emits_audit_with_initiated_by() -> None:
         assert force[0]["details"]["reason"] == "kill test"
     finally:
         await sup.stop()
+
+
+# ---------------------------------------------------------------------------
+# Indefinite ask() into a suspended agent (v0.10.0, hitl-polish.md D1)
+# ---------------------------------------------------------------------------
+
+
+async def test_indefinite_ask_waits_for_resume_then_returns_reply() -> None:
+    """The core HITL caller ergonomic: ask() with timeout=-1 (indefinite) to an
+    agent that is SUSPENDED for approval buffers, does NOT time out, and returns
+    the real reply once the agent is resumed (approval granted) -- however long
+    that takes. Proven with a real suspend/resume cycle, not a mock clock."""
+    from tests.conftest import EchoAgent
+
+    agent = EchoAgent("worker")
+    rt = Runtime(
+        supervisor=Supervisor("root", children=[agent]),
+        state_store=InMemoryStateStore(),
+    )
+    await rt.start()
+    try:
+        await rt.suspend("worker", reason="awaiting approval")
+        await wait_for_status(agent, ProcessStatus.SUSPENDED)
+
+        # Fire the ask with an INDEFINITE timeout while the agent is suspended.
+        ask_task = asyncio.create_task(rt.ask("worker", {"q": 1}, timeout=-1))
+        # It must NOT resolve while suspended (message buffered, not dropped, not
+        # timed out) -- give the loop real time to prove it stays pending.
+        await asyncio.sleep(0.2)
+        assert not ask_task.done()  # still waiting, no timeout fired
+
+        # Approval granted -> resume -> the buffered ask is processed and replies.
+        await rt.resume("worker", approver="alice")
+        reply = await asyncio.wait_for(ask_task, timeout=2.0)  # test's own guard
+        assert reply is not None
+    finally:
+        await rt.stop()
+
+
+async def test_none_timeout_also_means_indefinite() -> None:
+    """timeout=None is the Pythonic spelling of the same indefinite wait."""
+    from tests.conftest import EchoAgent
+
+    agent = EchoAgent("worker")
+    rt = Runtime(
+        supervisor=Supervisor("root", children=[agent]),
+        state_store=InMemoryStateStore(),
+    )
+    await rt.start()
+    try:
+        await rt.suspend("worker", reason="approval")
+        await wait_for_status(agent, ProcessStatus.SUSPENDED)
+        ask_task = asyncio.create_task(rt.ask("worker", {"q": 1}, timeout=None))
+        await asyncio.sleep(0.15)
+        assert not ask_task.done()
+        await rt.resume("worker", approver="bob")
+        assert await asyncio.wait_for(ask_task, timeout=2.0) is not None
+    finally:
+        await rt.stop()

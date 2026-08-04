@@ -172,13 +172,21 @@ class MessageBus:
                 )
             )
 
-    async def request(self, message: Message, timeout: float = 30.0) -> Message:
+    async def request(self, message: Message, timeout: float | None = 30.0) -> Message:
         """Send a request message and await a reply.
 
         Used by ask() — delegates to transport.request() which handles
         correlation and reply routing.
+
+        ``timeout`` (v0.10.0): ``None`` — or any value ``<= 0`` (canonically
+        ``-1``) — means **wait indefinitely** (HITL approvals can take
+        hours/days; the agent stays SUSPENDED until resumed). Normalized to
+        ``None`` here so every transport's ``asyncio.timeout(None)`` waits
+        forever uniformly. A positive value is a bounded wait, as before.
         """
         self._validate_message_type(message)
+        if timeout is not None and timeout <= 0:
+            timeout = None
 
         entry = self._registry.lookup(message.recipient)
         if entry is None:

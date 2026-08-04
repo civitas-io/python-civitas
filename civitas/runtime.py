@@ -1153,10 +1153,15 @@ class Runtime:
         self,
         agent_name: str,
         payload: dict[str, Any],
-        timeout: float = 30.0,
+        timeout: float | None = 30.0,
         message_type: str = "message",
     ) -> Message:
-        """Send a message to an agent and await a reply."""
+        """Send a message to an agent and await a reply.
+
+        ``timeout`` (v0.10.0): ``None``/``-1``/any value ``<= 0`` waits
+        indefinitely — the HITL case (ask an agent that suspends for approval;
+        the reply arrives hours/days later on resume). See ``AgentProcess.ask``.
+        """
         if self._bus is None or self._tracer is None:
             raise RuntimeError("Runtime not started")
 
