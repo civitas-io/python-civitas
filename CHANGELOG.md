@@ -11,6 +11,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+## [0.10.1] — 2026-08-01
+
+Streaming and telemetry polish — refinements on the already-shipped bus-native streaming and the
+`civitas telemetry` TUI.
+
+### Added
+
+- **Streaming: immediate `StreamInterrupted` on producer loss** (design `bus-native-streaming.md`
+  §8b). When a producer stops mid-stream — a graceful stop, a force-restart, or a crash — it now
+  interrupts its consumers immediately instead of leaving them to wait out `idle_timeout`. The
+  producer keeps a per-outbound-stream `recipient` index and, on message-loop teardown, sends a
+  `producer_stopped` error to each active consumer (mapped to `StreamInterrupted`). `idle_timeout`/
+  `max_duration` remain the backstop for a genuinely-unreachable peer (e.g. `kill -9`).
+- **Telemetry: log/event viewer** in `civitas telemetry` (design `telemetry-native.md` §13/§14). A
+  new `EventLogTable` panel shows a chronological event feed (time, event, agent, status, duration;
+  newest first), backed by two new `SQLiteQueryEngine` methods: `recent_spans()` (the feed) and
+  `spans_in_trace()` (the §13 per-trace drill-down), returning a new `SpanRecord`.
+
+### Fixed
+
+- **Telemetry: range-adaptive chart bucket granularity.** `CostChart`/`MessageRateChart` always
+  queried with a fixed bucket (1 day for cost) regardless of the selected range, so a 1h view
+  collapsed the whole hour into a single point. `TimeRange.bucket_seconds()` now scales the bucket
+  with the visible window (1m/5m/1h/6h/1d), so every view shows ~24-90 real data points.
+
+### Changed
+
+- **Telemetry: `CostBreakdownTable`** now shows its agent/model cardinality in the title as a scroll
+  affordance (it already scrolled natively as a `ScrollView`).
+
 ## [0.10.0] — 2026-07-31
 
 HITL (human-in-the-loop) polish on the durable-suspension primitive. HITL approvals can take hours
