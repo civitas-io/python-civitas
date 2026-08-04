@@ -1139,3 +1139,57 @@ async def test_registry_suspension_flag_tracks_transitions_incl_restore() -> Non
         assert rt._registry.is_suspended("worker") is False
     finally:
         await rt.stop()
+
+
+# ---------------------------------------------------------------------------
+# Restart-budget exemption for crash-while-SUSPENDED (v0.10.0, hitl-polish.md D3)
+# ---------------------------------------------------------------------------
+
+
+async def test_crash_while_suspended_is_exempt_from_restart_budget() -> None:
+    """A crash of a SUSPENDED agent restarts it (back into SUSPENDED via the
+    marker) WITHOUT consuming the restart-intensity window -- a paused agent
+    poked repeatedly must not exhaust its budget and get escalated/removed."""
+    agent = RecorderAgent("worker")
+    agent.store = InMemoryStateStore()
+    sup = Supervisor("root", children=[agent], max_restarts=2, backoff_base=0.0)
+    await sup.start()
+    try:
+        await _suspend_via_message(agent)  # establish SUSPENDED (persists marker)
+
+        # Force-crash the suspended incarnation several times -- more than
+        # max_restarts. Each restart restores it into SUSPENDED; none should
+        # count against the budget, so the window stays empty and it's never
+        # exhausted/escalated.
+        for _ in range(4):
+            current = sup._children_by_name["worker"]
+            await current._mailbox.put(
+                Message(type="_agency.force_restart", payload={}, priority=1)
+            )
+            await wait_for(
+                lambda c=current: (
+                    sup._children_by_name["worker"] is not c
+                    and sup._children_by_name["worker"].status == ProcessStatus.SUSPENDED
+                ),
+                timeout=3.0,
+            )
+
+        # Budget window untouched -> still alive and suspended, not removed.
+        assert len(sup._engine.window) == 0
+        assert sup._children_by_name["worker"].status == ProcessStatus.SUSPENDED
+    finally:
+        await sup.stop()
+
+
+async def test_normal_crash_still_counts_against_budget() -> None:
+    """The exemption is scoped to SUSPENDED -- a RUNNING agent's crash still
+    records against the window (regression guard: we didn't exempt everything)."""
+    crasher = CrashOnMessageAgent("crasher")
+    sup = Supervisor("root", children=[crasher], max_restarts=5, backoff_base=0.0)
+    await sup.start()
+    try:
+        await sup._children_by_name["crasher"]._mailbox.put(Message(type="go"))
+        await wait_for(lambda: len(sup._engine.window) >= 1, timeout=3.0)
+        assert len(sup._engine.window) >= 1  # a running-agent crash DID count
+    finally:
+        await sup.stop()
