@@ -44,11 +44,18 @@ _BUILTINS: dict[str, dict[str, str]] = {
     },
     "exporter": {
         "console": "civitas.observability.export_backend.ConsoleBackend",
+        # SpanStores (B4) usable as declarative exporters. sqlite is core;
+        # postgres/mysql are driver-backed and live in civitas-contrib
+        # (resolved lazily -- ImportError only if used without contrib).
+        "sqlite": "civitas.observability.sqlite_backend.SQLiteSpanStore",
+        "postgres": "civitas_contrib.plugins.postgres_span_store.PostgresSpanStore",
+        "mysql": "civitas_contrib.plugins.mysql_span_store.MySQLSpanStore",
     },
     "state": {
         "in_memory": "civitas.plugins.state.InMemoryStateStore",
         "sqlite": "civitas.plugins.sqlite_store.SQLiteStateStore",
         "postgres": "civitas_contrib.plugins.postgres_store.PostgresStateStore",
+        "mysql": "civitas_contrib.plugins.mysql_store.MySQLStateStore",
         "encrypted": "civitas.plugins.encrypted_store.EncryptingStateStore",
     },
     "transport": {

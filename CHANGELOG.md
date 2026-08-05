@@ -11,6 +11,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+## [0.11.1] — 2026-08-05
+
+Driver-backed telemetry/state stores land in `civitas-contrib` (B4 continued), and the core loader
+gains the wiring to use them declaratively from topology YAML. Additive; contrib backends resolve
+lazily (only imported when used).
+
+### Added
+
+- **Loader: `SpanStore`s as declarative exporters** — `plugins.exporters` now accepts
+  `type: sqlite` (core `SQLiteSpanStore`), `type: postgres` and `type: mysql` (the driver-backed
+  `PostgresSpanStore`/`MySQLSpanStore` in `civitas-contrib`). Contrib types resolve lazily.
+- **Loader: `state` `type: mysql`** — `civitas-contrib`'s `MySQLStateStore`, alongside the existing
+  `postgres`.
+
+The driver-backed backends themselves ship in **civitas-contrib 0.2.0**: `PostgresSpanStore`
+(`[postgres]`), `MySQLSpanStore` and `MySQLStateStore` (`[mysql]`). They implement the B4
+`SpanStore`/`StateStore` protocols over a single `civitas_spans`/`civitas_agent_state` table, reuse
+core's public `normalize_span`, and use `DOUBLE` epoch times so bucketed queries return identical
+results to core's `SQLiteSpanStore` (verified by a cross-backend equivalence suite against real
+Postgres/MySQL).
+
 ## [0.11.0] — 2026-08-04
 
 The `SpanStore` seam and a written-down contrib boundary rule (B4). Telemetry storage is now a
