@@ -318,7 +318,20 @@ runtime = Runtime(
 )
 ```
 
-State is persisted to a local SQLite database as JSON. Survives process exits and machine restarts. All I/O runs in a thread executor — SQLite operations never block the asyncio event loop.
+State is persisted to a local SQLite database as JSON. Survives process exits and machine restarts. All I/O runs in a thread executor — SQLite operations never block the asyncio event loop. `SQLiteStateStore` is part of **core** civitas (SQLite is stdlib).
+
+### Postgres / MySQL state stores (civitas-contrib)
+
+For shared, multi-process durable state, `civitas-contrib` ships driver-backed stores (they need a DB driver, so they live in contrib):
+
+```python
+from civitas_contrib.plugins.postgres_store import PostgresStateStore  # pip install civitas-contrib[postgres]
+from civitas_contrib.plugins.mysql_store import MySQLStateStore        # pip install civitas-contrib[mysql]
+
+runtime = Runtime(supervisor=..., state_store=PostgresStateStore("postgresql://user:pass@host/db"))
+```
+
+Or declaratively in topology YAML — `type: postgres` / `type: mysql` under `plugins.state` (resolved lazily; needs the matching contrib extra installed).
 
 ```python
 # The agent — unchanged regardless of which store is configured
@@ -394,6 +407,12 @@ plugins:
 
   exporters:
     - type: console
+    - type: sqlite            # SQLiteSpanStore (core) -- queryable telemetry store
+      config:
+        db_dir: ./civitas_telemetry
+    # - type: postgres        # PostgresSpanStore (civitas-contrib[postgres])
+    #   config: { url: !ENV TELEMETRY_DB_URL }
+    # - type: mysql           # MySQLSpanStore (civitas-contrib[mysql])
 
   state:
     type: sqlite
@@ -401,9 +420,11 @@ plugins:
       db_path: agency_state.db
 ```
 
+The `sqlite`/`postgres`/`mysql` **exporter** types are `SpanStore`s (B4) — durable, queryable telemetry stores (`sqlite` is core; `postgres`/`mysql` need the matching contrib extra). The `sqlite`/`postgres`/`mysql` **state** types are `StateStore`s. Same names, different plugin role.
+
 Plugin resolution order:
 1. **Python entrypoints** — installed packages that register under `civitas.model`, `civitas.exporter`, `civitas.state`, or `civitas.transport`
-2. **Built-in names** — `anthropic`, `litellm`, `console`, `in_memory`, `sqlite`, `in_process`, `zmq`, `nats`
+2. **Built-in names** — models `anthropic`/`litellm`; exporters `console`/`sqlite`/`postgres`/`mysql`; state `in_memory`/`sqlite`/`postgres`/`mysql`; transports `in_process`/`zmq`/`nats`
 3. **Dotted import path** — e.g. `myapp.plugins.MyProvider`
 
 ### Registering a plugin via entrypoint

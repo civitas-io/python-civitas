@@ -61,6 +61,24 @@ def test_resolve_entrypoint_name_mismatch_falls_through() -> None:
     wrong_ep.load.assert_not_called()
 
 
+def test_resolve_sqlite_span_store_exporter_is_core() -> None:
+    """v0.11.1 (B4): SpanStores are usable as declarative exporters; the sqlite
+    one resolves to the core SQLiteSpanStore."""
+    cls = resolve_plugin_class("exporter", "sqlite")
+    assert cls.__module__ == "civitas.observability.sqlite_backend"
+    assert cls.__name__ == "SQLiteSpanStore"
+
+
+def test_driver_backed_stores_map_to_contrib_paths() -> None:
+    """v0.11.1: postgres/mysql span-store exporters and the mysql state store
+    resolve to civitas-contrib (lazily -- ImportError only if used without it)."""
+    from civitas.plugins.loader import _BUILTINS
+
+    assert _BUILTINS["exporter"]["postgres"].startswith("civitas_contrib.")
+    assert _BUILTINS["exporter"]["mysql"].startswith("civitas_contrib.")
+    assert _BUILTINS["state"]["mysql"] == "civitas_contrib.plugins.mysql_store.MySQLStateStore"
+
+
 def test_resolve_sqlite_state_store_is_core_not_contrib() -> None:
     """v0.11.0 (B4): SQLiteStateStore moved to core, so `type: sqlite` resolves
     to the core module and works WITHOUT civitas-contrib installed."""

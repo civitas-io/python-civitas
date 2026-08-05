@@ -362,9 +362,15 @@ backend = FanOutBackend([
 `ExportBackend` (above) is the general write contract. A **`SpanStore`** *extends* it for durable,
 **queryable** stores — one protocol that owns both the write side (`export`/`shutdown`) and the read
 surface (`cost_over_time`, `message_rate_over_time`, `cost_by_agent`/`_by_model`, `recent_spans`,
-`spans_in_trace`), so a backend's read and write sides share one schema and can't drift. Core ships
-two implementations; driver-backed ones (Postgres/MySQL) live in `civitas-contrib`. See
+`spans_in_trace`), so a backend's read and write sides share one schema and can't drift. See
 [`docs/design/spanstore-and-contrib-boundary.md`](design/spanstore-and-contrib-boundary.md).
+
+**Implementations:** `SQLiteSpanStore` + `InMemorySpanStore` in core; `PostgresSpanStore`
+(`civitas-contrib[postgres]`) and `MySQLSpanStore` (`civitas-contrib[mysql]`) for shared,
+cross-process aggregation in one place. All are usable declaratively as `plugins.exporters` of
+`type: sqlite`/`postgres`/`mysql` (see [plugins](plugins.md#loading-plugins-from-yaml)). The
+driver-backed stores use a single `civitas_spans` table (no window files) with `DOUBLE` epoch
+times, so their bucketed queries return identical results to core's `SQLiteSpanStore`.
 
 `normalize_span()` is **public API** (`from civitas.observability import normalize_span`): it maps a
 `SpanData`'s attributes onto the promoted columns (see the normalization table in
