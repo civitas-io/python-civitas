@@ -357,21 +357,41 @@ backend = FanOutBackend([
 
 ---
 
-## Native SQLite storage (v0.9.3.x, Track B, B1)
+## Native span storage: the `SpanStore` seam (v0.11.0, B4)
 
-**Install `civitas[telemetry]`.** A real, built-in `ExportBackend` for small/local deployments that
-want to ask "what did my agents spend last week" without already running Jaeger/Grafana/Tempo (see
-[`docs/design/telemetry-native.md`](design/telemetry-native.md) for the full design):
+`ExportBackend` (above) is the general write contract. A **`SpanStore`** *extends* it for durable,
+**queryable** stores — one protocol that owns both the write side (`export`/`shutdown`) and the read
+surface (`cost_over_time`, `message_rate_over_time`, `cost_by_agent`/`_by_model`, `recent_spans`,
+`spans_in_trace`), so a backend's read and write sides share one schema and can't drift. Core ships
+two implementations; driver-backed ones (Postgres/MySQL) live in `civitas-contrib`. See
+[`docs/design/spanstore-and-contrib-boundary.md`](design/spanstore-and-contrib-boundary.md).
+
+`normalize_span()` is **public API** (`from civitas.observability import normalize_span`): it maps a
+`SpanData`'s attributes onto the promoted columns (see the normalization table in
+[`telemetry-native.md`](design/telemetry-native.md) §4). Every `SpanStore` imports it rather than
+reimplementing the mapping — the returned key set is part of the contract.
+
+`InMemorySpanStore` (`from civitas.observability import InMemorySpanStore`) is a dependency-free
+reference impl + test double (the telemetry analogue of `InMemoryStateStore`).
+
+### `SQLiteSpanStore` (v0.9.3.x, Track B)
+
+**Install `civitas[telemetry]`.** A real, built-in `SpanStore` for small/local deployments that
+want to ask "what did my agents spend last week" without already running Jaeger/Grafana/Tempo:
 
 ```python
-from civitas.observability.sqlite_backend import SQLiteBackend
+from civitas.observability.sqlite_backend import SQLiteSpanStore
 
-backend = SQLiteBackend(
+backend = SQLiteSpanStore(
     db_dir="./civitas_telemetry",  # reasonable default
     window_days=30,                # one SQLite file per 30-day window
     retention_windows=6,           # ~180 days retained; older FILES are deleted outright
 )
 ```
+
+> **Back-compat:** `SQLiteBackend` (write-only name) and `SQLiteQueryEngine` (read-only name) remain
+> as aliases of `SQLiteSpanStore`; existing imports and `exporters=[SQLiteBackend(...)]` keep working
+> unchanged. New code should use `SQLiteSpanStore` (or the `SpanStore` protocol).
 
 Used exactly like any other exporter — `exporters=[backend]` passed to `Runtime`/`Worker`, or
 declared in topology YAML's `plugins.exporters:` block, composable with other exporters (e.g. also
@@ -387,9 +407,10 @@ fragmentation, no risk of a bad `WHERE` clause corrupting live data.
 own separate file set; multi-process aggregation is a deliberately deferred, tracked follow-up (see
 the design doc's §7 for the sketched answer), not silently unsupported.
 
-**Viewing it**: `SQLiteQueryEngine` (`civitas/observability/sqlite_query.py`) provides
-cost-over-time, message-rate-over-time, and per-agent/per-model cost breakdown queries directly
-over this store, including cross-window queries via SQLite's native `ATTACH DATABASE`. See
+**Viewing it**: `SQLiteSpanStore`'s own query methods provide cost-over-time,
+message-rate-over-time, per-agent/per-model cost breakdowns, a recent-span feed (`recent_spans`),
+and per-trace drill-down (`spans_in_trace`) directly over this store, including cross-window queries
+via SQLite's native `ATTACH DATABASE`. See
 [`civitas telemetry`](cli.md#civitas-telemetry) for the live Textual TUI built on top of it
 (charts, gauges, and a cost breakdown table — real terminal charts, via `textual-plotext`).
 

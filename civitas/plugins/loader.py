@@ -47,7 +47,7 @@ _BUILTINS: dict[str, dict[str, str]] = {
     },
     "state": {
         "in_memory": "civitas.plugins.state.InMemoryStateStore",
-        "sqlite": "civitas_contrib.plugins.sqlite_store.SQLiteStateStore",
+        "sqlite": "civitas.plugins.sqlite_store.SQLiteStateStore",
         "postgres": "civitas_contrib.plugins.postgres_store.PostgresStateStore",
         "encrypted": "civitas.plugins.encrypted_store.EncryptingStateStore",
     },

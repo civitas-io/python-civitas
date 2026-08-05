@@ -11,6 +11,39 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-08-04
+
+The `SpanStore` seam and a written-down contrib boundary rule (B4). Telemetry storage is now a
+pluggable, queryable protocol, and the persistence-in-core question is settled. All additive /
+aliased — no breaking change. Full design in
+`docs/design/spanstore-and-contrib-boundary.md`.
+
+### Added
+
+- **`SpanStore` protocol** (`from civitas.observability import SpanStore`) — extends `ExportBackend`
+  with the read surface (`cost_over_time`, `message_rate_over_time`, `cost_by_agent`/`_by_model`,
+  `recent_spans`, `spans_in_trace`). One protocol per backend, so a store's read and write sides
+  share one schema and cannot drift. `@runtime_checkable`.
+- **`normalize_span()` is now public API** (`from civitas.observability import normalize_span`) —
+  maps a `SpanData`'s attributes onto the promoted columns. Every `SpanStore` imports it rather than
+  reimplementing the mapping; the returned key set is part of the contract.
+- **`InMemorySpanStore`** — a dependency-free `SpanStore` reference implementation and test double
+  (the telemetry analogue of `InMemoryStateStore`).
+
+### Changed
+
+- **`SQLiteBackend` + `SQLiteQueryEngine` merged into `SQLiteSpanStore`** (read + write over one
+  schema). Both old names are kept as back-compat aliases; the `CostBucket`/`MessageRateBucket`/
+  `SpanRecord` dataclasses moved to `civitas.observability.span_store` and are still re-exported from
+  `sqlite_query`. Existing imports and `exporters=[SQLiteBackend(...)]` keep working unchanged.
+- **`SQLiteStateStore` moved from `civitas-contrib` to core** (`civitas.plugins.sqlite_store`). Under
+  the new contrib boundary rule — *core ships implementations with no third-party runtime
+  dependency; contrib ships anything needing a vendor/driver/framework SDK* — SQLite is stdlib, so it
+  belongs in core. YAML `type: sqlite` state stores now work **without** `civitas-contrib` installed.
+  Driver-backed Postgres/MySQL stores stay in contrib. The
+  `civitas_contrib.plugins.sqlite_store` import path continues to work via a deprecating re-export
+  shim (shipped in a separate `civitas-contrib` release).
+
 ## [0.10.1] — 2026-08-01
 
 Streaming and telemetry polish — refinements on the already-shipped bus-native streaming and the

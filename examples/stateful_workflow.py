@@ -3,8 +3,8 @@
 A workflow agent processes a 7-step pipeline, checkpointing after each step.
 Kill it mid-execution (Ctrl+C), restart — it resumes from the last checkpoint.
 
-Requires: pip install civitas civitas-contrib
-(SQLiteStateStore lives in civitas-contrib, not core civitas)
+Requires: pip install civitas
+(SQLiteStateStore is part of core civitas since v0.11.0 -- SQLite is stdlib.)
 
 Usage:
     python examples/stateful_workflow.py
@@ -15,10 +15,9 @@ Usage:
 
 import asyncio
 
-from civitas_contrib.plugins.sqlite_store import SQLiteStateStore
-
 from civitas import AgentProcess, Runtime, Supervisor
 from civitas.messages import Message
+from civitas.plugins.sqlite_store import SQLiteStateStore
 
 TOTAL_STEPS = 7
 
