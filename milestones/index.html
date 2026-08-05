@@ -4910,8 +4910,8 @@ resolution, and the <code>civitas state migrate</code> CLI are core's job. Table
 <td></td>
 </tr>
 <tr>
-<td>MySQL StateStore (<code>aiomysql</code>/<code>asyncmy</code> backend)</td>
-<td>⏸️ Deferred — see below; <strong>civitas-contrib</strong>'s job if built</td>
+<td>MySQL StateStore (<code>aiomysql</code> backend)</td>
+<td>✅ <strong>Done (civitas-contrib 0.2.0)</strong> — <code>civitas_contrib.plugins.mysql_store.MySQLStateStore</code>; loader <code>type: mysql</code>; real-MySQL tested</td>
 <td></td>
 </tr>
 </tbody>
@@ -6173,6 +6173,11 @@ too — see Part 1 above (§B1-B3). Remaining Track B items:</p>
 <td>v0.9.3.6 (B4)</td>
 <td><strong>Deferred by explicit decision (2026-07-29), documented not silently dropped</strong> — two real design questions surfaced right after B1 shipped, both real enough to track but not worth a mid-flight refactor of already-working, already-tested code: (1) placement — <code>SQLiteBackend</code> writes durable data to disk, matching this project's own "persistence backends live in <code>civitas-contrib</code>" precedent (<code>SQLiteStateStore</code> already lives there) rather than core <code>python-civitas</code>, which currently only ships zero-I/O feature machinery (<code>ExportBackend</code>/<code>FanOutBackend</code>/<code>ConsoleBackend</code>); (2) pluggability — SQLite is one backend among several a user may eventually want (Postgres, etc.) — the telemetry-specific logic (span normalization, schema shape) should be separated from the storage mechanism itself so alternative backends don't have to reimplement normalization, "build like a library so others can use the capability." Full writeup in <code>docs/design/telemetry-native.md</code>'s §12 addendum.</td>
 <td>✅ <strong>Done (v0.11.0)</strong> — see below</td>
+</tr>
+<tr>
+<td>v0.11.1 (B4 cont.)</td>
+<td><strong>Driver-backed SpanStores + MySQL StateStore</strong> (civitas-contrib 0.2.0 + core loader). <code>PostgresSpanStore</code> (<code>[postgres]</code>), <code>MySQLSpanStore</code> (<code>[mysql]</code>), and <code>MySQLStateStore</code> (<code>[mysql]</code>) — all against the B4 <code>SpanStore</code>/<code>StateStore</code> protocols, reusing core's public <code>normalize_span</code>. Single <code>civitas_spans</code> table + <code>DOUBLE</code> epoch times so bucketed queries match core's <code>SQLiteSpanStore</code> exactly (verified by a cross-backend equivalence suite against real Dockerized Postgres/MySQL via testcontainers). Core loader gains <code>exporter</code> types <code>sqlite</code>/<code>postgres</code>/<code>mysql</code> (SpanStores as declarative exporters) and state <code>type: mysql</code></td>
+<td>✅ Done</td>
 </tr>
 <tr>
 <td>v0.11.0 (B4)</td>

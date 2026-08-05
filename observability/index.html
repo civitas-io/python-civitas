@@ -3380,9 +3380,14 @@ API, add it yourself via <code>span.set_attribute(...)</code>.</p>
 <p><code>ExportBackend</code> (above) is the general write contract. A <strong><code>SpanStore</code></strong> <em>extends</em> it for durable,
 <strong>queryable</strong> stores — one protocol that owns both the write side (<code>export</code>/<code>shutdown</code>) and the read
 surface (<code>cost_over_time</code>, <code>message_rate_over_time</code>, <code>cost_by_agent</code>/<code>_by_model</code>, <code>recent_spans</code>,
-<code>spans_in_trace</code>), so a backend's read and write sides share one schema and can't drift. Core ships
-two implementations; driver-backed ones (Postgres/MySQL) live in <code>civitas-contrib</code>. See
+<code>spans_in_trace</code>), so a backend's read and write sides share one schema and can't drift. See
 <a href="../design/spanstore-and-contrib-boundary/"><code>docs/design/spanstore-and-contrib-boundary.md</code></a>.</p>
+<p><strong>Implementations:</strong> <code>SQLiteSpanStore</code> + <code>InMemorySpanStore</code> in core; <code>PostgresSpanStore</code>
+(<code>civitas-contrib[postgres]</code>) and <code>MySQLSpanStore</code> (<code>civitas-contrib[mysql]</code>) for shared,
+cross-process aggregation in one place. All are usable declaratively as <code>plugins.exporters</code> of
+<code>type: sqlite</code>/<code>postgres</code>/<code>mysql</code> (see <a href="../plugins/#loading-plugins-from-yaml">plugins</a>). The
+driver-backed stores use a single <code>civitas_spans</code> table (no window files) with <code>DOUBLE</code> epoch
+times, so their bucketed queries return identical results to core's <code>SQLiteSpanStore</code>.</p>
 <p><code>normalize_span()</code> is <strong>public API</strong> (<code>from civitas.observability import normalize_span</code>): it maps a
 <code>SpanData</code>'s attributes onto the promoted columns (see the normalization table in
 <a href="../design/telemetry-native/"><code>telemetry-native.md</code></a> §4). Every <code>SpanStore</code> imports it rather than
