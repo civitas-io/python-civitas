@@ -1759,6 +1759,8 @@
       
         
       
+        
+      
     
     
     
@@ -1905,6 +1907,34 @@
     
   
     Gateway API Surface (M4.x)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../spanstore-and-contrib-boundary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SpanStore & Contrib Boundary (B4)
   
 
     
@@ -2543,6 +2573,16 @@ standard. 1474/1474 unit+integration tests green (macOS); Linux (Docker, full ex
 new <code>telemetry</code> extra) green except the one confirmed pre-existing <code>test_python_m_agency</code>
 <code>.venv</code>-path environmental failure. mypy/ruff check/format clean.</p>
 <h2 id="12-addendum-2026-07-29-two-real-follow-up-questions-deferred-and-tracked">12. Addendum (2026-07-29) — two real follow-up questions, deferred and tracked<a class="headerlink" href="#12-addendum-2026-07-29-two-real-follow-up-questions-deferred-and-tracked" title="Permanent link">&para;</a></h2>
+<blockquote>
+<p><strong>RESOLVED in v0.11.0 (B4).</strong> Both questions below were answered and implemented — see
+<a href="../spanstore-and-contrib-boundary/"><code>docs/design/spanstore-and-contrib-boundary.md</code></a>. In short:
+<code>SpanStore</code> extends <code>ExportBackend</code> with the query surface (one protocol per backend, no schema
+drift); <code>normalize_span()</code> is now public API every backend imports; <code>SQLiteBackend</code> +
+<code>SQLiteQueryEngine</code> merged into <code>SQLiteSpanStore</code> (aliases kept); and the placement question was
+settled by a new contrib boundary rule (<em>needs a third-party runtime dependency</em> → contrib), which
+keeps <code>SQLiteSpanStore</code> in core and moved <code>SQLiteStateStore</code> back to core too. The original
+analysis is retained below for history.</p>
+</blockquote>
 <p>Two legitimate design questions surfaced in conversation immediately after B1 shipped. Explicit
 decision: <strong>document both here and in <code>docs/milestones.md</code> (v0.9.3.6, B4) rather than refactor
 already-working, already-tested code mid-flight.</strong> Neither is a defect in what shipped — both are

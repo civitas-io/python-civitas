@@ -2415,6 +2415,8 @@
       
         
       
+        
+      
     
     
     
@@ -2561,6 +2563,34 @@
     
   
     Gateway API Surface (M4.x)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/spanstore-and-contrib-boundary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SpanStore & Contrib Boundary (B4)
   
 
     
@@ -6141,8 +6171,13 @@ too — see Part 1 above (§B1-B3). Remaining Track B items:</p>
 <tbody>
 <tr>
 <td>v0.9.3.6 (B4)</td>
-<td><strong>Deferred by explicit decision (2026-07-29), documented not silently dropped</strong> — two real design questions surfaced right after B1 shipped, both real enough to track but not worth a mid-flight refactor of already-working, already-tested code: (1) placement — <code>SQLiteBackend</code> writes durable data to disk, matching this project's own "persistence backends live in <code>civitas-contrib</code>" precedent (<code>SQLiteStateStore</code> already lives there) rather than core <code>python-civitas</code>, which currently only ships zero-I/O feature machinery (<code>ExportBackend</code>/<code>FanOutBackend</code>/<code>ConsoleBackend</code>); (2) pluggability — SQLite is one backend among several a user may eventually want (Postgres, etc.) — the telemetry-specific logic (span normalization, schema shape) should be separated from the storage mechanism itself so alternative backends don't have to reimplement normalization, "build like a library so others can use the capability." Full writeup in <code>docs/design/telemetry-native.md</code>'s §12 addendum. <strong>Current, shipped v0.9.3.3 implementation is intentionally left as-is</strong> — both of these are real, tracked follow-ups, not a defect in what already shipped</td>
-<td>Deferred — tracked, not scheduled</td>
+<td><strong>Deferred by explicit decision (2026-07-29), documented not silently dropped</strong> — two real design questions surfaced right after B1 shipped, both real enough to track but not worth a mid-flight refactor of already-working, already-tested code: (1) placement — <code>SQLiteBackend</code> writes durable data to disk, matching this project's own "persistence backends live in <code>civitas-contrib</code>" precedent (<code>SQLiteStateStore</code> already lives there) rather than core <code>python-civitas</code>, which currently only ships zero-I/O feature machinery (<code>ExportBackend</code>/<code>FanOutBackend</code>/<code>ConsoleBackend</code>); (2) pluggability — SQLite is one backend among several a user may eventually want (Postgres, etc.) — the telemetry-specific logic (span normalization, schema shape) should be separated from the storage mechanism itself so alternative backends don't have to reimplement normalization, "build like a library so others can use the capability." Full writeup in <code>docs/design/telemetry-native.md</code>'s §12 addendum.</td>
+<td>✅ <strong>Done (v0.11.0)</strong> — see below</td>
+</tr>
+<tr>
+<td>v0.11.0 (B4)</td>
+<td><strong>SpanStore protocol + contrib boundary rule</strong> (design <code>spanstore-and-contrib-boundary.md</code>). Resolves both v0.9.3.6 questions: (1) <strong>pluggability</strong> — <code>SpanStore</code> extends <code>ExportBackend</code> with the query surface (one protocol per backend, read+write share one schema, can't drift); <code>normalize_span()</code> is now public API every backend imports; <code>SQLiteBackend</code>+<code>SQLiteQueryEngine</code> merged into <code>SQLiteSpanStore</code> (old names kept as aliases); <code>InMemorySpanStore</code> added as reference impl + test double, with a parametrized conformance suite proving the seam is backend-agnostic. (2) <strong>placement</strong> — adopted a cleaner contrib boundary rule (<em>needs a third-party runtime dependency</em> → contrib, not <em>touches disk</em>), which keeps <code>SQLiteSpanStore</code> in core AND moved <code>SQLiteStateStore</code> back from contrib to core (stdlib sqlite3, zero new deps; YAML <code>type: sqlite</code> now works without contrib). Driver-backed Postgres/MySQL span+state stores stay in contrib (future, demand-driven). Contrib deprecation shim ships as a separate civitas-contrib release gated on core v0.11.0</td>
+<td>✅ Done</td>
 </tr>
 <tr>
 <td>v0.9.3.7</td>

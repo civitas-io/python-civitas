@@ -1181,13 +1181,30 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#native-sqlite-storage-v093x-track-b-b1" class="md-nav__link">
+  <a href="#native-span-storage-the-spanstore-seam-v0110-b4" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Native SQLite storage (v0.9.3.x, Track B, B1)
+        Native span storage: the SpanStore seam (v0.11.0, B4)
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Native span storage: the SpanStore seam (v0.11.0, B4)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#sqlitespanstore-v093x-track-b" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SQLiteSpanStore (v0.9.3.x, Track B)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2158,6 +2175,8 @@
       
         
       
+        
+      
     
     
     
@@ -2304,6 +2323,34 @@
     
   
     Gateway API Surface (M4.x)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/spanstore-and-contrib-boundary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SpanStore & Contrib Boundary (B4)
   
 
     
@@ -2731,13 +2778,30 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#native-sqlite-storage-v093x-track-b-b1" class="md-nav__link">
+  <a href="#native-span-storage-the-spanstore-seam-v0110-b4" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Native SQLite storage (v0.9.3.x, Track B, B1)
+        Native span storage: the SpanStore seam (v0.11.0, B4)
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Native span storage: the SpanStore seam (v0.11.0, B4)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#sqlitespanstore-v093x-track-b" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SQLiteSpanStore (v0.9.3.x, Track B)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -3312,18 +3376,35 @@ API, add it yourself via <code>span.set_attribute(...)</code>.</p>
 </span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="p">])</span>
 </span></code></pre></div>
 <hr />
-<h2 id="native-sqlite-storage-v093x-track-b-b1">Native SQLite storage (v0.9.3.x, Track B, B1)<a class="headerlink" href="#native-sqlite-storage-v093x-track-b-b1" title="Permanent link">&para;</a></h2>
-<p><strong>Install <code>civitas[telemetry]</code>.</strong> A real, built-in <code>ExportBackend</code> for small/local deployments that
-want to ask "what did my agents spend last week" without already running Jaeger/Grafana/Tempo (see
-<a href="../design/telemetry-native/"><code>docs/design/telemetry-native.md</code></a> for the full design):</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">civitas.observability.sqlite_backend</span><span class="w"> </span><span class="kn">import</span> <span class="n">SQLiteBackend</span>
+<h2 id="native-span-storage-the-spanstore-seam-v0110-b4">Native span storage: the <code>SpanStore</code> seam (v0.11.0, B4)<a class="headerlink" href="#native-span-storage-the-spanstore-seam-v0110-b4" title="Permanent link">&para;</a></h2>
+<p><code>ExportBackend</code> (above) is the general write contract. A <strong><code>SpanStore</code></strong> <em>extends</em> it for durable,
+<strong>queryable</strong> stores — one protocol that owns both the write side (<code>export</code>/<code>shutdown</code>) and the read
+surface (<code>cost_over_time</code>, <code>message_rate_over_time</code>, <code>cost_by_agent</code>/<code>_by_model</code>, <code>recent_spans</code>,
+<code>spans_in_trace</code>), so a backend's read and write sides share one schema and can't drift. Core ships
+two implementations; driver-backed ones (Postgres/MySQL) live in <code>civitas-contrib</code>. See
+<a href="../design/spanstore-and-contrib-boundary/"><code>docs/design/spanstore-and-contrib-boundary.md</code></a>.</p>
+<p><code>normalize_span()</code> is <strong>public API</strong> (<code>from civitas.observability import normalize_span</code>): it maps a
+<code>SpanData</code>'s attributes onto the promoted columns (see the normalization table in
+<a href="../design/telemetry-native/"><code>telemetry-native.md</code></a> §4). Every <code>SpanStore</code> imports it rather than
+reimplementing the mapping — the returned key set is part of the contract.</p>
+<p><code>InMemorySpanStore</code> (<code>from civitas.observability import InMemorySpanStore</code>) is a dependency-free
+reference impl + test double (the telemetry analogue of <code>InMemoryStateStore</code>).</p>
+<h3 id="sqlitespanstore-v093x-track-b"><code>SQLiteSpanStore</code> (v0.9.3.x, Track B)<a class="headerlink" href="#sqlitespanstore-v093x-track-b" title="Permanent link">&para;</a></h3>
+<p><strong>Install <code>civitas[telemetry]</code>.</strong> A real, built-in <code>SpanStore</code> for small/local deployments that
+want to ask "what did my agents spend last week" without already running Jaeger/Grafana/Tempo:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">civitas.observability.sqlite_backend</span><span class="w"> </span><span class="kn">import</span> <span class="n">SQLiteSpanStore</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="n">backend</span> <span class="o">=</span> <span class="n">SQLiteBackend</span><span class="p">(</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="n">backend</span> <span class="o">=</span> <span class="n">SQLiteSpanStore</span><span class="p">(</span>
 </span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>    <span class="n">db_dir</span><span class="o">=</span><span class="s2">&quot;./civitas_telemetry&quot;</span><span class="p">,</span>  <span class="c1"># reasonable default</span>
 </span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>    <span class="n">window_days</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span>                <span class="c1"># one SQLite file per 30-day window</span>
 </span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>    <span class="n">retention_windows</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span>           <span class="c1"># ~180 days retained; older FILES are deleted outright</span>
 </span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="p">)</span>
 </span></code></pre></div>
+<blockquote>
+<p><strong>Back-compat:</strong> <code>SQLiteBackend</code> (write-only name) and <code>SQLiteQueryEngine</code> (read-only name) remain
+as aliases of <code>SQLiteSpanStore</code>; existing imports and <code>exporters=[SQLiteBackend(...)]</code> keep working
+unchanged. New code should use <code>SQLiteSpanStore</code> (or the <code>SpanStore</code> protocol).</p>
+</blockquote>
 <p>Used exactly like any other exporter — <code>exporters=[backend]</code> passed to <code>Runtime</code>/<code>Worker</code>, or
 declared in topology YAML's <code>plugins.exporters:</code> block, composable with other exporters (e.g. also
 forwarding to Jaeger) via <code>FanOutBackend</code>.</p>
@@ -3335,9 +3416,10 @@ fragmentation, no risk of a bad <code>WHERE</code> clause corrupting live data.<
 <p><strong>Scope</strong>: single-process only for now — each OS process (Runtime + every Worker) would produce its
 own separate file set; multi-process aggregation is a deliberately deferred, tracked follow-up (see
 the design doc's §7 for the sketched answer), not silently unsupported.</p>
-<p><strong>Viewing it</strong>: <code>SQLiteQueryEngine</code> (<code>civitas/observability/sqlite_query.py</code>) provides
-cost-over-time, message-rate-over-time, and per-agent/per-model cost breakdown queries directly
-over this store, including cross-window queries via SQLite's native <code>ATTACH DATABASE</code>. See
+<p><strong>Viewing it</strong>: <code>SQLiteSpanStore</code>'s own query methods provide cost-over-time,
+message-rate-over-time, per-agent/per-model cost breakdowns, a recent-span feed (<code>recent_spans</code>),
+and per-trace drill-down (<code>spans_in_trace</code>) directly over this store, including cross-window queries
+via SQLite's native <code>ATTACH DATABASE</code>. See
 <a href="../cli/#civitas-telemetry"><code>civitas telemetry</code></a> for the live Textual TUI built on top of it
 (charts, gauges, and a cost breakdown table — real terminal charts, via <code>textual-plotext</code>).</p>
 <hr />
