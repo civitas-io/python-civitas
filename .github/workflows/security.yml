@@ -127,7 +127,21 @@ jobs:
         with:
           fetch-depth: 0   # full history required for historical secret scan
 
+      # Pinned, not @main: on 2026-08-10 the scheduled run failed with 59
+      # "verified" findings, all from the Lob detector, on ordinary test code
+      # (assertions/docstrings, nothing secret-shaped) — a confirmed,
+      # currently-open TruffleHog bug: the Lob detector treats HTTP 422/403
+      # verification responses as success and has no entropy check, so it
+      # matches snake_case identifiers of the right length and "verifies"
+      # them via a broken check. @main and the latest tagged release
+      # (v3.96.0) were IDENTICAL at the time — pinning a version doesn't
+      # retroactively fix this incident, it prevents a future unreviewed
+      # regression from landing silently the same way this one did.
       - name: TruffleHog — scan full history
-        uses: trufflesecurity/trufflehog@main
+        uses: trufflesecurity/trufflehog@v3.96.0
         with:
-          extra_args: --results=verified
+          extra_args: --results=verified --exclude-detectors=Lob
+          # TODO: remove --exclude-detectors=Lob once upstream fixes the
+          # 422/403-treated-as-verified bug and adds an entropy check to the
+          # Lob keyPat. Re-enable by removing the flag, not by re-pinning to
+          # @main.
