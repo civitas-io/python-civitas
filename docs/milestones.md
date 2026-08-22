@@ -1473,7 +1473,7 @@ Split from the original v0.10.0 "HITL & Streaming" bundle when the HITL half shi
 |------|-------|--------|---------------|
 | `CivitasMCPServer` — expose an agent tree as an MCP server | fabrica | ⏸️ not started anywhere | §M3.4 |
 | CrewAI adapter — full implementation (stub raises `NotImplementedError` today) | civitas-contrib | ⏳ stub | §Infrastructure & Release |
-| MySQL StateStore | civitas-contrib | ⏸️ | §Postgres StateStore |
+| ~~MySQL StateStore~~ | civitas-contrib | ✅ Done (`civitas-contrib` 0.2.0) — row stale, kept struck through rather than silently deleted; see §Postgres StateStore's own ✅ record | §Postgres StateStore |
 | [Prompt Library & Playground](#prompt-library-playground) | civitas-contrib | 💡 idea (🔴 high), spec unwritten | §Phase 5 |
 | [Skills Gateway](#skills-gateway) | civitas-contrib | 💡 idea, spec unwritten | §Phase 5 |
 | [Fabrica — Tools Gateway](#fabrica-tools-gateway) / `find_tools` (RFC 0001) | civitas-forge | 💡 idea (🔴 high), spec unwritten | §Phase 5, rfc/0001 |
