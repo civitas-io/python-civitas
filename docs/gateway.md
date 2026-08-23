@@ -217,6 +217,14 @@ See [design/gateway-ws-grpc-auth.md](design/gateway-ws-grpc-auth.md) for the ful
 
 ## HTTP mTLS via a reverse proxy
 
+> **🚧 In progress (2026-08-23): `mtls_source="direct"` is being fixed for real** — a custom
+> uvicorn HTTP protocol that reads the peer certificate directly off the TLS transport, closing
+> the gap this section describes without requiring a reverse proxy. See
+> [design/gateway-http-mtls-direct.md](design/gateway-http-mtls-direct.md) for the full mechanism
+> (verified empirically, not just designed) and progress. Once shipped, this section's "still
+> non-functional" framing below will be corrected to describe `proxy_header` as one of two valid
+> modes, not the only working one.
+
 `require_client_cert` authorizes a request on the client certificate's full subject DN. uvicorn never exposes the client certificate from its own TLS handshake to the ASGI app ([uvicorn#400](https://github.com/encode/uvicorn/issues/400)), so terminating mTLS **directly** at uvicorn cannot populate a client cert — every request is rejected `401` even with a valid certificate. This is the default `mtls_source="direct"`: kept for backward compatibility, still non-functional against uvicorn (a known limitation of that mode).
 
 The working pattern is to terminate TLS at a reverse proxy and have it forward the verified client certificate to civitas as the IETF-standard [RFC 9440](https://www.rfc-editor.org/rfc/rfc9440.html) `Client-Cert` header. civitas decodes it, extracts the DN, and feeds it into the **unchanged** DN-allowlist authorization.

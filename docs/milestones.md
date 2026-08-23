@@ -1300,6 +1300,7 @@ Owner column: `core` = python-civitas, else the target repo.
 | # | Issue | Severity | Area |
 |---|-------|----------|------|
 | [#26](https://github.com/civitas-io/python-civitas/issues/26) | MCP client lacks Streamable HTTP transport | — | mcp / fabrica (blocked on fabrica) |
+| [#25](https://github.com/civitas-io/python-civitas/issues/25) (reopened, `direct`-mode half) | In progress (2026-08-23) -- `mtls_source="direct"` HTTP mTLS is still non-functional against uvicorn (never populates the ASGI TLS extension, [uvicorn#400](https://github.com/encode/uvicorn/issues/400)); a real client with a valid, trusted, allowlisted certificate is incorrectly rejected `401`. Surfaced again from `civitas-io/presidium`'s M7 work, which needs direct-mode mTLS for a genuinely self-hostable single-process server (no mandatory reverse proxy). Fix: a custom uvicorn HTTP protocol subclass that reads the real peer certificate off the TLS transport (`ssl_object.getpeercert(binary_form=True)`, verified empirically this session) and populates the same ASGI extension shape `_client_cert_from_scope()` already expects -- no change to the existing, correct DN-authorization logic. See [gateway-http-mtls-direct.md](design/gateway-http-mtls-direct.md). | High -- real functional gap, not cosmetic | gateway / mTLS |
 
 > #27–#35 closed by [v0.8.0](#v080-supervision-core-hardening-released); #39–#43 closed by
 > [v0.8.1](#v081-verification-perimeter-released). The 2026-07 architecture review is fully
