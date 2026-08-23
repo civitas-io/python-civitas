@@ -7,7 +7,7 @@ packages = ["civitas"]
 
 [project]
 name = "civitas"
-version = "0.11.2"
+version = "0.11.3"
 description = "The production runtime for Python agents"
 readme = "README.md"
 requires-python = ">=3.12"

@@ -11,7 +11,6 @@ from typing import Any
 
 from civitas.config import settings
 from civitas.errors import ConfigurationError
-from civitas.gateway._tls_protocol import build_tls_aware_http_kwarg
 from civitas.gateway.dispatch import GatewayDispatcher, StreamSink
 from civitas.gateway.jwt_auth import _JWT_MIDDLEWARE_PATH, JwtVerifier
 from civitas.gateway.mtls import _MTLS_MIDDLEWARE_PATH, _load_x509
@@ -268,7 +267,14 @@ class HTTPGateway(AgentProcess):
                 "civitas[http] is required for HTTPGateway. "
                 "Install with: pip install 'civitas[http]'"
             ) from exc
-
+        # Lazy, alongside the uvicorn import above: civitas/gateway/_tls_protocol.py
+        # itself imports uvicorn eagerly at module level (it subclasses
+        # HttpToolsProtocol), so importing it at this module's own top level
+        # would defeat the whole point of the try/except above -- a plain
+        # `pip install civitas` (no [http] extra) would fail at `import civitas`
+        # itself. Real bug found and fixed the same day it shipped (2026-08-23):
+        # confirmed live against the real published v0.11.2 wheel in a fresh venv.
+        from civitas.gateway._tls_protocol import build_tls_aware_http_kwarg
         from civitas.gateway.asgi import GatewayASGI
 
         # v0.9.6 (control-plane-writes.md D3): control-plane WRITE routes are

@@ -11,6 +11,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+## [0.11.3] -- 2026-08-23
+
+A real, live packaging bug found immediately after v0.11.2 published, by the release's own final
+verification step (a fresh-venv install) -- fixed the same day, not left broken.
+
+### Fixed
+
+- **`import civitas` failed entirely with `civitas[http]` installed.** v0.11.2's new
+  `civitas.gateway._tls_protocol` module imports `uvicorn.protocols.http.httptools_impl` eagerly
+  at module level (it subclasses `HttpToolsProtocol`), and `civitas/gateway/core.py` imported that
+  module at ITS OWN top level too -- defeating this codebase's own established, careful discipline
+  of only ever importing `uvicorn` lazily inside `HTTPGateway.on_start()`, specifically so a plain
+  `pip install civitas` (no `[http]` extra) never requires it. Fixed by moving the
+  `_tls_protocol` import to be lazy too, alongside the existing `import uvicorn` line. Confirmed,
+  not assumed: a real fresh-venv `pip install civitas` (base install) and `pip install
+  civitas[http]` (the gateway extra) both now import cleanly.
+
 ## [0.11.2] -- 2026-08-23
 
 A real, functional gateway fix (R10) -- closes the other half of #25. Backward compatible; no

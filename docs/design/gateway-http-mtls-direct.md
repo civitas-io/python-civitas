@@ -142,7 +142,14 @@ unaffected (protocol class unchanged in both cases) — regression coverage for 
 - **HTTP/3** — unaffected; `enable_http3` is already, separately, incompatible with any
   `client_cert_mode` (aioquic cannot enforce client certs), unchanged by this design.
 
-## 9. Real bugs found while implementing, before landing
+## 9. Real bugs found while implementing, before landing (plus one found right after publishing)
+
+- **A real, live packaging bug, found by v0.11.2's own release verification, fixed same-day as
+  v0.11.3**: `_tls_protocol.py` imports `uvicorn.protocols.http.httptools_impl` eagerly at module
+  level, and `core.py` imported that module at its own top level -- defeating this codebase's
+  established discipline of only ever importing `uvicorn` lazily inside `on_start()`. A plain
+  `pip install civitas` failed entirely. Fixed by moving the `_tls_protocol` import to be lazy
+  too, confirmed against a real fresh-venv install both with and without `civitas[http]`.
 
 - **A structural nesting bug in `core.py`'s own edit**: the pre-existing D9 "proxy_header without
   `require_client_cert` in middleware" guard got accidentally moved inside the new `direct`-mode
