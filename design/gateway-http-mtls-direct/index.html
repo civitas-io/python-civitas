@@ -2179,10 +2179,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#9-real-bugs-found-while-implementing-before-landing" class="md-nav__link">
+  <a href="#9-real-bugs-found-while-implementing-before-landing-plus-one-found-right-after-publishing" class="md-nav__link">
     <span class="md-ellipsis">
       
-        9. Real bugs found while implementing, before landing
+        9. Real bugs found while implementing, before landing (plus one found right after publishing)
       
     </span>
   </a>
@@ -2384,13 +2384,23 @@ unaffected (protocol class unchanged in both cases) — regression coverage for 
 <li><strong>HTTP/3</strong> — unaffected; <code>enable_http3</code> is already, separately, incompatible with any
   <code>client_cert_mode</code> (aioquic cannot enforce client certs), unchanged by this design.</li>
 </ul>
-<h2 id="9-real-bugs-found-while-implementing-before-landing">9. Real bugs found while implementing, before landing<a class="headerlink" href="#9-real-bugs-found-while-implementing-before-landing" title="Permanent link">&para;</a></h2>
+<h2 id="9-real-bugs-found-while-implementing-before-landing-plus-one-found-right-after-publishing">9. Real bugs found while implementing, before landing (plus one found right after publishing)<a class="headerlink" href="#9-real-bugs-found-while-implementing-before-landing-plus-one-found-right-after-publishing" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>A structural nesting bug in <code>core.py</code>'s own edit</strong>: the pre-existing D9 "proxy_header without
+<li>
+<p><strong>A real, live packaging bug, found by v0.11.2's own release verification, fixed same-day as
+  v0.11.3</strong>: <code>_tls_protocol.py</code> imports <code>uvicorn.protocols.http.httptools_impl</code> eagerly at module
+  level, and <code>core.py</code> imported that module at its own top level -- defeating this codebase's
+  established discipline of only ever importing <code>uvicorn</code> lazily inside <code>on_start()</code>. A plain
+  <code>pip install civitas</code> failed entirely. Fixed by moving the <code>_tls_protocol</code> import to be lazy
+  too, confirmed against a real fresh-venv install both with and without <code>civitas[http]</code>.</p>
+</li>
+<li>
+<p><strong>A structural nesting bug in <code>core.py</code>'s own edit</strong>: the pre-existing D9 "proxy_header without
   <code>require_client_cert</code> in middleware" guard got accidentally moved inside the new <code>direct</code>-mode
   block during editing, corrupting <code>client_cert_mode="required"</code> + <code>mtls_source="direct"</code> startup
   (a real, pre-existing, previously-passing test -- <code>test_on_start_passes_ssl_cert_reqs</code> -- caught
-  this immediately). Fixed by keeping each <code>mtls_source</code> branch's own guard scoped to itself.</li>
+  this immediately). Fixed by keeping each <code>mtls_source</code> branch's own guard scoped to itself.</p>
+</li>
 <li><strong>A real bug in the <em>test harness</em>, not the fix</strong>: the first version of both this repo's new
   test and <code>civitas-io/presidium</code>'s own mirrored test used httpx's deprecated
   <code>cert=(cert_path, key_path)</code> + <code>verify=&lt;str ca_path&gt;</code> combination -- which produced a bare,
