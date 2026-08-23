@@ -11,6 +11,7 @@ from typing import Any
 
 from civitas.config import settings
 from civitas.errors import ConfigurationError
+from civitas.gateway._tls_protocol import build_tls_aware_http_kwarg
 from civitas.gateway.dispatch import GatewayDispatcher, StreamSink
 from civitas.gateway.jwt_auth import _JWT_MIDDLEWARE_PATH, JwtVerifier
 from civitas.gateway.mtls import _MTLS_MIDDLEWARE_PATH, _load_x509
@@ -330,6 +331,14 @@ class HTTPGateway(AgentProcess):
                     "extracted certificate would never be authorized; add it to middleware "
                     "or remove mtls_source"
                 )
+        if self._gw_config.mtls_source == "direct" and self._gw_config.client_cert_mode != "none":
+            # Same eager-dependency discipline as proxy_header above --
+            # TlsAwareHttpToolsProtocol's _dn_from_der() also needs
+            # cryptography; a missing dependency must fail startup loudly,
+            # not surface as a per-request 401 indistinguishable from a
+            # real DN-allowlist rejection. See docs/design/
+            # gateway-http-mtls-direct.md.
+            _load_x509()
 
         # D10: JWT auto-inherits onto gRPC (D6), but a bearer token over an insecure
         # (plaintext) gRPC port ships the credential in the clear — refuse to start.
@@ -370,6 +379,16 @@ class HTTPGateway(AgentProcess):
             # in _client_cert_from_headers must key on the true TCP peer, not a
             # spoofable forwarded value. direct mode is left untouched (uvicorn default).
             uv_kwargs["proxy_headers"] = False
+        if self._gw_config.mtls_source == "direct" and self._gw_config.client_cert_mode != "none":
+            # Closes the direct-mode half of GH #25: uvicorn's default HTTP
+            # protocol never populates the ASGI TLS extension, so
+            # require_client_cert always saw client_cert=None even for a
+            # fully valid, trusted, allowlisted client. TlsAwareHttpToolsProtocol
+            # reads the real peer certificate straight off the TLS transport
+            # instead. Only swapped in for this exact combination (D2,
+            # docs/design/gateway-http-mtls-direct.md) -- a plaintext or
+            # proxy_header gateway is completely unaffected.
+            uv_kwargs.update(build_tls_aware_http_kwarg())
         uv_config = uvicorn.Config(**uv_kwargs)
         self._uvicorn_server = uvicorn.Server(uv_config)
         self._server_task = asyncio.create_task(

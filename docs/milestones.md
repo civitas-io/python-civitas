@@ -907,6 +907,7 @@ capability, which builds on supervision + dynamic spawn + telemetry (under inves
 | R7 | **Bus-native streaming primitive** (`AgentProcess.stream()`, agent-to-agent, no transport change) | ✅ Done (v0.7.1) | [#22](https://github.com/civitas-io/python-civitas/pull/22) · [bus-native-streaming.md](design/bus-native-streaming.md) |
 | R8 | **WS/gRPC gateway auth** — JWT (`Sec-WebSocket-Protocol` subprotocol) and gRPC (`ServerInterceptor` + mTLS transport wiring, Health/Reflection carve-out) auto-inherit from the existing HTTP JWT/mTLS config; fail-closed startup validations for the new insecure-config combinations. | ✅ Done (v0.7.2) | [#17](https://github.com/civitas-io/python-civitas/issues/17) · [gateway-ws-grpc-auth.md](design/gateway-ws-grpc-auth.md) |
 | R9 | **HTTP mTLS via trusted reverse proxy** — `require_client_cert` was always non-functional against uvicorn (never populates the ASGI TLS extension); new opt-in `mtls_source="proxy_header"` trusts an RFC 9440 `Client-Cert` header from a trusted-CIDR proxy instead, feeding the unchanged DN-allowlist authorizer. `direct` mode (default) is unchanged, still non-functional. | ✅ Done (v0.7.3) | [#25](https://github.com/civitas-io/python-civitas/issues/25) · [gateway-http-mtls-proxy.md](design/gateway-http-mtls-proxy.md) |
+| R10 | **HTTP mTLS in `direct` mode, for real** — R9 explicitly left `direct` mode non-functional; this closes that other half. New `TlsAwareHttpToolsProtocol` (a thin `HttpToolsProtocol` subclass) reads the real peer certificate straight off the TLS transport (`ssl_object.getpeercert(binary_form=True)`, verified empirically before implementing) and populates the same ASGI extension shape `_client_cert_from_scope()` already expects — no change to the existing, correct DN-authorization logic. Surfaced again from `civitas-io/presidium`'s M7 work, which needs a genuinely self-hostable, single-process server (no mandatory reverse proxy). Verified against Presidium's own real mTLS test suite too, via a local editable install (not a committed dependency change). | ✅ Done (2026-08-23) | [#25](https://github.com/civitas-io/python-civitas/issues/25) (reopened, closed again) · [gateway-http-mtls-direct.md](design/gateway-http-mtls-direct.md) |
 
 **Suggested cut line:** R1–R2 (spawn follow-ups) are the headline; R3 (auth) + R4 (encrypted store)
 are strong companions; R5–R9 are opportunistic and can slip to a later patch.
@@ -1300,7 +1301,13 @@ Owner column: `core` = python-civitas, else the target repo.
 | # | Issue | Severity | Area |
 |---|-------|----------|------|
 | [#26](https://github.com/civitas-io/python-civitas/issues/26) | MCP client lacks Streamable HTTP transport | — | mcp / fabrica (blocked on fabrica) |
-| [#25](https://github.com/civitas-io/python-civitas/issues/25) (reopened, `direct`-mode half) | In progress (2026-08-23) -- `mtls_source="direct"` HTTP mTLS is still non-functional against uvicorn (never populates the ASGI TLS extension, [uvicorn#400](https://github.com/encode/uvicorn/issues/400)); a real client with a valid, trusted, allowlisted certificate is incorrectly rejected `401`. Surfaced again from `civitas-io/presidium`'s M7 work, which needs direct-mode mTLS for a genuinely self-hostable single-process server (no mandatory reverse proxy). Fix: a custom uvicorn HTTP protocol subclass that reads the real peer certificate off the TLS transport (`ssl_object.getpeercert(binary_form=True)`, verified empirically this session) and populates the same ASGI extension shape `_client_cert_from_scope()` already expects -- no change to the existing, correct DN-authorization logic. See [gateway-http-mtls-direct.md](design/gateway-http-mtls-direct.md). | High -- real functional gap, not cosmetic | gateway / mTLS |
+> [#25](https://github.com/civitas-io/python-civitas/issues/25) (reopened, `direct`-mode half) --
+> **Done (2026-08-23)**, moved to Part 1 below. `mtls_source="direct"` HTTP mTLS was still
+> non-functional against uvicorn (never populated the ASGI TLS extension,
+> [uvicorn#400](https://github.com/encode/uvicorn/issues/400)); a real client with a valid,
+> trusted, allowlisted certificate was incorrectly rejected `401`. Fixed with a custom uvicorn HTTP
+> protocol subclass reading the real peer certificate off the TLS transport. See
+> [gateway-http-mtls-direct.md](design/gateway-http-mtls-direct.md).
 
 > #27–#35 closed by [v0.8.0](#v080-supervision-core-hardening-released); #39–#43 closed by
 > [v0.8.1](#v081-verification-perimeter-released). The 2026-07 architecture review is fully

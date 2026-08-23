@@ -1,6 +1,11 @@
 # HTTP mTLS in Direct Mode — closing the other half of #25
 
-**Status:** 🚧 In progress — design finalized, implementation starting this session.
+**Status:** ✅ Done (2026-08-23) — implemented, tested end to end against a real running
+`HTTPGateway`, all 1659 existing tests + 5 new ones pass, 3x stable, `ruff`/`mypy --strict` clean.
+Verified against `civitas-io/presidium`'s own real mTLS test suite too, via a local editable
+install (not committed as a dependency change) — all 4 of its previously-failing scenarios now
+pass with this fix installed. Presidium itself stays pinned to the last published `civitas`
+release until this ships in a real tagged version; see "Downstream rollout" below.
 **Source:** [GH #25](https://github.com/civitas-io/python-civitas/issues/25) (originally closed by
 `mtls_source="proxy_header"`, `gateway-http-mtls-proxy.md`, v0.7.3 — that design explicitly left
 `direct` mode "unchanged, still non-functional," see its own §1/Milestones R9 row); surfaced again
@@ -137,7 +142,49 @@ unaffected (protocol class unchanged in both cases) — regression coverage for 
 - **HTTP/3** — unaffected; `enable_http3` is already, separately, incompatible with any
   `client_cert_mode` (aioquic cannot enforce client certs), unchanged by this design.
 
-## 8. References
+## 9. Real bugs found while implementing, before landing
+
+- **A structural nesting bug in `core.py`'s own edit**: the pre-existing D9 "proxy_header without
+  `require_client_cert` in middleware" guard got accidentally moved inside the new `direct`-mode
+  block during editing, corrupting `client_cert_mode="required"` + `mtls_source="direct"` startup
+  (a real, pre-existing, previously-passing test -- `test_on_start_passes_ssl_cert_reqs` -- caught
+  this immediately). Fixed by keeping each `mtls_source` branch's own guard scoped to itself.
+- **A real bug in the *test harness*, not the fix**: the first version of both this repo's new
+  test and `civitas-io/presidium`'s own mirrored test used httpx's deprecated
+  `cert=(cert_path, key_path)` + `verify=<str ca_path>` combination -- which produced a bare,
+  signal-free `httpx.ReadError` for the two "should succeed" scenarios, with
+  `TlsAwareHttpToolsProtocol.connection_made` never even being called server-side. Diagnosed by
+  comparing a raw `asyncio.open_connection(ssl=...)` client (worked immediately) against httpx
+  side by side against the *same* running server. Root cause: httpx's legacy `cert=` path has a
+  real, current incompatibility with a plain string `verify=` path in this httpx version (0.28.1)
+  that the modern, recommended API -- one fully-configured `ssl.SSLContext` (built with both
+  `load_verify_locations()` and `load_cert_chain()`) passed as `verify=<context>` -- does not have.
+  Confirmed empirically: switching only the test's client construction (no server-side code
+  change) made all four real handshake scenarios pass immediately. Both this repo's test and
+  Presidium's now use the modern API.
+- **Two cert-generation gotchas, not a design bug**: modern OpenSSL (3.x) refuses chain validation
+  without (1) a `SubjectKeyIdentifier` on the CA matched by an `AuthorityKeyIdentifier` on each
+  leaf, and (2) a `KeyUsage` extension on the CA asserting `keyCertSign`/`cRLSign`. Neither is
+  needed by `civitas`'s own existing gRPC mTLS test fixture (`test_gateway_ws_grpc_auth.py`'s
+  `tls_certs`) because `grpc.aio`'s own cert validation path is more lenient than Python's `ssl`
+  module (used here by uvicorn/httpx) -- a real, useful fact for anyone building a similar fixture
+  in this repo in future.
+
+## 10. Downstream rollout
+
+`civitas-io/presidium` needs this fix to make its own M7 mTLS handshake test pass for real -- but
+Presidium pins `civitas>=0.11.0` (a real, published PyPI release), and this fix is not published
+yet. Verified the full integration works end to end via a **local, uncommitted** editable install
+of this repo into Presidium's venv (`uv pip install -e <this repo>`), confirming all 4 of
+Presidium's own mTLS scenarios pass with this fix present -- then reverted Presidium's venv back
+to the published dependency. Presidium's own mTLS test file marks its two currently-blocked
+scenarios `xfail(strict=True)` with a reason citing this design doc, so: (a) Presidium's CI stays
+accurately green today (a real, tracked, not-yet-shipped gap, not a mysterious red), and (b) the
+moment this fix ships in a real `civitas` release and Presidium bumps its pin, `strict=True`
+forces those `xfail` markers to fail loudly (since the tests would unexpectedly start passing) --
+the correct signal to remove the markers and graduate the tests to real, enforced coverage.
+
+## 11. References
 
 - [uvicorn#400](https://github.com/encode/uvicorn/issues/400) — the underlying upstream gap.
 - [GH #25](https://github.com/civitas-io/python-civitas/issues/25) — this repo's tracking issue
