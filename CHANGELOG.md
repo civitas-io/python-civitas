@@ -11,7 +11,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
-## [0.11.1] — 2026-08-05
+## [0.11.2] -- 2026-08-23
+
+A real, functional gateway fix (R10) -- closes the other half of #25. Backward compatible; no
+public API change.
+
+### Fixed
+
+- **HTTP mTLS in `mtls_source="direct"` (the default) now actually works.** uvicorn never exposed
+  the client certificate from its own TLS handshake to the ASGI app (uvicorn#400), so
+  `require_client_cert` rejected every request with a valid, trusted, allowlisted certificate as a
+  `401` -- a real functional dead end for anyone not running a TLS-terminating reverse proxy in
+  front of civitas. #25's earlier fix (v0.7.3) closed this for `mtls_source="proxy_header"` only,
+  explicitly leaving `direct` mode broken.
+- New `civitas.gateway._tls_protocol.TlsAwareHttpToolsProtocol`, a thin uvicorn HTTP protocol
+  subclass that reads the real peer certificate straight off the TLS transport
+  (`ssl_object.getpeercert(binary_form=True)`) and populates the exact ASGI extension shape
+  `_client_cert_from_scope()` already expected -- no change to the existing, correct
+  DN-authorization logic. Wired in automatically whenever `client_cert_mode != "none"` and
+  `mtls_source == "direct"`; a plaintext or `proxy_header` gateway is completely unaffected.
+  Full design, verified mechanism, and every real bug found while implementing:
+  `docs/design/gateway-http-mtls-direct.md`.
+
+## [0.11.1] -- 2026-08-05
 
 Driver-backed telemetry/state stores land in `civitas-contrib` (B4 continued), and the core loader
 gains the wiring to use them declaratively from topology YAML. Additive; contrib backends resolve
