@@ -3032,6 +3032,15 @@
 <p>See <a href="../design/gateway-ws-grpc-auth/">design/gateway-ws-grpc-auth.md</a> for the full rationale (decisions D1–D11).</p>
 <hr />
 <h2 id="http-mtls-via-a-reverse-proxy">HTTP mTLS via a reverse proxy<a class="headerlink" href="#http-mtls-via-a-reverse-proxy" title="Permanent link">&para;</a></h2>
+<blockquote>
+<p><strong>🚧 In progress (2026-08-23): <code>mtls_source="direct"</code> is being fixed for real</strong> — a custom
+uvicorn HTTP protocol that reads the peer certificate directly off the TLS transport, closing
+the gap this section describes without requiring a reverse proxy. See
+<a href="../design/gateway-http-mtls-direct/">design/gateway-http-mtls-direct.md</a> for the full mechanism
+(verified empirically, not just designed) and progress. Once shipped, this section's "still
+non-functional" framing below will be corrected to describe <code>proxy_header</code> as one of two valid
+modes, not the only working one.</p>
+</blockquote>
 <p><code>require_client_cert</code> authorizes a request on the client certificate's full subject DN. uvicorn never exposes the client certificate from its own TLS handshake to the ASGI app (<a href="https://github.com/encode/uvicorn/issues/400">uvicorn#400</a>), so terminating mTLS <strong>directly</strong> at uvicorn cannot populate a client cert — every request is rejected <code>401</code> even with a valid certificate. This is the default <code>mtls_source="direct"</code>: kept for backward compatibility, still non-functional against uvicorn (a known limitation of that mode).</p>
 <p>The working pattern is to terminate TLS at a reverse proxy and have it forward the verified client certificate to civitas as the IETF-standard <a href="https://www.rfc-editor.org/rfc/rfc9440.html">RFC 9440</a> <code>Client-Cert</code> header. civitas decodes it, extracts the DN, and feeds it into the <strong>unchanged</strong> DN-allowlist authorization.</p>
 <p>Enable it with two new <code>GatewayConfig</code> fields:</p>
