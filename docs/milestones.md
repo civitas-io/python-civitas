@@ -1514,6 +1514,64 @@ Web-based drag-and-drop editor for designing agent topologies visually.
 
 ---
 
+### M-LAST — Real Performance Benchmarking (do this last, deliberately)
+
+**Status: ⏸️ Deferred, scoped | Priority: 🟢 Low — explicitly sequenced after everything else in
+this backlog, not before.** Scoped 2026-08-24, directly informed by a real spike
+([`civitas-io/fabrica`'s `SPIKE-mcp-transport-benchmark.md`](https://github.com/civitas-io/fabrica/blob/main/specs/archive/spikes/SPIKE-mcp-transport-benchmark.md))
+and the real industry research done alongside it — both the methodology gaps found in that
+spike and the two credible published benchmarks it was checked against
+([TM Dev Lab's multi-language MCP benchmark](https://www.tmdevlab.com/mcp-server-performance-benchmark.html),
+[Stacklok/ToolHive's transport benchmark](https://stacklok.com/blog/mcp-server-performance-transport-protocol-matters/))
+directly shape what "done properly" means here.
+
+**Why deferred to last, on purpose**: a real, comparable benchmark needs a stable target —
+running it now, mid-backlog, means re-running it every time a real perf-relevant change lands
+elsewhere in this list (gateway, transport, supervision). Doing it once, last, against a settled
+surface is the more honest use of the effort.
+
+**What "properly scoped" means, learned directly from the real gaps found in the MCP transport
+spike — do NOT repeat these shortcuts here**:
+
+1. **A real, independent load generator (k6, Locust, or equivalent) driving genuinely separate
+   connections/sessions against a real running `civitas` process** — not concurrent asyncio
+   tasks sharing one connection inside the same process as the code under test. The MCP spike's
+   own single-shared-session throughput plateau (never scaling past ~5 concurrent callers) is a
+   direct, named consequence of skipping this the first time; don't repeat it here.
+2. **A real network hop, not pure loopback** — at minimum client and server as separate
+   processes on the same host talking over a real socket; ideally client and server on separate
+   real hosts (the homelab is available), since loopback-only numbers were shown to diverge
+   meaningfully from real, published, network-inclusive numbers in the MCP spike's own
+   reconciliation section.
+3. **Realistic workloads, not workload-free echo/no-op calls** — at least one CPU-light path
+   (e.g. a simple agent `handle()` round trip) and one representative real path (e.g. a gateway
+   HTTP request through to a responding agent, matching how `TlsAwareHttpToolsProtocol`/
+   `HTTPGateway` are actually used) so results reflect real usage, not pure transport overhead
+   in isolation.
+4. **State the actual concurrency model precisely in the results themselves** — real OS threads
+   vs. asyncio tasks vs. separate processes vs. separate real client machines, spelled out before
+   any number is reported, matching the "honest methodology disclosure" pattern the MCP spike
+   added only after being asked directly. Don't make that same doc-back-and-forth necessary again.
+5. **Pick ONE existing published methodology to genuinely replicate the shape of** (TM Dev Lab's
+   k6/Docker/50-VU setup is the more directly comparable of the two, since it already covers
+   multiple languages/runtimes at the SAME workload and load profile) so the eventual comparison
+   is a real, apples-to-apples ranking — not another disclosed-as-not-comparable exercise. Named
+   explicitly here so scoping this later doesn't silently drift back into an easier, non-comparable
+   shape.
+6. **Cover the real surfaces that matter for this repo specifically**: `HTTPGateway`/mTLS request
+   throughput (the R10 work), the message bus under `zmq`/`nats` transports at real concurrency,
+   and `Supervisor`/`DynamicSupervisor` spawn latency under load — not just MCP (that surface
+   already has its own real, if narrowly-scoped, numbers from the spike above).
+
+**Deliverable, when this is picked up**: a `docs/design/performance-benchmark.md` design doc
+first (methodology, exact tool, exact comparison target, real hardware spec) — matching this
+project's own "design doc before implementation" convention — then a real, reproducible harness
+(kept, not deleted, per this org's spike-code convention) and a findings doc with real, dated
+numbers, an honest limitations section, and an explicit ranking against the one chosen published
+methodology from item 5 above.
+
+---
+
 ## Phase 5 — Agentic Platform
 
 Civitas provides the runtime primitives. Governance lives in [Presidium](https://github.com/civitas-io/presidium) — an interface library that defines governance protocols (PolicyEngine, AgentRegistry, CredentialProvider, etc.) with lightweight defaults (CEL policy engine, in-memory registry) in the core package, and adapters for existing products (OPA, Vault, LiteLLM) plus reference implementations for novel components in presidium-contrib.
