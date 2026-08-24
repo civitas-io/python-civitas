@@ -63,21 +63,26 @@ added for every repo that has one.
   sibling in Presidium) — both found by the release's own fresh-venv verification step, not
   skipped as a formality.
 
-## GH #26 — Streamable HTTP MCP transport: implementation DONE, benchmarks next
+## GH #26 — Streamable HTTP MCP transport: DONE and CLOSED
 
-**Real, implemented, both sides** (commit `052b567` here, `f402656` in
-`civitas-io/fabrica`): [github.com/civitas-io/python-civitas/issues/26](https://github.com/civitas-io/python-civitas/issues/26).
-`MCPServerConfig.transport` now has a real `"streamable_http"` value; Fabrica's
+**Real, implemented, both sides, benchmarked, and closed**
+(commit `052b567` here, `f402656`/`16877b7` in `civitas-io/fabrica`):
+[github.com/civitas-io/python-civitas/issues/26](https://github.com/civitas-io/python-civitas/issues/26)
+(closed). `MCPServerConfig.transport` has a real `"streamable_http"` value; Fabrica's
 `MCPClient.connect()` has a real third branch using the `mcp` SDK's own
 `streamable_http_client`, verified end to end against a real running server (not
-mocked) -- see `civitas-io/fabrica`'s own `HANDOFF.md`/commit for the full detail,
-including a real anyio/asyncio cancellation interop finding along the way. Issue
-left open pending the real perf benchmarks below.
+mocked) -- see `civitas-io/fabrica`'s own `HANDOFF.md`/commits for the full detail,
+including a real anyio/asyncio cancellation interop finding along the way.
 
-**Still open, not started**: real performance benchmarks (concurrency, latency,
-throughput, memory load) for the new transport, to be added to the relevant
-README(s) -- not estimated. The homelab is available for a real Linux measurement
-if that matters for the result.
+**Real perf benchmarks, run on the real homelab (AMD Ryzen 9 3900X), matched
+dependency versions**: `streamable_http` p50 2.01ms / 673 calls-s @ concurrency=10,
+vs. `stdio` 0.69ms/2356 and `sse` 1.32ms/991 -- roughly 3x `stdio`'s latency, ~1.5x
+`sse`'s, as expected given it layers a full HTTP request/response on an already-open
+stream. No memory growth on any transport at 2000 calls. One real, notable finding,
+honestly flagged as a still-open question: throughput doesn't meaningfully scale
+past ~5 concurrent callers sharing one `ClientSession`, on any transport. Full
+methodology, raw JSON, every finding:
+[`civitas-io/fabrica`'s `SPIKE-mcp-transport-benchmark.md`](https://github.com/civitas-io/fabrica/blob/main/specs/archive/spikes/SPIKE-mcp-transport-benchmark.md).
 
 **Historical detail below, now superseded by the above** (kept for the original
 reasoning trail):
