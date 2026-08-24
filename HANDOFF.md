@@ -51,6 +51,18 @@ added for every repo that has one.
 
 ---
 
+## Real, working pre-commit hooks -- installed, verified, not just configured
+
+**2026-08-24**: `.pre-commit-config.yaml` existed here since June but the hook was never actually
+installed (`.git/hooks/pre-commit` didn't exist). Now real: `uv run pre-commit install &&
+uv run pre-commit install --hook-type pre-push` wires up ruff/ruff-format/gitleaks on every
+commit, `mypy` (pinned `--python 3.12`, matching CI's own mypy job exactly -- a real,
+confirmed Python-3.14-specific pyzmq/mypy stub false positive was found and fixed while wiring
+this up) and the full test suite on every push. See `.pre-commit-config.yaml`'s own comments for
+the full reasoning (`--frozen` avoiding lockfile-mutation-as-a-side-effect, etc.) -- a future
+session picking this repo back up should just run the two `pre-commit install` commands above,
+not re-derive any of this.
+
 ## Real bugs found and fixed this session — the pattern matters more than the specifics
 
 - **`RegistryServer`/`AgentProcess` attribute collision, `PolicyEvaluatorServer` enum-vs-string
