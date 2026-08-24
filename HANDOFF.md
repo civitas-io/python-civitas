@@ -1,0 +1,108 @@
+# Handoff: python-civitas
+
+**Purpose of this doc:** resume work cold, after a context compaction, without re-deriving
+anything already decided. Read this first, then follow the links — don't re-read the whole repo
+linearly. Deep, dated engineering history lives in [`CHANGELOG.md`](CHANGELOG.md) and
+[`docs/milestones.md`](docs/milestones.md) (Part 1 = shipped history, do not edit; Part 2 =
+the active backlog).
+
+**Cross-project context**: this project is one of three real pillars in the `civitas-io` org
+(Civitas = runtime, this repo, Presidium = governance, Fabrica = context layer). The private
+`civitas-io/context` repo is the cross-repo reasoning substrate. `civitas-io/presidium` and
+`civitas-io/fabrica` each have their own `HANDOFF.md` — read all three when working across
+repo boundaries, which the current next task (below) does.
+
+---
+
+## Status as of 2026-08-24: **`civitas` v0.11.3 is live on PyPI**, real mTLS in direct mode
+
+```
+pip install civitas   # 0.11.3
+```
+
+Confirmed via a real fresh-venv install (both with and without `civitas[http]`). GitHub Release:
+[`v0.11.3`](https://github.com/civitas-io/python-civitas/releases/tag/v0.11.3).
+
+**What shipped this session (R10, closing GH #25's `direct`-mode half):** `mtls_source="direct"`
+(the default) HTTP mTLS now actually works — uvicorn never exposed the client certificate from
+its own TLS handshake to the ASGI app (a known, previously only half-fixed gap; `proxy_header`
+mode worked, `direct` didn't). New `civitas.gateway._tls_protocol.TlsAwareHttpToolsProtocol`
+reads the real peer certificate straight off the TLS transport — verified empirically (a minimal,
+real asyncio TLS server) before any implementation code was written, then proven end to end
+against a real running `HTTPGateway` and against `civitas-io/presidium`'s own real mTLS test
+suite via a local editable install. Full design and every real bug found along the way:
+[`docs/design/gateway-http-mtls-direct.md`](docs/design/gateway-http-mtls-direct.md).
+
+**v0.11.2 → v0.11.3 same-day patch**: v0.11.2's own release verification (a real fresh-venv
+install) immediately caught a second real, live bug — `import civitas` failed entirely with
+`civitas[http]` installed, because the new `_tls_protocol.py` imported `uvicorn` eagerly at
+module level, defeating this codebase's own established discipline of only ever importing
+`uvicorn` lazily inside `HTTPGateway.on_start()`. Fixed and re-released the same day, not left
+broken. **Pattern worth remembering**: this is the second time this exact class of bug (a new
+module eagerly importing an optional dependency, then itself imported eagerly by an
+always-loaded chain) has hit this org this session — the first was Presidium's own `aiosqlite`
+incident. Watch for this shape specifically whenever adding a new module gated behind an extra.
+
+**Org profile README fixed** (`civitas-io/.github`): was missing `fabrica` entirely from the
+repos table (still described Fabrica as living inside `civitas-contrib`), gave real install
+instructions for a private repo (`tessera`), and claimed `pip install promptshrink` worked
+despite that project being spec-only. All fixed, plus a real "latest release + date" column
+added for every repo that has one.
+
+---
+
+## Real bugs found and fixed this session — the pattern matters more than the specifics
+
+- **`RegistryServer`/`AgentProcess` attribute collision, `PolicyEvaluatorServer` enum-vs-string
+  bug, `check_grant()`'s inherited `"tool:"` prefix bug, `payload_extra` dispatch not working for
+  user-declared routes** — all found in `civitas-io/presidium`, not this repo, but all found by
+  actually running code against this repo's real, current source, never by inspection alone.
+- **The mTLS gap itself (GH #25/R10)** — found because a downstream consumer (Presidium) wrote a
+  real end-to-end test instead of trusting that config assembly = working behavior.
+- **Two packaging bugs in this repo** (the `_tls_protocol.py` eager-uvicorn-import above, and its
+  sibling in Presidium) — both found by the release's own fresh-venv verification step, not
+  skipped as a formality.
+
+## What's next: GH #26 — MCP client lacks Streamable HTTP transport
+
+**Real, still-open, cross-repo item** (touches this repo AND `civitas-io/fabrica`):
+[github.com/civitas-io/python-civitas/issues/26](https://github.com/civitas-io/python-civitas/issues/26).
+
+- `civitas/mcp/types.py`'s `MCPServerConfig.transport` is `Literal["stdio", "sse"]` — no
+  Streamable HTTP (a single `POST`/`GET`/`DELETE` endpoint, no separate SSE-upgrade endpoint),
+  which is what most current remote MCP servers actually ship, often *instead of* classic SSE.
+- The actual client construction lives in **`civitas-io/fabrica`**'s `src/fabrica/mcp/client.py`
+  (`MCPClient.connect()`) — confirmed directly against that repo's real, current source, not the
+  old `civitas-contrib` location the issue was originally filed against (stale reference in the
+  issue itself, worth fixing when this is picked up).
+- The official `mcp` Python SDK already ships `mcp.client.streamable_http.streamablehttp_client`,
+  mirroring `mcp.client.sse.sse_client`'s shape closely — per the issue filer's own assessment,
+  "a fairly contained addition": a third `transport` literal value in this repo, and a branch in
+  Fabrica's `MCPClient.connect()` constructing `streamablehttp_client(url)` instead of
+  `sse_client(url)`.
+- **Real, concrete motivating case already hit in practice** (per the issue): a self-hosted MCP
+  server exposing HTTP mode as a single `/mcp` endpoint (the Streamable HTTP shape) cannot be
+  connected to at all today.
+
+**Also requested for this piece of work**: real performance benchmarks (concurrency, latency,
+throughput, memory load) for the Streamable HTTP transport path specifically, to be added to the
+relevant README(s) once real numbers exist — not estimated, not synthetic-only. **The homelab
+(a real Linux machine) is available if a Linux-specific measurement is needed** — mirrors this
+session's own established discipline of validating real capabilities on real hardware rather than
+assuming behavior (see e.g. the Firecracker jailer/vsock work in `civitas-io/fabrica`'s own
+`specs/archive/spikes/`).
+
+**Suggested real sequence, not yet started:**
+1. Add the third `transport: Literal["stdio", "sse", "streamable_http"]` value + validation in
+   `civitas/mcp/types.py` (this repo).
+2. Implement the corresponding branch in `civitas-io/fabrica`'s `MCPClient.connect()`.
+3. Real, empirical benchmarks (not assumed) comparing `sse`/`streamable_http` under realistic
+   concurrency — latency, throughput, memory — against a real MCP server (the homelab, if Linux
+   matters for the result).
+4. Update both repos' READMEs with the real numbers.
+5. Close GH #26, fix its own stale `civitas-contrib` path reference while there.
+
+## Other real, open work (lower priority than #26 right now)
+
+See `docs/milestones.md`'s own "Part 2 — Backlog" for the full, current list — as of this
+session, GH #26 is the only tracked open issue against this repo specifically.
