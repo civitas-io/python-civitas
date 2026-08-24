@@ -908,6 +908,7 @@ capability, which builds on supervision + dynamic spawn + telemetry (under inves
 | R8 | **WS/gRPC gateway auth** — JWT (`Sec-WebSocket-Protocol` subprotocol) and gRPC (`ServerInterceptor` + mTLS transport wiring, Health/Reflection carve-out) auto-inherit from the existing HTTP JWT/mTLS config; fail-closed startup validations for the new insecure-config combinations. | ✅ Done (v0.7.2) | [#17](https://github.com/civitas-io/python-civitas/issues/17) · [gateway-ws-grpc-auth.md](design/gateway-ws-grpc-auth.md) |
 | R9 | **HTTP mTLS via trusted reverse proxy** — `require_client_cert` was always non-functional against uvicorn (never populates the ASGI TLS extension); new opt-in `mtls_source="proxy_header"` trusts an RFC 9440 `Client-Cert` header from a trusted-CIDR proxy instead, feeding the unchanged DN-allowlist authorizer. `direct` mode (default) is unchanged, still non-functional. | ✅ Done (v0.7.3) | [#25](https://github.com/civitas-io/python-civitas/issues/25) · [gateway-http-mtls-proxy.md](design/gateway-http-mtls-proxy.md) |
 | R10 | **HTTP mTLS in `direct` mode, for real** — R9 explicitly left `direct` mode non-functional; this closes that other half. New `TlsAwareHttpToolsProtocol` (a thin `HttpToolsProtocol` subclass) reads the real peer certificate straight off the TLS transport (`ssl_object.getpeercert(binary_form=True)`, verified empirically before implementing) and populates the same ASGI extension shape `_client_cert_from_scope()` already expects — no change to the existing, correct DN-authorization logic. Surfaced again from `civitas-io/presidium`'s M7 work, which needs a genuinely self-hostable, single-process server (no mandatory reverse proxy). Verified against Presidium's own real mTLS test suite too, via a local editable install (not a committed dependency change). Released as v0.11.2 -- whose own release verification (a real fresh-venv install) immediately found `import civitas` failed entirely (a lazy-import discipline break, `_tls_protocol.py` pulling in `uvicorn` eagerly), fixed and re-released same-day as **v0.11.3**, live and verified on PyPI. | ✅ Done (2026-08-23) | [#25](https://github.com/civitas-io/python-civitas/issues/25) (reopened, closed again) · [gateway-http-mtls-direct.md](design/gateway-http-mtls-direct.md) |
+| R11 | **`streamable_http` MCP transport** — `MCPServerConfig.transport` gained a third real value, `"streamable_http"`, using the official `mcp` SDK's `streamable_http_client`. Real motivating case: most current remote MCP servers (and, confirmed separately, AgentGateway's own MCP proxy endpoint) expose a single `/mcp` endpoint over Streamable HTTP, not classic `sse`. The actual client construction lives in `civitas-io/fabrica`'s `MCPClient.connect()`, verified end to end against a real running Streamable HTTP MCP server, not mocked -- including a real anyio/asyncio cancellation interop finding along the way. Real performance benchmarks run on the homelab (AMD Ryzen 9 3900X): `streamable_http` p50 2.01ms/673 calls-s @ concurrency=10 vs. `stdio` 0.69ms/2356 and `sse` 1.32ms/991 -- checked against two independently-published industry benchmarks (TM Dev Lab, Stacklok/ToolHive), with an honest reconciliation of why direct ranking isn't valid (different network topology, different workload). | ✅ Done (2026-08-24) | [#26](https://github.com/civitas-io/python-civitas/issues/26) (closed) · [`civitas-io/fabrica`'s `SPIKE-mcp-transport-benchmark.md`](https://github.com/civitas-io/fabrica/blob/main/specs/archive/spikes/SPIKE-mcp-transport-benchmark.md) |
 
 **Suggested cut line:** R1–R2 (spawn follow-ups) are the headline; R3 (auth) + R4 (encrypted store)
 are strong companions; R5–R9 are opportunistic and can slip to a later patch.
@@ -1298,9 +1299,13 @@ Owner column: `core` = python-civitas, else the target repo.
 
 ### Now open — tracked issue (python-civitas)
 
-| # | Issue | Severity | Area |
-|---|-------|----------|------|
-| [#26](https://github.com/civitas-io/python-civitas/issues/26) | MCP client lacks Streamable HTTP transport | — | mcp / fabrica (blocked on fabrica) |
+**None currently open against this repo specifically** (as of 2026-08-24). The active,
+cross-repo M-LAST performance-benchmarking item lives in [Part 2 -- Backlog](#part-2--backlog)
+below, deliberately deferred to last.
+
+> [#26](https://github.com/civitas-io/python-civitas/issues/26) (Streamable HTTP MCP transport) --
+> **Done (2026-08-24)**, moved to Part 1 above as R11.
+
 > [#25](https://github.com/civitas-io/python-civitas/issues/25) (reopened, `direct`-mode half) --
 > **Done (2026-08-23)**, moved to Part 1 below. `mtls_source="direct"` HTTP mTLS was still
 > non-functional against uvicorn (never populated the ASGI TLS extension,
