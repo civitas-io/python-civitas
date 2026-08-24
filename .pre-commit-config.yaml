@@ -3,7 +3,7 @@ repos:
   # File hygiene
   # -----------------------------------------------------------------------
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
@@ -19,7 +19,7 @@ repos:
   # Lint + format (ruff replaces flake8, isort, pyupgrade)
   # -----------------------------------------------------------------------
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.11.6
+    rev: v0.16.4
     hooks:
       - id: ruff
         args: [--fix]
@@ -29,27 +29,45 @@ repos:
   # Secret scanning
   # -----------------------------------------------------------------------
   - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.21.2
+    rev: v8.30.1
     hooks:
       - id: gitleaks
 
   # -----------------------------------------------------------------------
-  # Type checking
+  # Type checking + tests -- local hooks via `uv run`, not the mirrors-mypy
+  # pre-commit repo. Real, deliberate choice (2026-08-24): a separately
+  # pinned mypy version (mirrors-mypy's own `rev`, with a hand-maintained
+  # `additional_dependencies` list) can drift from the real mypy version
+  # this project's own uv.lock actually pins and tests against in CI --
+  # `uv run mypy` always uses the exact same mypy/dependency versions CI
+  # does, with zero duplicated version-pinning to keep in sync.
   # -----------------------------------------------------------------------
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.15.0
+  - repo: local
     hooks:
       - id: mypy
-        args: [civitas/]
+        name: mypy (civitas)
+        # --python 3.12, pinned to match CI's own "mypy" job exactly (ci.yml runs
+        # mypy on 3.12 only, not the full 3.12/3.13/3.14 test matrix) -- a real,
+        # confirmed finding while setting this hook up: `uv run mypy civitas/`
+        # with no pin resolves to whatever Python `uv` picks locally (3.14 here),
+        # which produces 14 real, false-positive pyzmq/mypy stub errors on
+        # civitas/transport/zmq.py that do NOT reproduce on 3.12 -- confirmed by
+        # running both side by side, not assumed.
+        # --frozen: use the committed uv.lock as-is, don't let switching to
+        # --python 3.12 trigger a real re-resolution/lockfile rewrite as a
+        # side effect of every commit (confirmed real: without --frozen, this
+        # hook mutated uv.lock locally on every run and pre-commit reported
+        # a false "Failed" for it, even though mypy itself passed cleanly).
+        entry: uv run --frozen --python 3.12 --extra dev --extra otel --extra dashboard mypy civitas/
+        language: system
         pass_filenames: false
-        additional_dependencies:
-          # Type stubs
-          - types-pyyaml
-          # Runtime dependencies (mypy runs in an isolated env and needs these)
-          - msgpack>=1.1
-          - pyyaml>=6.0
-          - typer>=0.12
-          - rich>=13
-          - anthropic>=0.20
-          - opentelemetry-sdk>=1.20
-          - opentelemetry-exporter-otlp-proto-grpc>=1.20
+        files: ^civitas/
+        types: [python]
+
+      - id: tests
+        name: tests (civitas)
+        entry: uv run --frozen --extra dev --extra otel --extra dashboard pytest -x -q --no-header --tb=line --no-cov
+        language: system
+        pass_filenames: false
+        types: [python]
+        stages: [pre-push]

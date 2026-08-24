@@ -16,8 +16,11 @@ cd python-civitas
 # Install all dev dependencies (includes test, lint, type-check tooling)
 uv sync --extra dev
 
-# Install pre-commit hooks (ruff + mypy run on every commit)
+# Install pre-commit hooks -- ruff/ruff-format/mypy/gitleaks run on every
+# commit; the full test suite runs on every push (kept separate from commit
+# since it's slower). See .pre-commit-config.yaml for exactly what runs.
 uv run pre-commit install
+uv run pre-commit install --hook-type pre-push
 ```
 
 That's it. No virtualenv activation needed — `uv run` handles the environment.
