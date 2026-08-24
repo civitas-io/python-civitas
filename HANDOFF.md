@@ -63,10 +63,24 @@ added for every repo that has one.
   sibling in Presidium) — both found by the release's own fresh-venv verification step, not
   skipped as a formality.
 
-## What's next: GH #26 — MCP client lacks Streamable HTTP transport
+## GH #26 — Streamable HTTP MCP transport: implementation DONE, benchmarks next
 
-**Real, still-open, cross-repo item** (touches this repo AND `civitas-io/fabrica`):
-[github.com/civitas-io/python-civitas/issues/26](https://github.com/civitas-io/python-civitas/issues/26).
+**Real, implemented, both sides** (commit `052b567` here, `f402656` in
+`civitas-io/fabrica`): [github.com/civitas-io/python-civitas/issues/26](https://github.com/civitas-io/python-civitas/issues/26).
+`MCPServerConfig.transport` now has a real `"streamable_http"` value; Fabrica's
+`MCPClient.connect()` has a real third branch using the `mcp` SDK's own
+`streamable_http_client`, verified end to end against a real running server (not
+mocked) -- see `civitas-io/fabrica`'s own `HANDOFF.md`/commit for the full detail,
+including a real anyio/asyncio cancellation interop finding along the way. Issue
+left open pending the real perf benchmarks below.
+
+**Still open, not started**: real performance benchmarks (concurrency, latency,
+throughput, memory load) for the new transport, to be added to the relevant
+README(s) -- not estimated. The homelab is available for a real Linux measurement
+if that matters for the result.
+
+**Historical detail below, now superseded by the above** (kept for the original
+reasoning trail):
 
 - `civitas/mcp/types.py`'s `MCPServerConfig.transport` is `Literal["stdio", "sse"]` — no
   Streamable HTTP (a single `POST`/`GET`/`DELETE` endpoint, no separate SSE-upgrade endpoint),
