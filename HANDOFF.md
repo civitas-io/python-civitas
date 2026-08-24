@@ -133,7 +133,13 @@ assuming behavior (see e.g. the Firecracker jailer/vsock work in `civitas-io/fab
 4. Update both repos' READMEs with the real numbers.
 5. Close GH #26, fix its own stale `civitas-contrib` path reference while there.
 
-## Other real, open work (lower priority than #26 right now)
+## Other real, open work
 
-See `docs/milestones.md`'s own "Part 2 — Backlog" for the full, current list — as of this
-session, GH #26 is the only tracked open issue against this repo specifically.
+**Zero open tracked issues against this repo specifically, as of 2026-08-24** (GH #26 closed).
+The only real, named remaining backlog item is **M-LAST -- real performance benchmarking**,
+deliberately deferred to last (see `docs/milestones.md`'s own "Part 2 -- Backlog" for the full
+scope: a real independent load generator, a real network hop, realistic workloads, precise
+concurrency-model disclosure, replicating one specific published methodology closely enough for
+a genuine ranking, covering `HTTPGateway`/mTLS, `zmq`/`nats` transport concurrency, and
+`Supervisor` spawn latency). Not started -- deliberately sequenced after everything else,
+since it needs a stable target to benchmark against.
