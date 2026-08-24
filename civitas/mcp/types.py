@@ -14,17 +14,21 @@ class MCPServerConfig:
 
     For stdio transport: set command (and optionally args/env).
     For sse transport: set url.
+    For streamable_http transport: set url. This is the MCP spec's newer
+    transport -- a single POST/GET/DELETE endpoint, no separate SSE-upgrade
+    endpoint -- and is what most current remote MCP servers actually ship,
+    often *instead of* classic sse rather than alongside it (GH #26).
     """
 
     name: str
-    transport: Literal["stdio", "sse"]
+    transport: Literal["stdio", "sse", "streamable_http"]
 
     # stdio fields
     command: str | None = None
     args: list[str] = field(default_factory=list)
     env: dict[str, str] | None = None
 
-    # sse fields
+    # sse / streamable_http fields
     url: str | None = None
 
     # sandbox
@@ -33,12 +37,14 @@ class MCPServerConfig:
     def __post_init__(self) -> None:
         if self.transport == "stdio" and not self.command:
             raise ValueError(f"MCPServerConfig '{self.name}': transport=stdio requires 'command'")
-        if self.transport == "sse" and not self.url:
-            raise ValueError(f"MCPServerConfig '{self.name}': transport=sse requires 'url'")
-        if self.transport not in ("stdio", "sse"):
+        if self.transport in ("sse", "streamable_http") and not self.url:
+            raise ValueError(
+                f"MCPServerConfig '{self.name}': transport={self.transport} requires 'url'"
+            )
+        if self.transport not in ("stdio", "sse", "streamable_http"):
             raise ValueError(
                 f"MCPServerConfig '{self.name}': unknown transport '{self.transport}'. "
-                "Use 'stdio' or 'sse'."
+                "Use 'stdio', 'sse', or 'streamable_http'."
             )
 
 

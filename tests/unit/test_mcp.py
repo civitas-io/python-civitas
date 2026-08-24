@@ -41,6 +41,17 @@ class TestMCPServerConfig:
         cfg = MCPServerConfig(name="remote", transport="sse", url="http://localhost:8080")
         assert cfg.url == "http://localhost:8080"
 
+    def test_streamable_http_requires_url(self):
+        with pytest.raises(ValueError, match="requires 'url'"):
+            MCPServerConfig(name="x", transport="streamable_http")
+
+    def test_streamable_http_valid(self):
+        cfg = MCPServerConfig(
+            name="remote", transport="streamable_http", url="http://localhost:8080/mcp"
+        )
+        assert cfg.transport == "streamable_http"
+        assert cfg.url == "http://localhost:8080/mcp"
+
     def test_stdio_with_args_and_env(self):
         cfg = MCPServerConfig(
             name="fs",
@@ -133,6 +144,9 @@ class TestRuntimeMcpConfig:
                 - name: remote
                   transport: sse
                   url: "http://localhost:8080/sse"
+                - name: streamable
+                  transport: streamable_http
+                  url: "http://localhost:8080/mcp"
         """)
         cfg_file = tmp_path / "topology.yaml"
         cfg_file.write_text(topology)
@@ -140,7 +154,7 @@ class TestRuntimeMcpConfig:
         from civitas import Runtime
 
         runtime = Runtime.from_config(cfg_file)
-        assert len(runtime._mcp_configs) == 2
+        assert len(runtime._mcp_configs) == 3
 
         gh = runtime._mcp_configs[0]
         assert gh.name == "github"
@@ -153,6 +167,11 @@ class TestRuntimeMcpConfig:
         assert remote.name == "remote"
         assert remote.transport == "sse"
         assert remote.url == "http://localhost:8080/sse"
+
+        streamable = runtime._mcp_configs[2]
+        assert streamable.name == "streamable"
+        assert streamable.transport == "streamable_http"
+        assert streamable.url == "http://localhost:8080/mcp"
 
     def test_no_mcp_section_leaves_empty_list(self, tmp_path: Path):
         topology = textwrap.dedent("""\
