@@ -5250,6 +5250,12 @@ capability, which builds on supervision + dynamic spawn + telemetry (under inves
 <td>✅ Done (2026-08-23)</td>
 <td><a href="https://github.com/civitas-io/python-civitas/issues/25">#25</a> (reopened, closed again) · <a href="../design/gateway-http-mtls-direct/">gateway-http-mtls-direct.md</a></td>
 </tr>
+<tr>
+<td>R11</td>
+<td><strong><code>streamable_http</code> MCP transport</strong> — <code>MCPServerConfig.transport</code> gained a third real value, <code>"streamable_http"</code>, using the official <code>mcp</code> SDK's <code>streamable_http_client</code>. Real motivating case: most current remote MCP servers (and, confirmed separately, AgentGateway's own MCP proxy endpoint) expose a single <code>/mcp</code> endpoint over Streamable HTTP, not classic <code>sse</code>. The actual client construction lives in <code>civitas-io/fabrica</code>'s <code>MCPClient.connect()</code>, verified end to end against a real running Streamable HTTP MCP server, not mocked -- including a real anyio/asyncio cancellation interop finding along the way. Real performance benchmarks run on the homelab (AMD Ryzen 9 3900X): <code>streamable_http</code> p50 2.01ms/673 calls-s @ concurrency=10 vs. <code>stdio</code> 0.69ms/2356 and <code>sse</code> 1.32ms/991 -- checked against two independently-published industry benchmarks (TM Dev Lab, Stacklok/ToolHive), with an honest reconciliation of why direct ranking isn't valid (different network topology, different workload).</td>
+<td>✅ Done (2026-08-24)</td>
+<td><a href="https://github.com/civitas-io/python-civitas/issues/26">#26</a> (closed) · <a href="https://github.com/civitas-io/fabrica/blob/main/specs/archive/spikes/SPIKE-mcp-transport-benchmark.md"><code>civitas-io/fabrica</code>'s <code>SPIKE-mcp-transport-benchmark.md</code></a></td>
+</tr>
 </tbody>
 </table>
 <p><strong>Suggested cut line:</strong> R1–R2 (spawn follow-ups) are the headline; R3 (auth) + R4 (encrypted store)
@@ -6114,67 +6120,19 @@ Three orthogonal HITL rough-edges on the durable-suspension primitive; full desi
 (a design doc if warranted), then moves into <a href="#part-1-shipped">Part 1 — Shipped</a> once released.
 Owner column: <code>core</code> = python-civitas, else the target repo.</p>
 <h3 id="now-open-tracked-issue-python-civitas">Now open — tracked issue (python-civitas)<a class="headerlink" href="#now-open-tracked-issue-python-civitas" title="Permanent link">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>#</th>
-<th>Issue</th>
-<th>Severity</th>
-<th>Area</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><a href="https://github.com/civitas-io/python-civitas/issues/26">#26</a></td>
-<td>MCP client lacks Streamable HTTP transport</td>
-<td>—</td>
-<td>mcp / fabrica (blocked on fabrica)</td>
-</tr>
-<tr>
-<td>&gt; <a href="https://github.com/civitas-io/python-civitas/issues/25">#25</a> (reopened, <code>direct</code>-mode half) --</td>
-<td></td>
-<td></td>
-<td></td>
-</tr>
-<tr>
-<td>&gt; <strong>Done (2026-08-23)</strong>, moved to Part 1 below. <code>mtls_source="direct"</code> HTTP mTLS was still</td>
-<td></td>
-<td></td>
-<td></td>
-</tr>
-<tr>
-<td>&gt; non-functional against uvicorn (never populated the ASGI TLS extension,</td>
-<td></td>
-<td></td>
-<td></td>
-</tr>
-<tr>
-<td>&gt; <a href="https://github.com/encode/uvicorn/issues/400">uvicorn#400</a>); a real client with a valid,</td>
-<td></td>
-<td></td>
-<td></td>
-</tr>
-<tr>
-<td>&gt; trusted, allowlisted certificate was incorrectly rejected <code>401</code>. Fixed with a custom uvicorn HTTP</td>
-<td></td>
-<td></td>
-<td></td>
-</tr>
-<tr>
-<td>&gt; protocol subclass reading the real peer certificate off the TLS transport. See</td>
-<td></td>
-<td></td>
-<td></td>
-</tr>
-<tr>
-<td>&gt; <a href="../design/gateway-http-mtls-direct/">gateway-http-mtls-direct.md</a>.</td>
-<td></td>
-<td></td>
-<td></td>
-</tr>
-</tbody>
-</table>
+<p><strong>None currently open against this repo specifically</strong> (as of 2026-08-24). The active,
+cross-repo M-LAST performance-benchmarking item lives in <a href="#part-2--backlog">Part 2 -- Backlog</a>
+below, deliberately deferred to last.</p>
 <blockquote>
+<p><a href="https://github.com/civitas-io/python-civitas/issues/26">#26</a> (Streamable HTTP MCP transport) --
+<strong>Done (2026-08-24)</strong>, moved to Part 1 above as R11.</p>
+<p><a href="https://github.com/civitas-io/python-civitas/issues/25">#25</a> (reopened, <code>direct</code>-mode half) --
+<strong>Done (2026-08-23)</strong>, moved to Part 1 below. <code>mtls_source="direct"</code> HTTP mTLS was still
+non-functional against uvicorn (never populated the ASGI TLS extension,
+<a href="https://github.com/encode/uvicorn/issues/400">uvicorn#400</a>); a real client with a valid,
+trusted, allowlisted certificate was incorrectly rejected <code>401</code>. Fixed with a custom uvicorn HTTP
+protocol subclass reading the real peer certificate off the TLS transport. See
+<a href="../design/gateway-http-mtls-direct/">gateway-http-mtls-direct.md</a>.</p>
 <h1 id="2735-closed-by-v080-3943-closed-by">27–#35 closed by <a href="#v080-supervision-core-hardening-released">v0.8.0</a>; #39–#43 closed by<a class="headerlink" href="#2735-closed-by-v080-3943-closed-by" title="Permanent link">&para;</a></h1>
 <p><a href="#v081-verification-perimeter-released">v0.8.1</a>. The 2026-07 architecture review is fully
 closed by <a href="#v090-supervision-endgame-released">v0.9.0</a> — zero xfail trackers remain in
