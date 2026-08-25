@@ -1299,9 +1299,9 @@ Owner column: `core` = python-civitas, else the target repo.
 
 ### Now open — tracked issue (python-civitas)
 
-**None currently open against this repo specifically** (as of 2026-08-24). The active,
-cross-repo M-LAST performance-benchmarking item lives in [Part 2 -- Backlog](#part-2--backlog)
-below, deliberately deferred to last.
+**None currently open against this repo specifically** (as of 2026-08-25). The M-LAST
+performance-benchmarking item (see [Part 2 -- Backlog](#part-2--backlog) below) is now **complete**
+-- real benchmarks, real results, `docs/design/performance-benchmark.md`.
 
 > [#26](https://github.com/civitas-io/python-civitas/issues/26) (Streamable HTTP MCP transport) --
 > **Done (2026-08-24)**, moved to Part 1 above as R11.
@@ -1520,6 +1520,22 @@ Web-based drag-and-drop editor for designing agent topologies visually.
 ---
 
 ### M-LAST — Real Performance Benchmarking (do this last, deliberately)
+
+**Status: ✅ Complete, 2026-08-25.** Real benchmarks against a real, standalone `civitas` server,
+on real hardware (a MacBook + a separate Linux homelab host, direct Tailscale connection), a real
+k6 load profile replicating TM Dev Lab's own exact methodology shape, and a real, explicit
+ranking against their own published table. Full results, methodology, and honest limitations
+(including a real, encountered cross-host firewall constraint for the message-bus benchmark
+specifically, and a real, unreproduced anomaly worth a future root-cause pass):
+[`docs/design/performance-benchmark.md`](design/performance-benchmark.md). Real, reusable harness
+checked in at `benchmarks/` (not deleted after use). **Headline finding**: civitas's own
+`HTTPGateway` throughput at a directly-comparable CPU-bound workload (936.8 req/sec) beats
+Node.js and Python/FastMCP in TM Dev Lab's own published table, despite civitas's own run paying
+a real cross-host network-hop latency tax their same-host setup never had to pay -- a real,
+previously-unmeasured, positive result, reported alongside the equally real fact that civitas's
+average latency is higher than all four of their published implementations.
+
+**Original scoping, kept for the record below:**
 
 **Status: ⏸️ Deferred, scoped | Priority: 🟢 Low — explicitly sequenced after everything else in
 this backlog, not before.** Scoped 2026-08-24, directly informed by a real spike

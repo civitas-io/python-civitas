@@ -1,0 +1,17 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY pyproject.toml .
+COPY civitas/ civitas/
+COPY benchmarks/serve_gateway.py benchmarks/serve_gateway.py
+
+RUN pip install --no-cache-dir -e ".[http]" && \
+    useradd --create-home --uid 1000 civitas
+USER civitas
+
+# Resource limits (--cpus=1.0 --memory=1g, matching TM Dev Lab's own
+# per-server Docker constraint exactly) are applied at `docker run` time,
+# not baked into the image -- see benchmarks/README.md for the real command.
+ENTRYPOINT ["python", "benchmarks/serve_gateway.py"]
+CMD ["--port", "8090"]
