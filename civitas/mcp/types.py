@@ -58,7 +58,21 @@ class MCPToolSchema:
 
 
 class MCPToolError(Exception):
-    """Raised when an MCP tool call returns isError=True or fails."""
+    """Raised when an MCP tool call returns isError=True or fails.
+
+    Real, honest gap found 2026-08-25 while fixing ``AgentProcess.
+    connect_mcp()``: nothing in civitas core actually raises or catches
+    this class -- the real MCP call path (``fabrica.mcp.client.MCPClient.
+    call_tool()``) raises its own, separately-defined ``fabrica.mcp.
+    errors.MCPToolError`` instead, which an ``except civitas.mcp.types.
+    MCPToolError`` here would NOT catch (different classes, same name).
+    ``fabrica.mcp.tool.MCPTool.execute()`` lets fabrica's real exception
+    propagate unchanged rather than translating into this one. Kept for
+    now as existing public API (removing it is a real, separate,
+    semver-relevant decision, not bundled into this fix) -- but treat it
+    as dead/aspirational, not a type you can reliably catch a real MCP
+    tool failure with.
+    """
 
     def __init__(self, tool_name: str, detail: str) -> None:
         self.tool_name = tool_name

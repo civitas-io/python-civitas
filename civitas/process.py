@@ -1129,7 +1129,7 @@ class AgentProcess:
             from fabrica.mcp.tool import MCPTool
         except ImportError as exc:
             raise ConfigurationError(
-                "MCP support requires fabrica. Install it with: pip install fabrica[mcp]"
+                "MCP support requires fabrica. Install it with: pip install fabrica-context"
             ) from exc
 
         client = MCPClient(config, audit_sink=self._audit_sink, agent_name=self.name)

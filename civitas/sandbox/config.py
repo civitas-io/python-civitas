@@ -42,15 +42,38 @@ class SandboxConfig:
                   - /etc/ssl/certs:ro
 
     Attributes:
-        enabled: When False the process runs unsandboxed. Default: False.
+        enabled: When False the process runs unsandboxed. Default: True
+            (fail-closed) -- changed from False in a real, deliberate breaking
+            fix: a bare ``SandboxConfig()`` previously meant *unsandboxed*,
+            the opposite of this org's own repeatedly-stated fail-closed-by-
+            default platform-wide principle, and a real, security-relevant
+            divergence from fabrica's own independently-defined
+            ``SandboxConfig`` (which already defaulted ``enabled=True``) --
+            found while scoping the ``connect_mcp()``/``MCPTool`` fix. A
+            caller who genuinely wants an unsandboxed MCP server subprocess
+            must now say so explicitly (``enabled=False``), matching this
+            codebase's own established ``allow_ungoverned``/
+            ``allow_unsandboxed`` opt-out convention elsewhere.
         network: ``"deny"`` blocks all outbound network access;
                  ``"allow"`` leaves the network namespace shared with the host.
         filesystem: Explicit bind-mounts added on top of the base read-only root.
+        allow_unsandboxed: Added 2026-08-25, migrated in from fabrica's own,
+            previously-independently-defined ``SandboxConfig`` while
+            unifying the two into one canonical type (see this fix's own
+            changelog entry). Civitas core itself never reads this field --
+            it exists here purely so a single ``SandboxConfig`` instance
+            carries everything ``fabrica.mcp.isolation.SrtIsolation`` needs
+            (real isolation unavailable, e.g. ``srt`` not installed, AND
+            the caller has explicitly opted out of the fail-closed default)
+            without fabrica needing a second, divergence-prone type. Same
+            fail-closed-by-default / explicit-opt-in shape as
+            ``NullPresidiumClient.allow_ungoverned`` elsewhere in this org.
     """
 
-    enabled: bool = False
+    enabled: bool = True
     network: str = "deny"
     filesystem: list[FilesystemMount] = field(default_factory=list)
+    allow_unsandboxed: bool = False
 
     def __post_init__(self) -> None:
         if self.network not in ("deny", "allow"):
@@ -74,7 +97,8 @@ class SandboxConfig:
                 mounts.append(FilesystemMount(path=entry["path"], mode=entry.get("mode", "ro")))
 
         return cls(
-            enabled=bool(data.get("enabled", False)),
+            enabled=bool(data.get("enabled", True)),
             network=str(data.get("network", "deny")),
             filesystem=mounts,
+            allow_unsandboxed=bool(data.get("allow_unsandboxed", False)),
         )

@@ -93,7 +93,7 @@ opened the PR — with a full audit trail. A human clicked merge."*
 
 - Medicus runs as a **static child** (avoids the dynamic-spawn audit/metrics gap; fixing that gap is
   still tracked separately).
-- fabrica for the sandbox (`fabrica[mcp]`); degrades to a subprocess-with-tmpdir for the offline demo.
+- fabrica for the sandbox (`fabrica-context`); degrades to a subprocess-with-tmpdir for the offline demo.
 - No new core dependency; LLM via existing `civitas-contrib` providers (mock for the default run).
 
 ## Success criteria

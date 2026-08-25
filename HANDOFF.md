@@ -10,12 +10,45 @@ the active backlog).
 (Civitas = runtime, this repo, Presidium = governance, Fabrica = context layer). The private
 `civitas-io/context` repo is the cross-repo reasoning substrate. `civitas-io/presidium` and
 `civitas-io/fabrica` each have their own `HANDOFF.md` — read all three when working across
-repo boundaries. **This repo specifically has zero open work right now, as of 2026-08-25** (see
-"M-LAST" and "Other real, open work" below -- M-LAST, the last item in this repo's own backlog,
-is now done). The active frontier across the org is `civitas-io/presidium` (M4, M6, and
-credential resolution remain; M5's CLI and M8 are both done) and `civitas-io/tessera` (a real
-service-mode/unattended-approval gap, named in that repo's own new `HANDOFF.md`), per each
-repo's own `HANDOFF.md`.
+repo boundaries.
+
+## `AgentProcess.connect_mcp()` was broken since inception -- fixed 2026-08-25, real code not yet released
+
+**Real, currently-blocking bug, reported by a downstream project team against `civitas` 0.11.3 /
+`fabrica-context` 0.4.0 / `presidium` 0.6.0** -- verified directly against source before agreeing,
+not taken on faith. `connect_mcp()` has always tried `from fabrica.mcp.tool import MCPTool`; that
+module never existed in `civitas-io/fabrica` (confirmed via `git log -S "class MCPTool"` finding
+nothing real). Every real call raised `ModuleNotFoundError` immediately -- despite
+`docs/mcp.md` presenting it as a fully working, documented feature, and
+`docs/milestones.md` marking `MCPTool(ToolProvider)` **✅ done** in shipped history. It never was;
+that row is only accurate again as of this fix.
+
+**This repo's own real, related fixes** (the actual missing `MCPTool` class lives in
+`civitas-io/fabrica`, not here -- see that repo's own `HANDOFF.md`):
+
+- **`civitas.sandbox.config.SandboxConfig.enabled` now defaults `True` (fail-closed), was
+  `False`.** Found while scoping: fabrica's own, independently-defined `SandboxConfig` already
+  defaulted `enabled=True` -- the two silently disagreed on a security-relevant default the
+  whole time, undetected because nothing ever exercised both together until this fix (which
+  unifies fabrica's copy into a re-export of this one). `SandboxConfig` also gained
+  `allow_unsandboxed: bool = False`, migrated in from fabrica's version, for the same
+  unification.
+- Fixed `pip install fabrica[mcp]` -> `pip install fabrica-context` in `connect_mcp()`'s own
+  `ImportError` message and `civitas.mcp`'s module docstring -- wrong package name AND a
+  nonexistent extra (`mcp` is a hard core dependency of `fabrica-context`, not gated behind one).
+- `civitas.mcp.types.MCPToolError`'s docstring corrected: confirmed dead -- nothing in civitas
+  core raises or catches it; the real MCP call path raises `fabrica.mcp.errors.MCPToolError`
+  instead (different class, same name). Not removed, a real separate semver decision.
+
+See `CHANGELOG.md`'s `[Unreleased]` entry for the full detail. **Real, working, verified end to
+end** -- a real reproduction test (calling `connect_mcp()` against a real running MCP server,
+asserting tools register into `self.tools` and execute for real) lives in `civitas-io/fabrica`'s
+own test suite (this repo's own dev environment deliberately doesn't install fabrica). **Not yet
+released** -- `civitas.sandbox.config.SandboxConfig.enabled`'s default flip is a real, deliberate
+breaking change; needs a version bump (suggest `0.12.0`, matching this org's own precedent of
+treating a deliberate, correctly-reasoned breaking fix as a MINOR bump pre-1.0, e.g. presidium's
+`CelPolicyEngine` default-deny flip) before `fabrica-context` can bump its own `civitas>=0.11.0`
+floor to pick it up.
 
 ---
 

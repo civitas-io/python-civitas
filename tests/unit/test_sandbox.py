@@ -13,10 +13,18 @@ from civitas.sandbox.config import FilesystemMount, SandboxConfig
 
 class TestSandboxConfig:
     def test_defaults(self):
+        """enabled=True (fail-closed) since 2026-08-25 -- a real, deliberate
+        breaking fix: a bare SandboxConfig() previously meant *unsandboxed*,
+        the opposite of this org's own fail-closed-by-default principle,
+        and a real, security-relevant divergence from fabrica's own
+        (independently-defined at the time) SandboxConfig, which already
+        defaulted enabled=True. Found while fixing AgentProcess.connect_mcp().
+        """
         cfg = SandboxConfig()
-        assert cfg.enabled is False
+        assert cfg.enabled is True
         assert cfg.network == "deny"
         assert cfg.filesystem == []
+        assert cfg.allow_unsandboxed is False
 
     def test_from_dict_minimal(self):
         cfg = SandboxConfig.from_dict({"enabled": True})
@@ -58,9 +66,15 @@ class TestSandboxConfig:
         with pytest.raises(ValueError, match="network"):
             SandboxConfig.from_dict({"network": "half"})
 
-    def test_enabled_false_by_default_in_from_dict(self):
+    def test_enabled_true_by_default_in_from_dict(self):
         cfg = SandboxConfig.from_dict({})
-        assert cfg.enabled is False
+        assert cfg.enabled is True
+
+    def test_allow_unsandboxed_parsed_from_dict(self):
+        cfg = SandboxConfig.from_dict({"allow_unsandboxed": True})
+        assert cfg.allow_unsandboxed is True
+        cfg = SandboxConfig.from_dict({})
+        assert cfg.allow_unsandboxed is False
 
 
 class TestFilesystemMount:

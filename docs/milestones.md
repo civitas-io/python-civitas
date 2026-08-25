@@ -239,7 +239,7 @@ MCP protocol plumbing — the wire layer between Civitas agents and MCP tool ser
 | Topology YAML `mcp.servers` block — parsed into `Runtime._mcp_configs`, auto-connect at agent startup | ✅ | civitas core |
 | `MCPClient` — connect (stdio + SSE), `list_tools`, `call_tool` | ✅ | **civitas-contrib (fabrica)** — not this repo |
 | `MCPTool(ToolProvider)` — `mcp://server_name/tool_name` name scheme, `civitas.mcp.call` OTEL span | ✅ | **civitas-contrib (fabrica)** — not this repo |
-| `civitas[mcp]` optional extra | ❌ removed | use `pip install fabrica[mcp]` instead |
+| `civitas[mcp]` optional extra | ❌ removed | use `pip install fabrica-context` instead |
 | `CivitasMCPServer(GenServer)` — expose an agent tree as an MCP server | ⏸️ | deferred to Fabrica (scope boundary decision), not started anywhere |
 | Unit tests (types + YAML parsing, core-side only) | ✅ | civitas core (`tests/unit/test_mcp.py`) |
 

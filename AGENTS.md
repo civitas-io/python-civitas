@@ -76,7 +76,7 @@ pip install civitas-contrib[litellm]      # 100+ models via LiteLLM
 pip install civitas-contrib[postgres]     # PostgreSQL state store
 
 # MCP tools gateway → fabrica (part of civitas-contrib repo)
-pip install fabrica[mcp]                  # MCP subprocess gateway + sandboxing
+pip install fabrica-context               # MCP subprocess gateway + sandboxing
 ```
 
 ---
@@ -115,8 +115,8 @@ from civitas_contrib.adapters.langgraph import LangGraphAgent      # civitas-con
 from civitas_contrib.adapters.openai import OpenAIAgent            # civitas-contrib[openai]
 
 # MCP gateway — requires fabrica
-from fabrica.mcp.client import MCPClient                           # fabrica[mcp]
-from fabrica.mcp.tool import MCPTool                               # fabrica[mcp]
+from fabrica.mcp.client import MCPClient                           # fabrica-context
+from fabrica.mcp.tool import MCPTool                               # fabrica-context
 from fabrica.sandbox.bubblewrap import BubblewrapSandbox           # fabrica
 ```
 

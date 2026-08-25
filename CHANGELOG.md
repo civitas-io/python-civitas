@@ -9,7 +9,41 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ---
 
-## [Unreleased]
+## [0.12.0] -- 2026-08-25
+
+Real bug reported 2026-08-25 by a downstream project team against `civitas` 0.11.3 /
+`fabrica-context` 0.4.0 / `presidium` 0.6.0: `AgentProcess.connect_mcp()` has always tried
+`from fabrica.mcp.tool import MCPTool` -- that module never existed, so every real call raised
+`ModuleNotFoundError` immediately. Verified directly against source before agreeing, then scoped
+and fixed the same day. The real fix (`MCPTool`, the actual missing piece) lives in
+`civitas-io/fabrica` -- see that repo's own `HANDOFF.md`. This repo's own real, related fixes,
+found while scoping:
+
+### Changed
+
+- **BREAKING: `civitas.sandbox.config.SandboxConfig.enabled` now defaults to `True`
+  (fail-closed), not `False`.** A bare `SandboxConfig()` previously meant *unsandboxed* -- the
+  opposite of this org's own repeatedly-stated fail-closed-by-default platform-wide principle,
+  and a real, security-relevant divergence from fabrica's own (independently-defined at the
+  time) `SandboxConfig`, which already defaulted `enabled=True`. A caller who genuinely wants an
+  unsandboxed MCP server subprocess must now say so explicitly (`enabled=False`).
+- `SandboxConfig` gained `allow_unsandboxed: bool = False` (migrated in from fabrica's own,
+  previously-independently-defined `SandboxConfig` while unifying the two into one canonical
+  type -- civitas core itself never reads this field; it exists here so a single `SandboxConfig`
+  instance carries everything `fabrica.mcp.isolation.SrtIsolation` needs).
+
+### Fixed
+
+- `AgentProcess.connect_mcp()`'s `ImportError` message and `civitas.mcp`'s own module docstring
+  both said `pip install fabrica[mcp]` -- wrong on two counts: `fabrica` is taken on PyPI by an
+  unrelated project (real name is `fabrica-context`), and `fabrica-context` has no `[mcp]` extra
+  at all (`mcp` is a hard core dependency). Fixed to `pip install fabrica-context`.
+- `civitas.mcp.types.MCPToolError`'s docstring corrected: it is not raised or caught anywhere in
+  civitas core, and never has been -- the real MCP call path
+  (`fabrica.mcp.client.MCPClient.call_tool()`) raises its own, separately-defined
+  `fabrica.mcp.errors.MCPToolError` instead, which an `except civitas.mcp.types.MCPToolError`
+  here would NOT catch (different classes, same name). Kept for now as existing public API, not
+  removed -- a real, separate, semver-relevant decision.
 
 ## [0.11.3] -- 2026-08-23
 
