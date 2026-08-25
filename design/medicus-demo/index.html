@@ -2356,7 +2356,7 @@ opened the PR — with a full audit trail. A human clicked merge."</em></p>
 <ul>
 <li>Medicus runs as a <strong>static child</strong> (avoids the dynamic-spawn audit/metrics gap; fixing that gap is
   still tracked separately).</li>
-<li>fabrica for the sandbox (<code>fabrica[mcp]</code>); degrades to a subprocess-with-tmpdir for the offline demo.</li>
+<li>fabrica for the sandbox (<code>fabrica-context</code>); degrades to a subprocess-with-tmpdir for the offline demo.</li>
 <li>No new core dependency; LLM via existing <code>civitas-contrib</code> providers (mock for the default run).</li>
 </ul>
 <h2 id="success-criteria">Success criteria<a class="headerlink" href="#success-criteria" title="Permanent link">&para;</a></h2>
