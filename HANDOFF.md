@@ -10,10 +10,12 @@ the active backlog).
 (Civitas = runtime, this repo, Presidium = governance, Fabrica = context layer). The private
 `civitas-io/context` repo is the cross-repo reasoning substrate. `civitas-io/presidium` and
 `civitas-io/fabrica` each have their own `HANDOFF.md` — read all three when working across
-repo boundaries. **This repo specifically has zero open work right now** (see "Other real, open
-work" below) -- the active frontier as of 2026-08-24 is entirely in `civitas-io/presidium`
-(M5's CLI just started; M4/M6/M8 and credential resolution remain), per that repo's own
-`HANDOFF.md`.
+repo boundaries. **This repo specifically has zero open work right now, as of 2026-08-25** (see
+"M-LAST" and "Other real, open work" below -- M-LAST, the last item in this repo's own backlog,
+is now done). The active frontier across the org is `civitas-io/presidium` (M4, M6, and
+credential resolution remain; M5's CLI and M8 are both done) and `civitas-io/tessera` (a real
+service-mode/unattended-approval gap, named in that repo's own new `HANDOFF.md`), per each
+repo's own `HANDOFF.md`.
 
 ---
 
