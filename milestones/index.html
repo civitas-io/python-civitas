@@ -6120,9 +6120,9 @@ Three orthogonal HITL rough-edges on the durable-suspension primitive; full desi
 (a design doc if warranted), then moves into <a href="#part-1-shipped">Part 1 — Shipped</a> once released.
 Owner column: <code>core</code> = python-civitas, else the target repo.</p>
 <h3 id="now-open-tracked-issue-python-civitas">Now open — tracked issue (python-civitas)<a class="headerlink" href="#now-open-tracked-issue-python-civitas" title="Permanent link">&para;</a></h3>
-<p><strong>None currently open against this repo specifically</strong> (as of 2026-08-24). The active,
-cross-repo M-LAST performance-benchmarking item lives in <a href="#part-2--backlog">Part 2 -- Backlog</a>
-below, deliberately deferred to last.</p>
+<p><strong>None currently open against this repo specifically</strong> (as of 2026-08-25). The M-LAST
+performance-benchmarking item (see <a href="#part-2--backlog">Part 2 -- Backlog</a> below) is now <strong>complete</strong>
+-- real benchmarks, real results, <code>docs/design/performance-benchmark.md</code>.</p>
 <blockquote>
 <p><a href="https://github.com/civitas-io/python-civitas/issues/26">#26</a> (Streamable HTTP MCP transport) --
 <strong>Done (2026-08-24)</strong>, moved to Part 1 above as R11.</p>
@@ -6529,6 +6529,20 @@ reverse proxy (#25).</p>
 </table>
 <hr />
 <h3 id="m-last-real-performance-benchmarking-do-this-last-deliberately">M-LAST — Real Performance Benchmarking (do this last, deliberately)<a class="headerlink" href="#m-last-real-performance-benchmarking-do-this-last-deliberately" title="Permanent link">&para;</a></h3>
+<p><strong>Status: ✅ Complete, 2026-08-25.</strong> Real benchmarks against a real, standalone <code>civitas</code> server,
+on real hardware (a MacBook + a separate Linux homelab host, direct Tailscale connection), a real
+k6 load profile replicating TM Dev Lab's own exact methodology shape, and a real, explicit
+ranking against their own published table. Full results, methodology, and honest limitations
+(including a real, encountered cross-host firewall constraint for the message-bus benchmark
+specifically, and a real, unreproduced anomaly worth a future root-cause pass):
+<a href="../design/performance-benchmark/"><code>docs/design/performance-benchmark.md</code></a>. Real, reusable harness
+checked in at <code>benchmarks/</code> (not deleted after use). <strong>Headline finding</strong>: civitas's own
+<code>HTTPGateway</code> throughput at a directly-comparable CPU-bound workload (936.8 req/sec) beats
+Node.js and Python/FastMCP in TM Dev Lab's own published table, despite civitas's own run paying
+a real cross-host network-hop latency tax their same-host setup never had to pay -- a real,
+previously-unmeasured, positive result, reported alongside the equally real fact that civitas's
+average latency is higher than all four of their published implementations.</p>
+<p><strong>Original scoping, kept for the record below:</strong></p>
 <p><strong>Status: ⏸️ Deferred, scoped | Priority: 🟢 Low — explicitly sequenced after everything else in
 this backlog, not before.</strong> Scoped 2026-08-24, directly informed by a real spike
 (<a href="https://github.com/civitas-io/fabrica/blob/main/specs/archive/spikes/SPIKE-mcp-transport-benchmark.md"><code>civitas-io/fabrica</code>'s <code>SPIKE-mcp-transport-benchmark.md</code></a>)
