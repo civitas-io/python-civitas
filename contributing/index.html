@@ -2528,8 +2528,11 @@
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="c1"># Install all dev dependencies (includes test, lint, type-check tooling)</span>
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>uv<span class="w"> </span>sync<span class="w"> </span>--extra<span class="w"> </span>dev
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="c1"># Install pre-commit hooks (ruff + mypy run on every commit)</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>uv<span class="w"> </span>run<span class="w"> </span>pre-commit<span class="w"> </span>install
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="c1"># Install pre-commit hooks -- ruff/ruff-format/mypy/gitleaks run on every</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="c1"># commit; tests run on push (pre-push, separate install below, since it&#39;s slower).</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="c1"># See .pre-commit-config.yaml for exactly what runs.</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>uv<span class="w"> </span>run<span class="w"> </span>pre-commit<span class="w"> </span>install
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>uv<span class="w"> </span>run<span class="w"> </span>pre-commit<span class="w"> </span>install<span class="w"> </span>--hook-type<span class="w"> </span>pre-push
 </span></code></pre></div>
 <p>That's it. No virtualenv activation needed — <code>uv run</code> handles the environment.</p>
 <hr />
@@ -2787,33 +2790,35 @@
 </span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a>│   │   ├── tracer.py        # Tracer, Span, three output modes
 </span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a>│   │   ├── span_queue.py    # SpanQueue, SpanData
 </span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a>│   │   └── export_backend.py # ExportBackend, ConsoleBackend, FanOutBackend
-</span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a>│   ├── plugins/             # Plugin implementations
+</span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a>│   ├── plugins/             # Plugin implementations (core only — no LLM providers here)
 </span><span id="__span-7-25"><a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a>│   │   ├── model.py         # ModelProvider protocol, ModelResponse
 </span><span id="__span-7-26"><a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a>│   │   ├── tools.py         # ToolProvider, ToolRegistry
 </span><span id="__span-7-27"><a id="__codelineno-7-27" name="__codelineno-7-27" href="#__codelineno-7-27"></a>│   │   ├── state.py         # StateStore, InMemoryStateStore
 </span><span id="__span-7-28"><a id="__codelineno-7-28" name="__codelineno-7-28" href="#__codelineno-7-28"></a>│   │   ├── sqlite_store.py  # SQLiteStateStore
-</span><span id="__span-7-29"><a id="__codelineno-7-29" name="__codelineno-7-29" href="#__codelineno-7-29"></a>│   │   ├── anthropic.py     # AnthropicProvider
-</span><span id="__span-7-30"><a id="__codelineno-7-30" name="__codelineno-7-30" href="#__codelineno-7-30"></a>│   │   ├── litellm.py       # LiteLLMProvider
-</span><span id="__span-7-31"><a id="__codelineno-7-31" name="__codelineno-7-31" href="#__codelineno-7-31"></a>│   │   └── loader.py        # Plugin resolution (entrypoint → builtin → dotted path)
-</span><span id="__span-7-32"><a id="__codelineno-7-32" name="__codelineno-7-32" href="#__codelineno-7-32"></a>│   ├── adapters/            # Framework adapters
-</span><span id="__span-7-33"><a id="__codelineno-7-33" name="__codelineno-7-33" href="#__codelineno-7-33"></a>│   │   ├── langgraph.py     # LangGraphAgent
-</span><span id="__span-7-34"><a id="__codelineno-7-34" name="__codelineno-7-34" href="#__codelineno-7-34"></a>│   │   └── openai.py        # OpenAIAgent
-</span><span id="__span-7-35"><a id="__codelineno-7-35" name="__codelineno-7-35" href="#__codelineno-7-35"></a>│   └── cli/                 # Typer CLI
-</span><span id="__span-7-36"><a id="__codelineno-7-36" name="__codelineno-7-36" href="#__codelineno-7-36"></a>│       ├── app.py           # Root app + console
-</span><span id="__span-7-37"><a id="__codelineno-7-37" name="__codelineno-7-37" href="#__codelineno-7-37"></a>│       ├── run.py           # civitas run
-</span><span id="__span-7-38"><a id="__codelineno-7-38" name="__codelineno-7-38" href="#__codelineno-7-38"></a>│       ├── topology.py      # civitas topology validate/show/diff
-</span><span id="__span-7-39"><a id="__codelineno-7-39" name="__codelineno-7-39" href="#__codelineno-7-39"></a>│       ├── deploy.py        # civitas deploy docker-compose
-</span><span id="__span-7-40"><a id="__codelineno-7-40" name="__codelineno-7-40" href="#__codelineno-7-40"></a>│       └── state.py         # civitas state list/show/clear
-</span><span id="__span-7-41"><a id="__codelineno-7-41" name="__codelineno-7-41" href="#__codelineno-7-41"></a>├── tests/
-</span><span id="__span-7-42"><a id="__codelineno-7-42" name="__codelineno-7-42" href="#__codelineno-7-42"></a>│   ├── conftest.py          # Shared fixtures and test agents
-</span><span id="__span-7-43"><a id="__codelineno-7-43" name="__codelineno-7-43" href="#__codelineno-7-43"></a>│   ├── unit/                # Fast, isolated unit tests
-</span><span id="__span-7-44"><a id="__codelineno-7-44" name="__codelineno-7-44" href="#__codelineno-7-44"></a>│   └── integration/         # Full-runtime integration tests
-</span><span id="__span-7-45"><a id="__codelineno-7-45" name="__codelineno-7-45" href="#__codelineno-7-45"></a>├── docs/                    # Documentation (MkDocs)
-</span><span id="__span-7-46"><a id="__codelineno-7-46" name="__codelineno-7-46" href="#__codelineno-7-46"></a>├── examples/                # Runnable examples
-</span><span id="__span-7-47"><a id="__codelineno-7-47" name="__codelineno-7-47" href="#__codelineno-7-47"></a>├── AGENTS.md                # Machine-readable API reference
-</span><span id="__span-7-48"><a id="__codelineno-7-48" name="__codelineno-7-48" href="#__codelineno-7-48"></a>├── CONTRIBUTING.md          # This file
-</span><span id="__span-7-49"><a id="__codelineno-7-49" name="__codelineno-7-49" href="#__codelineno-7-49"></a>└── pyproject.toml           # Build config, deps, tool config
+</span><span id="__span-7-29"><a id="__codelineno-7-29" name="__codelineno-7-29" href="#__codelineno-7-29"></a>│   │   ├── encrypted_store.py # EncryptingStateStore
+</span><span id="__span-7-30"><a id="__codelineno-7-30" name="__codelineno-7-30" href="#__codelineno-7-30"></a>│   │   └── loader.py        # Plugin resolution (entrypoint → builtin → dotted path)
+</span><span id="__span-7-31"><a id="__codelineno-7-31" name="__codelineno-7-31" href="#__codelineno-7-31"></a>│   └── cli/                 # Typer CLI
+</span><span id="__span-7-32"><a id="__codelineno-7-32" name="__codelineno-7-32" href="#__codelineno-7-32"></a>│       ├── app.py           # Root app + console
+</span><span id="__span-7-33"><a id="__codelineno-7-33" name="__codelineno-7-33" href="#__codelineno-7-33"></a>│       ├── init.py          # civitas init
+</span><span id="__span-7-34"><a id="__codelineno-7-34" name="__codelineno-7-34" href="#__codelineno-7-34"></a>│       ├── run.py           # civitas run
+</span><span id="__span-7-35"><a id="__codelineno-7-35" name="__codelineno-7-35" href="#__codelineno-7-35"></a>│       ├── topology.py      # civitas topology validate/show/diff
+</span><span id="__span-7-36"><a id="__codelineno-7-36" name="__codelineno-7-36" href="#__codelineno-7-36"></a>│       ├── deploy.py        # civitas deploy docker-compose
+</span><span id="__span-7-37"><a id="__codelineno-7-37" name="__codelineno-7-37" href="#__codelineno-7-37"></a>│       ├── state.py         # civitas state list/clear/migrate
+</span><span id="__span-7-38"><a id="__codelineno-7-38" name="__codelineno-7-38" href="#__codelineno-7-38"></a>│       ├── dashboard.py     # civitas dashboard (&quot;civitas top&quot;, needs [dashboard] extra)
+</span><span id="__span-7-39"><a id="__codelineno-7-39" name="__codelineno-7-39" href="#__codelineno-7-39"></a>│       ├── telemetry.py     # civitas telemetry (needs [telemetry] extra)
+</span><span id="__span-7-40"><a id="__codelineno-7-40" name="__codelineno-7-40" href="#__codelineno-7-40"></a>│       ├── security.py      # civitas security init zmq | civitas security init nats
+</span><span id="__span-7-41"><a id="__codelineno-7-41" name="__codelineno-7-41" href="#__codelineno-7-41"></a>│       └── version.py       # civitas version
+</span><span id="__span-7-42"><a id="__codelineno-7-42" name="__codelineno-7-42" href="#__codelineno-7-42"></a>├── tests/
+</span><span id="__span-7-43"><a id="__codelineno-7-43" name="__codelineno-7-43" href="#__codelineno-7-43"></a>│   ├── conftest.py          # Shared fixtures and test agents
+</span><span id="__span-7-44"><a id="__codelineno-7-44" name="__codelineno-7-44" href="#__codelineno-7-44"></a>│   ├── unit/                # Fast, isolated unit tests
+</span><span id="__span-7-45"><a id="__codelineno-7-45" name="__codelineno-7-45" href="#__codelineno-7-45"></a>│   └── integration/         # Full-runtime integration tests
+</span><span id="__span-7-46"><a id="__codelineno-7-46" name="__codelineno-7-46" href="#__codelineno-7-46"></a>├── docs/                    # Documentation (MkDocs)
+</span><span id="__span-7-47"><a id="__codelineno-7-47" name="__codelineno-7-47" href="#__codelineno-7-47"></a>├── examples/                # Runnable examples
+</span><span id="__span-7-48"><a id="__codelineno-7-48" name="__codelineno-7-48" href="#__codelineno-7-48"></a>├── AGENTS.md                # Machine-readable API reference
+</span><span id="__span-7-49"><a id="__codelineno-7-49" name="__codelineno-7-49" href="#__codelineno-7-49"></a>├── CONTRIBUTING.md          # This file
+</span><span id="__span-7-50"><a id="__codelineno-7-50" name="__codelineno-7-50" href="#__codelineno-7-50"></a>└── pyproject.toml           # Build config, deps, tool config
 </span></code></pre></div>
+<p>LLM providers (<code>AnthropicProvider</code>, <code>OpenAIProvider</code>, <code>GeminiProvider</code>, <code>MistralProvider</code>, the not-yet-implemented <code>LiteLLMProvider</code>) and framework adapters live in the separate <code>civitas-io/civitas-contrib</code> repo, not here — there is no <code>civitas/adapters/</code> directory and no <code>civitas/plugins/anthropic.py</code> in this repo.</p>
 
 
 

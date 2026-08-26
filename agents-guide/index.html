@@ -2387,7 +2387,7 @@ adapters live in <code>civitas-contrib</code>.</p>
 <li><strong><code>ask()</code> caller ⇒ handler must <code>return self.reply(...)</code>.</strong> Missing reply = caller hangs to timeout.</li>
 <li><strong>Payloads are JSON primitives only</strong> (<code>str/int/float/bool/list/dict/None</code>). <code>.model_dump()</code> Pydantic models first.</li>
 <li><strong>No <code>send</code>/<code>ask</code> from <code>on_start()</code></strong> — the bus isn't ready. First outbound message goes from <code>handle()</code>.</li>
-<li><strong>Only checkpointed state survives restart</strong> (v0.8.0). <code>self.state</code> is reset on every (re)start, then restored from the last <code>checkpoint()</code>. Instance variables: undefined across restarts — never rely on them.</li>
+<li><strong>Only checkpointed state survives restart</strong> (v0.9.0, final). <code>self.state</code> is reset on every (re)start, then restored from the last <code>checkpoint()</code>. Instance variables: undefined across restarts — never rely on them.</li>
 <li><strong>Never block the event loop.</strong> All I/O async; wrap unavoidable blocking calls in <code>asyncio.to_thread()</code>. One blocking <code>handle()</code> stalls every agent in the process.</li>
 <li><strong>Route by name, never by object reference.</strong> <code>await self.ask("other", ...)</code> — direct method calls bypass supervision, tracing, and transport.</li>
 <li><strong>Reserved prefixes:</strong> application <code>message_type</code> must not start with <code>_agency.</code> or <code>civitas.stream.</code> (raises <code>MessageValidationError</code>).</li>

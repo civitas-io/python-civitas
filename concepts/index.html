@@ -774,6 +774,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#genserver" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GenServer
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -818,6 +829,17 @@
     <span class="md-ellipsis">
       
         Backoff
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dynamicsupervisor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DynamicSupervisor
       
     </span>
   </a>
@@ -2473,6 +2495,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#genserver" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GenServer
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2517,6 +2550,17 @@
     <span class="md-ellipsis">
       
         Backoff
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dynamicsupervisor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DynamicSupervisor
       
     </span>
   </a>
@@ -2670,7 +2714,9 @@
 <p>Each component has a single responsibility. <code>Runtime</code> assembles them; it doesn't own business logic.</p>
 <hr />
 <h2 id="agentprocess">AgentProcess<a class="headerlink" href="#agentprocess" title="Permanent link">&para;</a></h2>
-<p><code>AgentProcess</code> is the unit of computation — the Python equivalent of an Erlang GenServer.</p>
+<p><code>AgentProcess</code> is the unit of computation — the Python equivalent of an Erlang GenServer.
+For the OTP-style call/cast/info pattern itself, see <code>GenServer</code> below (a real subclass of
+<code>AgentProcess</code>, not a separate primitive).</p>
 <p>Each instance has:
 - Its own <strong>mailbox</strong> — a bounded async queue of incoming messages
 - Its own <strong>state</strong> — a plain dict, private to that process
@@ -2678,7 +2724,11 @@
 - An asyncio <code>Task</code> running its message loop</p>
 <h3 id="lifecycle">Lifecycle<a class="headerlink" href="#lifecycle" title="Permanent link">&para;</a></h3>
 <p><img alt="Agent State Machine" src="../assets/agent-state-machine.svg" /></p>
-<p>Four hooks to override:</p>
+<p>Core hooks to override (<code>on_start</code>, <code>handle</code>, <code>on_error</code>, <code>on_stop</code> shown below). Three more exist
+for less common cases: <code>on_suspend</code>/<code>on_resume</code> (human-in-the-loop approval flows),
+<code>on_correction</code> (mid-flight message correction), and <code>on_child_terminated</code> (a <code>DynamicSupervisor</code>'s
+own children notify their parent) — see <code>docs/agents-guide.md</code> and <code>civitas/process.py</code> for the
+full signatures.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">MyAgent</span><span class="p">(</span><span class="n">AgentProcess</span><span class="p">):</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_start</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>        <span class="c1"># Called once before the first message.</span>
@@ -2773,23 +2823,37 @@
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">reply</span><span class="p">({</span><span class="s2">&quot;step&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span><span class="p">[</span><span class="s2">&quot;step&quot;</span><span class="p">]})</span>
 </span></code></pre></div>
 <p>On restart, the runtime restores <code>self.state</code> from the last checkpoint before calling <code>on_start()</code>. Agents that never call <code>checkpoint()</code> incur zero overhead.</p>
+<h3 id="genserver">GenServer<a class="headerlink" href="#genserver" title="Permanent link">&para;</a></h3>
+<p><code>GenServer</code> is a real <code>AgentProcess</code> subclass for the classic OTP call/cast/info pattern, for
+agents that are better modeled as a stateful service than a free-form message handler:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">Counter</span><span class="p">(</span><span class="n">GenServer</span><span class="p">):</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">init</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>       <span class="c1"># override init(), not on_start()</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">state</span><span class="p">[</span><span class="s2">&quot;count&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">handle_call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">payload</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">from_</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">state</span><span class="p">[</span><span class="s2">&quot;count&quot;</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span><span class="p">[</span><span class="s2">&quot;count&quot;</span><span class="p">]}</span>
+</span></code></pre></div>
+<p>Override <code>handle_call</code>/<code>handle_cast</code>/<code>handle_info</code> — never <code>handle()</code> directly — and <code>init()</code>
+instead of <code>on_start()</code>. Useful whenever an agent's job is closer to "a supervised service with
+request/response semantics" than "react to arbitrary messages."</p>
 <hr />
 <h2 id="supervisor">Supervisor<a class="headerlink" href="#supervisor" title="Permanent link">&para;</a></h2>
 <p>The <code>Supervisor</code> monitors its children and applies a restart strategy when any of them crashes.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">Supervisor</span><span class="p">(</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="s2">&quot;root&quot;</span><span class="p">,</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">strategy</span><span class="o">=</span><span class="s2">&quot;ONE_FOR_ONE&quot;</span><span class="p">,</span>   <span class="c1"># or ONE_FOR_ALL, REST_FOR_ONE</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">max_restarts</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>           <span class="c1"># max crashes before escalating</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">restart_window</span><span class="o">=</span><span class="mf">60.0</span><span class="p">,</span>      <span class="c1"># sliding window (seconds) for counting crashes</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">backoff</span><span class="o">=</span><span class="s2">&quot;EXPONENTIAL&quot;</span><span class="p">,</span>    <span class="c1"># or CONSTANT, LINEAR</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="n">backoff_base</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>         <span class="c1"># initial backoff delay in seconds</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>    <span class="n">backoff_max</span><span class="o">=</span><span class="mf">60.0</span><span class="p">,</span>         <span class="c1"># maximum backoff delay</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>    <span class="n">children</span><span class="o">=</span><span class="p">[</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>        <span class="n">MyAgent</span><span class="p">(</span><span class="s2">&quot;agent-a&quot;</span><span class="p">),</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>        <span class="n">MyAgent</span><span class="p">(</span><span class="s2">&quot;agent-b&quot;</span><span class="p">),</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>        <span class="n">AnotherAgent</span><span class="p">(</span><span class="s2">&quot;agent-c&quot;</span><span class="p">),</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>    <span class="p">],</span>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">Supervisor</span><span class="p">(</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="s2">&quot;root&quot;</span><span class="p">,</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="n">strategy</span><span class="o">=</span><span class="s2">&quot;ONE_FOR_ONE&quot;</span><span class="p">,</span>   <span class="c1"># or ONE_FOR_ALL, REST_FOR_ONE</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">max_restarts</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>           <span class="c1"># max crashes before escalating</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">restart_window</span><span class="o">=</span><span class="mf">60.0</span><span class="p">,</span>      <span class="c1"># sliding window (seconds) for counting crashes</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">backoff</span><span class="o">=</span><span class="s2">&quot;EXPONENTIAL&quot;</span><span class="p">,</span>    <span class="c1"># or CONSTANT, LINEAR</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">backoff_base</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>         <span class="c1"># initial backoff delay in seconds</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="n">backoff_max</span><span class="o">=</span><span class="mf">60.0</span><span class="p">,</span>         <span class="c1"># maximum backoff delay</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    <span class="n">children</span><span class="o">=</span><span class="p">[</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>        <span class="n">MyAgent</span><span class="p">(</span><span class="s2">&quot;agent-a&quot;</span><span class="p">),</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>        <span class="n">MyAgent</span><span class="p">(</span><span class="s2">&quot;agent-b&quot;</span><span class="p">),</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>        <span class="n">AnotherAgent</span><span class="p">(</span><span class="s2">&quot;agent-c&quot;</span><span class="p">),</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>    <span class="p">],</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="p">)</span>
 </span></code></pre></div>
 <h3 id="restart-strategies">Restart strategies<a class="headerlink" href="#restart-strategies" title="Permanent link">&para;</a></h3>
 <p><strong>ONE_FOR_ONE</strong> — restart only the crashed child. Other children are unaffected.</p>
@@ -2837,31 +2901,54 @@
 </tbody>
 </table>
 <p><code>EXPONENTIAL</code> is the default for production systems. It prevents retry storms when a dependency is down.</p>
+<h3 id="dynamicsupervisor">DynamicSupervisor<a class="headerlink" href="#dynamicsupervisor" title="Permanent link">&para;</a></h3>
+<p><code>Supervisor</code>'s children are fixed at topology-build time. <code>DynamicSupervisor</code> is a real, separate
+class for the opposite case — a supervisor that starts empty and gains/loses children at runtime:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">Orchestrator</span><span class="p">(</span><span class="n">AgentProcess</span><span class="p">):</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">handle</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="n">Message</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Message</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>        <span class="c1"># spawn() resolves the nearest-ancestor DynamicSupervisor automatically —</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>        <span class="c1"># no need to name it, unlike spawn_into() which targets one explicitly.</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>        <span class="n">agent_name</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">spawn</span><span class="p">(</span><span class="n">WorkerAgent</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;worker-</span><span class="si">{</span><span class="n">message</span><span class="o">.</span><span class="n">payload</span><span class="p">[</span><span class="s1">&#39;job_id&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>        <span class="c1"># ... later ...</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>        <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">despawn</span><span class="p">(</span><span class="n">agent_name</span><span class="p">)</span>
+</span></code></pre></div>
+<p>Declared in topology YAML under <code>type: dynamic_supervisor</code>. Enforces <code>ONE_FOR_ONE</code> restart
+semantics only — a child exhausting its restart budget fires <code>on_child_terminated</code> on the spawner
+rather than escalating to the tree above. <code>spawner_allowlist</code>/<code>max_children</code>/<code>max_total_spawns</code>
+(and their per-spawner variants) are the built-in authorization/quota controls for who may spawn
+what, and how much.</p>
 <hr />
 <h2 id="message">Message<a class="headerlink" href="#message" title="Permanent link">&para;</a></h2>
 <p><code>Message</code> is the standard envelope for all inter-agent communication. It carries routing metadata, observability context, and your application payload.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nd">@dataclass</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">Message</span><span class="p">:</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="nb">id</span><span class="p">:</span> <span class="nb">str</span>               <span class="c1"># UUID7 — time-sortable, globally unique</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="nb">type</span><span class="p">:</span> <span class="nb">str</span>             <span class="c1"># application-defined message type (default: &quot;message&quot;)</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">sender</span><span class="p">:</span> <span class="nb">str</span>           <span class="c1"># agent name that sent this message</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">recipient</span><span class="p">:</span> <span class="nb">str</span>        <span class="c1"># agent name this message is addressed to</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">payload</span><span class="p">:</span> <span class="nb">dict</span>         <span class="c1"># your data — must be JSON-serializable</span>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    <span class="c1"># Request-reply</span>
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="n">correlation_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span>   <span class="c1"># links a reply to its originating request</span>
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    <span class="n">reply_to</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span>         <span class="c1"># ephemeral address for the reply</span>
-</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>
-</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>    <span class="c1"># Observability</span>
-</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>    <span class="n">trace_id</span><span class="p">:</span> <span class="nb">str</span>                <span class="c1"># distributed trace identifier</span>
-</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>    <span class="n">span_id</span><span class="p">:</span> <span class="nb">str</span>                 <span class="c1"># this message&#39;s span</span>
-</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>    <span class="n">parent_span_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span>   <span class="c1"># the span that caused this message</span>
-</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>
-</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>    <span class="c1"># Runtime</span>
-</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>    <span class="n">timestamp</span><span class="p">:</span> <span class="nb">float</span>     <span class="c1"># unix timestamp at creation</span>
-</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>    <span class="n">attempt</span><span class="p">:</span> <span class="nb">int</span>         <span class="c1"># retry count (incremented on RETRY)</span>
-</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>    <span class="n">priority</span><span class="p">:</span> <span class="nb">int</span>        <span class="c1"># &gt; 0 for system messages (jump the queue)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nd">@dataclass</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">Message</span><span class="p">:</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>    <span class="nb">id</span><span class="p">:</span> <span class="nb">str</span>               <span class="c1"># UUID7 — time-sortable, globally unique</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="nb">type</span><span class="p">:</span> <span class="nb">str</span>             <span class="c1"># application-defined message type (default: &quot;message&quot;)</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    <span class="n">sender</span><span class="p">:</span> <span class="nb">str</span>           <span class="c1"># agent name that sent this message</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="n">recipient</span><span class="p">:</span> <span class="nb">str</span>        <span class="c1"># agent name this message is addressed to</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="n">payload</span><span class="p">:</span> <span class="nb">dict</span>         <span class="c1"># your data — must be JSON-serializable</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>    <span class="c1"># Request-reply</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>    <span class="n">correlation_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span>   <span class="c1"># links a reply to its originating request</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>    <span class="n">reply_to</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span>         <span class="c1"># ephemeral address for the reply</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>    <span class="c1"># Observability</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>    <span class="n">trace_id</span><span class="p">:</span> <span class="nb">str</span>                <span class="c1"># distributed trace identifier</span>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>    <span class="n">span_id</span><span class="p">:</span> <span class="nb">str</span>                 <span class="c1"># this message&#39;s span</span>
+</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a>    <span class="n">parent_span_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span>   <span class="c1"># the span that caused this message</span>
+</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a>
+</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a>    <span class="c1"># Runtime</span>
+</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a>    <span class="n">timestamp</span><span class="p">:</span> <span class="nb">float</span>     <span class="c1"># unix timestamp at creation</span>
+</span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a>    <span class="n">attempt</span><span class="p">:</span> <span class="nb">int</span>         <span class="c1"># retry count (incremented on RETRY)</span>
+</span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a>    <span class="n">priority</span><span class="p">:</span> <span class="nb">int</span>        <span class="c1"># &gt; 0 for system messages (jump the queue)</span>
+</span><span id="__span-5-22"><a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a>    <span class="n">ttl</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span>    <span class="c1"># expiry in seconds (declared field; see note below)</span>
+</span><span id="__span-5-23"><a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a>    <span class="n">seq</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span>      <span class="c1"># sequence number for ordered delivery within a stream</span>
 </span></code></pre></div>
+<blockquote>
+<p><code>ttl</code> is real API surface (declared on every <code>Message</code>) but is not currently enforced anywhere
+in <code>bus.py</code> — setting it does not cause expiry. Documented here honestly rather than implying
+behavior that doesn't exist yet.</p>
+</blockquote>
 <h3 id="payload-rules">Payload rules<a class="headerlink" href="#payload-rules" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Must contain only JSON-serializable values: <code>str</code>, <code>int</code>, <code>float</code>, <code>bool</code>, <code>None</code>, <code>list</code>, <code>dict</code></li>
@@ -2879,13 +2966,9 @@
 <p>The Registry is also used for pattern-matching in <code>broadcast</code>. A call to <code>self.broadcast("workers.*", payload)</code> delivers to every registered agent whose name matches the glob.</p>
 <hr />
 <h2 id="transport">Transport<a class="headerlink" href="#transport" title="Permanent link">&para;</a></h2>
-<p>The <code>Transport</code> is the delivery layer underneath the MessageBus. It has five methods:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">start</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">stop</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">subscribe</span><span class="p">(</span><span class="n">address</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">handler</span><span class="p">:</span> <span class="n">Callable</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">publish</span><span class="p">(</span><span class="n">address</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">request</span><span class="p">(</span><span class="n">address</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">,</span> <span class="n">timeout</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span>
-</span></code></pre></div>
+<p>The <code>Transport</code> is the delivery layer underneath the MessageBus. See
+<a href="../transports/#transport-protocol">Transports</a> for the full <code>Transport</code> protocol
+reference — kept in one place rather than duplicated here.</p>
 <p>Three implementations are provided:</p>
 <p><img alt="Transport Tiers" src="../assets/transport-tiers.svg" /></p>
 <p>Agent code never references the transport directly. The runtime injects it. Switching from <code>InProcessTransport</code> to <code>NATSTransport</code> requires changing one line in your topology YAML.</p>
@@ -2895,15 +2978,15 @@
 <p>Everything outside the core runtime — LLM providers, tools, state stores, observability exporters — is a plugin. Plugins are Python protocols (structural typing, not inheritance):</p>
 <p><img alt="Plugin Protocols" src="../assets/plugin-protocols.svg" /></p>
 <p>Any class that satisfies the protocol can be used — you don't subclass anything. To write a custom model provider:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">MyProvider</span><span class="p">:</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">chat</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">messages</span><span class="p">,</span> <span class="n">tools</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>        <span class="c1"># call your API here</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>        <span class="k">return</span> <span class="n">ModelResponse</span><span class="p">(</span><span class="n">content</span><span class="o">=</span><span class="s2">&quot;...&quot;</span><span class="p">,</span> <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span> <span class="n">tokens_in</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">tokens_out</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">cost_usd</span><span class="o">=</span><span class="mf">0.0</span><span class="p">)</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">runtime</span> <span class="o">=</span> <span class="n">Runtime</span><span class="p">(</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="n">supervisor</span><span class="o">=...</span><span class="p">,</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="n">model_provider</span><span class="o">=</span><span class="n">MyProvider</span><span class="p">(),</span>   <span class="c1"># satisfies ModelProvider protocol</span>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">MyProvider</span><span class="p">:</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">chat</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">messages</span><span class="p">,</span> <span class="n">tools</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>        <span class="c1"># call your API here</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>        <span class="k">return</span> <span class="n">ModelResponse</span><span class="p">(</span><span class="n">content</span><span class="o">=</span><span class="s2">&quot;...&quot;</span><span class="p">,</span> <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span> <span class="n">tokens_in</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">tokens_out</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">cost_usd</span><span class="o">=</span><span class="mf">0.0</span><span class="p">)</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="n">runtime</span> <span class="o">=</span> <span class="n">Runtime</span><span class="p">(</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>    <span class="n">supervisor</span><span class="o">=...</span><span class="p">,</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>    <span class="n">model_provider</span><span class="o">=</span><span class="n">MyProvider</span><span class="p">(),</span>   <span class="c1"># satisfies ModelProvider protocol</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="p">)</span>
 </span></code></pre></div>
 <p>See <a href="../plugins/">Plugins</a> for the full protocol definitions and all bundled implementations.</p>
 <hr />
@@ -2912,20 +2995,20 @@
 <p><img alt="Runtime Startup Sequence" src="../assets/runtime-startup.svg" /></p>
 <p>The startup sequence is deterministic: infrastructure first (serializer, tracer, transport, registry, bus), then plugins, then agents. Agents are never started before the bus is ready.</p>
 <p><strong>Programmatic:</strong></p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">runtime</span> <span class="o">=</span> <span class="n">Runtime</span><span class="p">(</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="n">supervisor</span><span class="o">=</span><span class="n">Supervisor</span><span class="p">(</span><span class="s2">&quot;root&quot;</span><span class="p">,</span> <span class="n">children</span><span class="o">=</span><span class="p">[</span><span class="o">...</span><span class="p">]),</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="n">transport</span><span class="o">=</span><span class="s2">&quot;in_process&quot;</span><span class="p">,</span>          <span class="c1"># or &quot;zmq&quot;, &quot;nats&quot;</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="n">model_provider</span><span class="o">=</span><span class="n">AnthropicProvider</span><span class="p">(),</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="n">tool_registry</span><span class="o">=</span><span class="n">tools</span><span class="p">,</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>    <span class="n">state_store</span><span class="o">=</span><span class="n">SQLiteStateStore</span><span class="p">(</span><span class="s2">&quot;state.db&quot;</span><span class="p">),</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="p">)</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="k">await</span> <span class="n">runtime</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="c1"># ...</span>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="k">await</span> <span class="n">runtime</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">runtime</span> <span class="o">=</span> <span class="n">Runtime</span><span class="p">(</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>    <span class="n">supervisor</span><span class="o">=</span><span class="n">Supervisor</span><span class="p">(</span><span class="s2">&quot;root&quot;</span><span class="p">,</span> <span class="n">children</span><span class="o">=</span><span class="p">[</span><span class="o">...</span><span class="p">]),</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    <span class="n">transport</span><span class="o">=</span><span class="s2">&quot;in_process&quot;</span><span class="p">,</span>          <span class="c1"># or &quot;zmq&quot;, &quot;nats&quot;</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="n">model_provider</span><span class="o">=</span><span class="n">AnthropicProvider</span><span class="p">(),</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="n">tool_registry</span><span class="o">=</span><span class="n">tools</span><span class="p">,</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>    <span class="n">state_store</span><span class="o">=</span><span class="n">SQLiteStateStore</span><span class="p">(</span><span class="s2">&quot;state.db&quot;</span><span class="p">),</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="p">)</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="k">await</span> <span class="n">runtime</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="c1"># ...</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="k">await</span> <span class="n">runtime</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
 </span></code></pre></div>
 <p><strong>From YAML topology:</strong></p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">runtime</span> <span class="o">=</span> <span class="n">Runtime</span><span class="o">.</span><span class="n">from_yaml</span><span class="p">(</span><span class="s2">&quot;topology.yaml&quot;</span><span class="p">)</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="k">await</span> <span class="n">runtime</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">runtime</span> <span class="o">=</span> <span class="n">Runtime</span><span class="o">.</span><span class="n">from_config</span><span class="p">(</span><span class="s2">&quot;topology.yaml&quot;</span><span class="p">)</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="k">await</span> <span class="n">runtime</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
 </span></code></pre></div>
 <p>See <a href="../topology/">Topology YAML</a> for the full schema.</p>
 <hr />

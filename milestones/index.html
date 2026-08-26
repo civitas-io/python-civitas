@@ -2385,6 +2385,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#public-documentation-reliability-done" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Public documentation reliability (Done)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3349,6 +3360,17 @@
     <span class="md-ellipsis">
       
         Now open — tracked issue (python-civitas)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#public-documentation-reliability-done" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Public documentation reliability (Done)
       
     </span>
   </a>
@@ -5762,7 +5784,7 @@ from the same message/span.</p>
 <h3 id="b1-native-telemetry-storage">B1 — Native telemetry storage<a class="headerlink" href="#b1-native-telemetry-storage" title="Permanent link">&para;</a></h3>
 <p>A civitas-native persistent span store for small/local deployments. Design-first: full design
 conversation and decision log in
-<a href="../design/telemetry-native.md"><code>docs/design/telemetry-native.md</code></a> before any code.</p>
+<a href="../design/telemetry-native/"><code>docs/design/telemetry-native.md</code></a> before any code.</p>
 <table>
 <thead>
 <tr>
@@ -5807,7 +5829,7 @@ conversation and decision log in
 <h3 id="b2-telemetry-queryaggregation-layer">B2 — Telemetry query/aggregation layer<a class="headerlink" href="#b2-telemetry-queryaggregation-layer" title="Permanent link">&para;</a></h3>
 <p>A query/aggregation layer over B1's SQLite store. Design conversation (not a full standalone
 design doc — more mechanical than B1's genuine new architectural decision) captured in
-<a href="../design/telemetry-native.md"><code>docs/design/telemetry-native.md</code></a>'s §13.</p>
+<a href="../design/telemetry-native/"><code>docs/design/telemetry-native.md</code></a>'s §13.</p>
 <table>
 <thead>
 <tr>
@@ -5851,7 +5873,7 @@ design doc — more mechanical than B1's genuine new architectural decision) cap
 </table>
 <h3 id="b3-telemetry-tui-completing-track-b">B3 — Telemetry TUI, completing Track B<a class="headerlink" href="#b3-telemetry-tui-completing-track-b" title="Permanent link">&para;</a></h3>
 <p>The Textual TUI over B1/B2's native SQLite store. Full design + decisions in
-<a href="../design/telemetry-native.md"><code>docs/design/telemetry-native.md</code></a>'s §14.</p>
+<a href="../design/telemetry-native/"><code>docs/design/telemetry-native.md</code></a>'s §14.</p>
 <table>
 <thead>
 <tr>
@@ -5966,7 +5988,7 @@ and existed as a separate, hand-rolled <code>asyncio.start_server</code> HTTP se
 implementation onto it, the two were <strong>merged</strong> — <code>TopologyServer</code> is now an ordinary agent behind
 <code>HTTPGateway</code>, inheriting its API-key/JWT/mTLS auth. Design-first: full investigation, four
 reviewed decisions, and a phased migration plan in
-<a href="../design/topology-gateway-merge.md"><code>docs/design/topology-gateway-merge.md</code></a>.</p>
+<a href="../design/topology-gateway-merge/"><code>docs/design/topology-gateway-merge.md</code></a>.</p>
 <p><strong>Breaking change (deliberate, D6):</strong> the <code>TopologyServer</code> class is removed — no longer importable
 from <code>civitas</code>. YAML users are unaffected (<code>type: topology_server</code> nodes keep working, now building
 a <code>TopologyAgent</code> + <code>HTTPGateway</code> sub-supervisor under the hood). Direct-construction (non-YAML)
@@ -6026,7 +6048,7 @@ auto-registered route carrying the node's auth middleware, with the authenticate
 recorded as the audit actor (<code>control-plane-writes.md</code> D2 — the honest binding). <strong>civitas ships
 the seam + honest audit + safe localhost default, never AuthZ</strong> (customers bring their own
 SCIM/IdP/OPA middleware; single devs bring nothing). Full design + rationale in
-<a href="../design/control-plane-writes.md"><code>docs/design/control-plane-writes.md</code></a>.</p>
+<a href="../design/control-plane-writes/"><code>docs/design/control-plane-writes.md</code></a>.</p>
 <table>
 <thead>
 <tr>
@@ -6092,7 +6114,7 @@ SCIM/IdP/OPA middleware; single devs bring nothing). Full design + rationale in
 <p><strong>Status: ✅ Released 2026-07-31, as a single release</strong> (HITL half of the original "HITL &amp; Streaming
 polish" bundle; the streaming R7 items are split out to their own future release — see Part 2).
 Three orthogonal HITL rough-edges on the durable-suspension primitive; full design in
-<a href="../design/hitl-polish.md"><code>docs/design/hitl-polish.md</code></a>.</p>
+<a href="../design/hitl-polish/"><code>docs/design/hitl-polish.md</code></a>.</p>
 <table>
 <thead>
 <tr>
@@ -6120,9 +6142,125 @@ Three orthogonal HITL rough-edges on the durable-suspension primitive; full desi
 (a design doc if warranted), then moves into <a href="#part-1-shipped">Part 1 — Shipped</a> once released.
 Owner column: <code>core</code> = python-civitas, else the target repo.</p>
 <h3 id="now-open-tracked-issue-python-civitas">Now open — tracked issue (python-civitas)<a class="headerlink" href="#now-open-tracked-issue-python-civitas" title="Permanent link">&para;</a></h3>
-<p><strong>None currently open against this repo specifically</strong> (as of 2026-08-25). The M-LAST
-performance-benchmarking item (see <a href="#part-2--backlog">Part 2 -- Backlog</a> below) is now <strong>complete</strong>
--- real benchmarks, real results, <code>docs/design/performance-benchmark.md</code>.</p>
+<p><strong>Public documentation reliability</strong> (see the next section, below) shipped 2026-08-26 --
+all 4 action items done, same day it was opened.
+The M-LAST performance-benchmarking item (see <a href="#part-2-backlog">Part 2 -- Backlog</a> below) remains
+<strong>complete</strong> -- real benchmarks, real results, <code>docs/design/performance-benchmark.md</code>.</p>
+<h3 id="public-documentation-reliability-done">Public documentation reliability (Done)<a class="headerlink" href="#public-documentation-reliability-done" title="Permanent link">&para;</a></h3>
+<p><strong>Status: ✅ Done -- all 4 action items shipped | Priority: 🔴 High | Owner: core</strong></p>
+<p><strong>Trigger</strong>: a real, code-verified audit of every public-facing doc (<code>README.md</code>, <code>docs/*.md</code>,
+<code>AGENTS.md</code>, <code>docs/llms.txt</code>, <code>docs/agents-guide.md</code>) found the public docs surface extensively
+stale relative to source -- broken imports (<code>TopologyServer</code>, removed at v0.9.5, still imported in
+<code>AGENTS.md</code>), two docs directly contradicting each other on real runtime behavior (mailbox
+blocking vs. non-blocking, <code>architecture.md</code> vs. <code>faq.md</code>), a fabricated <code>civitas[mcp]</code> pip extra
+and an entirely invented "Civitas as an MCP server" class in <code>docs/mcp.md</code>, a wrong pricing-table
+model ID in <code>docs/plugins.md</code> that silently makes real cost computation return <code>None</code>, and more --
+full findings list in this session's own transcript, not duplicated here. Root cause, confirmed:
+CI lints/type-checks/tests <code>civitas/</code> and smoke-tests <code>examples/*.py</code>
+(<code>tests/integration/test_examples_smoke.py</code> exists precisely because standalone examples used to
+rot the same way) -- but <strong>zero mechanism checks any prose or code-fence in <code>docs/</code>, <code>README.md</code>,
+or <code>AGENTS.md</code></strong>. That gap is structural, not accidental: two independent past renames
+(<code>TopologyServer</code>→<code>TopologyAgent</code>; a state-store import path moving from contrib into core) each
+independently show up as unfixed in 2-3 <em>different</em> docs, meaning refactors here are not currently
+accompanied by any doc-sweep step.</p>
+<p><strong>Resolved via a 5-advisor LLM council</strong> (Contrarian/First Principles/Expansionist/Outsider/
+Executor, peer-reviewed -- &#8536; independent reviewers picked the same response strongest, 5/5
+flagged the same blind spot). Core finding: "docs" here is a category error, not a separate
+artifact class from code -- every public doc claim (an import path, a pip extra, a YAML schema, a
+pricing string) is a checkable claim about running code, the exact same category <code>examples/*.py</code>
+already got a real CI gate for. The fix is to extend that existing pattern, not invent a
+docs-specific discipline. Explicitly rejected: treating "docs for coding agents" as requiring
+separate content from "docs for humans" -- the failures are audience-agnostic (a broken import
+breaks the same way for both); the one place agent-facing docs should differ is structure/density
+(a lean router an agent can act on precisely), not correctness.</p>
+<p><strong>Action items, in the council's own priority order:</strong></p>
+<ol>
+<li>✅ <strong>Hand-fix the concretely-identified breakages</strong> -- no new tooling required, stops active
+   harm immediately. <code>TopologyServer</code>→<code>TopologyAgent</code> import fix (with the v0.9.5
+   HTTPGateway-routing architecture note, in <code>topology.md</code>/<code>supervision.md</code>/<code>cli.md</code>/
+   <code>observability.md</code>), the mailbox blocking-vs-non-blocking contradiction (canonicalize on
+   <code>faq.md</code>'s correct version), the fabricated <code>civitas[mcp]</code> extra and invented
+   <code>civitas.mcp.server.MCPServer</code> class in <code>docs/mcp.md</code> (rewritten: real fabrica-backed client,
+   real single top-level <code>mcp: servers:</code> YAML schema applying to every agent, real
+   <code>civitas.mcp.call</code> span shape, real dead-<code>MCPToolError</code> gotcha), the wrong pricing-table model
+   ID in <code>docs/plugins.md</code> (<code>claude-opus-4-6</code>, full real table) plus the entirely missing
+   <code>OpenAIProvider</code>/<code>GeminiProvider</code>/<code>MistralProvider</code> docs and the fact <code>LiteLLMProvider</code> is a
+   <code>NotImplementedError</code> stub, the stale sqlite import path, the <code>docs/agents-guide.md</code>
+   v0.8.0-vs-v0.9.0 restart-contract version contradiction (source confirms v0.9.0), missing
+   <code>civitas security init zmq/nats</code> + <code>civitas state migrate</code> + <code>topology show --header</code> CLI docs,
+   the <code>--transport</code> default's real supervisor-vs-worker-mode split, the wrong <code>docs_enabled</code>
+   tri-state default and missing <code>GatewayConfig</code>/<code>GatewayRequest</code> fields, the false "no WebSocket /
+   no auth" claims in <code>docs/gateway.md</code> (both real and shipped) plus the undocumented <code>RateLimiter</code>,
+   the wrong <code>Alt-Svc</code> header format and default message <code>type</code>, the <code>Transport</code> protocol's 3
+   missing methods (<code>unsubscribe</code>/<code>wait_subscribed</code>/<code>set_serializer</code>) in <code>docs/transports.md</code>, the
+   missing <code>_agency.force_restart</code> system message, and the phantom <code>civitas/adapters/</code> +
+   <code>civitas/plugins/anthropic.py</code> file listings in both <code>CONTRIBUTING.md</code> and
+   <code>docs/contributing.md</code> (plus their drifted pre-commit-hook descriptions, now reconciled). Full
+   list of what was actually found and fixed lives in each fixed doc's own real content, not
+   restated here.</li>
+</ol>
+<p><strong>New real bug surfaced while fixing <code>docs/gateway.md</code>, not just a doc error</strong>:
+   <code>RouteTable.merge_contracts_from()</code> (the mechanism that's supposed to wire <code>@route</code>/<code>@contract</code>
+   decorator metadata into request validation) is only ever exercised directly against a
+   manually-constructed <code>RouteTable</code> in <code>tests/unit/test_gateway.py</code> — <code>HTTPGateway.__init__</code>
+   builds and owns its <code>RouteTable</code> as a private <code>_route_table</code> with no public way to call
+   <code>merge_contracts_from()</code> on it or inject a pre-merged table. So decorating a <code>handle()</code> with
+   <code>@route</code>/<code>@contract</code> today gets you <strong>no</strong> 422/500 validation through a real <code>HTTPGateway</code> —
+   contradicting the CHANGELOG's v-tagged claim that it's "wired ... for automatic 422/500
+   validation." <code>docs/gateway.md</code> now documents this honestly (decorators are IDE/doc metadata
+   only, YAML <code>routes:</code> is authoritative) instead of showing a fabricated working example. Needs
+   its own follow-up: either expose a real <code>HTTPGateway.merge_contracts_from()</code>/constructor hook,
+   or retire the decorators if they're not worth wiring up.
+2. ✅ <strong>Restructure <code>AGENTS.md</code> into a thin router</strong> -- cut from 910 to 304 lines (not quite
+   the aspirational ~100, but every cut line was genuinely duplicated SDK-reference content:
+   Quick Import Reference, the full Repository Layout tree, and the Core API sections for
+   <code>AgentProcess</code>/<code>Message</code>/<code>Supervisor</code>/<code>Runtime</code>/Topology YAML/Tools/LLM calls/multi-agent
+   patterns -- all now covered, and kept accurate, in <code>docs/concepts.md</code>, <code>docs/agents-guide.md</code>,
+   <code>docs/messaging.md</code>, <code>docs/supervision.md</code>, <code>docs/topology.md</code>, <code>docs/plugins.md</code>, and
+   <code>CONTRIBUTING.md</code>. What stayed: org structure + the one load-bearing dependency-direction
+   rule, environment setup, code style, testing rules, public SDK stability rules, the Karpathy
+   behavioral guidelines, and the 18-item Anti-Patterns list -- none of that duplicates anything
+   in <code>docs/</code>, so it doesn't rot the same way. Added an explicit pointer at the top
+   distinguishing this file (contributing to civitas core) from <code>docs/agents-guide.md</code> (building
+   on top of civitas as a library), plus a PR-checklist line requiring the matching <code>docs/*.md</code>
+   page to be updated in the same PR as any SDK-visible change.
+3. ✅ <strong>Extend <code>test_examples_smoke.py</code>'s exact philosophy to markdown</strong>:
+   <code>tests/integration/test_docs_codeblocks.py</code> extracts every <code>``python fence from</code>docs/<em>.md<code>,</code>README.md<code>,</code>AGENTS.md<code>,</code>CONTRIBUTING.md<code>(excluding</code>docs/milestones.md<code>itself -- a historical log, not current reference), parses each with</code>ast<code>(a hard
+   failure on invalid syntax), and for every</code>civitas.</em><code>import checks the module actually
+   exists and the imported symbol is a real attribute on it.</code>civitas_contrib.<em><code>/</code>fabrica.</em><code>imports are best-effort -- verified if that package happens to be installed, skipped
+   (not failed) if not, since this repo's own CI deliberately never installs them (the
+   exact cross-repo blind spot the monorepo-vs-separate council decision above chose not to
+   solve this way). No CI wiring needed --</code>tests/integration<code>already runs in the existing</code>integration<code>job in</code>.github/workflows/ci.yml`, so this is live immediately.</p>
+<p><strong>First real catch, on the very first run</strong>: <code>docs/concepts.md</code>'s own "Transport" section
+   had an independent, second, already-stale copy of the <code>Transport</code> protocol (invalid
+   Python syntax -- bodies omitted -- and only 5 of the real 10 methods, the exact "five
+   methods" miscount already fixed in <code>docs/transports.md</code> during item 1). Replaced with a
+   link to <code>docs/transports.md#transport-protocol</code> instead of a second copy. Confirms the
+   checker earns its keep: same repo, same audit pass, and a second independent copy of the
+   same fact had already drifted.
+4. ✅ <strong>Add <code>mkdocs build --strict</code></strong> to <code>.github/workflows/docs.yml</code> (a new "Build docs
+   (strict...)" step before the <code>gh-deploy</code> step) so broken internal links/cross-references
+   fail CI instead of silently deploying. Ran it locally first and fixed every real warning
+   it found before wiring it in (fix-then-gate, not gate-then-fail): six <code>docs/milestones.md</code>
+   links to <code>docs/design/*.md</code> written with a wrong <code>../</code> prefix (docs/milestones.md is
+   itself inside <code>docs/</code>, so <code>design/x.md</code> is correct, not <code>../design/x.md</code>); five links
+   pointing at repo-root files (<code>CHANGELOG.md</code>, <code>SECURITY.md</code>, <code>AGENTS.md</code>,
+   <code>examples/dynamic_spawning.py</code>, and 4 <code>civitas/*.py</code> references) that were relative paths
+   assuming those files ship inside the built site -- they don't (mkdocs's <code>docs_dir</code> is
+   <code>docs/</code> only), so these were dead links on the <em>actual deployed site</em> today, not just a
+   strict-mode nitpick; one wrong relative path to <code>design/gateway-streaming.md</code> from
+   <code>docs/streaming.md</code>; and four same-page/cross-page anchor slugs that didn't match
+   MkDocs's real heading-to-anchor slugification (double hyphens where headings have <code>&amp;</code>/<code>—</code>,
+   and two <code>docs/cli.md</code> → <code>docs/observability.md</code> anchors referencing an old heading name
+   entirely). All fixed with either corrected relative paths (within <code>docs/</code>) or full GitHub
+   blob URLs (for anything genuinely outside <code>docs/</code>). <code>uv run mkdocs build --strict</code> now
+   passes clean.
+5. <strong>Deliberately not building</strong>: a cross-doc-agreement linter for claims a code-fence can't
+   verify (behavioral assertions, version numbers) -- the fix there is structural (make there be
+   exactly one place each fact lives, cross-linked) not a second linter reconciling copies forever.
+6. <strong>Deliberately deferred, not forgotten</strong>: a generalized/reusable doc-verification tool, an
+   "agent-legible docs" positioning story, and a formal versioning-against-releases scheme --
+   real, legitimate future value, revisit only once items 1-4 are done and stable.</p>
 <blockquote>
 <p><a href="https://github.com/civitas-io/python-civitas/issues/26">#26</a> (Streamable HTTP MCP transport) --
 <strong>Done (2026-08-24)</strong>, moved to Part 1 above as R11.</p>

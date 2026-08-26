@@ -1035,10 +1035,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#topologyserver" class="md-nav__link">
+  <a href="#topologyagent" class="md-nav__link">
     <span class="md-ellipsis">
       
-        TopologyServer
+        TopologyAgent
       
     </span>
   </a>
@@ -2738,10 +2738,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#topologyserver" class="md-nav__link">
+  <a href="#topologyagent" class="md-nav__link">
     <span class="md-ellipsis">
       
-        TopologyServer
+        TopologyAgent
       
     </span>
   </a>
@@ -3342,15 +3342,15 @@ conflated with queue depth), and a <code>SUSPENDED</code> agent acks while stayi
 </span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="k">await</span> <span class="n">runtime</span><span class="o">.</span><span class="n">despawn</span><span class="p">(</span><span class="s2">&quot;workers&quot;</span><span class="p">,</span> <span class="s2">&quot;researcher-1&quot;</span><span class="p">)</span>
 </span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="k">await</span> <span class="n">runtime</span><span class="o">.</span><span class="n">stop_agent</span><span class="p">(</span><span class="s2">&quot;workers&quot;</span><span class="p">,</span> <span class="s2">&quot;researcher-1&quot;</span><span class="p">,</span> <span class="n">drain</span><span class="o">=</span><span class="s2">&quot;current&quot;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mf">5.0</span><span class="p">)</span>
 </span></code></pre></div>
-<h3 id="topologyserver">TopologyServer<a class="headerlink" href="#topologyserver" title="Permanent link">&para;</a></h3>
-<p><code>TopologyServer</code> is a supervised HTTP endpoint that exposes live topology state. Declare it in YAML as a sibling of other children:</p>
+<h3 id="topologyagent">TopologyAgent<a class="headerlink" href="#topologyagent" title="Permanent link">&para;</a></h3>
+<p><code>TopologyAgent</code> exposes live topology state. Declare it in YAML as a sibling of other children — the node type name (<code>topology_server</code>) is kept for backward compatibility, but as of v0.9.5 it no longer runs its own standalone HTTP server: instead it comes with an internally-owned <code>HTTPGateway</code> that serves its routes, sharing the same auth stack (API key / JWT / mTLS) as any other gateway.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">topology_server</span>
 </span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">topo_server</span>
 </span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
 </span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="w">    </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">127.0.0.1</span><span class="w">   </span><span class="c1"># default</span>
 </span><span id="__span-27-5"><a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a><span class="w">    </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">6789</span><span class="w">        </span><span class="c1"># default</span>
 </span></code></pre></div>
-<p>Endpoints (all read-only, JSON):</p>
+<p>Endpoints:</p>
 <table>
 <thead>
 <tr>
@@ -3361,7 +3361,7 @@ conflated with queue depth), and a <code>SUSPENDED</code> agent acks while stayi
 <tbody>
 <tr>
 <td><code>GET /health</code></td>
-<td><code>{"status": "ok"}</code></td>
+<td><code>{"status": "ok"}</code> (auth-free by default)</td>
 </tr>
 <tr>
 <td><code>GET /topology</code></td>
@@ -3375,10 +3375,42 @@ conflated with queue depth), and a <code>SUSPENDED</code> agent acks while stayi
 <td><code>GET /agents/{name}</code></td>
 <td>Single agent status or <code>{"error": "..."}</code> with 404</td>
 </tr>
+<tr>
+<td><code>GET /agents/{name}/mailbox</code></td>
+<td>Non-destructive peek at a mailbox</td>
+</tr>
+<tr>
+<td><code>GET /snapshot</code></td>
+<td>JSON metrics snapshot (used by <code>civitas top</code>)</td>
+</tr>
+<tr>
+<td><code>GET /metrics</code></td>
+<td>Prometheus text-format exposition</td>
+</tr>
+<tr>
+<td><code>GET /processes</code></td>
+<td>Process-level resource samples</td>
+</tr>
+<tr>
+<td><code>POST /agents/{name}/suspend</code></td>
+<td>Suspend an agent</td>
+</tr>
+<tr>
+<td><code>POST /agents/{name}/resume</code></td>
+<td>Resume a suspended agent</td>
+</tr>
+<tr>
+<td><code>POST /agents/{name}/restart</code></td>
+<td>Force-restart (kill) an agent</td>
+</tr>
+<tr>
+<td><code>POST /agents/{name}/mailbox</code></td>
+<td>Inject an application message</td>
+</tr>
 </tbody>
 </table>
 <p><code>civitas topology show</code> automatically pings <code>/topology</code> if a <code>topology_server</code> node is present in the YAML. If the server is unreachable (runtime not running), it falls back to rendering the static YAML tree with a <code>(runtime not running)</code> annotation.</p>
-<p>See <a href="../examples/dynamic_spawning.py">examples/dynamic_spawning.py</a> for a complete working example.</p>
+<p>See <a href="https://github.com/civitas-io/python-civitas/blob/main/examples/dynamic_spawning.py">examples/dynamic_spawning.py</a> for a complete working example.</p>
 
 
 

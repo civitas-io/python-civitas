@@ -2709,7 +2709,7 @@
 <ul class="task-list">
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <code>SQLiteStateStore</code> (or a custom durable store) configured — not <code>in_memory</code></li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <code>db_path</code> points to a persistent volume (not a container ephemeral filesystem)</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> State CLI commands tested: <code>civitas state list</code>, <code>civitas state show &lt;name&gt;</code></li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> State CLI commands tested: <code>civitas state list</code>, <code>civitas state clear</code></li>
 </ul>
 <p><strong>Observability</strong></p>
 <ul class="task-list">
@@ -2733,8 +2733,8 @@
 </ul>
 <hr />
 <h2 id="upgrading-between-levels">Upgrading between levels<a class="headerlink" href="#upgrading-between-levels" title="Permanent link">&para;</a></h2>
-<p><strong>Level 1 → Level 2:</strong> Install <code>python-civitas[zmq]</code>. Change <code>transport.type</code> to <code>zmq</code>. Add <code>process: worker</code> to agents you want isolated. Start a second terminal with <code>--process worker</code>. Agent code: unchanged.</p>
-<p><strong>Level 2 → Level 3:</strong> Install <code>python-civitas[nats]</code>. Start a NATS server. Change <code>transport.type</code> to <code>nats</code>, set <code>servers</code>. Run each process group on its own machine (or container). Agent code: unchanged.</p>
+<p><strong>Level 1 → Level 2:</strong> Install <code>civitas[zmq]</code>. Change <code>transport.type</code> to <code>zmq</code>. Add <code>process: worker</code> to agents you want isolated. Start a second terminal with <code>--process worker</code>. Agent code: unchanged.</p>
+<p><strong>Level 2 → Level 3:</strong> Install <code>civitas[nats]</code>. Start a NATS server. Change <code>transport.type</code> to <code>nats</code>, set <code>servers</code>. Run each process group on its own machine (or container). Agent code: unchanged.</p>
 <p><strong>Level 3 → Level 4:</strong> Run <code>civitas deploy docker-compose --topology topology.yaml</code>. Edit the generated <code>.env</code> with real secrets. Run <code>docker compose up --build</code>. Agent code: unchanged.</p>
 
 

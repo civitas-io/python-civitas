@@ -2470,7 +2470,7 @@ STOPPING, STOPPED, or CRASHED. This design adds a supervised, durable <strong>SU
 (F02 review, Apr 2026) — see <code>tests/unit/test_process.py::test_suspended_removed_from_enum</code>.</p>
 <p><strong>It was not removed because suspension is a bad idea.</strong> It was removed because it was <em>dead
 API</em>: the enum value existed but nothing ever transitioned into or out of it, nothing checked
-it, and no method set it. That is exactly <a href="../../AGENTS.md">AGENTS.md anti-pattern #16</a>
+it, and no method set it. That is exactly <a href="https://github.com/civitas-io/python-civitas/blob/main/AGENTS.md">AGENTS.md anti-pattern #16</a>
 ("Declaring API surface without wiring it up").</p>
 <p><strong>This is the governing constraint of this design.</strong> Re-introducing <code>SUSPENDED</code> is only
 acceptable if it is <em>fully wired</em>: defined transitions in and out, defined mailbox behavior,

@@ -2345,7 +2345,7 @@
 
 <h1 id="streaming">Streaming<a class="headerlink" href="#streaming" title="Permanent link">&para;</a></h1>
 <p>Civitas supports incremental, chunk-at-a-time replies both to external clients (through the
-<a href="gateway-streaming.md">gateway</a>: SSE / WebSocket / gRPC server-streaming) and <strong>agent-to-agent over the
+<a href="../design/gateway-streaming/">gateway</a>: SSE / WebSocket / gRPC server-streaming) and <strong>agent-to-agent over the
 message bus</strong> (in-process, ZMQ, NATS). This page covers the bus-native, agent-to-agent path.</p>
 <h2 id="producing-a-stream">Producing a stream<a class="headerlink" href="#producing-a-stream" title="Permanent link">&para;</a></h2>
 <p>Inside <code>handle()</code>, open a <code>stream_reply()</code> block and <code>send()</code> chunks. The end terminator is sent

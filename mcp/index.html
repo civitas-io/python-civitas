@@ -1043,17 +1043,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#exposing-civitas-agents-as-an-mcp-server" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Exposing Civitas agents as an MCP server
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#otel-tracing" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2334,17 +2323,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#exposing-civitas-agents-as-an-mcp-server" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Exposing Civitas agents as an MCP server
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#otel-tracing" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2398,10 +2376,11 @@
 
 
 <h1 id="mcp-integration">MCP Integration<a class="headerlink" href="#mcp-integration" title="Permanent link">&para;</a></h1>
-<p>Civitas agents can connect to external MCP (Model Context Protocol) tool servers and invoke their tools natively — alongside built-in tools, with the same <code>mcp://server/tool</code> URI addressing, and with full OTEL tracing. A Civitas agent can also expose itself as an MCP server, making its capabilities callable by any MCP-compatible client.</p>
-<p>MCP integration requires the optional <code>mcp</code> extra:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s1">&#39;civitas[mcp]&#39;</span>
+<p>Civitas agents can connect to external MCP (Model Context Protocol) tool servers and invoke their tools natively — alongside built-in tools, with the same <code>mcp://server/tool</code> URI addressing, and with full OTEL tracing.</p>
+<p>The actual MCP client lives in a separate package, <strong>fabrica</strong> (<code>civitas-io/fabrica</code>), not in civitas core. <code>civitas.mcp.types</code> (<code>MCPServerConfig</code>, <code>MCPToolSchema</code>) is a lightweight, dependency-free config module that both packages share — <code>AgentProcess.connect_mcp()</code> lazily imports <code>fabrica.mcp.client.MCPClient</code> and <code>fabrica.mcp.tool.MCPTool</code> only when actually called, so civitas core never depends on fabrica:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip<span class="w"> </span>install<span class="w"> </span>fabrica-context
 </span></code></pre></div>
+<p>If fabrica isn't installed, <code>connect_mcp()</code> raises <code>ConfigurationError("MCP support requires fabrica. Install it with: pip install fabrica-context")</code>.</p>
 <hr />
 <h2 id="connecting-to-an-mcp-server">Connecting to an MCP server<a class="headerlink" href="#connecting-to-an-mcp-server" title="Permanent link">&para;</a></h2>
 <p>Call <code>await self.connect_mcp(config)</code> inside <code>on_start()</code>. This starts the MCP server subprocess (stdio) or opens the SSE connection, negotiates capabilities, and registers all advertised tools into <code>self.tools</code> under the <code>mcp://server_name/tool_name</code> URI scheme.</p>
@@ -2441,13 +2420,13 @@
 <tr>
 <td><code>name</code></td>
 <td><code>str</code></td>
-<td>both</td>
+<td>all</td>
 <td>Logical name used in tool URIs: <code>mcp://name/tool</code></td>
 </tr>
 <tr>
 <td><code>transport</code></td>
-<td><code>"stdio"</code> | <code>"sse"</code></td>
-<td>both</td>
+<td><code>"stdio"</code> | <code>"sse"</code> | <code>"streamable_http"</code></td>
+<td>all</td>
 <td>How to connect to the server</td>
 </tr>
 <tr>
@@ -2471,11 +2450,18 @@
 <tr>
 <td><code>url</code></td>
 <td><code>str</code></td>
-<td>sse</td>
-<td>SSE endpoint URL, e.g. <code>"http://localhost:3000/sse"</code></td>
+<td>sse, streamable_http</td>
+<td>Endpoint URL, e.g. <code>"http://localhost:3000/sse"</code></td>
+</tr>
+<tr>
+<td><code>sandbox</code></td>
+<td><code>SandboxConfig \| None</code></td>
+<td>optional</td>
+<td>Per-server sandboxing (see <a href="../architecture/">Architecture</a> — <code>civitas/sandbox/</code>)</td>
 </tr>
 </tbody>
 </table>
+<p><code>streamable_http</code> is the MCP spec's newer transport (a single POST/GET/DELETE endpoint, no separate SSE-upgrade endpoint) and is what most current remote MCP servers ship — often <em>instead of</em> classic <code>sse</code> rather than alongside it.</p>
 <p><strong>stdio transport</strong> — Civitas spawns the command as a subprocess and communicates over stdin/stdout. The subprocess lifecycle is tied to the agent: when the agent stops, the subprocess is terminated.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">MCPServerConfig</span><span class="p">(</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;github&quot;</span><span class="p">,</span>
@@ -2500,10 +2486,10 @@
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="n">results</span> <span class="o">=</span> <span class="k">await</span> <span class="n">search</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">query</span><span class="o">=</span><span class="n">message</span><span class="o">.</span><span class="n">payload</span><span class="p">[</span><span class="s2">&quot;query&quot;</span><span class="p">],</span> <span class="n">per_page</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">reply</span><span class="p">({</span><span class="s2">&quot;repositories&quot;</span><span class="p">:</span> <span class="n">results</span><span class="p">})</span>
 </span></code></pre></div>
-<p>If a tool call fails (the MCP server returns <code>isError=True</code> or the subprocess exits), <code>MCPToolError</code> is raised with the tool name and detail message.</p>
+<p>If a tool call fails (the MCP server returns <code>isError=True</code> or the subprocess exits), an exception is raised — but <strong>not</strong> <code>civitas.mcp.types.MCPToolError</code>. The real call path (<code>fabrica.mcp.client.MCPClient.call_tool()</code>, via <code>fabrica.mcp.tool.MCPTool.execute()</code>) raises fabrica's own, separately-defined <code>fabrica.mcp.errors.MCPToolError</code> and lets it propagate unchanged; civitas's <code>MCPToolError</code> is unused dead code kept only as existing public API. Catch <code>fabrica.mcp.errors.MCPToolError</code> (or a broad <code>Exception</code>) around <code>tool.execute()</code>, not <code>civitas.mcp.types.MCPToolError</code>.</p>
 <hr />
 <h2 id="mcp-tools-in-llm-tool-calling">MCP tools in LLM tool calling<a class="headerlink" href="#mcp-tools-in-llm-tool-calling" title="Permanent link">&para;</a></h2>
-<p>MCP tools registered with <code>connect_mcp</code> are available to the agent's LLM provider automatically. Pass <code>self.tools</code> when calling the LLM and the model can select and invoke MCP tools as part of its reasoning:</p>
+<p>MCP tools registered with <code>connect_mcp</code> sit in the same <code>self.tools</code> registry as built-in tools. Collect their schemas and pass them to <code>self.llm.chat(..., tools=[...])</code> — <code>ModelProvider.chat()</code> expects a <code>list[Any]</code> of schemas, not the <code>ToolRegistry</code> itself:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">civitas</span><span class="w"> </span><span class="kn">import</span> <span class="n">AgentProcess</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">civitas.mcp.types</span><span class="w"> </span><span class="kn">import</span> <span class="n">MCPServerConfig</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">civitas.messages</span><span class="w"> </span><span class="kn">import</span> <span class="n">Message</span>
@@ -2529,11 +2515,11 @@
 </span><span id="__span-5-23"><a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a>        <span class="n">response</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">llm</span><span class="o">.</span><span class="n">chat</span><span class="p">(</span>
 </span><span id="__span-5-24"><a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a>            <span class="n">model</span><span class="o">=</span><span class="s2">&quot;claude-haiku-4-5&quot;</span><span class="p">,</span>
 </span><span id="__span-5-25"><a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a>            <span class="n">messages</span><span class="o">=</span><span class="p">[{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;user&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">message</span><span class="o">.</span><span class="n">payload</span><span class="p">[</span><span class="s2">&quot;question&quot;</span><span class="p">]}],</span>
-</span><span id="__span-5-26"><a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a>            <span class="n">tools</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">tools</span><span class="p">,</span>  <span class="c1"># includes all mcp://filesystem/* and mcp://github/* tools</span>
+</span><span id="__span-5-26"><a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a>            <span class="n">tools</span><span class="o">=</span><span class="p">[</span><span class="n">t</span><span class="o">.</span><span class="n">schema</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tools</span><span class="o">.</span><span class="n">list_tools</span><span class="p">()],</span>  <span class="c1"># includes mcp://filesystem/* and mcp://github/* tools</span>
 </span><span id="__span-5-27"><a id="__codelineno-5-27" name="__codelineno-5-27" href="#__codelineno-5-27"></a>        <span class="p">)</span>
 </span><span id="__span-5-28"><a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">reply</span><span class="p">({</span><span class="s2">&quot;answer&quot;</span><span class="p">:</span> <span class="n">response</span><span class="o">.</span><span class="n">content</span><span class="p">})</span>
 </span></code></pre></div>
-<p>The LLM sees MCP tool names in their <code>mcp://server/tool</code> form. Tool call results are routed back through the Civitas tool registry, not directly through the MCP client, so OTEL tracing applies.</p>
+<p>The LLM sees MCP tool names in their <code>mcp://server/tool</code> form (each <code>MCPTool.name</code> is <code>f"mcp://{server}/{tool}"</code>). Tool call results are routed back through <code>tool.execute()</code> on the Civitas tool registry, not directly through the MCP client, so OTEL tracing applies. As with any non-Anthropic provider, remember the <a href="../plugins/#toolprovider-and-toolregistry">tool-schema translation gap</a> — <code>OpenAIProvider</code>/<code>MistralProvider</code> don't convert <code>input_schema</code> for you.</p>
 <hr />
 <h2 id="connecting-to-multiple-servers">Connecting to multiple servers<a class="headerlink" href="#connecting-to-multiple-servers" title="Permanent link">&para;</a></h2>
 <p>Call <code>connect_mcp</code> once per server in <code>on_start()</code>. Each server is registered under its own name prefix:</p>
@@ -2553,40 +2539,28 @@
 <p>Tools from each server are namespaced: <code>mcp://filesystem/read_file</code>, <code>mcp://postgres/query</code>, etc. There is no collision between servers.</p>
 <hr />
 <h2 id="topology-yaml">Topology YAML<a class="headerlink" href="#topology-yaml" title="Permanent link">&para;</a></h2>
-<p>MCP server connections are configured in the agent's <code>mcp_servers</code> block:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">supervision</span><span class="p">:</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">root</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="nt">strategy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ONE_FOR_ONE</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span><span class="nt">children</span><span class="p">:</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">researcher</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">myapp.agents.ResearchAgent</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">      </span><span class="nt">mcp_servers</span><span class="p">:</span>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">filesystem</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">          </span><span class="nt">transport</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">stdio</span>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">          </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">npx</span>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">          </span><span class="nt">args</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;-y&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;@modelcontextprotocol/server-filesystem&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;/data&quot;</span><span class="p p-Indicator">]</span>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">slack</span>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="w">          </span><span class="nt">transport</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sse</span>
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="w">          </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://localhost:3001/sse</span>
+<p>MCP servers are configured in a single <strong>top-level</strong> <code>mcp: servers:</code> block — not per-agent. Every server declared here is connected to <strong>every agent in the runtime</strong>, right after transport startup and before the supervision tree's normal agent lifecycle proceeds:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">mcp</span><span class="p">:</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">servers</span><span class="p">:</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">filesystem</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">      </span><span class="nt">transport</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">stdio</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">      </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">npx</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">      </span><span class="nt">args</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;-y&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;@modelcontextprotocol/server-filesystem&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;/data&quot;</span><span class="p p-Indicator">]</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">slack</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">      </span><span class="nt">transport</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sse</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://localhost:3001/sse</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="nt">supervision</span><span class="p">:</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">root</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="w">  </span><span class="nt">strategy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ONE_FOR_ONE</span>
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="w">  </span><span class="nt">children</span><span class="p">:</span>
+</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">researcher</span>
+</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">myapp.agents.ResearchAgent</span>
 </span></code></pre></div>
-<p>The runtime calls <code>connect_mcp</code> for each entry before <code>on_start()</code> is called on the agent.</p>
-<hr />
-<h2 id="exposing-civitas-agents-as-an-mcp-server">Exposing Civitas agents as an MCP server<a class="headerlink" href="#exposing-civitas-agents-as-an-mcp-server" title="Permanent link">&para;</a></h2>
-<p><code>MCPServer</code> wraps a running runtime and exposes its agents as tools callable by any MCP client. This lets external systems (Claude Desktop, other MCP hosts) call into your agent graph.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">civitas.mcp.server</span><span class="w"> </span><span class="kn">import</span> <span class="n">MCPServer</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">mcp</span> <span class="o">=</span> <span class="n">MCPServer</span><span class="p">(</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>    <span class="n">runtime</span><span class="o">=</span><span class="n">runtime</span><span class="p">,</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>    <span class="n">expose</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;researcher&quot;</span><span class="p">,</span> <span class="s2">&quot;summarizer&quot;</span><span class="p">],</span>  <span class="c1"># agent names to expose as tools</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>    <span class="n">port</span><span class="o">=</span><span class="mi">3000</span><span class="p">,</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="p">)</span>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="k">await</span> <span class="n">mcp</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="c1"># MCP clients can now connect at http://localhost:3000/sse</span>
-</span></code></pre></div>
-<p>Each exposed agent appears as a tool named after the agent. Calling the tool sends a <code>call</code> message to the agent and returns its reply as the tool result.</p>
+<p>If a given agent fails to connect to a declared server (e.g. the agent doesn't call <code>connect_mcp</code>-compatible setup, or the server is unreachable), the runtime logs a warning and continues — it does not fail startup. There is currently no way to scope an MCP server to a subset of agents via YAML; if you need per-agent MCP servers, call <code>connect_mcp()</code> yourself from that agent's <code>on_start()</code> instead (see <a href="#connecting-to-an-mcp-server">Connecting to an MCP server</a> above).</p>
 <hr />
 <h2 id="otel-tracing">OTEL tracing<a class="headerlink" href="#otel-tracing" title="Permanent link">&para;</a></h2>
-<p>Every MCP tool invocation emits a <code>tool.execute {name}</code> span, identical to built-in tool spans:</p>
+<p>Every MCP tool invocation (via <code>fabrica.mcp.tool.MCPTool.execute()</code>) emits a <code>civitas.mcp.call</code> span:</p>
 <table>
 <thead>
 <tr>
@@ -2596,24 +2570,24 @@
 </thead>
 <tbody>
 <tr>
-<td><code>tool.name</code></td>
-<td><code>mcp://filesystem/read_file</code></td>
+<td><code>civitas.mcp.server</code></td>
+<td>The MCP server's config name, e.g. <code>filesystem</code></td>
 </tr>
 <tr>
-<td><code>tool.result_status</code></td>
-<td><code>ok</code> or <code>error</code></td>
+<td><code>civitas.mcp.tool</code></td>
+<td>The MCP tool's name, e.g. <code>read_file</code></td>
 </tr>
 <tr>
-<td><code>tool.latency_ms</code></td>
-<td>Round-trip time including MCP server execution</td>
+<td><code>civitas.agent.name</code></td>
+<td>The name of the agent that made the call</td>
 </tr>
 </tbody>
 </table>
-<p>These spans are parented to the enclosing <code>civitas.agent.handle</code> span, so MCP calls appear inline in your distributed trace alongside LLM calls.</p>
+<p>On failure the span records the exception via <code>span.set_error(exc)</code>. An <code>mcp.tool.call</code> audit event is also emitted to the configured <code>AuditSink</code>, independent of tracing. These spans are parented to the enclosing call stack, so MCP calls appear inline in your distributed trace alongside LLM calls.</p>
 <hr />
 <h2 id="what-mcp-integration-does-not-do">What MCP integration does not do<a class="headerlink" href="#what-mcp-integration-does-not-do" title="Permanent link">&para;</a></h2>
 <p><strong>No automatic reconnection.</strong> If an SSE server goes down, the connection is not automatically re-established. Wrap <code>connect_mcp</code> in retry logic inside <code>on_start()</code> if you need resilience.</p>
-<p><strong>No schema validation on tool inputs.</strong> Civitas passes keyword arguments directly to the MCP client. Input validation is the MCP server's responsibility. Use <code>MCPToolError</code> handling to catch server-side failures.</p>
+<p><strong>No schema validation on tool inputs.</strong> Civitas passes keyword arguments directly to the MCP client. Input validation is the MCP server's responsibility. Catch <code>fabrica.mcp.errors.MCPToolError</code> (not <code>civitas.mcp.types.MCPToolError</code>, which is dead — see above) to handle server-side failures.</p>
 <p><strong>No tool discovery at runtime.</strong> Tools are registered once in <code>on_start()</code>. Tools added to the MCP server after connection are not visible. Restart the agent to pick up new tools.</p>
 <hr />
 <h2 id="see-also">See also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>

@@ -2322,11 +2322,11 @@
 <h2 id="motivation">Motivation<a class="headerlink" href="#motivation" title="Permanent link">&para;</a></h2>
 <p>M4.3 produced a STRIDE threat model identifying <strong>10 HIGH</strong> and <strong>8 MEDIUM</strong> risks in the Civitas runtime. Most of those findings explicitly defer their mitigation to M4.2. Today the runtime ships with:</p>
 <ul>
-<li><strong>No transport encryption.</strong> ZMQ messages traverse loopback as raw msgpack (<a href="../../civitas/transport/zmq.py">civitas/transport/zmq.py:1-284</a>). NATS connects without client TLS. Cross-host deployments are not safe.</li>
-<li><strong>No message authentication.</strong> <code>Message.sender</code> is a string field set by the sender and never verified (<a href="../../civitas/messages.py">civitas/messages.py</a>). Any agent can spoof any other agent (Spoofing, HIGH).</li>
-<li><strong>Plaintext secrets in YAML.</strong> <code>from_config()</code> does not substitute env vars; API keys must be hardcoded into topology files or wrapped at the deployment layer (<a href="../../civitas/runtime.py">civitas/runtime.py:100-317</a>).</li>
+<li><strong>No transport encryption.</strong> ZMQ messages traverse loopback as raw msgpack (<a href="https://github.com/civitas-io/python-civitas/blob/main/civitas/transport/zmq.py#L1-L284">civitas/transport/zmq.py:1-284</a>). NATS connects without client TLS. Cross-host deployments are not safe.</li>
+<li><strong>No message authentication.</strong> <code>Message.sender</code> is a string field set by the sender and never verified (<a href="https://github.com/civitas-io/python-civitas/blob/main/civitas/messages.py">civitas/messages.py</a>). Any agent can spoof any other agent (Spoofing, HIGH).</li>
+<li><strong>Plaintext secrets in YAML.</strong> <code>from_config()</code> does not substitute env vars; API keys must be hardcoded into topology files or wrapped at the deployment layer (<a href="https://github.com/civitas-io/python-civitas/blob/main/civitas/runtime.py#L100-L317">civitas/runtime.py:100-317</a>).</li>
 <li><strong>No per-agent credential scope.</strong> Plugins (LLM providers, tools) read env vars or take config dicts at instantiation; every agent shares the same credentials.</li>
-<li><strong>No tool sandboxing.</strong> MCP tools are executed as subprocesses with the runtime's full privileges (<a href="../../civitas/mcp/tool.py">civitas/mcp/tool.py:44-67</a>).</li>
+<li><strong>No tool sandboxing.</strong> MCP tools are executed as subprocesses with the runtime's full privileges (this doc predates the v0.9.x migration of the MCP client to <code>civitas-io/fabrica</code>; see <a href="https://github.com/civitas-io/fabrica/blob/main/src/fabrica/mcp/tool.py"><code>fabrica/mcp/tool.py</code></a> for the current implementation).</li>
 <li><strong>No structured audit log.</strong> OTel spans cover observability but are not designed as a tamper-evident audit trail.</li>
 </ul>
 <p>M4.2 closes these gaps. It is the implementation arm of the threat model.</p>

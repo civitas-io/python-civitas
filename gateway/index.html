@@ -1136,6 +1136,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#what-the-gateway-does" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the gateway does
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#what-the-gateway-does-not-do" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2677,6 +2688,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#what-the-gateway-does" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the gateway does
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#what-the-gateway-does-not-do" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2910,15 +2932,81 @@
 </tr>
 <tr>
 <td><code>docs_enabled</code></td>
-<td><code>bool</code></td>
-<td><code>True</code></td>
-<td>Serve Swagger UI at <code>docs_path</code></td>
+<td><code>bool \| None</code></td>
+<td><code>None</code></td>
+<td>Tri-state: <code>None</code> auto-enables Swagger UI unless gateway auth is configured; <code>True</code>/<code>False</code> forces it</td>
 </tr>
 <tr>
 <td><code>docs_path</code></td>
 <td><code>str</code></td>
 <td><code>"/docs"</code></td>
 <td>Base path for API docs</td>
+</tr>
+<tr>
+<td><code>tls_ca_cert</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>Path to a private CA cert, for verifying client certs in mTLS</td>
+</tr>
+<tr>
+<td><code>client_cert_mode</code></td>
+<td><code>str</code></td>
+<td><code>"none"</code></td>
+<td>mTLS mode: <code>"none"</code>, <code>"optional"</code>, or <code>"required"</code></td>
+</tr>
+<tr>
+<td><code>mtls_source</code></td>
+<td><code>str</code></td>
+<td><code>"direct"</code></td>
+<td><code>"direct"</code> (civitas reads the TLS peer cert itself) or <code>"proxy_header"</code> (trust an upstream proxy's <code>Client-Cert</code> header)</td>
+</tr>
+<tr>
+<td><code>trusted_proxy_cidrs</code></td>
+<td><code>frozenset[str]</code></td>
+<td><code>frozenset()</code></td>
+<td>Peer IP ranges trusted to supply <code>Client-Cert</code> in <code>proxy_header</code> mode</td>
+</tr>
+<tr>
+<td><code>grpc_enabled</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>Also serve a gRPC surface alongside HTTP</td>
+</tr>
+<tr>
+<td><code>grpc_port</code></td>
+<td><code>int \| None</code></td>
+<td><code>None</code></td>
+<td>Port for the gRPC surface</td>
+</tr>
+<tr>
+<td><code>grpc_reflection</code></td>
+<td><code>bool</code></td>
+<td><code>True</code></td>
+<td>Enable gRPC server reflection</td>
+</tr>
+<tr>
+<td><code>ws_routes</code></td>
+<td><code>list[dict]</code></td>
+<td><code>[]</code></td>
+<td>WebSocket route declarations</td>
+</tr>
+<tr>
+<td><code>stream_queue_maxsize</code></td>
+<td><code>int</code></td>
+<td><code>256</code></td>
+<td>Max buffered messages for a <code>stream_reply()</code></td>
+</tr>
+<tr>
+<td><code>stream_idle_timeout</code></td>
+<td><code>float</code></td>
+<td><code>300.0</code></td>
+<td>Seconds of inactivity before an open stream is closed</td>
+</tr>
+<tr>
+<td><code>max_stream_duration</code></td>
+<td><code>float</code></td>
+<td><code>3600.0</code></td>
+<td>Hard cap on a single stream's lifetime</td>
 </tr>
 </tbody>
 </table>
@@ -2955,7 +3043,7 @@
 </span><span id="__span-4-28"><a id="__codelineno-4-28" name="__codelineno-4-28" href="#__codelineno-4-28"></a>            <span class="s2">&quot;tokens_used&quot;</span><span class="p">:</span> <span class="n">response</span><span class="o">.</span><span class="n">tokens_in</span> <span class="o">+</span> <span class="n">response</span><span class="o">.</span><span class="n">tokens_out</span><span class="p">,</span>
 </span><span id="__span-4-29"><a id="__codelineno-4-29" name="__codelineno-4-29" href="#__codelineno-4-29"></a>        <span class="p">})</span>
 </span></code></pre></div>
-<p><code>@route</code> attaches path and method to the function as metadata. <code>@contract</code> enables Pydantic validation: a bad request body returns <code>422 Unprocessable Entity</code>; a reply that fails <code>ChatResponse</code> validation returns <code>500</code>.</p>
+<p><code>@route</code> and <code>@contract</code> only attach metadata to the function — they do nothing on their own. Wiring that metadata into request validation requires <code>RouteTable.merge_contracts_from(agent_cls, agent_name)</code>, matched by <code>(method, path)</code> against entries built from YAML — but <code>HTTPGateway</code> builds and owns its <code>RouteTable</code> internally (<code>_route_table</code>, private) and does not expose a way to call <code>merge_contracts_from()</code> on it or to pass in a pre-merged table. In practice, today, decorating a <code>handle()</code> method with <code>@route</code>/<code>@contract</code> <strong>does not</strong> get you 422/500 validation through a normal <code>HTTPGateway</code> — that path is only exercised directly against a manually-constructed <code>RouteTable</code> in the test suite (<code>tests/unit/test_gateway.py</code>). Treat <code>@route</code>/<code>@contract</code> as documentation/IDE-navigation aids only until this wiring gap is closed; the YAML <code>routes:</code> block is the authoritative, working configuration surface.</p>
 <hr />
 <h2 id="middleware">Middleware<a class="headerlink" href="#middleware" title="Permanent link">&para;</a></h2>
 <p>Middleware are async callables that wrap every request before it reaches the agent. Declare them as dotted import paths in <code>GatewayConfig.middleware</code>. They execute in order — first entry is the outermost wrapper.</p>
@@ -3036,6 +3124,16 @@
 <td><code>gateway</code></td>
 <td><code>HTTPGateway</code></td>
 <td>Reference to the gateway process</td>
+</tr>
+<tr>
+<td><code>client_cert</code></td>
+<td><code>dict \| None</code></td>
+<td>mTLS leaf, set by the ASGI edge only when the client presents one: <code>{"dn": &lt;full subject DN&gt;, "leaf_pem": &lt;PEM&gt;}</code></td>
+</tr>
+<tr>
+<td><code>auth</code></td>
+<td><code>dict \| None</code></td>
+<td>Verified identity set by auth middleware (e.g. <code>{"id": "&lt;principal&gt;"}</code>), never merged into the dispatched payload</td>
 </tr>
 </tbody>
 </table>
@@ -3279,18 +3377,31 @@ mechanism and how it was verified empirically before implementation.</p>
 </span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a>    <span class="n">routes</span><span class="o">=</span><span class="p">[</span><span class="o">...</span><span class="p">],</span>
 </span><span id="__span-18-9"><a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a><span class="p">)</span>
 </span></code></pre></div>
-<p>The gateway injects <code>Alt-Svc: h3=":8444"; ma=3600</code> into every HTTP/1.1 and HTTP/2 response. Clients that support HTTP/3 will upgrade automatically on the next request.</p>
+<p>The gateway injects <code>Alt-Svc: h3=":8444"</code> into every HTTP/1.1 and HTTP/2 response. Clients that support HTTP/3 will upgrade automatically on the next request.</p>
 <p><code>enable_http3</code> requires <code>pip install 'civitas[http3]'</code> and valid TLS credentials — the gateway will raise <code>ValueError</code> at startup if either is missing.</p>
 <hr />
 <h2 id="trace-context-and-message-type">Trace context and message type<a class="headerlink" href="#trace-context-and-message-type" title="Permanent link">&para;</a></h2>
 <p>Two special headers influence gateway behavior:</p>
 <p><strong><code>traceparent</code></strong> (W3C trace context) — if present, the gateway extracts the <code>trace_id</code> and <code>parent_span_id</code> from the header and stamps them onto the outgoing message. This connects external traces to the Civitas trace tree.</p>
-<p><strong><code>X-Civitas-Type</code></strong> — overrides the <code>type</code> field on the outgoing message. By default the gateway sets <code>type</code> to the route's path pattern (e.g. <code>"/v1/chat/{session_id}"</code>). Use this header to dispatch to a specific handler in a multi-type agent.</p>
+<p><strong><code>X-Civitas-Type</code></strong> — overrides the <code>type</code> field on the outgoing message. By default the gateway sets <code>type</code> to <code>"http.request"</code>. Use this header to dispatch to a specific handler in a multi-type agent.</p>
 <hr />
+<h2 id="what-the-gateway-does">What the gateway does<a class="headerlink" href="#what-the-gateway-does" title="Permanent link">&para;</a></h2>
+<p><strong>WebSocket support.</strong> Declare <code>ws_routes</code> in <code>GatewayConfig</code> to bridge a WebSocket session to an agent: inbound frames become <code>cast</code> messages, agent replies (including <code>stream_reply()</code> chunks) become outbound frames. When JWT auth is configured, the bearer token rides the <code>Sec-WebSocket-Protocol</code> handshake header — see <a href="#websocket-grpc-auth">WebSocket &amp; gRPC auth</a> above.</p>
+<p><strong>gRPC surface.</strong> Set <code>grpc_enabled=True</code> and <code>grpc_port</code> to serve the same agents over gRPC alongside HTTP, including server reflection and the same JWT/mTLS auth stack.</p>
+<p><strong>First-party rate limiting.</strong> <code>civitas.gateway.ratelimit.RateLimiter</code> (a <code>GenServer</code>) plus the <code>rate_limit</code> middleware implement a sliding-window limiter shared across every request. Wire it from topology YAML:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nt">children</span><span class="p">:</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">rate_limiter</span><span class="w">          </span><span class="c1"># the fixed name the middleware calls</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gen_server</span>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="w">    </span><span class="nt">module</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">civitas.gateway.ratelimit</span>
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="w">    </span><span class="nt">class</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RateLimiter</span>
+</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="w">    </span><span class="nt">config</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">max_requests</span><span class="p">:</span><span class="w"> </span><span class="nv">100</span><span class="p p-Indicator">,</span><span class="nt"> window_seconds</span><span class="p">:</span><span class="w"> </span><span class="nv">60</span><span class="p p-Indicator">}</span>
+</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a>
+</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a><span class="c1"># in the gateway&#39;s own config:</span>
+</span><span id="__span-19-9"><a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a><span class="nt">middleware</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">civitas.gateway.ratelimit.rate_limit</span><span class="p p-Indicator">]</span>
+</span></code></pre></div>
 <h2 id="what-the-gateway-does-not-do">What the gateway does not do<a class="headerlink" href="#what-the-gateway-does-not-do" title="Permanent link">&para;</a></h2>
-<p><strong>No WebSocket support.</strong> The gateway handles request-reply HTTP only. For streaming or bidirectional communication, connect directly to the Civitas bus or use the SSE transport (planned).</p>
 <p><strong>No TLS termination proxy.</strong> The gateway can serve TLS directly via uvicorn's SSL support, but it is not a reverse proxy. Put nginx or Caddy in front if you need load balancing, certificate management, or connection pooling at scale.</p>
-<p><strong>No authentication built in.</strong> Auth is middleware. The gateway has no concept of users, API keys, or JWTs — implement that in a middleware callable and declare it in <code>GatewayConfig.middleware</code>.</p>
+<p><strong>No built-in identity/AuthZ system.</strong> civitas ships the auth <em>seam</em> (middleware chain), JWT bearer verification, and mTLS — but no roles, scopes, SCIM, or IdP integration. Implement your own AuthZ in a middleware callable and declare it in <code>GatewayConfig.middleware</code>; see <a href="#control-plane-write-actions-the-authnz-seam-v096">Control-plane write actions &amp; the AuthNZ seam</a> below.</p>
 <hr />
 <h2 id="control-plane-write-actions-the-authnz-seam-v096">Control-plane write actions &amp; the AuthNZ seam (v0.9.6)<a class="headerlink" href="#control-plane-write-actions-the-authnz-seam-v096" title="Permanent link">&para;</a></h2>
 <p>A <code>topology_server</code> node (served by <code>HTTPGateway</code> since v0.9.5) exposes read-only
@@ -3363,13 +3474,13 @@ default</em>:</p>
 </ul>
 <p>Configure it on the <code>topology_server</code> node — <code>auth.middleware</code> gates every route
 except <code>/health</code> (which stays reachable for liveness probes):</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">topology_server</span>
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">topo</span>
-</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
-</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="w">    </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">127.0.0.1</span>
-</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="w">    </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">6789</span>
-</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="w">    </span><span class="nt">auth</span><span class="p">:</span>
-</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="w">      </span><span class="nt">middleware</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">myapp.auth.require_my_auth</span><span class="p p-Indicator">]</span><span class="w">   </span><span class="c1"># your seam; omit for a single dev</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">topology_server</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">topo</span>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">    </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">127.0.0.1</span>
+</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="w">    </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">6789</span>
+</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="w">    </span><span class="nt">auth</span><span class="p">:</span>
+</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="w">      </span><span class="nt">middleware</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">myapp.auth.require_my_auth</span><span class="p p-Indicator">]</span><span class="w">   </span><span class="c1"># your seam; omit for a single dev</span>
 </span></code></pre></div>
 <p>See <code>examples/control_plane_auth.py</code> for a runnable "bring your own auth"
 middleware, and <a href="../design/control-plane-writes/">design/control-plane-writes.md</a>

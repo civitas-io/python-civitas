@@ -2446,6 +2446,12 @@
 
 <h1 id="architecture">Architecture<a class="headerlink" href="#architecture" title="Permanent link">&para;</a></h1>
 <p>Internal reference for contributors and advanced users. Covers the runtime startup sequence, component wiring, message flow, fault handling, and key design decisions.</p>
+<p><strong>Not covered on this page</strong> — real, substantial subsystems with their own dedicated docs:
+<code>civitas/gateway/</code> (HTTP/gRPC edge, see <a href="../gateway/">Gateway</a>), <code>civitas/dashboard/</code> (the <code>civitas
+top</code>/<code>civitas telemetry</code> TUIs, see <a href="../observability/">Observability</a>), <code>civitas/sandbox/</code> (per-MCP-server
+process isolation config, see <a href="../mcp/">MCP</a>), <code>civitas/secrets/</code> (<code>SecretsProvider</code>,
+<code>substitute_vars</code>), <code>civitas/security/</code> (transport-level Ed25519 message signing), and
+<code>civitas/audit/</code> (<code>AuditSink</code> and built-in sinks).</p>
 <hr />
 <h2 id="component-map">Component map<a class="headerlink" href="#component-map" title="Permanent link">&para;</a></h2>
 <p><img alt="Civitas Components" src="../assets/architecture-components.svg" /></p>
@@ -2536,7 +2542,7 @@
 <h2 id="agentprocess-internals">AgentProcess internals<a class="headerlink" href="#agentprocess-internals" title="Permanent link">&para;</a></h2>
 <p>Each <code>AgentProcess</code> runs as a single asyncio task (<code>agent._task</code>). Inside that task:</p>
 <p><img alt="Agent State Machine" src="../assets/agent-state-machine.svg" /></p>
-<p><strong>Mailbox:</strong> An <code>asyncio.Queue</code> with a bounded capacity (default: 1000 messages). <code>receive()</code> calls <code>put_nowait()</code> — if the mailbox is full, <code>asyncio.QueueFull</code> is raised and the message is dropped with a warning. The agent's event loop calls <code>get()</code> to dequeue messages one at a time.</p>
+<p><strong>Mailbox:</strong> An <code>asyncio.Queue</code> with a bounded capacity (default: 1000 messages). Delivery calls <code>put()</code>, which <strong>blocks</strong> (awaits) when the mailbox is full — real backpressure on the sender, not a drop. (<code>put_nowait()</code> exists but is reserved for one sync-callback edge case — a <code>Supervisor</code>'s own crash self-messages, which can't await — not the normal delivery path.) The agent's event loop calls <code>get()</code> to dequeue messages one at a time.</p>
 <p><strong>State restore:</strong> On <code>INITIALIZING → RUNNING</code> transition (inside <code>_start()</code>), the runtime calls <code>store.get(agent.name)</code> and assigns the result to <code>self.state</code> before <code>on_start()</code> runs. This means <code>on_start()</code> always sees the last checkpointed state, whether the agent is starting for the first time or restarting after a crash.</p>
 <p><strong><code>_max_retries</code>:</strong> <code>AgentProcess</code> exposes <code>_max_retries = 3</code> as a class attribute. <code>on_error()</code> can compare <code>message.attempt</code> against this to decide whether to retry or escalate. The <code>attempt</code> field on <code>Message</code> is incremented by the bus each time the message is redelivered.</p>
 <hr />

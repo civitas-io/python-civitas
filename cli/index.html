@@ -1205,6 +1205,56 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#civitas-state-migrate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        civitas state migrate
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#civitas-security" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        civitas security
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="civitas security">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#civitas-security-init-zmq" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        civitas security init zmq
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#civitas-security-init-nats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        civitas security init nats
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2530,6 +2580,56 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#civitas-state-migrate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        civitas state migrate
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#civitas-security" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        civitas security
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="civitas security">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#civitas-security-init-zmq" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        civitas security init zmq
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#civitas-security-init-nats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        civitas security init nats
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2701,7 +2801,7 @@
 </tr>
 <tr>
 <td><code>--transport</code></td>
-<td>from topology</td>
+<td>from topology, else <code>in_process</code> (supervisor mode) or <code>zmq</code> (worker/<code>--process</code> mode)</td>
 <td>Override transport: <code>in_process</code>, <code>zmq</code>, <code>nats</code></td>
 </tr>
 <tr>
@@ -2749,14 +2849,15 @@
 </span></code></pre></div>
 <h3 id="civitas-topology-show">civitas topology show<a class="headerlink" href="#civitas-topology-show" title="Permanent link">&para;</a></h3>
 <p>Visualise the supervision tree from a topology file.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>civitas<span class="w"> </span>topology<span class="w"> </span>show<span class="w"> </span>&lt;path&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>civitas<span class="w"> </span>topology<span class="w"> </span>show<span class="w"> </span>&lt;path&gt;<span class="w"> </span><span class="o">[</span>--header<span class="w"> </span><span class="s1">&#39;Name: Value&#39;</span><span class="o">]</span>
 </span></code></pre></div>
+<p><code>--header</code> / <code>-H</code> (repeatable) attaches an auth header (e.g. <code>-H 'Authorization: Bearer &lt;token&gt;'</code>) to the live <code>GET /topology</code> query, for topologies whose gateway sits behind auth.</p>
 <p>Renders a Rich tree in the terminal showing:</p>
 <ul>
 <li>Supervisor names, strategies, restart limits, and backoff policies</li>
 <li>Agent names and types</li>
 <li><code>DynamicSupervisor</code> nodes with <code>[dyn]</code> marker and <code>max_children</code> annotation</li>
-<li><code>TopologyServer</code> nodes with <code>[topo]</code> marker and bind address</li>
+<li><code>TopologyAgent</code> nodes (<code>type: topology_server</code>) with <code>[topo]</code> marker and the bind address of its internally-owned <code>HTTPGateway</code> (default <code>127.0.0.1:6789</code>; not shown if <code>attach_to</code> is set)</li>
 <li>Process affinity annotations (<code>@process</code>)</li>
 <li>Summary footer: transport type, plugin count, agent/supervisor/process counts</li>
 </ul>
@@ -2891,6 +2992,91 @@
 </tbody>
 </table>
 <p>Without <code>--force</code>, you are prompted to confirm before state is deleted.</p>
+<h3 id="civitas-state-migrate">civitas state migrate<a class="headerlink" href="#civitas-state-migrate" title="Permanent link">&para;</a></h3>
+<p>Migrate agent state between backends (SQLite ↔ Postgres).</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>civitas<span class="w"> </span>state<span class="w"> </span>migrate<span class="w"> </span>&lt;src&gt;<span class="w"> </span>&lt;dst&gt;<span class="w"> </span><span class="o">[</span>--dry-run<span class="w"> </span>/<span class="w"> </span>--execute<span class="o">]</span>
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Argument / Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>src</code></td>
+<td>required</td>
+<td>Source DSN — <code>sqlite:&lt;path&gt;</code> or <code>postgresql://...</code></td>
+</tr>
+<tr>
+<td><code>dst</code></td>
+<td>required</td>
+<td>Destination DSN — <code>sqlite:&lt;path&gt;</code> or <code>postgresql://...</code></td>
+</tr>
+<tr>
+<td><code>--dry-run</code> / <code>--execute</code></td>
+<td><code>--dry-run</code></td>
+<td>Preview the migration without writing; pass <code>--execute</code> to apply</td>
+</tr>
+</tbody>
+</table>
+<p>Copies raw stored values between backends without an encryption wrapper — it does <strong>not</strong> encrypt or decrypt in flight. To re-encrypt state in place, deploy the encrypted store with <code>allow_plaintext_read=true</code> so legacy plaintext is read and re-written as ciphertext on the next checkpoint, then flip to strict.</p>
+<hr />
+<h2 id="civitas-security">civitas security<a class="headerlink" href="#civitas-security" title="Permanent link">&para;</a></h2>
+<p>Security key management for ZMQ CURVE and NATS TLS.</p>
+<h3 id="civitas-security-init-zmq">civitas security init zmq<a class="headerlink" href="#civitas-security-init-zmq" title="Permanent link">&para;</a></h3>
+<p>Scaffold a ZMQ CURVE keypair.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>civitas<span class="w"> </span>security<span class="w"> </span>init<span class="w"> </span>zmq<span class="w"> </span><span class="o">[</span>--out<span class="w"> </span>&lt;dir&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--force<span class="o">]</span>
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--out</code></td>
+<td>—</td>
+<td>Directory to write generated keypairs</td>
+</tr>
+<tr>
+<td><code>--force</code> / <code>-f</code></td>
+<td><code>False</code></td>
+<td>Overwrite existing keys</td>
+</tr>
+</tbody>
+</table>
+<h3 id="civitas-security-init-nats">civitas security init nats<a class="headerlink" href="#civitas-security-init-nats" title="Permanent link">&para;</a></h3>
+<p>Scaffold NATS TLS configuration.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>civitas<span class="w"> </span>security<span class="w"> </span>init<span class="w"> </span>nats<span class="w"> </span><span class="o">[</span>--cert<span class="w"> </span>&lt;path&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--key<span class="w"> </span>&lt;path&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--ca<span class="w"> </span>&lt;path&gt;<span class="o">]</span>
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--cert</code></td>
+<td>Path to TLS certificate (PEM)</td>
+</tr>
+<tr>
+<td><code>--key</code></td>
+<td>Path to TLS private key (PEM)</td>
+</tr>
+<tr>
+<td><code>--ca</code></td>
+<td>Path to CA certificate (PEM) for server verification</td>
+</tr>
+</tbody>
+</table>
 <hr />
 <h2 id="civitas-dashboard">civitas dashboard<a class="headerlink" href="#civitas-dashboard" title="Permanent link">&para;</a></h2>
 <p>Launch <strong><code>civitas top</code></strong> — a live, mouse-clickable Textual dashboard for an already-running
@@ -2899,8 +3085,8 @@ design). It attaches remotely over HTTP to the topology's <code>topology_server<
 <code>/topology</code>, <code>/snapshot</code>, and <code>/processes</code> independently — it does not start a runtime of its own.
 (v0.9.3: <code>/snapshot</code> was <code>/metrics</code> at the time this section was first written — renamed to make
 room for real Prometheus text-format exposition at the standard <code>/metrics</code> scrape path; see
-<a href="../observability/#prometheus-metrics-v0931">observability.md</a>.)</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>civitas<span class="w"> </span>dashboard<span class="w"> </span>&lt;topology.yaml&gt;<span class="w"> </span><span class="o">[</span>&lt;topology2.yaml&gt;<span class="w"> </span>...<span class="o">]</span><span class="w"> </span><span class="o">[</span>--refresh<span class="w"> </span>&lt;seconds&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--header<span class="w"> </span><span class="s1">&#39;Name: Value&#39;</span><span class="o">]</span>
+<a href="../observability/#prometheus-metrics-v093-a2">observability.md</a>.)</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>civitas<span class="w"> </span>dashboard<span class="w"> </span>&lt;topology.yaml&gt;<span class="w"> </span><span class="o">[</span>&lt;topology2.yaml&gt;<span class="w"> </span>...<span class="o">]</span><span class="w"> </span><span class="o">[</span>--refresh<span class="w"> </span>&lt;seconds&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--header<span class="w"> </span><span class="s1">&#39;Name: Value&#39;</span><span class="o">]</span>
 </span></code></pre></div>
 <p><strong>v0.9.4: multiple topologies.</strong> Given more than one topology file, each gets its own tab
 (labeled after the file's own name) — all attached to and polled concurrently, switchable
@@ -2933,7 +3119,7 @@ A single topology (the common case) looks exactly as it always has — no tab ba
 </tbody>
 </table>
 <p>Requires the <code>dashboard</code> extra:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s1">&#39;civitas[dashboard]&#39;</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s1">&#39;civitas[dashboard]&#39;</span>
 </span></code></pre></div>
 <p>Without it, the command still appears in <code>--help</code>, but exits with a clear install instruction the
 moment you try to run it.</p>
@@ -2977,7 +3163,7 @@ to see more than one row there.</p>
 <a href="../design/telemetry-native/">design/telemetry-native.md</a> for the full design). Unlike <code>civitas
 dashboard</code>, this does <strong>not</strong> attach to a live process — it reads directly from a local SQLite
 directory, so it works even after the app that wrote the data has stopped.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>civitas<span class="w"> </span>telemetry<span class="w"> </span><span class="o">[</span>&lt;db-dir&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--since<span class="w"> </span>&lt;range&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--window-days<span class="w"> </span>&lt;n&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--refresh<span class="w"> </span>&lt;seconds&gt;<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>civitas<span class="w"> </span>telemetry<span class="w"> </span><span class="o">[</span>&lt;db-dir&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--since<span class="w"> </span>&lt;range&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--window-days<span class="w"> </span>&lt;n&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--refresh<span class="w"> </span>&lt;seconds&gt;<span class="o">]</span>
 </span></code></pre></div>
 <table>
 <thead>
@@ -3011,7 +3197,7 @@ directory, so it works even after the app that wrote the data has stopped.</p>
 </tbody>
 </table>
 <p>Requires the <code>telemetry</code> extra:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s1">&#39;civitas[telemetry]&#39;</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s1">&#39;civitas[telemetry]&#39;</span>
 </span></code></pre></div>
 <p>Without it, the command still appears in <code>--help</code>, but exits with a clear install instruction the
 moment you try to run it.</p>
@@ -3031,7 +3217,7 @@ moment you try to run it.</p>
 against "now" each refresh), or <code>r</code> for an immediate manual refresh. <code>q</code> to quit.</p>
 <h3 id="try-it_1">Try it<a class="headerlink" href="#try-it_1" title="Permanent link">&para;</a></h3>
 <p>Run any topology with a <code>SQLiteBackend</code> exporter configured (see
-<a href="../observability/#native-sqlite-storage-v093x-track-b-b1">observability.md</a>), then point <code>civitas
+<a href="../observability/#sqlitespanstore-v093x-track-b">observability.md</a>), then point <code>civitas
 telemetry</code> at the same <code>db_dir</code> — it reads live, even while the app is still running and writing.</p>
 
 

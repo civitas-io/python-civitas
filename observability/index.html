@@ -3453,8 +3453,8 @@ via SQLite's native <code>ATTACH DATABASE</code>. See
 <p>Standard OTEL SDK environment variables (<code>OTEL_SERVICE_NAME</code>, <code>OTEL_RESOURCE_ATTRIBUTES</code>, etc.) are respected when <code>opentelemetry-sdk</code> is installed.</p>
 <hr />
 <h2 id="prometheus-metrics-v093-a2">Prometheus metrics (v0.9.3, A2)<a class="headerlink" href="#prometheus-metrics-v093-a2" title="Permanent link">&para;</a></h2>
-<p>Separate from tracing (spans, above) — <code>GET /metrics</code> on any running <code>TopologyServer</code> (the same
-component <code>civitas top</code> and <code>civitas topology show</code> already use) exposes real Prometheus
+<p>Separate from tracing (spans, above) — <code>GET /metrics</code> on the <code>HTTPGateway</code> serving a <code>TopologyAgent</code>
+(the same component <code>civitas top</code> and <code>civitas topology show</code> already use) exposes real Prometheus
 text-format metrics: message rates, latency, errors, restarts, LLM token/cost totals, and current
 agent status, all labeled by <code>agent</code> (and <code>model</code> for LLM metrics).</p>
 <p>This is the <strong>standard</strong> Prometheus scrape path — point a <code>scrape_configs</code> target at it directly,
@@ -3463,12 +3463,12 @@ no <code>metrics_path</code> override needed:</p>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="nt">scrape_configs</span><span class="p">:</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">job_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">civitas</span>
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">    </span><span class="nt">static_configs</span><span class="p">:</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">targets</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;127.0.0.1:6789&quot;</span><span class="p p-Indicator">]</span><span class="w">  </span><span class="c1"># your TopologyServer&#39;s host:port</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">targets</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;127.0.0.1:6789&quot;</span><span class="p p-Indicator">]</span><span class="w">  </span><span class="c1"># your topology_server node&#39;s host:port (its internally-owned gateway)</span>
 </span></code></pre></div>
 <p><code>civitas</code>'s own JSON metrics snapshot (used internally by <code>civitas top</code>) lives at <code>GET /snapshot</code>
 now instead — <code>/metrics</code> was renamed specifically to make room for the real, standard Prometheus
 path (never wise to break ecosystem standards in an OSS project). This is a breaking change to a
-previously-documented endpoint; see the <a href="../CHANGELOG.md">v0.9.3 CHANGELOG entry</a> if you were
+previously-documented endpoint; see the <a href="https://github.com/civitas-io/python-civitas/blob/main/CHANGELOG.md">v0.9.3 CHANGELOG entry</a> if you were
 depending on the old JSON shape at <code>/metrics</code> directly.</p>
 <h3 id="metric-reference">Metric reference<a class="headerlink" href="#metric-reference" title="Permanent link">&para;</a></h3>
 <table>

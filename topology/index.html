@@ -2803,8 +2803,8 @@
 <tr>
 <td><code>start_proxy</code></td>
 <td>bool</td>
-<td><code>false</code></td>
-<td>ZMQ only — start the proxy in this process</td>
+<td><code>true</code></td>
+<td>ZMQ only — start the proxy in this process (set <code>false</code> on Workers/nodes that connect to an existing proxy)</td>
 </tr>
 <tr>
 <td><code>servers</code></td>
@@ -3177,7 +3177,7 @@
 </table>
 <p>See <a href="../supervision/#dynamic-supervision">Dynamic supervision</a> for the full guide.</p>
 <h3 id="topology_server"><code>topology_server</code><a class="headerlink" href="#topology_server" title="Permanent link">&para;</a></h3>
-<p>A supervised JSON HTTP management endpoint. Use it alongside a <code>DynamicSupervisor</code> to expose live topology state.</p>
+<p>A <code>TopologyAgent</code> — live topology introspection. The node type name (<code>topology_server</code>) is kept for backward compatibility; as of v0.9.5 the class is <code>TopologyAgent</code>, and it no longer runs its own standalone HTTP server. Instead this node builds the agent plus an internally-owned <code>HTTPGateway</code> that serves its routes with the same auth stack (API key / JWT / mTLS) as any other gateway.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">topology_server</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">topo_server</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
@@ -3198,17 +3198,29 @@
 <td><code>host</code></td>
 <td>string</td>
 <td><code>127.0.0.1</code></td>
-<td>Bind address — use <code>0.0.0.0</code> to expose externally</td>
+<td>Bind address for the internally-owned gateway — use <code>0.0.0.0</code> to expose externally</td>
 </tr>
 <tr>
 <td><code>port</code></td>
 <td>int</td>
 <td><code>6789</code></td>
-<td>Port for the HTTP server</td>
+<td>Port for the internally-owned gateway</td>
+</tr>
+<tr>
+<td><code>attach_to</code></td>
+<td>string</td>
+<td>—</td>
+<td>Name of an existing <code>http_gateway</code> node to serve these routes on instead of spinning up a dedicated gateway (that gateway must set <code>topology_agent: &lt;this node's name&gt;</code> in its own config)</td>
+</tr>
+<tr>
+<td><code>auth.middleware</code></td>
+<td>list</td>
+<td><code>[]</code></td>
+<td>Middleware gating every route except <code>/health</code></td>
 </tr>
 </tbody>
 </table>
-<p>Endpoints: <code>GET /health</code>, <code>GET /topology</code>, <code>GET /agents</code>, <code>GET /agents/{name}</code>. See <a href="../supervision/#topologyserver">Dynamic supervision — TopologyServer</a> for details.</p>
+<p>Endpoints: <code>GET /health</code>, <code>GET /topology</code>, <code>GET /agents</code>, <code>GET /agents/{name}</code>, <code>GET /agents/{name}/mailbox</code>, <code>GET /snapshot</code>, <code>GET /metrics</code>, <code>GET /processes</code>, plus write routes <code>POST /agents/{name}/suspend</code>, <code>POST /agents/{name}/resume</code>, <code>POST /agents/{name}/restart</code>, <code>POST /agents/{name}/mailbox</code> (inject). See <a href="../supervision/#topologyagent">Dynamic supervision — TopologyAgent</a> for details.</p>
 <h3 id="eval_agent"><code>eval_agent</code><a class="headerlink" href="#eval_agent" title="Permanent link">&para;</a></h3>
 <p>Corrective observability loop that monitors agent behavior.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">monitor</span>
