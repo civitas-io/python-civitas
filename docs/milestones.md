@@ -1385,10 +1385,25 @@ breaks the same way for both); the one place agent-facing docs should differ is 
    distinguishing this file (contributing to civitas core) from `docs/agents-guide.md` (building
    on top of civitas as a library), plus a PR-checklist line requiring the matching `docs/*.md`
    page to be updated in the same PR as any SDK-visible change.
-3. ⏳ **Extend `test_examples_smoke.py`'s exact philosophy to markdown**: a real, in-CI checker
-   that extracts and executes every Python code-fence in `docs/*.md`/`README.md`/`AGENTS.md`
-   against the real installed package. The single highest-leverage piece of new infrastructure --
-   would have mechanically caught the majority of this audit's findings with zero human judgment.
+3. ✅ **Extend `test_examples_smoke.py`'s exact philosophy to markdown**:
+   `tests/integration/test_docs_codeblocks.py` extracts every ```python fence from
+   `docs/*.md`, `README.md`, `AGENTS.md`, `CONTRIBUTING.md` (excluding `docs/milestones.md`
+   itself -- a historical log, not current reference), parses each with `ast` (a hard
+   failure on invalid syntax), and for every `civitas.*` import checks the module actually
+   exists and the imported symbol is a real attribute on it. `civitas_contrib.*`/`fabrica.*`
+   imports are best-effort -- verified if that package happens to be installed, skipped
+   (not failed) if not, since this repo's own CI deliberately never installs them (the
+   exact cross-repo blind spot the monorepo-vs-separate council decision above chose not to
+   solve this way). No CI wiring needed -- `tests/integration` already runs in the existing
+   `integration` job in `.github/workflows/ci.yml`, so this is live immediately.
+
+   **First real catch, on the very first run**: `docs/concepts.md`'s own "Transport" section
+   had an independent, second, already-stale copy of the `Transport` protocol (invalid
+   Python syntax -- bodies omitted -- and only 5 of the real 10 methods, the exact "five
+   methods" miscount already fixed in `docs/transports.md` during item 1). Replaced with a
+   link to `docs/transports.md#transport-protocol` instead of a second copy. Confirms the
+   checker earns its keep: same repo, same audit pass, and a second independent copy of the
+   same fact had already drifted.
 4. ⏳ **Add `mkdocs build --strict`** to `.github/workflows/docs.yml` so broken internal
    links/cross-references fail CI instead of silently deploying.
 5. **Deliberately not building**: a cross-doc-agreement linter for claims a code-fence can't

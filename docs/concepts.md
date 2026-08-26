@@ -283,15 +283,9 @@ The Registry is also used for pattern-matching in `broadcast`. A call to `self.b
 
 ## Transport
 
-The `Transport` is the delivery layer underneath the MessageBus. It has five methods:
-
-```python
-async def start() -> None
-async def stop() -> None
-async def subscribe(address: str, handler: Callable) -> None
-async def publish(address: str, data: bytes) -> None
-async def request(address: str, data: bytes, timeout: float) -> bytes
-```
+The `Transport` is the delivery layer underneath the MessageBus. See
+[Transports](transports.md#transport-protocol) for the full `Transport` protocol
+reference — kept in one place rather than duplicated here.
 
 Three implementations are provided:
 
