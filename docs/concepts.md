@@ -28,6 +28,8 @@ Each component has a single responsibility. `Runtime` assembles them; it doesn't
 ## AgentProcess
 
 `AgentProcess` is the unit of computation — the Python equivalent of an Erlang GenServer.
+For the OTP-style call/cast/info pattern itself, see `GenServer` below (a real subclass of
+`AgentProcess`, not a separate primitive).
 
 Each instance has:
 - Its own **mailbox** — a bounded async queue of incoming messages
@@ -39,7 +41,11 @@ Each instance has:
 
 ![Agent State Machine](assets/agent-state-machine.svg)
 
-Four hooks to override:
+Core hooks to override (`on_start`, `handle`, `on_error`, `on_stop` shown below). Three more exist
+for less common cases: `on_suspend`/`on_resume` (human-in-the-loop approval flows),
+`on_correction` (mid-flight message correction), and `on_child_terminated` (a `DynamicSupervisor`'s
+own children notify their parent) — see `docs/agents-guide.md` and `civitas/process.py` for the
+full signatures.
 
 ```python
 class MyAgent(AgentProcess):
@@ -103,6 +109,25 @@ async def handle(self, message: Message) -> Message | None:
 ```
 
 On restart, the runtime restores `self.state` from the last checkpoint before calling `on_start()`. Agents that never call `checkpoint()` incur zero overhead.
+
+### GenServer
+
+`GenServer` is a real `AgentProcess` subclass for the classic OTP call/cast/info pattern, for
+agents that are better modeled as a stateful service than a free-form message handler:
+
+```python
+class Counter(GenServer):
+    async def init(self) -> None:       # override init(), not on_start()
+        self.state["count"] = 0
+
+    async def handle_call(self, payload: dict[str, Any], from_: str) -> dict[str, Any]:
+        self.state["count"] += 1
+        return {"count": self.state["count"]}
+```
+
+Override `handle_call`/`handle_cast`/`handle_info` — never `handle()` directly — and `init()`
+instead of `on_start()`. Useful whenever an agent's job is closer to "a supervised service with
+request/response semantics" than "react to arbitrary messages."
 
 ---
 
@@ -173,6 +198,27 @@ Each restart attempt waits a calculated delay before starting the child:
 
 `EXPONENTIAL` is the default for production systems. It prevents retry storms when a dependency is down.
 
+### DynamicSupervisor
+
+`Supervisor`'s children are fixed at topology-build time. `DynamicSupervisor` is a real, separate
+class for the opposite case — a supervisor that starts empty and gains/loses children at runtime:
+
+```python
+class Orchestrator(AgentProcess):
+    async def handle(self, message: Message) -> Message | None:
+        # spawn() resolves the nearest-ancestor DynamicSupervisor automatically —
+        # no need to name it, unlike spawn_into() which targets one explicitly.
+        agent_name = await self.spawn(WorkerAgent, f"worker-{message.payload['job_id']}")
+        # ... later ...
+        await self.despawn(agent_name)
+```
+
+Declared in topology YAML under `type: dynamic_supervisor`. Enforces `ONE_FOR_ONE` restart
+semantics only — a child exhausting its restart budget fires `on_child_terminated` on the spawner
+rather than escalating to the tree above. `spawner_allowlist`/`max_children`/`max_total_spawns`
+(and their per-spawner variants) are the built-in authorization/quota controls for who may spawn
+what, and how much.
+
 ---
 
 ## Message
@@ -201,7 +247,13 @@ class Message:
     timestamp: float     # unix timestamp at creation
     attempt: int         # retry count (incremented on RETRY)
     priority: int        # > 0 for system messages (jump the queue)
+    ttl: float | None    # expiry in seconds (declared field; see note below)
+    seq: int | None      # sequence number for ordered delivery within a stream
 ```
+
+> `ttl` is real API surface (declared on every `Message`) but is not currently enforced anywhere
+> in `bus.py` — setting it does not cause expiry. Documented here honestly rather than implying
+> behavior that doesn't exist yet.
 
 ### Payload rules
 
@@ -301,7 +353,7 @@ await runtime.stop()
 **From YAML topology:**
 
 ```python
-runtime = Runtime.from_yaml("topology.yaml")
+runtime = Runtime.from_config("topology.yaml")
 await runtime.start()
 ```
 

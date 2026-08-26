@@ -8,7 +8,7 @@ This guide takes you from a blank environment to a running, supervised, observab
 
 ## Prerequisites
 
-- Python 3.11 or later
+- Python 3.12 or later
 - A terminal
 
 That's it for the first three steps. An API key and Docker are optional extras introduced later.

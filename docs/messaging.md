@@ -235,6 +235,7 @@ Message types prefixed with `_agency.` are reserved for runtime internals:
 | `_agency.health_ack` | Worker replies with a per-agent status/task_alive/mailbox_depth snapshot |
 | `_agency.shutdown` | Runtime signals an agent to stop |
 | `_agency.restart` | Supervisor tells a Worker to restart an agent |
+| `_agency.force_restart` | Control-plane force-restart / kill (v0.9.6) — a priority message delivered outside normal restart policy |
 | `_agency.register` | Cross-process agent registration |
 | `_agency.deregister` | Cross-process agent deregistration |
 | `_agency.suspend` | Request an agent pause at its next message boundary (rejected on a `Supervisor`, v0.9.0) |

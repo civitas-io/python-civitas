@@ -69,7 +69,7 @@ await runtime.stop()
 1. **`ask()` caller ⇒ handler must `return self.reply(...)`.** Missing reply = caller hangs to timeout.
 2. **Payloads are JSON primitives only** (`str/int/float/bool/list/dict/None`). `.model_dump()` Pydantic models first.
 3. **No `send`/`ask` from `on_start()`** — the bus isn't ready. First outbound message goes from `handle()`.
-4. **Only checkpointed state survives restart** (v0.8.0). `self.state` is reset on every (re)start, then restored from the last `checkpoint()`. Instance variables: undefined across restarts — never rely on them.
+4. **Only checkpointed state survives restart** (v0.9.0, final). `self.state` is reset on every (re)start, then restored from the last `checkpoint()`. Instance variables: undefined across restarts — never rely on them.
 5. **Never block the event loop.** All I/O async; wrap unavoidable blocking calls in `asyncio.to_thread()`. One blocking `handle()` stalls every agent in the process.
 6. **Route by name, never by object reference.** `await self.ask("other", ...)` — direct method calls bypass supervision, tracing, and transport.
 7. **Reserved prefixes:** application `message_type` must not start with `_agency.` or `civitas.stream.` (raises `MessageValidationError`).

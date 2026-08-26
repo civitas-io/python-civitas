@@ -15,14 +15,18 @@ Plugins are injected by `Runtime` at startup. Agents access them via `self.llm`,
 ## Install
 
 ```bash
-pip install civitas                   # core only
-pip install civitas-contrib[anthropic]  # + Anthropic LLM provider
-pip install civitas-contrib[litellm]    # + 100+ models via LiteLLM
-pip install civitas[otel]             # + OpenTelemetry tracing
-pip install civitas[zmq]              # + ZMQ multi-process transport
-pip install civitas[nats]             # + NATS distributed transport
-pip install civitas[anthropic,otel]   # typical dev setup
+pip install civitas                    # core only
+pip install civitas-contrib[anthropic] # + Anthropic LLM provider
+pip install civitas-contrib[openai]    # + OpenAI LLM provider
+pip install civitas-contrib[gemini]    # + Google Gemini LLM provider
+pip install civitas-contrib[mistral]   # + Mistral LLM provider
+pip install civitas[otel]              # + OpenTelemetry tracing
+pip install civitas[zmq]               # + ZMQ multi-process transport
+pip install civitas[nats]              # + NATS distributed transport
+pip install civitas[encryption]        # + encrypted StateStore at rest
 ```
+
+`civitas-contrib[litellm]` does not yet provide a working `LiteLLMProvider` — see [LiteLLMProvider](#litellmprovider-not-yet-implemented) below.
 
 ---
 
@@ -95,44 +99,72 @@ Pass `model=None` to use the provider's `default_model`.
 
 | Model | Input $/M tokens | Output $/M tokens |
 |---|---|---|
+| `claude-opus-4-6` | $15.00 | $75.00 |
 | `claude-sonnet-4-6` | $3.00 | $15.00 |
 | `claude-haiku-4-5-20251001` | $0.80 | $4.00 |
-| `claude-opus-4-5-20251001` | $15.00 | $75.00 |
+| `claude-sonnet-4-5-20251001` | $3.00 | $15.00 |
+| `claude-3-7-sonnet-20250219` | $3.00 | $15.00 |
 | `claude-3-5-sonnet-20241022` | $3.00 | $15.00 |
+| `claude-3-5-haiku-20241022` | $0.80 | $4.00 |
+| `claude-3-opus-20240229` | $15.00 | $75.00 |
+| `claude-3-sonnet-20240229` | $3.00 | $15.00 |
+| `claude-3-haiku-20240307` | $0.25 | $1.25 |
 
 For models not in the pricing table, `cost_usd` is `None`.
 
-### LiteLLMProvider
-
-Covers OpenAI, Google Gemini, AWS Bedrock, Azure, Cohere, Mistral, and 100+ other providers via [LiteLLM](https://docs.litellm.ai).
+### OpenAIProvider
 
 ```bash
-pip install civitas-contrib[litellm]
+pip install civitas-contrib[openai]
+export OPENAI_API_KEY=sk-...
 ```
 
 ```python
-from civitas.plugins.litellm import LiteLLMProvider
+from civitas_contrib.plugins.openai import OpenAIProvider
 
-# OpenAI
 runtime = Runtime(
-    model_provider=LiteLLMProvider(default_model="gpt-4o"),
-    ...
+    supervisor=Supervisor("root", children=[...]),
+    model_provider=OpenAIProvider(default_model="gpt-4o"),
 )
+```
 
-# Google Gemini
+### GeminiProvider
+
+```bash
+pip install civitas-contrib[gemini]
+export GEMINI_API_KEY=...
+```
+
+```python
+from civitas_contrib.plugins.gemini import GeminiProvider
+
 runtime = Runtime(
-    model_provider=LiteLLMProvider(default_model="gemini/gemini-2.0-flash"),
-    ...
+    supervisor=Supervisor("root", children=[...]),
+    model_provider=GeminiProvider(default_model="gemini-2.0-flash"),
 )
+```
 
-# AWS Bedrock
+### MistralProvider
+
+```bash
+pip install civitas-contrib[mistral]
+export MISTRAL_API_KEY=...
+```
+
+```python
+from civitas_contrib.plugins.mistral import MistralProvider
+
 runtime = Runtime(
-    model_provider=LiteLLMProvider(default_model="bedrock/claude-3-5-sonnet-20241022"),
-    ...
+    supervisor=Supervisor("root", children=[...]),
+    model_provider=MistralProvider(default_model="mistral-large-latest"),
 )
 ```
 
 Agent code is identical regardless of which provider is configured — only the `Runtime` constructor changes.
+
+### LiteLLMProvider (not yet implemented)
+
+`civitas_contrib.plugins.litellm.LiteLLMProvider` (installed via `civitas-contrib[litellm]`, and resolvable by name as `type: litellm` in YAML) currently raises `NotImplementedError` on construction — it exists as a registered placeholder, not a working provider. Track progress at the [civitas-contrib issue tracker](https://github.com/civitas-io/civitas-contrib/issues). Until it lands, use the native `AnthropicProvider`/`OpenAIProvider`/`GeminiProvider`/`MistralProvider` above.
 
 ### Writing a custom ModelProvider
 
@@ -251,7 +283,7 @@ class WebSearchTool:
         return {"results": [...]}
 ```
 
-The `schema` field follows the Anthropic tool schema format (`input_schema` key). LiteLLM normalizes this across providers automatically when passed through `self.llm.chat(..., tools=[tool.schema])`.
+The `schema` field follows the Anthropic tool schema format (`input_schema` key), and `AnthropicProvider` passes it straight through to the SDK. **No provider currently translates it**: `OpenAIProvider` and `MistralProvider` forward whatever is in `tools=[...]` untouched to their own `chat.completions` call, and OpenAI's/Mistral's APIs expect a different shape (`{"type": "function", "function": {"name", "parameters", ...}}`, not `input_schema`). If you're targeting a non-Anthropic provider, convert `tool.schema` to that provider's expected shape yourself before passing it to `self.llm.chat(...)`.
 
 ### Passing tools to the LLM
 
@@ -352,8 +384,8 @@ class WorkflowAgent(AgentProcess):
 
 ```bash
 civitas state list                  # show all agents with persisted state
-civitas state show <agent-name>     # inspect a specific agent's state
 civitas state clear <agent-name>    # reset an agent to a clean start
+civitas state migrate <src> <dst>   # migrate state between backends (SQLite <-> Postgres)
 ```
 
 ### Writing a custom StateStore
@@ -424,7 +456,7 @@ The `sqlite`/`postgres`/`mysql` **exporter** types are `SpanStore`s (B4) — dur
 
 Plugin resolution order:
 1. **Python entrypoints** — installed packages that register under `civitas.model`, `civitas.exporter`, `civitas.state`, or `civitas.transport`
-2. **Built-in names** — models `anthropic`/`litellm`; exporters `console`/`sqlite`/`postgres`/`mysql`; state `in_memory`/`sqlite`/`postgres`/`mysql`; transports `in_process`/`zmq`/`nats`
+2. **Built-in names** — models `anthropic`/`openai`/`gemini`/`mistral`/`litellm` (litellm is a registered placeholder, not yet implemented); exporters `console`/`sqlite`/`postgres`/`mysql`; state `in_memory`/`sqlite`/`postgres`/`mysql`/`encrypted`; transports `in_process`/`zmq`/`nats`
 3. **Dotted import path** — e.g. `myapp.plugins.MyProvider`
 
 ### Registering a plugin via entrypoint
@@ -460,9 +492,10 @@ plugins:
 If a plugin fails to load — missing dependency, wrong constructor args, bad import path — `PluginError` is raised at startup with a clear message:
 
 ```
-civitas.errors.PluginError: Failed to load model plugin 'anthropic':
-  No module named 'anthropic'
-  Hint: pip install civitas-contrib[anthropic]
+civitas.errors.PluginError: Failed to load model plugin 'anthropic': No module named 'anthropic'
+  Hint: pip install civitas[anthropic]
 ```
+
+Note the hint always reads `pip install civitas[<name>]`, even for plugins that actually live in `civitas-contrib` (e.g. `anthropic`, `openai`) — `PluginError` doesn't distinguish which package a given plugin name ships from. If the hinted extra doesn't exist on `civitas`, check whether the plugin is a `civitas-contrib` extra instead.
 
 This fails fast at `Runtime.start()`, before any agents are started, so there's no ambiguity about what went wrong.

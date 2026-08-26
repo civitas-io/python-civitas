@@ -435,8 +435,8 @@ Standard OTEL SDK environment variables (`OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATT
 
 ## Prometheus metrics (v0.9.3, A2)
 
-Separate from tracing (spans, above) — `GET /metrics` on any running `TopologyServer` (the same
-component `civitas top` and `civitas topology show` already use) exposes real Prometheus
+Separate from tracing (spans, above) — `GET /metrics` on the `HTTPGateway` serving a `TopologyAgent`
+(the same component `civitas top` and `civitas topology show` already use) exposes real Prometheus
 text-format metrics: message rates, latency, errors, restarts, LLM token/cost totals, and current
 agent status, all labeled by `agent` (and `model` for LLM metrics).
 
@@ -448,7 +448,7 @@ no `metrics_path` override needed:
 scrape_configs:
   - job_name: civitas
     static_configs:
-      - targets: ["127.0.0.1:6789"]  # your TopologyServer's host:port
+      - targets: ["127.0.0.1:6789"]  # your topology_server node's host:port (its internally-owned gateway)
 ```
 
 `civitas`'s own JSON metrics snapshot (used internally by `civitas top`) lives at `GET /snapshot`

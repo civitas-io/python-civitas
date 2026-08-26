@@ -383,7 +383,7 @@ Standard OTEL SDK variables (`OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES`, et
 
 - [ ] `SQLiteStateStore` (or a custom durable store) configured — not `in_memory`
 - [ ] `db_path` points to a persistent volume (not a container ephemeral filesystem)
-- [ ] State CLI commands tested: `civitas state list`, `civitas state show <name>`
+- [ ] State CLI commands tested: `civitas state list`, `civitas state clear`
 
 **Observability**
 
@@ -409,8 +409,8 @@ Standard OTEL SDK variables (`OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES`, et
 
 ## Upgrading between levels
 
-**Level 1 → Level 2:** Install `python-civitas[zmq]`. Change `transport.type` to `zmq`. Add `process: worker` to agents you want isolated. Start a second terminal with `--process worker`. Agent code: unchanged.
+**Level 1 → Level 2:** Install `civitas[zmq]`. Change `transport.type` to `zmq`. Add `process: worker` to agents you want isolated. Start a second terminal with `--process worker`. Agent code: unchanged.
 
-**Level 2 → Level 3:** Install `python-civitas[nats]`. Start a NATS server. Change `transport.type` to `nats`, set `servers`. Run each process group on its own machine (or container). Agent code: unchanged.
+**Level 2 → Level 3:** Install `civitas[nats]`. Start a NATS server. Change `transport.type` to `nats`, set `servers`. Run each process group on its own machine (or container). Agent code: unchanged.
 
 **Level 3 → Level 4:** Run `civitas deploy docker-compose --topology topology.yaml`. Edit the generated `.env` with real secrets. Run `docker compose up --build`. Agent code: unchanged.

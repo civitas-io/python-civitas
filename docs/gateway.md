@@ -99,8 +99,19 @@ The default routes are a development convenience. For production, declare explic
 | `enable_http3` | `bool` | `False` | Enable QUIC / HTTP/3 (requires TLS + port_quic) |
 | `routes` | `list[dict]` | `[]` | Route declarations (empty = default routes) |
 | `middleware` | `list[str]` | `[]` | Dotted import paths for middleware callables |
-| `docs_enabled` | `bool` | `True` | Serve Swagger UI at `docs_path` |
+| `docs_enabled` | `bool \| None` | `None` | Tri-state: `None` auto-enables Swagger UI unless gateway auth is configured; `True`/`False` forces it |
 | `docs_path` | `str` | `"/docs"` | Base path for API docs |
+| `tls_ca_cert` | `str \| None` | `None` | Path to a private CA cert, for verifying client certs in mTLS |
+| `client_cert_mode` | `str` | `"none"` | mTLS mode: `"none"`, `"optional"`, or `"required"` |
+| `mtls_source` | `str` | `"direct"` | `"direct"` (civitas reads the TLS peer cert itself) or `"proxy_header"` (trust an upstream proxy's `Client-Cert` header) |
+| `trusted_proxy_cidrs` | `frozenset[str]` | `frozenset()` | Peer IP ranges trusted to supply `Client-Cert` in `proxy_header` mode |
+| `grpc_enabled` | `bool` | `False` | Also serve a gRPC surface alongside HTTP |
+| `grpc_port` | `int \| None` | `None` | Port for the gRPC surface |
+| `grpc_reflection` | `bool` | `True` | Enable gRPC server reflection |
+| `ws_routes` | `list[dict]` | `[]` | WebSocket route declarations |
+| `stream_queue_maxsize` | `int` | `256` | Max buffered messages for a `stream_reply()` |
+| `stream_idle_timeout` | `float` | `300.0` | Seconds of inactivity before an open stream is closed |
+| `max_stream_duration` | `float` | `3600.0` | Hard cap on a single stream's lifetime |
 
 ---
 
@@ -140,7 +151,7 @@ class ChatAgent(AgentProcess):
         })
 ```
 
-`@route` attaches path and method to the function as metadata. `@contract` enables Pydantic validation: a bad request body returns `422 Unprocessable Entity`; a reply that fails `ChatResponse` validation returns `500`.
+`@route` and `@contract` only attach metadata to the function — they do nothing on their own. Wiring that metadata into request validation requires `RouteTable.merge_contracts_from(agent_cls, agent_name)`, matched by `(method, path)` against entries built from YAML — but `HTTPGateway` builds and owns its `RouteTable` internally (`_route_table`, private) and does not expose a way to call `merge_contracts_from()` on it or to pass in a pre-merged table. In practice, today, decorating a `handle()` method with `@route`/`@contract` **does not** get you 422/500 validation through a normal `HTTPGateway` — that path is only exercised directly against a manually-constructed `RouteTable` in the test suite (`tests/unit/test_gateway.py`). Treat `@route`/`@contract` as documentation/IDE-navigation aids only until this wiring gap is closed; the YAML `routes:` block is the authoritative, working configuration surface.
 
 ---
 
@@ -193,6 +204,8 @@ To short-circuit the chain (e.g. for auth failures), return a `GatewayResponse` 
 | `body` | `dict` | Parsed JSON request body |
 | `client_ip` | `str` | Remote client IP address |
 | `gateway` | `HTTPGateway` | Reference to the gateway process |
+| `client_cert` | `dict \| None` | mTLS leaf, set by the ASGI edge only when the client presents one: `{"dn": <full subject DN>, "leaf_pem": <PEM>}` |
+| `auth` | `dict \| None` | Verified identity set by auth middleware (e.g. `{"id": "<principal>"}`), never merged into the dispatched payload |
 
 ### GatewayResponse fields
 
@@ -471,7 +484,7 @@ config = GatewayConfig(
 )
 ```
 
-The gateway injects `Alt-Svc: h3=":8444"; ma=3600` into every HTTP/1.1 and HTTP/2 response. Clients that support HTTP/3 will upgrade automatically on the next request.
+The gateway injects `Alt-Svc: h3=":8444"` into every HTTP/1.1 and HTTP/2 response. Clients that support HTTP/3 will upgrade automatically on the next request.
 
 `enable_http3` requires `pip install 'civitas[http3]'` and valid TLS credentials — the gateway will raise `ValueError` at startup if either is missing.
 
@@ -483,17 +496,35 @@ Two special headers influence gateway behavior:
 
 **`traceparent`** (W3C trace context) — if present, the gateway extracts the `trace_id` and `parent_span_id` from the header and stamps them onto the outgoing message. This connects external traces to the Civitas trace tree.
 
-**`X-Civitas-Type`** — overrides the `type` field on the outgoing message. By default the gateway sets `type` to the route's path pattern (e.g. `"/v1/chat/{session_id}"`). Use this header to dispatch to a specific handler in a multi-type agent.
+**`X-Civitas-Type`** — overrides the `type` field on the outgoing message. By default the gateway sets `type` to `"http.request"`. Use this header to dispatch to a specific handler in a multi-type agent.
 
 ---
 
-## What the gateway does not do
+## What the gateway does
 
-**No WebSocket support.** The gateway handles request-reply HTTP only. For streaming or bidirectional communication, connect directly to the Civitas bus or use the SSE transport (planned).
+**WebSocket support.** Declare `ws_routes` in `GatewayConfig` to bridge a WebSocket session to an agent: inbound frames become `cast` messages, agent replies (including `stream_reply()` chunks) become outbound frames. When JWT auth is configured, the bearer token rides the `Sec-WebSocket-Protocol` handshake header — see [WebSocket & gRPC auth](#websocket--grpc-auth) above.
+
+**gRPC surface.** Set `grpc_enabled=True` and `grpc_port` to serve the same agents over gRPC alongside HTTP, including server reflection and the same JWT/mTLS auth stack.
+
+**First-party rate limiting.** `civitas.gateway.ratelimit.RateLimiter` (a `GenServer`) plus the `rate_limit` middleware implement a sliding-window limiter shared across every request. Wire it from topology YAML:
+
+```yaml
+children:
+  - name: rate_limiter          # the fixed name the middleware calls
+    type: gen_server
+    module: civitas.gateway.ratelimit
+    class: RateLimiter
+    config: {max_requests: 100, window_seconds: 60}
+
+# in the gateway's own config:
+middleware: [civitas.gateway.ratelimit.rate_limit]
+```
+
+## What the gateway does not do
 
 **No TLS termination proxy.** The gateway can serve TLS directly via uvicorn's SSL support, but it is not a reverse proxy. Put nginx or Caddy in front if you need load balancing, certificate management, or connection pooling at scale.
 
-**No authentication built in.** Auth is middleware. The gateway has no concept of users, API keys, or JWTs — implement that in a middleware callable and declare it in `GatewayConfig.middleware`.
+**No built-in identity/AuthZ system.** civitas ships the auth *seam* (middleware chain), JWT bearer verification, and mTLS — but no roles, scopes, SCIM, or IdP integration. Implement your own AuthZ in a middleware callable and declare it in `GatewayConfig.middleware`; see [Control-plane write actions & the AuthNZ seam](#control-plane-write-actions--the-authnz-seam-v096) below.
 
 ---
 

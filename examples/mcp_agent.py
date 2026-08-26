@@ -4,7 +4,7 @@ This example shows how to connect a civitas agent to an MCP server over stdio
 and invoke its tools via the standard mcp://server/tool URI addressing.
 
 Requirements:
-    pip install 'civitas[mcp]'
+    pip install fabrica-context
     npx -y @modelcontextprotocol/server-filesystem /tmp   # or any MCP server
 
 Usage:

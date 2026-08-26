@@ -2,6 +2,13 @@
 
 Internal reference for contributors and advanced users. Covers the runtime startup sequence, component wiring, message flow, fault handling, and key design decisions.
 
+**Not covered on this page** — real, substantial subsystems with their own dedicated docs:
+`civitas/gateway/` (HTTP/gRPC edge, see [Gateway](gateway.md)), `civitas/dashboard/` (the `civitas
+top`/`civitas telemetry` TUIs, see [Observability](observability.md)), `civitas/sandbox/` (per-MCP-server
+process isolation config, see [MCP](mcp.md)), `civitas/secrets/` (`SecretsProvider`,
+`substitute_vars`), `civitas/security/` (transport-level Ed25519 message signing), and
+`civitas/audit/` (`AuditSink` and built-in sinks).
+
 ---
 
 ## Component map
@@ -148,7 +155,7 @@ Each `AgentProcess` runs as a single asyncio task (`agent._task`). Inside that t
 
 ![Agent State Machine](assets/agent-state-machine.svg)
 
-**Mailbox:** An `asyncio.Queue` with a bounded capacity (default: 1000 messages). `receive()` calls `put_nowait()` — if the mailbox is full, `asyncio.QueueFull` is raised and the message is dropped with a warning. The agent's event loop calls `get()` to dequeue messages one at a time.
+**Mailbox:** An `asyncio.Queue` with a bounded capacity (default: 1000 messages). Delivery calls `put()`, which **blocks** (awaits) when the mailbox is full — real backpressure on the sender, not a drop. (`put_nowait()` exists but is reserved for one sync-callback edge case — a `Supervisor`'s own crash self-messages, which can't await — not the normal delivery path.) The agent's event loop calls `get()` to dequeue messages one at a time.
 
 **State restore:** On `INITIALIZING → RUNNING` transition (inside `_start()`), the runtime calls `store.get(agent.name)` and assigns the result to `self.state` before `on_start()` runs. This means `on_start()` always sees the last checkpointed state, whether the agent is starting for the first time or restarting after a crash.
 

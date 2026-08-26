@@ -106,7 +106,7 @@ supervision:
 | `type` | string | `in_process` | Transport implementation: `in_process`, `zmq`, or `nats` |
 | `pub_addr` | string | `tcp://127.0.0.1:5559` | ZMQ only — proxy XSUB frontend address |
 | `sub_addr` | string | `tcp://127.0.0.1:5560` | ZMQ only — proxy XPUB backend address |
-| `start_proxy` | bool | `false` | ZMQ only — start the proxy in this process |
+| `start_proxy` | bool | `true` | ZMQ only — start the proxy in this process (set `false` on Workers/nodes that connect to an existing proxy) |
 | `servers` | string or list | `nats://localhost:4222` | NATS only — server URL(s) |
 | `jetstream` | bool | `false` | NATS only — enable JetStream durable subscriptions |
 | `stream_name` | string | `AGENCY` | NATS only — JetStream stream name |
@@ -231,7 +231,7 @@ See [Dynamic supervision](supervision.md#dynamic-supervision) for the full guide
 
 ### `topology_server`
 
-A supervised JSON HTTP management endpoint. Use it alongside a `DynamicSupervisor` to expose live topology state.
+A `TopologyAgent` — live topology introspection. The node type name (`topology_server`) is kept for backward compatibility; as of v0.9.5 the class is `TopologyAgent`, and it no longer runs its own standalone HTTP server. Instead this node builds the agent plus an internally-owned `HTTPGateway` that serves its routes with the same auth stack (API key / JWT / mTLS) as any other gateway.
 
 ```yaml
 - type: topology_server
@@ -243,10 +243,12 @@ A supervised JSON HTTP management endpoint. Use it alongside a `DynamicSuperviso
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `host` | string | `127.0.0.1` | Bind address — use `0.0.0.0` to expose externally |
-| `port` | int | `6789` | Port for the HTTP server |
+| `host` | string | `127.0.0.1` | Bind address for the internally-owned gateway — use `0.0.0.0` to expose externally |
+| `port` | int | `6789` | Port for the internally-owned gateway |
+| `attach_to` | string | — | Name of an existing `http_gateway` node to serve these routes on instead of spinning up a dedicated gateway (that gateway must set `topology_agent: <this node's name>` in its own config) |
+| `auth.middleware` | list | `[]` | Middleware gating every route except `/health` |
 
-Endpoints: `GET /health`, `GET /topology`, `GET /agents`, `GET /agents/{name}`. See [Dynamic supervision — TopologyServer](supervision.md#topologyserver) for details.
+Endpoints: `GET /health`, `GET /topology`, `GET /agents`, `GET /agents/{name}`, `GET /agents/{name}/mailbox`, `GET /snapshot`, `GET /metrics`, `GET /processes`, plus write routes `POST /agents/{name}/suspend`, `POST /agents/{name}/resume`, `POST /agents/{name}/restart`, `POST /agents/{name}/mailbox` (inject). See [Dynamic supervision — TopologyAgent](supervision.md#topologyagent) for details.
 
 ### `eval_agent`
 

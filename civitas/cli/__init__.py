@@ -7,9 +7,12 @@ Package structure:
     app.py       — shared Typer app, consoles, output helpers
     init.py      — civitas init
     run.py       — civitas run
-    state.py     — civitas state list|clear
+    state.py     — civitas state list|clear|migrate
     topology.py  — civitas topology validate|show|diff
-    deploy.py    — civitas deploy (M2.7)
+    deploy.py    — civitas deploy
+    dashboard.py — civitas dashboard ("civitas top", needs [dashboard] extra)
+    telemetry.py — civitas telemetry (needs [telemetry] extra)
+    security.py  — civitas security init zmq|nats
     version.py   — civitas version
     _templates/  — scaffolding templates
 """

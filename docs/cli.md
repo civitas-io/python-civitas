@@ -59,7 +59,7 @@ civitas run [--topology <path>] [--transport <type>] [--process <name>] [--nats-
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--topology` | `topology.yaml` | Path to topology YAML file |
-| `--transport` | from topology | Override transport: `in_process`, `zmq`, `nats` |
+| `--transport` | from topology, else `in_process` (supervisor mode) or `zmq` (worker/`--process` mode) | Override transport: `in_process`, `zmq`, `nats` |
 | `--process` | — | Run only the agents assigned to this process group (worker mode) |
 | `--nats-url` | `nats://localhost:4222` | NATS server URL (only used with `--transport nats`) |
 
@@ -116,15 +116,17 @@ civitas topology validate topology.yaml && echo "topology ok"
 Visualise the supervision tree from a topology file.
 
 ```bash
-civitas topology show <path>
+civitas topology show <path> [--header 'Name: Value']
 ```
+
+`--header` / `-H` (repeatable) attaches an auth header (e.g. `-H 'Authorization: Bearer <token>'`) to the live `GET /topology` query, for topologies whose gateway sits behind auth.
 
 Renders a Rich tree in the terminal showing:
 
 - Supervisor names, strategies, restart limits, and backoff policies
 - Agent names and types
 - `DynamicSupervisor` nodes with `[dyn]` marker and `max_children` annotation
-- `TopologyServer` nodes with `[topo]` marker and bind address
+- `TopologyAgent` nodes (`type: topology_server`) with `[topo]` marker and the bind address of its internally-owned `HTTPGateway` (default `127.0.0.1:6789`; not shown if `attach_to` is set)
 - Process affinity annotations (`@process`)
 - Summary footer: transport type, plugin count, agent/supervisor/process counts
 
@@ -250,6 +252,55 @@ civitas state clear [agent_name] [--db <path>] [--force]
 | `--force` | `False` | Skip confirmation prompt |
 
 Without `--force`, you are prompted to confirm before state is deleted.
+
+### civitas state migrate
+
+Migrate agent state between backends (SQLite ↔ Postgres).
+
+```bash
+civitas state migrate <src> <dst> [--dry-run / --execute]
+```
+
+| Argument / Option | Default | Description |
+|-------------------|---------|-------------|
+| `src` | required | Source DSN — `sqlite:<path>` or `postgresql://...` |
+| `dst` | required | Destination DSN — `sqlite:<path>` or `postgresql://...` |
+| `--dry-run` / `--execute` | `--dry-run` | Preview the migration without writing; pass `--execute` to apply |
+
+Copies raw stored values between backends without an encryption wrapper — it does **not** encrypt or decrypt in flight. To re-encrypt state in place, deploy the encrypted store with `allow_plaintext_read=true` so legacy plaintext is read and re-written as ciphertext on the next checkpoint, then flip to strict.
+
+---
+
+## civitas security
+
+Security key management for ZMQ CURVE and NATS TLS.
+
+### civitas security init zmq
+
+Scaffold a ZMQ CURVE keypair.
+
+```bash
+civitas security init zmq [--out <dir>] [--force]
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--out` | — | Directory to write generated keypairs |
+| `--force` / `-f` | `False` | Overwrite existing keys |
+
+### civitas security init nats
+
+Scaffold NATS TLS configuration.
+
+```bash
+civitas security init nats [--cert <path>] [--key <path>] [--ca <path>]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--cert` | Path to TLS certificate (PEM) |
+| `--key` | Path to TLS private key (PEM) |
+| `--ca` | Path to CA certificate (PEM) for server verification |
 
 ---
 

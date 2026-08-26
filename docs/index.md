@@ -185,7 +185,7 @@ python examples/supervised_agent.py      # crash + auto-restart
 python examples/research_pipeline.py     # three-agent pipeline
 python examples/research_assistant.py    # four-agent hero demo (no API key needed)
 python examples/http_gateway.py          # REST API with Swagger UI (civitas[http])
-python examples/mcp_agent.py             # connect to an MCP tool server (civitas[mcp])
+python examples/mcp_agent.py             # connect to an MCP tool server (pip install fabrica-context)
 ```
 
 ---

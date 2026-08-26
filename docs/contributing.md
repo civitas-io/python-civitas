@@ -16,8 +16,11 @@ cd python-civitas
 # Install all dev dependencies (includes test, lint, type-check tooling)
 uv sync --extra dev
 
-# Install pre-commit hooks (ruff + mypy run on every commit)
+# Install pre-commit hooks -- ruff/ruff-format/mypy/gitleaks run on every
+# commit; tests run on push (pre-push, separate install below, since it's slower).
+# See .pre-commit-config.yaml for exactly what runs.
 uv run pre-commit install
+uv run pre-commit install --hook-type pre-push
 ```
 
 That's it. No virtualenv activation needed — `uv run` handles the environment.
@@ -238,23 +241,24 @@ python-civitas/
 │   │   ├── tracer.py        # Tracer, Span, three output modes
 │   │   ├── span_queue.py    # SpanQueue, SpanData
 │   │   └── export_backend.py # ExportBackend, ConsoleBackend, FanOutBackend
-│   ├── plugins/             # Plugin implementations
+│   ├── plugins/             # Plugin implementations (core only — no LLM providers here)
 │   │   ├── model.py         # ModelProvider protocol, ModelResponse
 │   │   ├── tools.py         # ToolProvider, ToolRegistry
 │   │   ├── state.py         # StateStore, InMemoryStateStore
 │   │   ├── sqlite_store.py  # SQLiteStateStore
-│   │   ├── anthropic.py     # AnthropicProvider
-│   │   ├── litellm.py       # LiteLLMProvider
+│   │   ├── encrypted_store.py # EncryptingStateStore
 │   │   └── loader.py        # Plugin resolution (entrypoint → builtin → dotted path)
-│   ├── adapters/            # Framework adapters
-│   │   ├── langgraph.py     # LangGraphAgent
-│   │   └── openai.py        # OpenAIAgent
 │   └── cli/                 # Typer CLI
 │       ├── app.py           # Root app + console
+│       ├── init.py          # civitas init
 │       ├── run.py           # civitas run
 │       ├── topology.py      # civitas topology validate/show/diff
 │       ├── deploy.py        # civitas deploy docker-compose
-│       └── state.py         # civitas state list/show/clear
+│       ├── state.py         # civitas state list/clear/migrate
+│       ├── dashboard.py     # civitas dashboard ("civitas top", needs [dashboard] extra)
+│       ├── telemetry.py     # civitas telemetry (needs [telemetry] extra)
+│       ├── security.py      # civitas security init zmq | civitas security init nats
+│       └── version.py       # civitas version
 ├── tests/
 │   ├── conftest.py          # Shared fixtures and test agents
 │   ├── unit/                # Fast, isolated unit tests
@@ -265,3 +269,5 @@ python-civitas/
 ├── CONTRIBUTING.md          # This file
 └── pyproject.toml           # Build config, deps, tool config
 ```
+
+LLM providers (`AnthropicProvider`, `OpenAIProvider`, `GeminiProvider`, `MistralProvider`, the not-yet-implemented `LiteLLMProvider`) and framework adapters live in the separate `civitas-io/civitas-contrib` repo, not here — there is no `civitas/adapters/` directory and no `civitas/plugins/anthropic.py` in this repo.

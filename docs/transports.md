@@ -14,7 +14,7 @@ The agent code is byte-for-byte identical at every level. The `MessageBus` and `
 
 ## Transport protocol
 
-All three transports implement the same five-method protocol:
+All three transports implement the same `Transport` protocol:
 
 ```python
 class Transport(Protocol):
@@ -27,17 +27,30 @@ class Transport(Protocol):
     async def subscribe(self, address: str, handler: Callable[[bytes], Awaitable[None]]) -> None:
         """Register a handler for messages arriving at this address."""
 
+    async def unsubscribe(self, address: str) -> None:
+        """Remove the handler for an address. No-op if not subscribed."""
+
     async def publish(self, address: str, data: bytes) -> None:
         """Send a message to an address (fire-and-forget)."""
 
-    async def request(self, address: str, data: bytes, timeout: float) -> bytes:
+    async def request(self, address: str, data: bytes, timeout: float | None) -> bytes:
         """Send a message and await a reply."""
 
     async def wait_ready(self) -> None:
-        """Wait for connections and subscriptions to stabilize."""
+        """Wait for connections and subscriptions to stabilize. No-op by default."""
 
     def has_reply_address(self, address: str) -> bool:
         """Return True if address is an active ephemeral reply queue."""
+
+    async def wait_subscribed(self, address: str, timeout: float = 2.0) -> None:
+        """Block until the subscription for `address` is effective for peers.
+
+        Required for transports with asynchronous subscription propagation
+        (e.g. ZMQ PUB/SUB) to avoid publishing into a void right after subscribing."""
+
+    def set_serializer(self, serializer: Serializer) -> None:
+        """Replace the serializer this transport uses for its own internal
+        request()/reply-address bookkeeping."""
 ```
 
 Any class implementing these methods can be used as a transport. See [writing a custom transport](#writing-a-custom-transport) below.
@@ -336,7 +349,7 @@ transport-specific code.
 
 ## Writing a custom transport
 
-Implement the five-method `Transport` protocol and pass an instance to `Runtime` via the `components` parameter:
+Implement the `Transport` protocol and pass an instance to `Runtime` via the `components` parameter:
 
 ```python
 from civitas import Runtime, Supervisor
@@ -357,10 +370,15 @@ class RedisTransport:
         # subscribe to Redis channel
         ...
 
+    async def unsubscribe(self, address: str) -> None:
+        self._handlers.pop(address, None)
+        # unsubscribe from Redis channel
+        ...
+
     async def publish(self, address: str, data: bytes) -> None:
         await self._redis.publish(f"civitas:{address}", data)
 
-    async def request(self, address: str, data: bytes, timeout: float) -> bytes:
+    async def request(self, address: str, data: bytes, timeout: float | None) -> bytes:
         # implement ephemeral reply pattern
         ...
 
@@ -369,6 +387,12 @@ class RedisTransport:
 
     async def wait_ready(self) -> None:
         pass   # Redis connections are immediate
+
+    async def wait_subscribed(self, address: str, timeout: float = 2.0) -> None:
+        pass   # Redis pub/sub subscription is broker-side; treat as a no-op
+
+    def set_serializer(self, serializer) -> None:
+        self._serializer = serializer
 
 # Wire it via ComponentSet
 serializer = MsgpackSerializer()

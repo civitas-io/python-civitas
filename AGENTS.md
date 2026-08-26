@@ -56,16 +56,23 @@ pip install civitas[zmq]                  # ZMQ distributed transport
 pip install civitas[nats]                 # NATS distributed transport
 pip install civitas[nkeys]               # NATS + NKeys auth
 
-# HTTP gateway
+# HTTP / gRPC gateway
 pip install civitas[http]                 # uvicorn + pydantic
 pip install civitas[http3]               # + QUIC / HTTP3
+pip install civitas[grpc]                 # gRPC gateway surface
+pip install civitas[jwt]                  # gateway JWT bearer auth
 
 # Observability
 pip install civitas[otel]                 # OTEL exporter backend
+pip install civitas[dashboard]            # civitas dashboard ("civitas top") — Textual TUI
+pip install civitas[telemetry]            # civitas telemetry — native SQLite span storage + TUI
 
 # Security
 pip install civitas[security]            # transport-level Ed25519 message signing
 pip install civitas[encryption]          # encrypted StateStore at rest (ChaCha20-Poly1305 AEAD)
+
+# Performance
+pip install civitas[fast]                 # drop-in Rust-backed JSON (orjson) for JsonSerializer
 
 # Model providers, state stores, framework adapters, eval exporters → civitas-contrib
 pip install civitas-contrib[anthropic]    # Anthropic Claude
@@ -75,7 +82,7 @@ pip install civitas-contrib[mistral]      # Mistral
 pip install civitas-contrib[litellm]      # 100+ models via LiteLLM
 pip install civitas-contrib[postgres]     # PostgreSQL state store
 
-# MCP tools gateway → fabrica (part of civitas-contrib repo)
+# MCP tools gateway → fabrica (its own repo, civitas-io/fabrica)
 pip install fabrica-context               # MCP subprocess gateway + sandboxing
 ```
 
@@ -94,7 +101,7 @@ from civitas import SandboxConfig, FilesystemMount
 from civitas import SecretsProvider, substitute_vars
 from civitas import SecurityConfig
 from civitas import RegistryListener, RoutingEntry
-from civitas import TopologyServer
+from civitas import TopologyAgent
 from civitas.messages import Message
 from civitas.errors import CivitasError, ErrorAction
 from civitas.plugins.model import ModelProvider, ModelResponse, ToolCall
@@ -107,17 +114,20 @@ from civitas_contrib.plugins.openai import OpenAIProvider          # civitas-con
 from civitas_contrib.plugins.gemini import GeminiProvider          # civitas-contrib[gemini]
 from civitas_contrib.plugins.mistral import MistralProvider        # civitas-contrib[mistral]
 from civitas_contrib.plugins.litellm import LiteLLMProvider        # civitas-contrib[litellm]
-from civitas_contrib.plugins.sqlite_store import SQLiteStateStore  # civitas-contrib
+from civitas.plugins.sqlite_store import SQLiteStateStore          # civitas core (moved from contrib in v0.11.0)
 from civitas_contrib.plugins.postgres_store import PostgresStateStore  # civitas-contrib[postgres]
 
 # Framework adapters — require civitas-contrib
 from civitas_contrib.adapters.langgraph import LangGraphAgent      # civitas-contrib[langgraph]
 from civitas_contrib.adapters.openai import OpenAIAgent            # civitas-contrib[openai]
 
-# MCP gateway — requires fabrica
+# MCP gateway — requires fabrica-context (civitas-io/fabrica, its own repo)
 from fabrica.mcp.client import MCPClient                           # fabrica-context
 from fabrica.mcp.tool import MCPTool                               # fabrica-context
-from fabrica.sandbox.bubblewrap import BubblewrapSandbox           # fabrica
+from fabrica.sandbox import select_sandbox_backend, SandboxPool     # fabrica-context — picks
+                                                                     # SubprocessSandbox/SrtSandbox/
+                                                                     # FirecrackerSandbox per-platform;
+                                                                     # callers don't import a tier directly
 ```
 
 ---
@@ -141,7 +151,7 @@ civitas/
   components.py          # ComponentSet — dependency injection container
   genserver.py           # GenServer — OTP-style call/cast/info server
   evalloop.py            # EvalAgent, EvalLoop, EvalExporter, CorrectionSignal
-  topology_server.py     # TopologyServer — live topology API
+  topology_server.py     # TopologyAgent — live topology introspection, served via HTTPGateway
   cli/                   # CLI package
     __init__.py           # App assembly, exports main()
     app.py                # Shared Typer app, Console, output helpers
@@ -150,6 +160,9 @@ civitas/
     state.py              # civitas state list|clear|migrate
     topology.py           # civitas topology validate|show|diff
     deploy.py             # civitas deploy
+    dashboard.py          # civitas dashboard ("civitas top", needs [dashboard] extra)
+    telemetry.py          # civitas telemetry (needs [telemetry] extra)
+    security.py           # civitas security init zmq | civitas security init nats
     version.py            # civitas version
     _templates/           # Scaffolding templates ($variable syntax)
   audit/                 # Audit sink protocol + built-in sinks (jsonl, syslog, OTLP)

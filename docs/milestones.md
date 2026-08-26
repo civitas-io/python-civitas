@@ -1299,9 +1299,96 @@ Owner column: `core` = python-civitas, else the target repo.
 
 ### Now open — tracked issue (python-civitas)
 
-**None currently open against this repo specifically** (as of 2026-08-25). The M-LAST
-performance-benchmarking item (see [Part 2 -- Backlog](#part-2--backlog) below) is now **complete**
--- real benchmarks, real results, `docs/design/performance-benchmark.md`.
+**Public documentation reliability** (see the next section, below) is now open, as of 2026-08-26.
+The M-LAST performance-benchmarking item (see [Part 2 -- Backlog](#part-2--backlog) below) remains
+**complete** -- real benchmarks, real results, `docs/design/performance-benchmark.md`.
+
+### Public documentation reliability (In Progress)
+
+**Status: 🔄 In Progress | Priority: 🔴 High | Owner: core**
+
+**Trigger**: a real, code-verified audit of every public-facing doc (`README.md`, `docs/*.md`,
+`AGENTS.md`, `docs/llms.txt`, `docs/agents-guide.md`) found the public docs surface extensively
+stale relative to source -- broken imports (`TopologyServer`, removed at v0.9.5, still imported in
+`AGENTS.md`), two docs directly contradicting each other on real runtime behavior (mailbox
+blocking vs. non-blocking, `architecture.md` vs. `faq.md`), a fabricated `civitas[mcp]` pip extra
+and an entirely invented "Civitas as an MCP server" class in `docs/mcp.md`, a wrong pricing-table
+model ID in `docs/plugins.md` that silently makes real cost computation return `None`, and more --
+full findings list in this session's own transcript, not duplicated here. Root cause, confirmed:
+CI lints/type-checks/tests `civitas/` and smoke-tests `examples/*.py`
+(`tests/integration/test_examples_smoke.py` exists precisely because standalone examples used to
+rot the same way) -- but **zero mechanism checks any prose or code-fence in `docs/`, `README.md`,
+or `AGENTS.md`**. That gap is structural, not accidental: two independent past renames
+(`TopologyServer`→`TopologyAgent`; a state-store import path moving from contrib into core) each
+independently show up as unfixed in 2-3 *different* docs, meaning refactors here are not currently
+accompanied by any doc-sweep step.
+
+**Resolved via a 5-advisor LLM council** (Contrarian/First Principles/Expansionist/Outsider/
+Executor, peer-reviewed -- 4/5 independent reviewers picked the same response strongest, 5/5
+flagged the same blind spot). Core finding: "docs" here is a category error, not a separate
+artifact class from code -- every public doc claim (an import path, a pip extra, a YAML schema, a
+pricing string) is a checkable claim about running code, the exact same category `examples/*.py`
+already got a real CI gate for. The fix is to extend that existing pattern, not invent a
+docs-specific discipline. Explicitly rejected: treating "docs for coding agents" as requiring
+separate content from "docs for humans" -- the failures are audience-agnostic (a broken import
+breaks the same way for both); the one place agent-facing docs should differ is structure/density
+(a lean router an agent can act on precisely), not correctness.
+
+**Action items, in the council's own priority order:**
+
+1. ✅ **Hand-fix the concretely-identified breakages** -- no new tooling required, stops active
+   harm immediately. `TopologyServer`→`TopologyAgent` import fix (with the v0.9.5
+   HTTPGateway-routing architecture note, in `topology.md`/`supervision.md`/`cli.md`/
+   `observability.md`), the mailbox blocking-vs-non-blocking contradiction (canonicalize on
+   `faq.md`'s correct version), the fabricated `civitas[mcp]` extra and invented
+   `civitas.mcp.server.MCPServer` class in `docs/mcp.md` (rewritten: real fabrica-backed client,
+   real single top-level `mcp: servers:` YAML schema applying to every agent, real
+   `civitas.mcp.call` span shape, real dead-`MCPToolError` gotcha), the wrong pricing-table model
+   ID in `docs/plugins.md` (`claude-opus-4-6`, full real table) plus the entirely missing
+   `OpenAIProvider`/`GeminiProvider`/`MistralProvider` docs and the fact `LiteLLMProvider` is a
+   `NotImplementedError` stub, the stale sqlite import path, the `docs/agents-guide.md`
+   v0.8.0-vs-v0.9.0 restart-contract version contradiction (source confirms v0.9.0), missing
+   `civitas security init zmq/nats` + `civitas state migrate` + `topology show --header` CLI docs,
+   the `--transport` default's real supervisor-vs-worker-mode split, the wrong `docs_enabled`
+   tri-state default and missing `GatewayConfig`/`GatewayRequest` fields, the false "no WebSocket /
+   no auth" claims in `docs/gateway.md` (both real and shipped) plus the undocumented `RateLimiter`,
+   the wrong `Alt-Svc` header format and default message `type`, the `Transport` protocol's 3
+   missing methods (`unsubscribe`/`wait_subscribed`/`set_serializer`) in `docs/transports.md`, the
+   missing `_agency.force_restart` system message, and the phantom `civitas/adapters/` +
+   `civitas/plugins/anthropic.py` file listings in both `CONTRIBUTING.md` and
+   `docs/contributing.md` (plus their drifted pre-commit-hook descriptions, now reconciled). Full
+   list of what was actually found and fixed lives in each fixed doc's own real content, not
+   restated here.
+
+   **New real bug surfaced while fixing `docs/gateway.md`, not just a doc error**:
+   `RouteTable.merge_contracts_from()` (the mechanism that's supposed to wire `@route`/`@contract`
+   decorator metadata into request validation) is only ever exercised directly against a
+   manually-constructed `RouteTable` in `tests/unit/test_gateway.py` — `HTTPGateway.__init__`
+   builds and owns its `RouteTable` as a private `_route_table` with no public way to call
+   `merge_contracts_from()` on it or inject a pre-merged table. So decorating a `handle()` with
+   `@route`/`@contract` today gets you **no** 422/500 validation through a real `HTTPGateway` —
+   contradicting the CHANGELOG's v-tagged claim that it's "wired ... for automatic 422/500
+   validation." `docs/gateway.md` now documents this honestly (decorators are IDE/doc metadata
+   only, YAML `routes:` is authoritative) instead of showing a fabricated working example. Needs
+   its own follow-up: either expose a real `HTTPGateway.merge_contracts_from()`/constructor hook,
+   or retire the decorators if they're not worth wiring up.
+2. ⏳ **Restructure `AGENTS.md` into a thin router** (~100 lines, matching this org's own
+   `harness-engineering-wiki` guidance on `AGENTS.md`-as-table-of-contents, not encyclopedia) with
+   links into the real `docs/` site as the system of record -- eliminating the duplication that
+   let the `TopologyServer`/version-number contradictions exist in the first place, rather than
+   trying to keep two copies in sync by hand forever.
+3. ⏳ **Extend `test_examples_smoke.py`'s exact philosophy to markdown**: a real, in-CI checker
+   that extracts and executes every Python code-fence in `docs/*.md`/`README.md`/`AGENTS.md`
+   against the real installed package. The single highest-leverage piece of new infrastructure --
+   would have mechanically caught the majority of this audit's findings with zero human judgment.
+4. ⏳ **Add `mkdocs build --strict`** to `.github/workflows/docs.yml` so broken internal
+   links/cross-references fail CI instead of silently deploying.
+5. **Deliberately not building**: a cross-doc-agreement linter for claims a code-fence can't
+   verify (behavioral assertions, version numbers) -- the fix there is structural (make there be
+   exactly one place each fact lives, cross-linked) not a second linter reconciling copies forever.
+6. **Deliberately deferred, not forgotten**: a generalized/reusable doc-verification tool, an
+   "agent-legible docs" positioning story, and a formal versioning-against-releases scheme --
+   real, legitimate future value, revisit only once items 1-4 are done and stable.
 
 > [#26](https://github.com/civitas-io/python-civitas/issues/26) (Streamable HTTP MCP transport) --
 > **Done (2026-08-24)**, moved to Part 1 above as R11.

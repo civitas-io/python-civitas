@@ -604,9 +604,9 @@ await runtime.despawn("workers", "researcher-1")
 await runtime.stop_agent("workers", "researcher-1", drain="current", timeout=5.0)
 ```
 
-### TopologyServer
+### TopologyAgent
 
-`TopologyServer` is a supervised HTTP endpoint that exposes live topology state. Declare it in YAML as a sibling of other children:
+`TopologyAgent` exposes live topology state. Declare it in YAML as a sibling of other children — the node type name (`topology_server`) is kept for backward compatibility, but as of v0.9.5 it no longer runs its own standalone HTTP server: instead it comes with an internally-owned `HTTPGateway` that serves its routes, sharing the same auth stack (API key / JWT / mTLS) as any other gateway.
 
 ```yaml
 - type: topology_server
@@ -616,14 +616,22 @@ await runtime.stop_agent("workers", "researcher-1", drain="current", timeout=5.0
     port: 6789        # default
 ```
 
-Endpoints (all read-only, JSON):
+Endpoints:
 
 | Endpoint | Response |
 |---|---|
-| `GET /health` | `{"status": "ok"}` |
+| `GET /health` | `{"status": "ok"}` (auth-free by default) |
 | `GET /topology` | Full supervision tree with live dynamic children and their statuses |
 | `GET /agents` | Flat list of all agents including dynamically spawned ones |
 | `GET /agents/{name}` | Single agent status or `{"error": "..."}` with 404 |
+| `GET /agents/{name}/mailbox` | Non-destructive peek at a mailbox |
+| `GET /snapshot` | JSON metrics snapshot (used by `civitas top`) |
+| `GET /metrics` | Prometheus text-format exposition |
+| `GET /processes` | Process-level resource samples |
+| `POST /agents/{name}/suspend` | Suspend an agent |
+| `POST /agents/{name}/resume` | Resume a suspended agent |
+| `POST /agents/{name}/restart` | Force-restart (kill) an agent |
+| `POST /agents/{name}/mailbox` | Inject an application message |
 
 `civitas topology show` automatically pings `/topology` if a `topology_server` node is present in the YAML. If the server is unreachable (runtime not running), it falls back to rendering the static YAML tree with a `(runtime not running)` annotation.
 

@@ -1,12 +1,14 @@
 # MCP Integration
 
-Civitas agents can connect to external MCP (Model Context Protocol) tool servers and invoke their tools natively — alongside built-in tools, with the same `mcp://server/tool` URI addressing, and with full OTEL tracing. A Civitas agent can also expose itself as an MCP server, making its capabilities callable by any MCP-compatible client.
+Civitas agents can connect to external MCP (Model Context Protocol) tool servers and invoke their tools natively — alongside built-in tools, with the same `mcp://server/tool` URI addressing, and with full OTEL tracing.
 
-MCP integration requires the optional `mcp` extra:
+The actual MCP client lives in a separate package, **fabrica** (`civitas-io/fabrica`), not in civitas core. `civitas.mcp.types` (`MCPServerConfig`, `MCPToolSchema`) is a lightweight, dependency-free config module that both packages share — `AgentProcess.connect_mcp()` lazily imports `fabrica.mcp.client.MCPClient` and `fabrica.mcp.tool.MCPTool` only when actually called, so civitas core never depends on fabrica:
 
 ```bash
-pip install 'civitas[mcp]'
+pip install fabrica-context
 ```
+
+If fabrica isn't installed, `connect_mcp()` raises `ConfigurationError("MCP support requires fabrica. Install it with: pip install fabrica-context")`.
 
 ---
 
@@ -45,12 +47,15 @@ After `connect_mcp` returns, all tools from that server are available. List them
 
 | Field | Type | Required for | Description |
 |---|---|---|---|
-| `name` | `str` | both | Logical name used in tool URIs: `mcp://name/tool` |
-| `transport` | `"stdio"` \| `"sse"` | both | How to connect to the server |
+| `name` | `str` | all | Logical name used in tool URIs: `mcp://name/tool` |
+| `transport` | `"stdio"` \| `"sse"` \| `"streamable_http"` | all | How to connect to the server |
 | `command` | `str` | stdio | Executable to launch, e.g. `"npx"` or `"python"` |
 | `args` | `list[str]` | stdio | Arguments passed to `command` |
 | `env` | `dict[str, str] \| None` | stdio | Extra environment variables for the subprocess |
-| `url` | `str` | sse | SSE endpoint URL, e.g. `"http://localhost:3000/sse"` |
+| `url` | `str` | sse, streamable_http | Endpoint URL, e.g. `"http://localhost:3000/sse"` |
+| `sandbox` | `SandboxConfig \| None` | optional | Per-server sandboxing (see [Architecture](architecture.md) — `civitas/sandbox/`) |
+
+`streamable_http` is the MCP spec's newer transport (a single POST/GET/DELETE endpoint, no separate SSE-upgrade endpoint) and is what most current remote MCP servers ship — often *instead of* classic `sse` rather than alongside it.
 
 **stdio transport** — Civitas spawns the command as a subprocess and communicates over stdin/stdout. The subprocess lifecycle is tied to the agent: when the agent stops, the subprocess is terminated.
 
@@ -87,13 +92,13 @@ async def handle(self, message: Message) -> Message | None:
     return self.reply({"repositories": results})
 ```
 
-If a tool call fails (the MCP server returns `isError=True` or the subprocess exits), `MCPToolError` is raised with the tool name and detail message.
+If a tool call fails (the MCP server returns `isError=True` or the subprocess exits), an exception is raised — but **not** `civitas.mcp.types.MCPToolError`. The real call path (`fabrica.mcp.client.MCPClient.call_tool()`, via `fabrica.mcp.tool.MCPTool.execute()`) raises fabrica's own, separately-defined `fabrica.mcp.errors.MCPToolError` and lets it propagate unchanged; civitas's `MCPToolError` is unused dead code kept only as existing public API. Catch `fabrica.mcp.errors.MCPToolError` (or a broad `Exception`) around `tool.execute()`, not `civitas.mcp.types.MCPToolError`.
 
 ---
 
 ## MCP tools in LLM tool calling
 
-MCP tools registered with `connect_mcp` are available to the agent's LLM provider automatically. Pass `self.tools` when calling the LLM and the model can select and invoke MCP tools as part of its reasoning:
+MCP tools registered with `connect_mcp` sit in the same `self.tools` registry as built-in tools. Collect their schemas and pass them to `self.llm.chat(..., tools=[...])` — `ModelProvider.chat()` expects a `list[Any]` of schemas, not the `ToolRegistry` itself:
 
 ```python
 from civitas import AgentProcess
@@ -121,12 +126,12 @@ class ResearchAgent(AgentProcess):
         response = await self.llm.chat(
             model="claude-haiku-4-5",
             messages=[{"role": "user", "content": message.payload["question"]}],
-            tools=self.tools,  # includes all mcp://filesystem/* and mcp://github/* tools
+            tools=[t.schema for t in self.tools.list_tools()],  # includes mcp://filesystem/* and mcp://github/* tools
         )
         return self.reply({"answer": response.content})
 ```
 
-The LLM sees MCP tool names in their `mcp://server/tool` form. Tool call results are routed back through the Civitas tool registry, not directly through the MCP client, so OTEL tracing applies.
+The LLM sees MCP tool names in their `mcp://server/tool` form (each `MCPTool.name` is `f"mcp://{server}/{tool}"`). Tool call results are routed back through `tool.execute()` on the Civitas tool registry, not directly through the MCP client, so OTEL tracing applies. As with any non-Anthropic provider, remember the [tool-schema translation gap](plugins.md#toolprovider-and-toolregistry) — `OpenAIProvider`/`MistralProvider` don't convert `input_schema` for you.
 
 ---
 
@@ -155,60 +160,42 @@ Tools from each server are namespaced: `mcp://filesystem/read_file`, `mcp://post
 
 ## Topology YAML
 
-MCP server connections are configured in the agent's `mcp_servers` block:
+MCP servers are configured in a single **top-level** `mcp: servers:` block — not per-agent. Every server declared here is connected to **every agent in the runtime**, right after transport startup and before the supervision tree's normal agent lifecycle proceeds:
 
 ```yaml
+mcp:
+  servers:
+    - name: filesystem
+      transport: stdio
+      command: npx
+      args: ["-y", "@modelcontextprotocol/server-filesystem", "/data"]
+    - name: slack
+      transport: sse
+      url: http://localhost:3001/sse
+
 supervision:
   name: root
   strategy: ONE_FOR_ONE
   children:
     - name: researcher
       type: myapp.agents.ResearchAgent
-      mcp_servers:
-        - name: filesystem
-          transport: stdio
-          command: npx
-          args: ["-y", "@modelcontextprotocol/server-filesystem", "/data"]
-        - name: slack
-          transport: sse
-          url: http://localhost:3001/sse
 ```
 
-The runtime calls `connect_mcp` for each entry before `on_start()` is called on the agent.
-
----
-
-## Exposing Civitas agents as an MCP server
-
-`MCPServer` wraps a running runtime and exposes its agents as tools callable by any MCP client. This lets external systems (Claude Desktop, other MCP hosts) call into your agent graph.
-
-```python
-from civitas.mcp.server import MCPServer
-
-mcp = MCPServer(
-    runtime=runtime,
-    expose=["researcher", "summarizer"],  # agent names to expose as tools
-    port=3000,
-)
-await mcp.start()
-# MCP clients can now connect at http://localhost:3000/sse
-```
-
-Each exposed agent appears as a tool named after the agent. Calling the tool sends a `call` message to the agent and returns its reply as the tool result.
+If a given agent fails to connect to a declared server (e.g. the agent doesn't call `connect_mcp`-compatible setup, or the server is unreachable), the runtime logs a warning and continues — it does not fail startup. There is currently no way to scope an MCP server to a subset of agents via YAML; if you need per-agent MCP servers, call `connect_mcp()` yourself from that agent's `on_start()` instead (see [Connecting to an MCP server](#connecting-to-an-mcp-server) above).
 
 ---
 
 ## OTEL tracing
 
-Every MCP tool invocation emits a `tool.execute {name}` span, identical to built-in tool spans:
+Every MCP tool invocation (via `fabrica.mcp.tool.MCPTool.execute()`) emits a `civitas.mcp.call` span:
 
 | Attribute | Value |
 |---|---|
-| `tool.name` | `mcp://filesystem/read_file` |
-| `tool.result_status` | `ok` or `error` |
-| `tool.latency_ms` | Round-trip time including MCP server execution |
+| `civitas.mcp.server` | The MCP server's config name, e.g. `filesystem` |
+| `civitas.mcp.tool` | The MCP tool's name, e.g. `read_file` |
+| `civitas.agent.name` | The name of the agent that made the call |
 
-These spans are parented to the enclosing `civitas.agent.handle` span, so MCP calls appear inline in your distributed trace alongside LLM calls.
+On failure the span records the exception via `span.set_error(exc)`. An `mcp.tool.call` audit event is also emitted to the configured `AuditSink`, independent of tracing. These spans are parented to the enclosing call stack, so MCP calls appear inline in your distributed trace alongside LLM calls.
 
 ---
 
@@ -216,7 +203,7 @@ These spans are parented to the enclosing `civitas.agent.handle` span, so MCP ca
 
 **No automatic reconnection.** If an SSE server goes down, the connection is not automatically re-established. Wrap `connect_mcp` in retry logic inside `on_start()` if you need resilience.
 
-**No schema validation on tool inputs.** Civitas passes keyword arguments directly to the MCP client. Input validation is the MCP server's responsibility. Use `MCPToolError` handling to catch server-side failures.
+**No schema validation on tool inputs.** Civitas passes keyword arguments directly to the MCP client. Input validation is the MCP server's responsibility. Catch `fabrica.mcp.errors.MCPToolError` (not `civitas.mcp.types.MCPToolError`, which is dead — see above) to handle server-side failures.
 
 **No tool discovery at runtime.** Tools are registered once in `on_start()`. Tools added to the MCP server after connection are not visible. Restart the agent to pick up new tools.
 
