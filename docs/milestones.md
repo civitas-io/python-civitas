@@ -1372,11 +1372,19 @@ breaks the same way for both); the one place agent-facing docs should differ is 
    only, YAML `routes:` is authoritative) instead of showing a fabricated working example. Needs
    its own follow-up: either expose a real `HTTPGateway.merge_contracts_from()`/constructor hook,
    or retire the decorators if they're not worth wiring up.
-2. ⏳ **Restructure `AGENTS.md` into a thin router** (~100 lines, matching this org's own
-   `harness-engineering-wiki` guidance on `AGENTS.md`-as-table-of-contents, not encyclopedia) with
-   links into the real `docs/` site as the system of record -- eliminating the duplication that
-   let the `TopologyServer`/version-number contradictions exist in the first place, rather than
-   trying to keep two copies in sync by hand forever.
+2. ✅ **Restructure `AGENTS.md` into a thin router** -- cut from 910 to 304 lines (not quite
+   the aspirational ~100, but every cut line was genuinely duplicated SDK-reference content:
+   Quick Import Reference, the full Repository Layout tree, and the Core API sections for
+   `AgentProcess`/`Message`/`Supervisor`/`Runtime`/Topology YAML/Tools/LLM calls/multi-agent
+   patterns -- all now covered, and kept accurate, in `docs/concepts.md`, `docs/agents-guide.md`,
+   `docs/messaging.md`, `docs/supervision.md`, `docs/topology.md`, `docs/plugins.md`, and
+   `CONTRIBUTING.md`. What stayed: org structure + the one load-bearing dependency-direction
+   rule, environment setup, code style, testing rules, public SDK stability rules, the Karpathy
+   behavioral guidelines, and the 18-item Anti-Patterns list -- none of that duplicates anything
+   in `docs/`, so it doesn't rot the same way. Added an explicit pointer at the top
+   distinguishing this file (contributing to civitas core) from `docs/agents-guide.md` (building
+   on top of civitas as a library), plus a PR-checklist line requiring the matching `docs/*.md`
+   page to be updated in the same PR as any SDK-visible change.
 3. ⏳ **Extend `test_examples_smoke.py`'s exact philosophy to markdown**: a real, in-CI checker
    that extracts and executes every Python code-fence in `docs/*.md`/`README.md`/`AGENTS.md`
    against the real installed package. The single highest-leverage piece of new infrastructure --
