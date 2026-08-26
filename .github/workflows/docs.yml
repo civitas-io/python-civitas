@@ -27,5 +27,8 @@ jobs:
       - name: Install docs dependencies
         run: uv sync --extra docs
 
+      - name: Build docs (strict — fails on broken internal links/anchors)
+        run: uv run mkdocs build --strict
+
       - name: Deploy to GitHub Pages
         run: uv run mkdocs gh-deploy --force

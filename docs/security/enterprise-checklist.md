@@ -143,4 +143,4 @@ Before going live in a regulated environment, conduct the following review:
 ## Contacts
 
 Security issues: **security@civitas.io**
-Responsible disclosure policy: [SECURITY.md](../../SECURITY.md)
+Responsible disclosure policy: [SECURITY.md](https://github.com/civitas-io/python-civitas/blob/main/SECURITY.md)

@@ -502,7 +502,7 @@ Two special headers influence gateway behavior:
 
 ## What the gateway does
 
-**WebSocket support.** Declare `ws_routes` in `GatewayConfig` to bridge a WebSocket session to an agent: inbound frames become `cast` messages, agent replies (including `stream_reply()` chunks) become outbound frames. When JWT auth is configured, the bearer token rides the `Sec-WebSocket-Protocol` handshake header — see [WebSocket & gRPC auth](#websocket--grpc-auth) above.
+**WebSocket support.** Declare `ws_routes` in `GatewayConfig` to bridge a WebSocket session to an agent: inbound frames become `cast` messages, agent replies (including `stream_reply()` chunks) become outbound frames. When JWT auth is configured, the bearer token rides the `Sec-WebSocket-Protocol` handshake header — see [WebSocket & gRPC auth](#websocket-grpc-auth) above.
 
 **gRPC surface.** Set `grpc_enabled=True` and `grpc_port` to serve the same agents over gRPC alongside HTTP, including server reflection and the same JWT/mTLS auth stack.
 
@@ -524,7 +524,7 @@ middleware: [civitas.gateway.ratelimit.rate_limit]
 
 **No TLS termination proxy.** The gateway can serve TLS directly via uvicorn's SSL support, but it is not a reverse proxy. Put nginx or Caddy in front if you need load balancing, certificate management, or connection pooling at scale.
 
-**No built-in identity/AuthZ system.** civitas ships the auth *seam* (middleware chain), JWT bearer verification, and mTLS — but no roles, scopes, SCIM, or IdP integration. Implement your own AuthZ in a middleware callable and declare it in `GatewayConfig.middleware`; see [Control-plane write actions & the AuthNZ seam](#control-plane-write-actions--the-authnz-seam-v096) below.
+**No built-in identity/AuthZ system.** civitas ships the auth *seam* (middleware chain), JWT bearer verification, and mTLS — but no roles, scopes, SCIM, or IdP integration. Implement your own AuthZ in a middleware callable and declare it in `GatewayConfig.middleware`; see [Control-plane write actions & the AuthNZ seam](#control-plane-write-actions-the-authnz-seam-v096) below.
 
 ---
 

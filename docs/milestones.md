@@ -1147,7 +1147,7 @@ Real Prometheus text-format metrics exposition at the standard `/metrics` scrape
 
 A civitas-native persistent span store for small/local deployments. Design-first: full design
 conversation and decision log in
-[`docs/design/telemetry-native.md`](../design/telemetry-native.md) before any code.
+[`docs/design/telemetry-native.md`](design/telemetry-native.md) before any code.
 
 | # | Deliverable | Priority |
 |---|-------------|----------|
@@ -1162,7 +1162,7 @@ conversation and decision log in
 
 A query/aggregation layer over B1's SQLite store. Design conversation (not a full standalone
 design doc — more mechanical than B1's genuine new architectural decision) captured in
-[`docs/design/telemetry-native.md`](../design/telemetry-native.md)'s §13.
+[`docs/design/telemetry-native.md`](design/telemetry-native.md)'s §13.
 
 | # | Deliverable | Priority |
 |---|-------------|----------|
@@ -1176,7 +1176,7 @@ design doc — more mechanical than B1's genuine new architectural decision) cap
 ### B3 — Telemetry TUI, completing Track B
 
 The Textual TUI over B1/B2's native SQLite store. Full design + decisions in
-[`docs/design/telemetry-native.md`](../design/telemetry-native.md)'s §14.
+[`docs/design/telemetry-native.md`](design/telemetry-native.md)'s §14.
 
 | # | Deliverable | Priority |
 |---|-------------|----------|
@@ -1228,7 +1228,7 @@ and existed as a separate, hand-rolled `asyncio.start_server` HTTP server that r
 implementation onto it, the two were **merged** — `TopologyServer` is now an ordinary agent behind
 `HTTPGateway`, inheriting its API-key/JWT/mTLS auth. Design-first: full investigation, four
 reviewed decisions, and a phased migration plan in
-[`docs/design/topology-gateway-merge.md`](../design/topology-gateway-merge.md).
+[`docs/design/topology-gateway-merge.md`](design/topology-gateway-merge.md).
 
 **Breaking change (deliberate, D6):** the `TopologyServer` class is removed — no longer importable
 from `civitas`. YAML users are unaffected (`type: topology_server` nodes keep working, now building
@@ -1262,7 +1262,7 @@ auto-registered route carrying the node's auth middleware, with the authenticate
 recorded as the audit actor (`control-plane-writes.md` D2 — the honest binding). **civitas ships
 the seam + honest audit + safe localhost default, never AuthZ** (customers bring their own
 SCIM/IdP/OPA middleware; single devs bring nothing). Full design + rationale in
-[`docs/design/control-plane-writes.md`](../design/control-plane-writes.md).
+[`docs/design/control-plane-writes.md`](design/control-plane-writes.md).
 
 | Item | Priority | Status |
 |------|----------|--------|
@@ -1283,7 +1283,7 @@ SCIM/IdP/OPA middleware; single devs bring nothing). Full design + rationale in
 **Status: ✅ Released 2026-07-31, as a single release** (HITL half of the original "HITL & Streaming
 polish" bundle; the streaming R7 items are split out to their own future release — see Part 2).
 Three orthogonal HITL rough-edges on the durable-suspension primitive; full design in
-[`docs/design/hitl-polish.md`](../design/hitl-polish.md).
+[`docs/design/hitl-polish.md`](design/hitl-polish.md).
 
 | Item | Status |
 |------|--------|
@@ -1299,13 +1299,14 @@ Owner column: `core` = python-civitas, else the target repo.
 
 ### Now open — tracked issue (python-civitas)
 
-**Public documentation reliability** (see the next section, below) is now open, as of 2026-08-26.
-The M-LAST performance-benchmarking item (see [Part 2 -- Backlog](#part-2--backlog) below) remains
+**Public documentation reliability** (see the next section, below) shipped 2026-08-26 --
+all 4 action items done, same day it was opened.
+The M-LAST performance-benchmarking item (see [Part 2 -- Backlog](#part-2-backlog) below) remains
 **complete** -- real benchmarks, real results, `docs/design/performance-benchmark.md`.
 
-### Public documentation reliability (In Progress)
+### Public documentation reliability (Done)
 
-**Status: 🔄 In Progress | Priority: 🔴 High | Owner: core**
+**Status: ✅ Done -- all 4 action items shipped | Priority: 🔴 High | Owner: core**
 
 **Trigger**: a real, code-verified audit of every public-facing doc (`README.md`, `docs/*.md`,
 `AGENTS.md`, `docs/llms.txt`, `docs/agents-guide.md`) found the public docs surface extensively
@@ -1404,8 +1405,23 @@ breaks the same way for both); the one place agent-facing docs should differ is 
    link to `docs/transports.md#transport-protocol` instead of a second copy. Confirms the
    checker earns its keep: same repo, same audit pass, and a second independent copy of the
    same fact had already drifted.
-4. ⏳ **Add `mkdocs build --strict`** to `.github/workflows/docs.yml` so broken internal
-   links/cross-references fail CI instead of silently deploying.
+4. ✅ **Add `mkdocs build --strict`** to `.github/workflows/docs.yml` (a new "Build docs
+   (strict...)" step before the `gh-deploy` step) so broken internal links/cross-references
+   fail CI instead of silently deploying. Ran it locally first and fixed every real warning
+   it found before wiring it in (fix-then-gate, not gate-then-fail): six `docs/milestones.md`
+   links to `docs/design/*.md` written with a wrong `../` prefix (docs/milestones.md is
+   itself inside `docs/`, so `design/x.md` is correct, not `../design/x.md`); five links
+   pointing at repo-root files (`CHANGELOG.md`, `SECURITY.md`, `AGENTS.md`,
+   `examples/dynamic_spawning.py`, and 4 `civitas/*.py` references) that were relative paths
+   assuming those files ship inside the built site -- they don't (mkdocs's `docs_dir` is
+   `docs/` only), so these were dead links on the *actual deployed site* today, not just a
+   strict-mode nitpick; one wrong relative path to `design/gateway-streaming.md` from
+   `docs/streaming.md`; and four same-page/cross-page anchor slugs that didn't match
+   MkDocs's real heading-to-anchor slugification (double hyphens where headings have `&`/`—`,
+   and two `docs/cli.md` → `docs/observability.md` anchors referencing an old heading name
+   entirely). All fixed with either corrected relative paths (within `docs/`) or full GitHub
+   blob URLs (for anything genuinely outside `docs/`). `uv run mkdocs build --strict` now
+   passes clean.
 5. **Deliberately not building**: a cross-doc-agreement linter for claims a code-fence can't
    verify (behavioral assertions, version numbers) -- the fix there is structural (make there be
    exactly one place each fact lives, cross-linked) not a second linter reconciling copies forever.

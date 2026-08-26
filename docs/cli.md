@@ -312,7 +312,7 @@ design). It attaches remotely over HTTP to the topology's `topology_server` node
 `/topology`, `/snapshot`, and `/processes` independently — it does not start a runtime of its own.
 (v0.9.3: `/snapshot` was `/metrics` at the time this section was first written — renamed to make
 room for real Prometheus text-format exposition at the standard `/metrics` scrape path; see
-[observability.md](observability.md#prometheus-metrics-v0931).)
+[observability.md](observability.md#prometheus-metrics-v093-a2).)
 
 ```bash
 civitas dashboard <topology.yaml> [<topology2.yaml> ...] [--refresh <seconds>] [--header 'Name: Value']
@@ -422,5 +422,5 @@ against "now" each refresh), or `r` for an immediate manual refresh. `q` to quit
 ### Try it
 
 Run any topology with a `SQLiteBackend` exporter configured (see
-[observability.md](observability.md#native-sqlite-storage-v093x-track-b-b1)), then point `civitas
+[observability.md](observability.md#sqlitespanstore-v093x-track-b)), then point `civitas
 telemetry` at the same `db_dir` — it reads live, even while the app is still running and writing.

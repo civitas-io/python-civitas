@@ -10,11 +10,11 @@
 
 M4.3 produced a STRIDE threat model identifying **10 HIGH** and **8 MEDIUM** risks in the Civitas runtime. Most of those findings explicitly defer their mitigation to M4.2. Today the runtime ships with:
 
-- **No transport encryption.** ZMQ messages traverse loopback as raw msgpack ([civitas/transport/zmq.py:1-284](../../civitas/transport/zmq.py)). NATS connects without client TLS. Cross-host deployments are not safe.
-- **No message authentication.** `Message.sender` is a string field set by the sender and never verified ([civitas/messages.py](../../civitas/messages.py)). Any agent can spoof any other agent (Spoofing, HIGH).
-- **Plaintext secrets in YAML.** `from_config()` does not substitute env vars; API keys must be hardcoded into topology files or wrapped at the deployment layer ([civitas/runtime.py:100-317](../../civitas/runtime.py)).
+- **No transport encryption.** ZMQ messages traverse loopback as raw msgpack ([civitas/transport/zmq.py:1-284](https://github.com/civitas-io/python-civitas/blob/main/civitas/transport/zmq.py#L1-L284)). NATS connects without client TLS. Cross-host deployments are not safe.
+- **No message authentication.** `Message.sender` is a string field set by the sender and never verified ([civitas/messages.py](https://github.com/civitas-io/python-civitas/blob/main/civitas/messages.py)). Any agent can spoof any other agent (Spoofing, HIGH).
+- **Plaintext secrets in YAML.** `from_config()` does not substitute env vars; API keys must be hardcoded into topology files or wrapped at the deployment layer ([civitas/runtime.py:100-317](https://github.com/civitas-io/python-civitas/blob/main/civitas/runtime.py#L100-L317)).
 - **No per-agent credential scope.** Plugins (LLM providers, tools) read env vars or take config dicts at instantiation; every agent shares the same credentials.
-- **No tool sandboxing.** MCP tools are executed as subprocesses with the runtime's full privileges ([civitas/mcp/tool.py:44-67](../../civitas/mcp/tool.py)).
+- **No tool sandboxing.** MCP tools are executed as subprocesses with the runtime's full privileges (this doc predates the v0.9.x migration of the MCP client to `civitas-io/fabrica`; see [`fabrica/mcp/tool.py`](https://github.com/civitas-io/fabrica/blob/main/src/fabrica/mcp/tool.py) for the current implementation).
 - **No structured audit log.** OTel spans cover observability but are not designed as a tamper-evident audit trail.
 
 M4.2 closes these gaps. It is the implementation arm of the threat model.

@@ -1,7 +1,7 @@
 # Streaming
 
 Civitas supports incremental, chunk-at-a-time replies both to external clients (through the
-[gateway](gateway-streaming.md): SSE / WebSocket / gRPC server-streaming) and **agent-to-agent over the
+[gateway](design/gateway-streaming.md): SSE / WebSocket / gRPC server-streaming) and **agent-to-agent over the
 message bus** (in-process, ZMQ, NATS). This page covers the bus-native, agent-to-agent path.
 
 ## Producing a stream

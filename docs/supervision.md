@@ -635,4 +635,4 @@ Endpoints:
 
 `civitas topology show` automatically pings `/topology` if a `topology_server` node is present in the YAML. If the server is unreachable (runtime not running), it falls back to rendering the static YAML tree with a `(runtime not running)` annotation.
 
-See [examples/dynamic_spawning.py](../examples/dynamic_spawning.py) for a complete working example.
+See [examples/dynamic_spawning.py](https://github.com/civitas-io/python-civitas/blob/main/examples/dynamic_spawning.py) for a complete working example.

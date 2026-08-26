@@ -454,7 +454,7 @@ scrape_configs:
 `civitas`'s own JSON metrics snapshot (used internally by `civitas top`) lives at `GET /snapshot`
 now instead — `/metrics` was renamed specifically to make room for the real, standard Prometheus
 path (never wise to break ecosystem standards in an OSS project). This is a breaking change to a
-previously-documented endpoint; see the [v0.9.3 CHANGELOG entry](../CHANGELOG.md) if you were
+previously-documented endpoint; see the [v0.9.3 CHANGELOG entry](https://github.com/civitas-io/python-civitas/blob/main/CHANGELOG.md) if you were
 depending on the old JSON shape at `/metrics` directly.
 
 ### Metric reference

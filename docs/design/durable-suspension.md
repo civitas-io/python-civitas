@@ -139,7 +139,7 @@ STOPPING, STOPPED, or CRASHED. This design adds a supervised, durable **SUSPENDE
 
 **It was not removed because suspension is a bad idea.** It was removed because it was *dead
 API*: the enum value existed but nothing ever transitioned into or out of it, nothing checked
-it, and no method set it. That is exactly [AGENTS.md anti-pattern #16](../../AGENTS.md)
+it, and no method set it. That is exactly [AGENTS.md anti-pattern #16](https://github.com/civitas-io/python-civitas/blob/main/AGENTS.md)
 ("Declaring API surface without wiring it up").
 
 **This is the governing constraint of this design.** Re-introducing `SUSPENDED` is only
