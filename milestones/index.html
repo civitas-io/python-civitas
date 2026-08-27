@@ -6199,18 +6199,29 @@ breaks the same way for both); the one place agent-facing docs should differ is 
    list of what was actually found and fixed lives in each fixed doc's own real content, not
    restated here.</li>
 </ol>
-<p><strong>New real bug surfaced while fixing <code>docs/gateway.md</code>, not just a doc error</strong>:
-   <code>RouteTable.merge_contracts_from()</code> (the mechanism that's supposed to wire <code>@route</code>/<code>@contract</code>
-   decorator metadata into request validation) is only ever exercised directly against a
-   manually-constructed <code>RouteTable</code> in <code>tests/unit/test_gateway.py</code> — <code>HTTPGateway.__init__</code>
-   builds and owns its <code>RouteTable</code> as a private <code>_route_table</code> with no public way to call
-   <code>merge_contracts_from()</code> on it or inject a pre-merged table. So decorating a <code>handle()</code> with
-   <code>@route</code>/<code>@contract</code> today gets you <strong>no</strong> 422/500 validation through a real <code>HTTPGateway</code> —
-   contradicting the CHANGELOG's v-tagged claim that it's "wired ... for automatic 422/500
-   validation." <code>docs/gateway.md</code> now documents this honestly (decorators are IDE/doc metadata
-   only, YAML <code>routes:</code> is authoritative) instead of showing a fabricated working example. Needs
-   its own follow-up: either expose a real <code>HTTPGateway.merge_contracts_from()</code>/constructor hook,
-   or retire the decorators if they're not worth wiring up.
+<p><strong>New real bug surfaced while fixing <code>docs/gateway.md</code>, not just a doc error — since resolved
+   (2026-08-27)</strong>: <code>RouteTable.merge_contracts_from()</code> (the mechanism that's supposed to wire
+   <code>@route</code>/<code>@contract</code> decorator metadata into request validation) was only ever exercised
+   directly against a manually-constructed <code>RouteTable</code> in <code>tests/unit/test_gateway.py</code> —
+   <code>HTTPGateway.__init__</code> built and owned its <code>RouteTable</code> as a private <code>_route_table</code> with no
+   public way to call <code>merge_contracts_from()</code> on it or inject a pre-merged table, and <code>civitas
+   topology validate</code> never called the related <code>RouteTable.from_class()</code> either, despite its own
+   docstring claiming that's its exclusive caller. Ran a 5-advisor LLM council on the fix (wire it
+   up via an explicit config field, auto-resolve via the registry at startup, or delete the dead
+   mechanism) — all 5 peer reviewers independently ranked the same advisor's answer strongest, and
+   the council's own recommendation was to verify real usage before choosing, since the choice
+   hinges entirely on a fact nobody had checked. Did that verification: grepped and git-blamed
+   <code>@route</code>/<code>@contract</code> usage across every repo in the org (python-civitas, civitas-contrib,
+   presidium, fabrica, kordon, tessera, prx) — found <strong>zero</strong> real usage of <code>@contract</code> anywhere,
+   including in civitas's own examples (<code>examples/http_gateway.py</code>/<code>gateway_auth.py</code> used <code>@route</code>
+   as decoration only, never paired with <code>@contract</code>); <code>presidium</code>, a real, substantial downstream
+   consumer of <code>HTTPGateway</code>/<code>GatewayConfig</code>, builds all its routing through YAML/config and never
+   imports the decorators. Confirmed dead code, not a live feature with a wiring bug. <strong>Removed
+   entirely</strong>: <code>@route</code>, <code>@contract</code>, <code>RouteTable.from_class()</code>, <code>RouteTable.merge_contracts_from()</code>,
+   <code>RouteEntry.request_schema</code>/<code>response_schema</code>, <code>civitas/gateway/contracts.py</code>, and the OpenAPI
+   schema-generation branches that depended on them (see <code>CHANGELOG.md</code> <code>[Unreleased]</code> for the
+   full breaking-change entry). <code>docs/gateway.md</code> now documents that there is no built-in
+   request/response validation and shows how to validate inside <code>handle()</code> directly.
 2. ✅ <strong>Restructure <code>AGENTS.md</code> into a thin router</strong> -- cut from 910 to 304 lines (not quite
    the aspirational ~100, but every cut line was genuinely duplicated SDK-reference content:
    Quick Import Reference, the full Repository Layout tree, and the Core API sections for

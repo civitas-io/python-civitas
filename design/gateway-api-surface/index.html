@@ -2876,9 +2876,20 @@
 
 
 <h1 id="design-gateway-api-surface">Design: Gateway API Surface<a class="headerlink" href="#design-gateway-api-surface" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> Implemented — v0.4
+<p><strong>Status:</strong> Partially reverted — v0.4 (see update below)
 <strong>Author:</strong> Jeryn Mathew Varghese
 <strong>Last updated:</strong> 2026-04</p>
+<blockquote>
+<p><strong>Update (2026-08-27):</strong> The <code>@route</code>/<code>@contract</code> decorator pair and <code>RouteTable.
+from_class()</code>/<code>merge_contracts_from()</code> described below were removed entirely. They
+were never actually wired into <code>HTTPGateway</code>'s real request-dispatch path — decorating
+a method never produced working validation, only unit tests exercised the mechanism by
+constructing objects by hand. An org-wide audit found zero real usage of <code>@contract</code>
+anywhere, including in civitas's own examples. See <code>docs/milestones.md</code> ("Public
+documentation reliability") for the investigation and an LLM Council review of the
+fix options. YAML <code>routes:</code> (documented below and in <code>docs/gateway.md</code>) remains the
+sole, fully-working routing mechanism and was never affected by this.</p>
+</blockquote>
 <hr />
 <h2 id="motivation">Motivation<a class="headerlink" href="#motivation" title="Permanent link">&para;</a></h2>
 <p><code>HTTPGateway</code> provides the network bridge between external HTTP clients and the Civitas message bus. Out of the box it supports default URL conventions (<code>POST /agents/{name}</code>) — enough for internal tooling and simple integrations.</p>
