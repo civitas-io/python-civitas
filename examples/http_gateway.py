@@ -21,14 +21,13 @@ import asyncio
 import signal
 
 from civitas import AgentProcess, Runtime, Supervisor
-from civitas.gateway import GatewayConfig, HTTPGateway, route
+from civitas.gateway import GatewayConfig, HTTPGateway
 from civitas.messages import Message
 
 
 class EchoAgent(AgentProcess):
     """Simple echo agent — replies with whatever text it receives."""
 
-    @route("POST", "/v1/echo")
     async def handle(self, message: Message) -> Message | None:
         return self.reply({"echo": message.payload.get("text", "")})
 

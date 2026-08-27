@@ -39,12 +39,11 @@ import time  # noqa: E402
 import jwt as pyjwt  # noqa: E402
 
 from civitas import AgentProcess, Runtime, Supervisor  # noqa: E402
-from civitas.gateway import GatewayConfig, HTTPGateway, route  # noqa: E402
+from civitas.gateway import GatewayConfig, HTTPGateway  # noqa: E402
 from civitas.messages import Message  # noqa: E402
 
 
 class EchoAgent(AgentProcess):
-    @route("POST", "/v1/echo")
     async def handle(self, message: Message) -> Message | None:
         return self.reply({"echo": message.payload.get("text", "")})
 

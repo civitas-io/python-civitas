@@ -1,8 +1,18 @@
 # Design: Gateway API Surface
 
-**Status:** Implemented — v0.4
+**Status:** Partially reverted — v0.4 (see update below)
 **Author:** Jeryn Mathew Varghese
 **Last updated:** 2026-04
+
+> **Update (2026-08-27):** The `@route`/`@contract` decorator pair and `RouteTable.
+> from_class()`/`merge_contracts_from()` described below were removed entirely. They
+> were never actually wired into `HTTPGateway`'s real request-dispatch path — decorating
+> a method never produced working validation, only unit tests exercised the mechanism by
+> constructing objects by hand. An org-wide audit found zero real usage of `@contract`
+> anywhere, including in civitas's own examples. See `docs/milestones.md` ("Public
+> documentation reliability") for the investigation and an LLM Council review of the
+> fix options. YAML `routes:` (documented below and in `docs/gateway.md`) remains the
+> sole, fully-working routing mechanism and was never affected by this.
 
 ---
 

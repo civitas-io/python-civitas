@@ -18,11 +18,8 @@ from civitas.gateway import (
     GatewayRequest,
     GatewayResponse,
     HTTPGateway,
-    contract,
-    route,
 )
 from civitas.gateway.asgi import GatewayASGI, _parse_traceparent
-from civitas.gateway.contracts import validate_request, validate_response
 from civitas.gateway.core import _build_topology_routes
 from civitas.gateway.middleware import build_chain, load_middleware
 from civitas.gateway.openapi import build_spec
@@ -119,29 +116,6 @@ class TestRouteTable:
         result = rt.match("POST", "/v1/chat")
         assert result is not None
         assert result[0].agent == "first"
-
-    def test_from_class_reads_route_metadata(self) -> None:
-        class FakeAgent:
-            def handle_call(self) -> None:
-                pass
-
-        FakeAgent.handle_call._civitas_route = {  # type: ignore[attr-defined]
-            "method": "POST",
-            "path": "/v1/chat",
-            "mode": "call",
-        }
-
-        rt = RouteTable.from_class(FakeAgent)
-        assert len(rt) == 1
-        assert rt.entries()[0].path_pattern == "/v1/chat"
-
-    def test_from_class_no_routes(self) -> None:
-        class EmptyAgent:
-            def handle(self) -> None:
-                pass
-
-        rt = RouteTable.from_class(EmptyAgent)
-        assert len(rt) == 0
 
     def test_multiple_path_params(self) -> None:
         rt = RouteTable.from_config(
@@ -776,186 +750,6 @@ supervision:
 
 
 # ---------------------------------------------------------------------------
-# @route decorator
-# ---------------------------------------------------------------------------
-
-
-class TestRouteDecorator:
-    def test_sets_civitas_route_metadata(self) -> None:
-        @route("POST", "/v1/chat")
-        def handler() -> None:
-            pass
-
-        assert handler._civitas_route == {"method": "POST", "path": "/v1/chat", "mode": "call"}
-
-    def test_method_uppercased(self) -> None:
-        @route("get", "/v1/status")
-        def handler() -> None:
-            pass
-
-        assert handler._civitas_route["method"] == "GET"
-
-    def test_custom_mode(self) -> None:
-        @route("POST", "/v1/notify", mode="cast")
-        def handler() -> None:
-            pass
-
-        assert handler._civitas_route["mode"] == "cast"
-
-    def test_from_class_reads_decorated_methods(self) -> None:
-        class MyAgent:
-            @route("POST", "/v1/chat")
-            def handle_chat(self) -> None:
-                pass
-
-            @route("GET", "/v1/status")
-            def handle_status(self) -> None:
-                pass
-
-        rt = RouteTable.from_class(MyAgent)
-        assert len(rt) == 2
-        paths = {e.path_pattern for e in rt.entries()}
-        assert "/v1/chat" in paths
-        assert "/v1/status" in paths
-
-
-# ---------------------------------------------------------------------------
-# @contract decorator + validation helpers
-# ---------------------------------------------------------------------------
-
-
-class TestContractDecorator:
-    def test_sets_civitas_contract_metadata(self) -> None:
-        try:
-            from pydantic import BaseModel
-
-            class Req(BaseModel):
-                text: str
-
-            @contract(request=Req)
-            def handler() -> None:
-                pass
-
-            assert handler._civitas_contract["request"] is Req
-            assert handler._civitas_contract["response"] is None
-        except ImportError:
-            pytest.skip("pydantic not installed")
-
-    def test_validate_request_valid(self) -> None:
-        try:
-            from pydantic import BaseModel
-
-            class Req(BaseModel):
-                text: str
-
-            ok, err = validate_request(Req, {"text": "hello"})
-            assert ok is True
-            assert err is None
-        except ImportError:
-            pytest.skip("pydantic not installed")
-
-    def test_validate_request_invalid_returns_422_shape(self) -> None:
-        try:
-            from pydantic import BaseModel
-
-            class Req(BaseModel):
-                text: str
-
-            ok, err = validate_request(Req, {"wrong_field": 123})
-            assert ok is False
-            assert err is not None
-            assert "detail" in err
-            assert isinstance(err["detail"], list)
-        except ImportError:
-            pytest.skip("pydantic not installed")
-
-    def test_validate_response_valid(self) -> None:
-        try:
-            from pydantic import BaseModel
-
-            class Resp(BaseModel):
-                answer: int
-
-            ok, err_msg = validate_response(Resp, {"answer": 42})
-            assert ok is True
-            assert err_msg is None
-        except ImportError:
-            pytest.skip("pydantic not installed")
-
-    def test_validate_response_invalid(self) -> None:
-        try:
-            from pydantic import BaseModel
-
-            class Resp(BaseModel):
-                answer: int
-
-            ok, err_msg = validate_response(Resp, {"answer": "not-an-int"})
-            # pydantic v2 coerces strings to int, so this may pass; test with clearly wrong type
-            ok2, err2 = validate_response(Resp, {"wrong": "field"})
-            # At least one of these should fail (depending on pydantic strict mode)
-            assert isinstance(ok, bool)
-        except ImportError:
-            pytest.skip("pydantic not installed")
-
-    def test_merge_contracts_from_patches_route_entry(self) -> None:
-        try:
-            from pydantic import BaseModel
-
-            class Req(BaseModel):
-                text: str
-
-            class MyAgent:
-                @route("POST", "/v1/chat")
-                @contract(request=Req)
-                def handle(self) -> None:
-                    pass
-
-            rt = RouteTable.from_config(
-                [
-                    {"method": "POST", "path": "/v1/chat", "agent": "my_agent"},
-                ]
-            )
-            rt.merge_contracts_from(MyAgent, agent_name="my_agent")
-            entry = rt.entries()[0]
-            assert entry.request_schema is Req
-        except ImportError:
-            pytest.skip("pydantic not installed")
-
-    @pytest.mark.asyncio
-    async def test_contract_request_validation_returns_422(self) -> None:
-        try:
-            from pydantic import BaseModel
-
-            class Req(BaseModel):
-                text: str
-
-            class MyAgent:
-                @route("POST", "/v1/chat")
-                @contract(request=Req)
-                def handle(self) -> None:
-                    pass
-
-            gateway = MagicMock(spec=HTTPGateway)
-            gateway.name = "api"
-            config = GatewayConfig(
-                routes=[
-                    {"method": "POST", "path": "/v1/chat", "agent": "my_agent"},
-                ]
-            )
-            rt = RouteTable.from_config(config.routes)
-            rt.merge_contracts_from(MyAgent, agent_name="my_agent")
-            asgi = GatewayASGI(gateway=gateway, route_table=rt, config=config)
-
-            status, body = await _http_request(
-                asgi, method="POST", path="/v1/chat", body={"wrong": 1}
-            )
-            assert status == 422
-            assert "detail" in body
-        except ImportError:
-            pytest.skip("pydantic not installed")
-
-
-# ---------------------------------------------------------------------------
 # Middleware chain
 # ---------------------------------------------------------------------------
 
@@ -1091,47 +885,6 @@ class TestOpenAPI:
         op = spec["paths"]["/sessions/{id}/history"]["get"]
         param_names = [p["name"] for p in op["parameters"]]
         assert "id" in param_names
-
-    def test_build_spec_with_request_schema(self) -> None:
-        try:
-            from pydantic import BaseModel
-        except ImportError:
-            pytest.skip("pydantic not installed")
-
-        class Req(BaseModel):
-            text: str
-
-        entry = RouteEntry(method="POST", path_pattern="/v1/chat", agent="bot", mode="call")
-        entry.request_schema = Req
-        rt = RouteTable([entry])
-        config = GatewayConfig()
-
-        spec = build_spec(rt, config)
-        op = spec["paths"]["/v1/chat"]["post"]
-        assert "requestBody" in op
-        body_schema = op["requestBody"]["content"]["application/json"]["schema"]
-        assert "properties" in body_schema or body_schema.get("title") == "Req"
-        assert "422" in op["responses"]
-
-    def test_build_spec_with_response_schema(self) -> None:
-        try:
-            from pydantic import BaseModel
-        except ImportError:
-            pytest.skip("pydantic not installed")
-
-        class Resp(BaseModel):
-            answer: int
-
-        entry = RouteEntry(method="GET", path_pattern="/v1/result", agent="bot", mode="call")
-        entry.response_schema = Resp
-        rt = RouteTable([entry])
-        config = GatewayConfig()
-
-        spec = build_spec(rt, config)
-        op = spec["paths"]["/v1/result"]["get"]
-        resp_schema = op["responses"]["200"]["content"]["application/json"]["schema"]
-        assert "properties" in resp_schema or resp_schema.get("title") == "Resp"
-        assert "500" in op["responses"]
 
     def test_build_spec_two_methods_same_path(self) -> None:
         entry1 = RouteEntry(method="GET", path_pattern="/v1/items", agent="reader", mode="call")
@@ -1391,46 +1144,11 @@ class TestQueryParams:
 
 
 # ---------------------------------------------------------------------------
-# GatewayASGI — contract validation (lines 186->189, 191, 196-199)
+# GatewayASGI — error-shaped replies
 # ---------------------------------------------------------------------------
 
 
-class TestContractValidation:
-    @pytest.mark.asyncio
-    async def test_request_schema_failure_returns_422(self) -> None:
-        from pydantic import BaseModel
-
-        class ChatRequest(BaseModel):
-            query: str
-
-        asgi, gateway = _make_asgi(
-            routes=[{"method": "POST", "path": "/chat", "agent": "assistant", "mode": "call"}]
-        )
-        # Inject schema directly — from_config only wires schemas from @contract metadata
-        asgi._route_table.entries()[0].request_schema = ChatRequest
-
-        status, body = await _http_request(asgi, method="POST", path="/chat", body={})
-        assert status == 422
-
-    @pytest.mark.asyncio
-    async def test_response_schema_failure_returns_500(self) -> None:
-        from pydantic import BaseModel
-
-        class ChatResponse(BaseModel):
-            answer: str
-
-        asgi, gateway = _make_asgi(
-            routes=[{"method": "POST", "path": "/chat", "agent": "assistant", "mode": "call"}]
-        )
-        asgi._route_table.entries()[0].response_schema = ChatResponse
-
-        reply = MagicMock(spec=Message)
-        reply.payload = {"wrong_key": "value"}  # missing required "answer"
-        gateway.ask = AsyncMock(return_value=reply)
-
-        status, _ = await _http_request(asgi, method="POST", path="/chat", body={"q": "hi"})
-        assert status == 500
-
+class TestErrorReplies:
     @pytest.mark.asyncio
     async def test_error_in_reply_payload_returns_400(self) -> None:
         asgi, gateway = _make_asgi(

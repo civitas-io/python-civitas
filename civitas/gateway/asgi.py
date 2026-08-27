@@ -12,7 +12,6 @@ from email.policy import default as email_policy
 from typing import TYPE_CHECKING, Any
 
 from civitas.errors import ConfigurationError
-from civitas.gateway.contracts import validate_request, validate_response
 from civitas.gateway.dispatch import (
     DispatchResult,
     DispatchStatus,
@@ -417,12 +416,6 @@ class GatewayASGI:
                 principal = (request.auth or {}).get("principal") or {"id": "unauthenticated"}
                 payload["__principal__"] = principal
 
-            # Request contract validation
-            if entry.request_schema is not None:
-                valid, err = validate_request(entry.request_schema, payload)
-                if not valid:
-                    return GatewayResponse(422, err or {})
-
             if entry.mode == "stream":
                 stream = self._dispatcher.stream(
                     recipient=entry.agent,
@@ -441,9 +434,6 @@ class GatewayASGI:
             )
             return self._result_to_response(
                 result,
-                response_schema=entry.response_schema,
-                method=method,
-                path=path,
                 raw_response=entry.raw_response,
             )
 
@@ -486,9 +476,6 @@ class GatewayASGI:
     def _result_to_response(
         self,
         result: DispatchResult,
-        response_schema: Any | None = None,
-        method: str = "",
-        path: str = "",
         raw_response: bool = False,
     ) -> GatewayResponse:
         """Map a normalized DispatchResult onto an HTTP GatewayResponse."""
@@ -503,25 +490,18 @@ class GatewayASGI:
 
         # v0.9.5 (topology-gateway-merge.md D4): a raw_response route's OK reply
         # is {"__raw_body__": str, "__content_type__": str, "__status__": int} --
-        # sent verbatim, never JSON-encoded or contract-validated (there is no
-        # JSON schema for Prometheus text exposition, and TopologyAgent's own
-        # 404s -- e.g. an unknown agent name -- need a status other than 200).
-        # Only reachable when the ROUTE, not the reply shape, opted in -- an
-        # ordinary route returning these keys is unaffected. __status__ defaults
-        # to 200 so a raw-response route that never varies its status (like
-        # /health) doesn't need to set it explicitly.
+        # sent verbatim, never JSON-encoded (there is no JSON schema for
+        # Prometheus text exposition, and TopologyAgent's own 404s -- e.g. an
+        # unknown agent name -- need a status other than 200). Only reachable
+        # when the ROUTE, not the reply shape, opted in -- an ordinary route
+        # returning these keys is unaffected. __status__ defaults to 200 so a
+        # raw-response route that never varies its status (like /health)
+        # doesn't need to set it explicitly.
         if raw_response and result.status is DispatchStatus.OK:
             raw = result.payload.get("__raw_body__", "")
             content_type = result.payload.get("__content_type__", "text/plain; charset=utf-8")
             status = int(result.payload.get("__status__", 200))
             return GatewayResponse(status, raw_body=raw.encode(), content_type=content_type)
-
-        # OK or AGENT_ERROR: validate the reply payload before mapping the error.
-        if response_schema is not None:
-            valid, err_msg = validate_response(response_schema, result.payload)
-            if not valid:
-                logger.error("Response validation failed for %s %s: %s", method, path, err_msg)
-                return GatewayResponse(500, {"error": "response validation failed"})
 
         if result.status is DispatchStatus.AGENT_ERROR:
             return GatewayResponse(400, result.payload)

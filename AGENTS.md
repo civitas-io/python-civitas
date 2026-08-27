@@ -258,9 +258,10 @@ real class of bug found in this repo's own history.
     needs its `span.end()` in a `finally`, or an exception leaks an open span.
 16. **Declaring API surface without wiring it up** — a field/method/config key that exists
     but no code path ever reads sets false expectations. If you define an interface, wire
-    it up before merging. (A real, currently-open instance of this: `RouteTable.
-    merge_contracts_from()` in `civitas/gateway/router.py` — see `docs/gateway.md` and
-    `docs/milestones.md`.)
+    it up before merging — or delete it once you confirm nothing real depends on it. (Real
+    precedent: `@route`/`@contract`/`RouteTable.merge_contracts_from()` were removed
+    entirely from `civitas/gateway/` after confirming zero real usage anywhere in the org
+    — see `docs/milestones.md`.)
 17. **Silently accepting unknown configuration keys** — `from_config()` and similar loaders
     should reject unknown top-level keys immediately with a clear error, not silently ignore typos.
 18. **Importing civitas-contrib or fabrica at module top in civitas core** — always lazy,

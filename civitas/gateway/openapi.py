@@ -72,40 +72,19 @@ def build_spec(route_table: RouteTable, config: GatewayConfig) -> dict[str, Any]
             },
         }
 
-        # Request body schema
-        req_schema: dict[str, Any] = {"type": "object"}
-        if entry.request_schema is not None:
-            try:
-                req_schema = entry.request_schema.model_json_schema()
-            except Exception:
-                pass
-
         if method in ("post", "put", "patch"):
             operation["requestBody"] = {
-                "required": entry.request_schema is not None,
-                "content": {"application/json": {"schema": req_schema}},
+                "required": False,
+                "content": {"application/json": {"schema": {"type": "object"}}},
             }
-
-        # Response schema
-        resp_body: dict[str, Any] = {"type": "object"}
-        if entry.response_schema is not None:
-            try:
-                resp_body = entry.response_schema.model_json_schema()
-            except Exception:
-                pass
 
         if entry.mode == "cast":
             operation["responses"]["202"] = {"description": "Accepted (fire-and-forget)"}
         else:
             operation["responses"]["200"] = {
                 "description": "Successful response",
-                "content": {"application/json": {"schema": resp_body}},
+                "content": {"application/json": {"schema": {"type": "object"}}},
             }
-
-        if entry.request_schema is not None:
-            operation["responses"]["422"] = {"description": "Request validation error"}
-        if entry.response_schema is not None:
-            operation["responses"]["500"] = {"description": "Response validation error"}
 
         paths[oapi_path][method] = operation
 

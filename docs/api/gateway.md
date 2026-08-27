@@ -26,8 +26,6 @@ See [HTTP Gateway](../gateway.md) for a full guide with examples.
     options:
       members:
         - from_config
-        - from_class
-        - merge_contracts_from
         - match
         - entries
       show_source: true
@@ -49,15 +47,3 @@ See [HTTP Gateway](../gateway.md) for a full guide with examples.
 ::: civitas.gateway.types.GatewayResponse
     options:
       show_source: false
-
----
-
-::: civitas.gateway.router.route
-    options:
-      show_source: true
-
----
-
-::: civitas.gateway.contracts.contract
-    options:
-      show_source: true

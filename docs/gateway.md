@@ -115,43 +115,18 @@ The default routes are a development convenience. For production, declare explic
 
 ---
 
-## The `@route` decorator
+## Request/response validation
 
-The `@route` decorator colocates route metadata with the agent method it describes. This is for documentation and IDE navigation — the YAML config is authoritative at runtime:
-
-```python
-from civitas.gateway import route, contract
-from pydantic import BaseModel
-
-class ChatRequest(BaseModel):
-    session_id: str
-    message: str
-
-class ChatResponse(BaseModel):
-    reply: str
-    tokens_used: int
-
-class ChatAgent(AgentProcess):
-
-    @route("POST", "/v1/chat/{session_id}", mode="call")
-    @contract(request=ChatRequest, response=ChatResponse)
-    async def handle(self, message: Message) -> Message | None:
-        # message.payload is validated against ChatRequest
-        session_id = message.payload["session_id"]
-        text = message.payload["message"]
-
-        response = await self.llm.chat(
-            model="claude-haiku-4-5",
-            messages=[{"role": "user", "content": text}],
-        )
-        # reply dict is validated against ChatResponse before sending
-        return self.reply({
-            "reply": response.content,
-            "tokens_used": response.tokens_in + response.tokens_out,
-        })
-```
-
-`@route` and `@contract` only attach metadata to the function — they do nothing on their own. Wiring that metadata into request validation requires `RouteTable.merge_contracts_from(agent_cls, agent_name)`, matched by `(method, path)` against entries built from YAML — but `HTTPGateway` builds and owns its `RouteTable` internally (`_route_table`, private) and does not expose a way to call `merge_contracts_from()` on it or to pass in a pre-merged table. In practice, today, decorating a `handle()` method with `@route`/`@contract` **does not** get you 422/500 validation through a normal `HTTPGateway` — that path is only exercised directly against a manually-constructed `RouteTable` in the test suite (`tests/unit/test_gateway.py`). Treat `@route`/`@contract` as documentation/IDE-navigation aids only until this wiring gap is closed; the YAML `routes:` block is the authoritative, working configuration surface.
+There is currently no built-in request/response schema validation. An earlier
+`@route`/`@contract` decorator pair (Pydantic-based, advertised as adding automatic 422/500
+validation) was removed (2026-08-27): it was never actually wired into `HTTPGateway`'s real
+dispatch path — decorating a method never produced working validation, since `HTTPGateway`
+builds and owns its `RouteTable` from YAML `routes:` alone. An org-wide audit found zero real
+usage of the decorators anywhere, including in civitas's own examples; see
+`docs/milestones.md` ("Public documentation reliability") for the investigation. If you need
+request/response validation today, validate inside `handle()` yourself (e.g. `YourModel.
+model_validate(message.payload)`, returning `self.reply({"error": ...})` on failure) — the
+gateway itself performs no schema checks.
 
 ---
 
@@ -418,7 +393,7 @@ The encoding is right (base64 DER), but the header **name** (`X-Forwarded-Tls-Cl
 
 ## OpenAPI and Swagger UI
 
-The gateway generates an OpenAPI spec from the declared routes and any `@contract` decorators. Documentation is enabled by default:
+The gateway generates an OpenAPI spec from the declared routes. Documentation is enabled by default:
 
 ```
 GET /docs              → Swagger UI
@@ -431,7 +406,7 @@ Disable it in production:
 GatewayConfig(port=8080, docs_enabled=False, routes=[...])
 ```
 
-Routes with `@contract` decorators appear with full request and response schemas in the spec. Routes without contracts show generic `object` schemas.
+Every route shows a generic `object` schema for its request body and `200`/`202` response — there is no per-route schema generation (see [Request/response validation](#requestresponse-validation) above).
 
 ---
 

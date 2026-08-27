@@ -9,6 +9,31 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ---
 
+## [Unreleased]
+
+### Removed
+
+- **BREAKING: `civitas.gateway.route`/`@route`, `civitas.gateway.contract`/`@contract`,
+  `RouteTable.from_class()`, and `RouteTable.merge_contracts_from()` are removed.** These were
+  introduced together in the original M4.1 HTTP Gateway work as a documented mechanism for
+  automatic Pydantic request/response validation (422/500) via decorators. An audit (triggered by
+  this project's own "Public documentation reliability" milestone, see `docs/milestones.md`) found
+  they were never actually wired into `HTTPGateway`'s real dispatch path -- `HTTPGateway` builds
+  its `RouteTable` from YAML `routes:` alone and never calls `merge_contracts_from()`; `civitas
+  topology validate` never calls `from_class()` either, despite its own docstring's claim. Only
+  unit tests exercised the mechanism, by constructing `RouteTable`/`GatewayASGI` by hand. A
+  follow-up org-wide grep + git-blame check (LLM Council-reviewed, see `docs/milestones.md`) found
+  zero real usage of `@contract` anywhere in the org, including civitas's own examples, confirming
+  this was dead code from day one, not a live feature with a wiring bug. Decorating a `handle()`
+  method with `@route`/`@contract` never provided working validation for any real user -- removing
+  them changes no observed runtime behavior. If you need request/response validation, validate
+  inside `handle()` directly; see `docs/gateway.md`.
+- `RouteEntry.request_schema`/`response_schema` fields, and the OpenAPI request/response schema
+  generation and 422/500 documentation entries in `civitas/gateway/openapi.py` that depended on
+  them -- unreachable once the above was removed (nothing else ever populated them). Every route
+  now documents a generic `object` schema in the generated OpenAPI spec, exactly as it already did
+  in practice for every real route.
+
 ## [0.12.0] -- 2026-08-25
 
 Real bug reported 2026-08-25 by a downstream project team against `civitas` 0.11.3 /

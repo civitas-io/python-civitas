@@ -1361,18 +1361,29 @@ breaks the same way for both); the one place agent-facing docs should differ is 
    list of what was actually found and fixed lives in each fixed doc's own real content, not
    restated here.
 
-   **New real bug surfaced while fixing `docs/gateway.md`, not just a doc error**:
-   `RouteTable.merge_contracts_from()` (the mechanism that's supposed to wire `@route`/`@contract`
-   decorator metadata into request validation) is only ever exercised directly against a
-   manually-constructed `RouteTable` in `tests/unit/test_gateway.py` — `HTTPGateway.__init__`
-   builds and owns its `RouteTable` as a private `_route_table` with no public way to call
-   `merge_contracts_from()` on it or inject a pre-merged table. So decorating a `handle()` with
-   `@route`/`@contract` today gets you **no** 422/500 validation through a real `HTTPGateway` —
-   contradicting the CHANGELOG's v-tagged claim that it's "wired ... for automatic 422/500
-   validation." `docs/gateway.md` now documents this honestly (decorators are IDE/doc metadata
-   only, YAML `routes:` is authoritative) instead of showing a fabricated working example. Needs
-   its own follow-up: either expose a real `HTTPGateway.merge_contracts_from()`/constructor hook,
-   or retire the decorators if they're not worth wiring up.
+   **New real bug surfaced while fixing `docs/gateway.md`, not just a doc error — since resolved
+   (2026-08-27)**: `RouteTable.merge_contracts_from()` (the mechanism that's supposed to wire
+   `@route`/`@contract` decorator metadata into request validation) was only ever exercised
+   directly against a manually-constructed `RouteTable` in `tests/unit/test_gateway.py` —
+   `HTTPGateway.__init__` built and owned its `RouteTable` as a private `_route_table` with no
+   public way to call `merge_contracts_from()` on it or inject a pre-merged table, and `civitas
+   topology validate` never called the related `RouteTable.from_class()` either, despite its own
+   docstring claiming that's its exclusive caller. Ran a 5-advisor LLM council on the fix (wire it
+   up via an explicit config field, auto-resolve via the registry at startup, or delete the dead
+   mechanism) — all 5 peer reviewers independently ranked the same advisor's answer strongest, and
+   the council's own recommendation was to verify real usage before choosing, since the choice
+   hinges entirely on a fact nobody had checked. Did that verification: grepped and git-blamed
+   `@route`/`@contract` usage across every repo in the org (python-civitas, civitas-contrib,
+   presidium, fabrica, kordon, tessera, prx) — found **zero** real usage of `@contract` anywhere,
+   including in civitas's own examples (`examples/http_gateway.py`/`gateway_auth.py` used `@route`
+   as decoration only, never paired with `@contract`); `presidium`, a real, substantial downstream
+   consumer of `HTTPGateway`/`GatewayConfig`, builds all its routing through YAML/config and never
+   imports the decorators. Confirmed dead code, not a live feature with a wiring bug. **Removed
+   entirely**: `@route`, `@contract`, `RouteTable.from_class()`, `RouteTable.merge_contracts_from()`,
+   `RouteEntry.request_schema`/`response_schema`, `civitas/gateway/contracts.py`, and the OpenAPI
+   schema-generation branches that depended on them (see `CHANGELOG.md` `[Unreleased]` for the
+   full breaking-change entry). `docs/gateway.md` now documents that there is no built-in
+   request/response validation and shows how to validate inside `handle()` directly.
 2. ✅ **Restructure `AGENTS.md` into a thin router** -- cut from 910 to 304 lines (not quite
    the aspirational ~100, but every cut line was genuinely duplicated SDK-reference content:
    Quick Import Reference, the full Repository Layout tree, and the Core API sections for
