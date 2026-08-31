@@ -138,7 +138,7 @@ jobs:
       # retroactively fix this incident, it prevents a future unreviewed
       # regression from landing silently the same way this one did.
       - name: TruffleHog — scan full history
-        uses: trufflesecurity/trufflehog@v3.96.0
+        uses: trufflesecurity/trufflehog@v3.97.1
         with:
           extra_args: --results=verified --exclude-detectors=Lob
           # TODO: remove --exclude-detectors=Lob once upstream fixes the
