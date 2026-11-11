@@ -11,6 +11,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+### Security
+
+- **Require `msgpack>=1.2.3`** — fixes CVE-2026-114613, a memory leak in the msgpack C extension when deserialization rejects a non-`str`/`bytes` map key. Repeated malformed messages from a peer on a distributed transport (ZMQ/NATS) could grow process memory without bound.
+
 ## [0.7.3] — 2026-07-06
 
 ### Fixed
