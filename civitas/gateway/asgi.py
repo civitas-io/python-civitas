@@ -371,7 +371,7 @@ class GatewayASGI:
         )
 
         # Build and run middleware chain: global middleware, then this route's
-        # own middleware, then contract validation + bus dispatch (terminal).
+        # own middleware, then bus dispatch (terminal).
         chain = build_chain(self._middlewares + route_middlewares, self._dispatch_handler)
         response = await chain(request)
 
@@ -383,7 +383,7 @@ class GatewayASGI:
         await self._respond(send, response, extra_headers=trace_extra)
 
     async def _dispatch_handler(self, request: GatewayRequest) -> GatewayResponse:
-        """Terminal middleware handler: route → contract validate → dispatch."""
+        """Terminal middleware handler: match route (or default route) → dispatch to the bus."""
         method = request.method
         path = request.path
         headers = request.headers

@@ -12,7 +12,38 @@ the active backlog).
 `civitas-io/fabrica` each have their own `HANDOFF.md` — read all three when working across
 repo boundaries.
 
-## `AgentProcess.connect_mcp()` was broken since inception -- fixed 2026-08-25, real code not yet released
+## Status as of 2026-11-12: **`civitas` v0.13.0 is live on PyPI**
+
+```
+pip install civitas   # 0.13.0
+```
+
+Verified with fresh-venv installs from PyPI, with and without extras. GitHub Release:
+[`v0.13.0`](https://github.com/civitas-io/python-civitas/releases/tag/v0.13.0). Full detail in
+`CHANGELOG.md`'s `[0.13.0]` entry. What shipped:
+
+- **Security floors:** `msgpack>=1.2.3` (CVE-2026-114613, a C-extension memory leak on peer
+  messages) and `pyjwt[crypto]>=2.15` (JWKS-path advisories in the `[jwt]` extra).
+- **`civitas security init zmq` printed wrong keys:** Z85 keys went through Rich markup, so
+  about 1 run in 9 printed a silently altered key. It's now printed verbatim. This was also the
+  root cause of the flaky `test_security_init_zmq_generates_keypairs`.
+- **Breaking:** the never-wired `@route`/`@contract` gateway decorators were removed (minor
+  bump, same pre-1.0 precedent as v0.12.0).
+- **Supply-chain / CI hardening** (internal, not user-facing):
+  - The Security workflow's pip-audit now covers every extra. It used to audit only 11 of 116
+    locked packages and missed 88 advisories.
+  - Dependabot uses the `uv` ecosystem (`pip` can't update `uv.lock`), with alerts and
+    security updates enabled in repo settings.
+  - mypy now installs the `zmq` extra in CI and pre-commit.
+  - The 4 OTEL span integration tests, silently skipped since May, run again.
+
+**Lesson worth keeping:** in a shared or long-lived clone, `git fetch` before branching. This
+session's first two PRs were accidentally built on a local `main` that was ~200 commits stale
+(v0.7.3) and had to be redone.
+
+---
+
+## `AgentProcess.connect_mcp()` was broken since inception -- fixed 2026-08-25, released in v0.12.0
 
 **Real, currently-blocking bug, reported by a downstream project team against `civitas` 0.11.3 /
 `fabrica-context` 0.4.0 / `presidium` 0.6.0** -- verified directly against source before agreeing,
@@ -40,19 +71,18 @@ that row is only accurate again as of this fix.
   core raises or catches it; the real MCP call path raises `fabrica.mcp.errors.MCPToolError`
   instead (different class, same name). Not removed, a real separate semver decision.
 
-See `CHANGELOG.md`'s `[Unreleased]` entry for the full detail. **Real, working, verified end to
+See `CHANGELOG.md`'s `[0.12.0]` entry for the full detail. **Real, working, verified end to
 end** -- a real reproduction test (calling `connect_mcp()` against a real running MCP server,
 asserting tools register into `self.tools` and execute for real) lives in `civitas-io/fabrica`'s
-own test suite (this repo's own dev environment deliberately doesn't install fabrica). **Not yet
-released** -- `civitas.sandbox.config.SandboxConfig.enabled`'s default flip is a real, deliberate
-breaking change; needs a version bump (suggest `0.12.0`, matching this org's own precedent of
-treating a deliberate, correctly-reasoned breaking fix as a MINOR bump pre-1.0, e.g. presidium's
-`CelPolicyEngine` default-deny flip) before `fabrica-context` can bump its own `civitas>=0.11.0`
-floor to pick it up.
+own test suite (this repo's own dev environment deliberately doesn't install fabrica). **Released
+in v0.12.0 (2026-08-25)** -- `civitas.sandbox.config.SandboxConfig.enabled`'s default flip is a
+real, deliberate breaking change, shipped as a MINOR bump per this org's own pre-1.0 precedent
+(e.g. presidium's `CelPolicyEngine` default-deny flip). Whether `fabrica-context` has bumped its
+own `civitas>=0.11.0` floor to pick it up is tracked in that repo's own `HANDOFF.md`.
 
 ---
 
-## Status as of 2026-08-24: **`civitas` v0.11.3 is live on PyPI**, real mTLS in direct mode
+## Earlier status (2026-08-24): `civitas` v0.11.3, real mTLS in direct mode
 
 ```
 pip install civitas   # 0.11.3
@@ -94,9 +124,10 @@ added for every repo that has one.
 **2026-08-24**: `.pre-commit-config.yaml` existed here since June but the hook was never actually
 installed (`.git/hooks/pre-commit` didn't exist). Now real: `uv run pre-commit install &&
 uv run pre-commit install --hook-type pre-push` wires up ruff/ruff-format/gitleaks on every
-commit, `mypy` (pinned `--python 3.12`, matching CI's own mypy job exactly -- a real,
-confirmed Python-3.14-specific pyzmq/mypy stub false positive was found and fixed while wiring
-this up) and the full test suite on every push. See `.pre-commit-config.yaml`'s own comments for
+commit, `mypy` (pinned `--python 3.12` with the same extras as CI's own mypy job, including
+`zmq` -- the zmq.py errors first seen while wiring this up were later found to be real, not a
+3.14 stub false positive; they only showed up when pyzmq was installed, fixed in #72/#73) and
+the full test suite on every push. See `.pre-commit-config.yaml`'s own comments for
 the full reasoning (`--frozen` avoiding lockfile-mutation-as-a-side-effect, etc.) -- a future
 session picking this repo back up should just run the two `pre-commit install` commands above,
 not re-derive any of this.
@@ -200,5 +231,12 @@ recurs, not swept under the rug.
 
 ## Other real, open work
 
-**Zero open tracked issues against this repo specifically, as of 2026-08-25** (GH #26 closed,
-M-LAST done). This repo's real backlog is now empty.
+**Zero open GitHub issues against this repo, as of 2026-11-12.** The real queue is **14 open
+Dependabot PRs** (#47, #67, #68, #77-#87). Most came from the first run after switching
+Dependabot to the `uv` ecosystem. Review them before merging, especially:
+
+- **#77 (TruffleHog 3.96.0 -> 3.99.8):** `security.yml` pins 3.96.0 on purpose (`3191512`,
+  "pin TruffleHog, exclude Lob detector -- fixes scheduled scan failure"). Check that the Lob
+  false-positive doesn't come back before bumping.
+- **#87 (aioquic 1.3.0 -> 1.7.2):** HTTP/3 gateway. `tests/unit/test_gateway_h3.py` and
+  `tests/integration/test_h3_gateway.py` cover it.
