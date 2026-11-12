@@ -11,6 +11,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+## [0.13.0] -- 2026-11-12
+
+Security and correctness release. Raises the `msgpack` and `pyjwt` floors for known advisories,
+fixes `civitas security init zmq` printing wrong keys, and removes the `@route`/`@contract`
+gateway decorators, which never had any effect (**breaking**: imports of them now fail). The
+public docs were also audited and corrected against the actual source.
+
 ### Security
 
 - **Require `msgpack>=1.2.3`** -- fixes CVE-2026-114613, a memory leak in the msgpack C extension
