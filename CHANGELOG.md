@@ -16,6 +16,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 - **Require `msgpack>=1.2.3`** -- fixes CVE-2026-114613, a memory leak in the msgpack C extension
   when deserialization rejects a non-`str`/`bytes` map key. Repeated malformed messages from a peer
   on a distributed transport (ZMQ/NATS) could grow process memory without bound.
+- **Require `pyjwt[crypto]>=2.15`** (`[jwt]` extra) -- PyJWT 2.13 has several advisories on the
+  JWKS path that `CIVITAS_JWT_JWKS_URL` uses: `PyJWKClient` following redirects to untrusted hosts,
+  one malformed JWK aborting the whole key set, and decoding the token payload before its signature
+  is verified (fixed only in 2.15). civitas already blocked the algorithm-confusion advisories by
+  refusing to mix HMAC with asymmetric algorithms.
 
 ### Fixed
 
