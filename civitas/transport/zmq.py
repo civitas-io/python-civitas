@@ -56,7 +56,7 @@ class ZMQProxy:
         self._frontend_addr = frontend
         self._backend_addr = backend
         self._curve_config = curve_config
-        self._ctx: zmq.Context[bytes] | None = None
+        self._ctx: zmq.Context[zmq.Socket[bytes]] | None = None
         self._thread: threading.Thread | None = None
         self._ready = threading.Event()
 
