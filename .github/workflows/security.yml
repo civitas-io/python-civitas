@@ -105,13 +105,15 @@ jobs:
       - name: pip-audit
         # --strict: fail on any vulnerability with a fix available
         # --desc: include vulnerability description in output
+        # --all-extras: audit every locked package, not just the core deps (which
+        # previously left extras such as jwt/http/otel and all dev tooling unaudited)
         run: |
           uv tool install pip-audit
           uv tool run pip-audit \
             --strict \
             --desc \
             --format columns \
-            -r <(uv export --format requirements-txt --no-dev --no-emit-project 2>/dev/null)
+            -r <(uv export --format requirements-txt --all-extras --no-emit-project 2>/dev/null)
 
   # ---------------------------------------------------------------------------
   # Secret scanning — TruffleHog on full commit history
