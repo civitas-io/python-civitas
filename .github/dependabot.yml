@@ -1,8 +1,8 @@
 version: 2
 
 updates:
-  # Python dependencies
-  - package-ecosystem: pip
+  # Python dependencies -- uv, not pip: the pip updater can't read or update uv.lock
+  - package-ecosystem: uv
     directory: /
     schedule:
       interval: weekly
