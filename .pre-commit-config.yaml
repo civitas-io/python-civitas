@@ -46,19 +46,16 @@ repos:
     hooks:
       - id: mypy
         name: mypy (civitas)
-        # --python 3.12, pinned to match CI's own "mypy" job exactly (ci.yml runs
-        # mypy on 3.12 only, not the full 3.12/3.13/3.14 test matrix) -- a real,
-        # confirmed finding while setting this hook up: `uv run mypy civitas/`
-        # with no pin resolves to whatever Python `uv` picks locally (3.14 here),
-        # which produces 14 real, false-positive pyzmq/mypy stub errors on
-        # civitas/transport/zmq.py that do NOT reproduce on 3.12 -- confirmed by
-        # running both side by side, not assumed.
+        # --python 3.12 and these extras match CI's "Lint & type-check" job exactly
+        # (ci.yml runs mypy on 3.12 only, not the full 3.12/3.13/3.14 test matrix).
+        # --extra zmq: without pyzmq installed, mypy resolves zmq.* to Any and
+        # silently misses real type errors in civitas/transport/zmq.py (#72, #73).
         # --frozen: use the committed uv.lock as-is, don't let switching to
         # --python 3.12 trigger a real re-resolution/lockfile rewrite as a
         # side effect of every commit (confirmed real: without --frozen, this
         # hook mutated uv.lock locally on every run and pre-commit reported
         # a false "Failed" for it, even though mypy itself passed cleanly).
-        entry: uv run --frozen --python 3.12 --extra dev --extra otel --extra dashboard mypy civitas/
+        entry: uv run --frozen --python 3.12 --extra dev --extra otel --extra dashboard --extra zmq mypy civitas/
         language: system
         pass_filenames: false
         files: ^civitas/

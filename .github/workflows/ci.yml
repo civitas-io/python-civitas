@@ -100,7 +100,8 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync --extra dev --extra otel --extra dashboard
+        # zmq: without pyzmq installed, mypy treats zmq.* as Any and misses type errors there.
+        run: uv sync --extra dev --extra otel --extra dashboard --extra zmq
 
       - name: Ruff lint
         run: uv run ruff check civitas/
