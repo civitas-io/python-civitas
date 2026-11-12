@@ -17,6 +17,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
   when deserialization rejects a non-`str`/`bytes` map key. Repeated malformed messages from a peer
   on a distributed transport (ZMQ/NATS) could grow process memory without bound.
 
+### Fixed
+
+- `civitas security init zmq` printed its YAML snippet through Rich markup, but Z85 CURVE keys
+  contain `[`, `]` and `/`. About 1 run in 9 printed a silently wrong key (Rich dropped
+  `[foQ]`-like sequences), and about 1 in 100 crashed after the key files were already written.
+  The key files themselves were always correct; the printed snippet now matches them exactly.
+
 ### Removed
 
 - **BREAKING: `civitas.gateway.route`/`@route`, `civitas.gateway.contract`/`@contract`,
