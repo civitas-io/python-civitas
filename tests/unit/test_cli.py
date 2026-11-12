@@ -234,6 +234,25 @@ def test_security_init_zmq_generates_keypairs(tmp_path):
     assert {"zmq_server.pub", "zmq_server.key", "zmq_client.pub", "zmq_client.key"} <= names
 
 
+def test_security_init_zmq_prints_keys_verbatim(tmp_path, monkeypatch):
+    # Z85 keys can contain Rich markup-like sequences; they must print unmodified.
+    zmq = pytest.importorskip("zmq", reason="pyzmq not installed")
+    keypairs = iter(
+        [
+            (b"DC#jjv{@AK0jc(]}:&^KY+PmQK}[foQ]hrxrb0DS", b"<Lo:veatN}[6d]Hm@+JOi[/]>jCaW]<)V:dg"),
+            (b"Xq8[{A&)AZ>]Mv/:by[Gjz?j0*UGps}vOHiiAZcs", b"[bold]spjJqo1Qe#:go18Oswx?cnDcAM&6Z"),
+        ]
+    )
+    monkeypatch.setattr(zmq, "curve_keypair", lambda: next(keypairs))
+
+    result = runner.invoke(app, ["security", "init", "zmq", "--key-dir", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    for name in ("zmq_server.pub", "zmq_server.key", "zmq_client.pub", "zmq_client.key"):
+        key = (tmp_path / name).read_text().strip()
+        assert f'"{key}"' in result.output
+
+
 # ---------------------------------------------------------------------------
 # civitas run (no live runtime — argument handling only)
 # ---------------------------------------------------------------------------

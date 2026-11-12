@@ -102,7 +102,11 @@ security:
         server_secret_key: "{server_secret_z85}"
         client_public_key: "{client_pub_z85}"
         client_secret_key: "{client_secret_z85}"
-"""
+""",
+        # Z85 keys contain "[", "]" and "/"; Rich would parse e.g. "[foQ]" as markup and
+        # silently drop it from the printed key (or raise on "[/]").
+        markup=False,
+        highlight=False,
     )
     console.print("[dim]Keep server_secret_key and client_secret_key out of version control.[/dim]")
 
