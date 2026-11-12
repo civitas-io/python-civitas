@@ -4,6 +4,8 @@ Uses InMemorySpanExporter to capture and validate OTEL spans.
 Console fallback tests use capsys to verify print output.
 """
 
+from __future__ import annotations
+
 import asyncio
 
 import pytest
@@ -11,14 +13,30 @@ import pytest
 from civitas.messages import Message, _new_span_id
 from civitas.observability.tracer import Tracer
 
-# Try to import OTEL test utilities
 _HAS_OTEL = False
 try:
-    from civitas.plugins.otel import create_test_tracer
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
     _HAS_OTEL = True
 except ImportError:
     pass
+
+
+def create_test_tracer() -> tuple[Tracer, InMemorySpanExporter]:
+    """Create an OTEL-backed Tracer that records spans in memory (standalone provider)."""
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+
+    tracer = Tracer.__new__(Tracer)
+    tracer._span_queue = None
+    tracer._use_otel = True
+    tracer._console_fallback = False
+    tracer._provider = provider
+    tracer._otel_tracer = provider.get_tracer("civitas.test", "0.1.0")
+    return tracer, exporter
 
 
 # ------------------------------------------------------------------
