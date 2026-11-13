@@ -159,6 +159,11 @@ line-length = 100
 # Generated protobuf/gRPC stubs are machine-authored; don't lint or format them.
 extend-exclude = ["civitas/gateway/proto/"]
 
+[tool.ruff.format]
+# ruff >= 0.17 also formats Python code blocks in Markdown; docs examples are hand-laid-out
+# for readability (aligned comments, compact one-liners), so leave them alone.
+exclude = ["*.md"]
+
 [tool.ruff.lint]
 select = [
     "E",
