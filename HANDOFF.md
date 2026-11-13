@@ -41,6 +41,36 @@ Verified with fresh-venv installs from PyPI, with and without extras. GitHub Rel
 session's first two PRs were accidentally built on a local `main` that was ~200 commits stale
 (v0.7.3) and had to be redone.
 
+### Since v0.13.0 (as of 2026-11-13): repo maintenance only, **no release needed**
+
+`main` is 7 commits ahead of `v0.13.0` (#88, #47, #67, #68, #77, #89, #90). None of them changes
+what PyPI users install: `civitas/` has two comment-only lines changed, `pyproject.toml` only
+gained ruff config, and the rest is `uv.lock`, workflows and docs. Ship them with the next real
+fix or feature. Add an "Internal" note under `CHANGELOG.md`'s (currently empty) `[Unreleased]`
+section at that time.
+
+- **All 14 Dependabot PRs are resolved.**
+  - The 4 GitHub Actions bumps were merged as-is: checkout 7.0.1, upload-artifact 7.0.2,
+    download-artifact 8.0.2, TruffleHog 3.99.8. Bumping TruffleHog off 3.96.0 was safe: the pin
+    in `3191512` only existed to stop running a floating `@main`. The real fix is
+    `--exclude-detectors=Lob`, which is still in place.
+  - The 10 `uv` bumps (#78-#87) each rewrote `uv.lock` against a stale base and conflicted with
+    each other. They landed together as **#89**, using exactly the versions Dependabot proposed:
+    aioquic 1.7.2, grpcio family 1.85.1 (pulls in **protobuf 7**), nats-py 2.16, pyzmq 27.3,
+    typer 0.28, mypy 1.20.2, ruff 0.17.4, and the rest. The leftover PRs were closed as
+    superseded.
+  - **Pattern for future batches:** apply them with
+    `uv lock --python 3.12 --upgrade-package pkg==<dependabot's version> ...`, run the full
+    gate, open one PR, then close the originals. Pin to Dependabot's versions: a bare
+    `--upgrade-package` overshoots, for example to mypy 2.x.
+- **ruff 0.17 formats Python code blocks inside Markdown.** `[tool.ruff.format]` now has
+  `exclude = ["*.md"]` (#90), so `ruff format .` (per AGENTS.md) no longer rewrites 36
+  hand-laid-out docs files. Linting is unaffected.
+- **Local integration-test gotcha:** on the maintainer's machine, 3
+  `tests/integration/test_examples_smoke.py` cases fail with `Errno 98` because ports
+  8080-8082 are already in use by unrelated services (e.g. qbittorrent). This is
+  environmental; they pass in CI. Check `ss -ltnp` before chasing it.
+
 ---
 
 ## `AgentProcess.connect_mcp()` was broken since inception -- fixed 2026-08-25, released in v0.12.0
@@ -231,12 +261,25 @@ recurs, not swept under the rug.
 
 ## Other real, open work
 
-**Zero open GitHub issues against this repo, as of 2026-11-12.** The real queue is **14 open
-Dependabot PRs** (#47, #67, #68, #77-#87). Most came from the first run after switching
-Dependabot to the `uv` ecosystem. Review them before merging, especially:
+**Clean slate as of 2026-11-13: zero open issues, zero open PRs, CI green on `main`.** Next work
+comes from the backlog in [`docs/milestones.md`](docs/milestones.md) Part 2, not from a queue.
+Candidates, roughly in order of value:
 
-- **#77 (TruffleHog 3.96.0 -> 3.99.8):** `security.yml` pins 3.96.0 on purpose (`3191512`,
-  "pin TruffleHog, exclude Lob detector -- fixes scheduled scan failure"). Check that the Lob
-  false-positive doesn't come back before bumping.
-- **#87 (aioquic 1.3.0 -> 1.7.2):** HTTP/3 gateway. `tests/unit/test_gateway_h3.py` and
-  `tests/integration/test_h3_gateway.py` cover it.
+- **v1.0.0 GA gates:**
+  - CI matrix for macOS and Windows (Medium). Today CI runs on Ubuntu only, and 4 test files
+    use Unix-only `ipc://`.
+  - External security audit (Medium). This is the hard blocker for declaring 1.0.
+- **v0.9.3 telemetry follow-ups**, scoped 2026-07-28. Check the section's own status table
+  before starting.
+- **R7 credit-based stream backpressure** (Low).
+
+Small loose ends, each a one-PR fix:
+
+- **ruff version drift:** `.pre-commit-config.yaml` pins `ruff-pre-commit` at `v0.16.4`, while
+  `uv.lock` now has ruff 0.17.4, so commit-time and CI/`uv run` formatting can drift apart.
+  Bump the hook `rev` to match (it was already mismatched before #89).
+- **TruffleHog Lob exclusion:** `security.yml` still carries
+  `--exclude-detectors=Lob # TODO: remove once upstream fixes...`. Check whether upstream fixed
+  the 422/403-as-verified bug in a release after 3.99.8 before removing it.
+- **Dependabot is live** (uv, github-actions). Expect new PRs on its schedule and batch the `uv`
+  ones as described in the status section above.
